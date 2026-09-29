@@ -13,11 +13,21 @@ import { Globe } from "lucide-react";
 import { cx } from "../../lib/format";
 import { useLang, useT } from "../../lib/i18n";
 
+export type LangSwitcherTone = "default" | "onDark";
+
 export interface LangSwitcherProps {
 	className?: string;
+	/** `onDark` swaps to the sidebar tokens so the control reads on navy chrome. */
+	tone?: LangSwitcherTone;
 }
 
-export function LangSwitcher({ className }: LangSwitcherProps) {
+const TONE_CLASSES: Record<LangSwitcherTone, string> = {
+	default: "text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+	onDark:
+		"text-[var(--omp-sidebar-muted)] hover:bg-[var(--omp-sidebar-item-hover)] hover:text-[var(--omp-sidebar-text)]",
+};
+
+export function LangSwitcher({ className, tone = "default" }: LangSwitcherProps) {
 	const { lang, setLang } = useLang();
 	const t = useT();
 	const next = lang === "en" ? "zh" : "en";
@@ -28,9 +38,11 @@ export function LangSwitcher({ className }: LangSwitcherProps) {
 			title={t("lang.switch")}
 			aria-label={t("lang.switch")}
 			className={cx(
-				"no-drag omp-pressable flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-omp-md font-medium text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+				"no-drag omp-pressable flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-omp-md font-medium",
+				TONE_CLASSES[tone],
 				className,
 			)}
+			data-tone={tone}
 		>
 			<Globe size={16} />
 			<span>{lang === "en" ? "EN" : "中文"}</span>

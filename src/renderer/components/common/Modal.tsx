@@ -40,6 +40,14 @@ export interface ModalProps {
 	ariaLabel?: string;
 	/** Extra classes for the panel. */
 	panelClassName?: string;
+	/** Extra classes for the full-window overlay behind the panel. */
+	overlayClassName?: string;
+	/**
+	 * Decorative layer painted over the overlay, behind the panel. It is
+	 * aria-hidden and ignores the pointer (so backdrop click still closes), so
+	 * it must not contain focusable or interactive elements.
+	 */
+	backdrop?: ReactNode;
 	/**
 	 * Body container classes. Defaults to `px-5 py-4` so the body aligns with the
 	 * title bar (also px-5). Pass "p-0" for dialogs that manage their own inner
@@ -58,6 +66,8 @@ export function Modal({
 	placement = "center",
 	ariaLabel,
 	panelClassName,
+	overlayClassName,
+	backdrop,
 	bodyClassName = "px-5 py-4",
 	children,
 }: ModalProps) {
@@ -76,8 +86,8 @@ export function Modal({
 	// its children from `null`, so the fading panel would collapse to an empty box;
 	// holding the tree from the last open commit lets callers drop their own
 	// `if (!payload) return null` gate and pass `open` instead.
-	const shownRef = useRef<{ ariaLabel?: string; body: ReactNode; title: ReactNode } | null>(null);
-	if (open) shownRef.current = { ariaLabel, body: children, title };
+	const shownRef = useRef<{ ariaLabel?: string; backdrop: ReactNode; body: ReactNode; title: ReactNode } | null>(null);
+	if (open) shownRef.current = { ariaLabel, backdrop, body: children, title };
 	const shown = shownRef.current;
 
 	// Focus + keyboard + layer scope all live with `open`: the layer releases
@@ -144,7 +154,7 @@ export function Modal({
 
 	return createPortal(
 		<div
-			className={`omp-dialog-overlay ${closing ? "omp-fade-out" : "omp-fade-in"} fixed inset-0 z-50 flex justify-center bg-(--omp-overlay-bg) p-4 backdrop-blur-[6px] ${placement === "top" ? "items-start pt-[12dvh]" : "items-center"}`}
+			className={`omp-dialog-overlay ${closing ? "omp-fade-out" : "omp-fade-in"} fixed inset-0 z-50 flex justify-center bg-(--omp-overlay-bg) p-4 backdrop-blur-[2px] ${placement === "top" ? "items-start pt-[12dvh]" : "items-center"} ${overlayClassName ?? ""}`.trim()}
 			inert={closing}
 			onMouseDown={event => {
 				if (closing) return;
@@ -152,11 +162,16 @@ export function Modal({
 			}}
 			role="presentation"
 		>
+			{shown.backdrop ? (
+				<div aria-hidden="true" className="pointer-events-none absolute inset-0">
+					{shown.backdrop}
+				</div>
+			) : null}
 			<div
 				aria-label={shown.ariaLabel ?? (typeof shown.title === "string" ? shown.title : undefined)}
 				aria-labelledby={!chromeless && shown.title ? titleId : undefined}
 				aria-modal={!closing}
-				className={`omp-dialog-panel ${closing ? "omp-scale-out" : "omp-scale-in"} flex flex-col overflow-hidden rounded-2xl border border-(--omp-modal-border) bg-(--omp-modal-bg) shadow-(--omp-shadow-lg) ${SIZE_CLASSES[size]} ${panelClassName ?? ""}`.trim()}
+				className={`omp-dialog-panel ${closing ? "omp-scale-out" : "omp-scale-in"} flex flex-col overflow-hidden rounded-xl border border-(--omp-modal-border) bg-(--omp-modal-bg) shadow-(--omp-shadow-lg) ${shown.backdrop ? "z-[1]" : ""} ${SIZE_CLASSES[size]} ${panelClassName ?? ""}`.trim()}
 				onKeyDown={event => {
 					if (event.key === "Escape") event.stopPropagation();
 				}}
@@ -171,7 +186,7 @@ export function Modal({
 					<div className="flex shrink-0 items-center justify-between gap-3 border-b border-(--omp-border-muted) px-5 py-3.5">
 						<div
 							id={titleId}
-							className="min-w-0 truncate text-omp-xl font-semibold tracking-[-0.01em] text-(--omp-text)"
+							className="min-w-0 truncate font-display text-omp-xl font-semibold tracking-[-0.01em] text-(--omp-text)"
 						>
 							{shown.title}
 						</div>

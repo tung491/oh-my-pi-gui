@@ -14,13 +14,13 @@ import {
 } from "react";
 
 const BASE_INPUT =
-	"w-full rounded-lg border bg-(--omp-input-bg) px-3 py-[9px] text-omp-lg leading-[1.45] text-(--omp-text) placeholder:text-(--omp-dim) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50";
+	"w-full rounded-md border bg-(--omp-input-bg) px-3 py-[9px] text-omp-lg leading-[1.45] text-(--omp-text) placeholder:text-(--omp-dim) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50";
 
 /** Resting hairline + teal focus ring; error swaps both for the error tokens. */
 function stateClasses(error: boolean): string {
 	return error
 		? "border-(--omp-error) focus:border-(--omp-error) focus:shadow-[0_0_0_3px_var(--omp-error-dim)]"
-		: "border-(--omp-input-border) hover:border-(--omp-border-strong) focus:border-(--omp-input-focus-border) focus:shadow-[0_0_0_3px_var(--omp-input-glow)] disabled:hover:border-(--omp-input-border)";
+		: "border-(--omp-border) hover:border-(--omp-border-strong) focus:border-(--omp-input-focus-border) focus:shadow-[0_0_0_3px_var(--omp-input-glow)] disabled:hover:border-(--omp-border)";
 }
 
 function FieldShell({

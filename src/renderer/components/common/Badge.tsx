@@ -7,11 +7,11 @@ import type { ReactNode } from "react";
 export type BadgeVariant = "default" | "success" | "warning" | "error" | "info" | "muted";
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-	default: "border-(--omp-border-muted) bg-transparent text-(--omp-text)",
+	default: "border-(--omp-border) bg-(--omp-bg-secondary) text-(--omp-text)", // surface-ok: neutral badge fill
 	success: "border-[color-mix(in_srgb,var(--omp-success)_35%,transparent)] bg-transparent text-(--omp-success)",
 	warning: "border-[color-mix(in_srgb,var(--omp-warning)_35%,transparent)] bg-transparent text-(--omp-warning)",
 	error: "border-[color-mix(in_srgb,var(--omp-error)_35%,transparent)] bg-transparent text-(--omp-error)",
-	info: "border-[color-mix(in_srgb,var(--omp-link)_35%,transparent)] bg-transparent text-(--omp-link)",
+	info: "border-[color-mix(in_srgb,var(--omp-info)_25%,transparent)] bg-(--omp-info-dim) text-(--omp-info)",
 	muted: "border-transparent bg-transparent text-(--omp-dim)",
 };
 
@@ -20,7 +20,7 @@ const DOT_CLASSES: Record<BadgeVariant, string> = {
 	success: "bg-(--omp-success)",
 	warning: "bg-(--omp-warning)",
 	error: "bg-(--omp-error)",
-	info: "bg-(--omp-link)",
+	info: "bg-(--omp-info)",
 	muted: "bg-(--omp-dim)",
 };
 
@@ -37,7 +37,7 @@ export interface BadgeProps {
 export function Badge({ variant = "default", dot, pulse, className, children }: BadgeProps) {
 	return (
 		<span
-			className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-px text-omp-xs font-medium leading-4 tracking-wide whitespace-nowrap ${VARIANT_CLASSES[variant]} ${className ?? ""}`.trim()}
+			className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-omp-xs font-medium leading-4 tracking-wide whitespace-nowrap ${VARIANT_CLASSES[variant]} ${className ?? ""}`.trim()}
 		>
 			{dot && (
 				<span aria-hidden className="relative flex size-1.5">

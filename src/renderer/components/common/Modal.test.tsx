@@ -218,6 +218,37 @@ describe("Modal", () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
+	it("forwards overlay classes and renders a hidden backdrop layer before the panel", async () => {
+		await mount(
+			<Modal backdrop={<div data-testid="bd" />} onClose={() => {}} open overlayClassName="x-backdrop" title="Setup">
+				<button type="button">Continue</button>
+			</Modal>,
+		);
+		const overlay = document.querySelector(".omp-dialog-overlay");
+		expect(overlay?.classList.contains("x-backdrop")).toBe(true);
+		const backdrop = overlay?.querySelector("[data-testid='bd']");
+		expect(backdrop).not.toBeNull();
+		const layer = backdrop?.parentElement;
+		expect(layer?.getAttribute("aria-hidden")).toBe("true");
+		expect(overlay?.firstElementChild).toBe(layer);
+		expect(layer?.nextElementSibling?.classList.contains("omp-dialog-panel")).toBe(true);
+	});
+
+	it("keeps the backdrop it had while open during the exit animation", async () => {
+		await mount(
+			<Modal backdrop={<div data-testid="bd" />} onClose={() => {}} open title="Setup">
+				<span>Welcome</span>
+			</Modal>,
+		);
+		await render(
+			<Modal onClose={() => {}} open={false} title="Setup">
+				{null}
+			</Modal>,
+		);
+		expect(document.querySelector(".omp-dialog-panel")?.getAttribute("role")).toBe("presentation");
+		expect(document.querySelector(".omp-dialog-overlay [data-testid='bd']")).not.toBeNull();
+	});
+
 	it("fades out with the content it had while open, then unmounts", async () => {
 		const close = vi.fn();
 		await mount(
