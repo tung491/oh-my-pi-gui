@@ -129,7 +129,7 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		await expect(page.getByRole("dialog", { name: "Welcome to omp" })).toBeVisible();
 		await page
 			.getByRole("dialog", { name: "Welcome to omp" })
-			.getByRole("button", { name: "Close", exact: true })
+			.getByRole("button", { name: "Skip for now", exact: true })
 			.click();
 		await expect(page.getByRole("dialog")).toHaveCount(0);
 		const original = evidence.saved.data as RpcSessionState;
@@ -148,7 +148,7 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		}, original.sessionFile!);
 		await page.reload();
 		await expect(page.locator("[data-transcript-kind]")).toContainText(["arm audit ok"]);
-		await closeWelcomeIfPresent("Welcome to omp", "Close");
+		await closeWelcomeIfPresent("Welcome to omp", "Skip for now");
 		await page.getByRole("button", { name: "Session stats", exact: true }).click();
 		const stats = page.getByRole("dialog");
 		await expect(stats).toBeVisible();
@@ -175,7 +175,7 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		});
 		await page.reload();
 		await expect(page.getByRole("button", { name: "设置", exact: true })).toBeVisible();
-		await closeWelcomeIfPresent("欢迎使用 omp", "关闭");
+		await closeWelcomeIfPresent("欢迎使用 omp", "暂时跳过");
 		await page.getByRole("button", { name: "设置", exact: true }).click();
 		await expect(page.getByRole("dialog")).toContainText("权限与安全");
 		await expect(page.getByRole("dialog").locator(".settings-nav-group-label")).toHaveCount(8);
@@ -262,7 +262,7 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		await page.reload();
 		await expect.poll(() => app.evaluate(() => Reflect.get(globalThis, "auditPrefsRequested"))).toBe(true);
 		await expect(page.getByRole("button", { name: "选择主题", exact: true })).toBeVisible();
-		await closeWelcomeIfPresent("欢迎使用 omp", "关闭");
+		await closeWelcomeIfPresent("欢迎使用 omp", "暂时跳过");
 		await page.getByRole("button", { name: "选择主题", exact: true }).click();
 		const freshPicker = page.getByRole("dialog", { name: "选择主题", exact: true });
 		await freshPicker.getByPlaceholder("搜索主题…").fill("瓷白");
