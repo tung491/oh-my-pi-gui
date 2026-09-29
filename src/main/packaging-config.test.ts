@@ -19,6 +19,16 @@ interface BuilderConfig {
 	mac?: { extendInfo?: Record<string, unknown> };
 	win?: { target?: { target?: string; arch?: string[] }[] };
 	electronLanguages?: string[];
+	linux?: {
+		executableName?: string;
+		maintainer?: string;
+		target?: { target?: string; arch?: string[] }[];
+		desktop?: { entry?: Record<string, string> };
+	};
+	appImage?: { executableArgs?: string[] };
+	toolsets?: { appimage?: string };
+	extraMetadata?: { desktopName?: string; homepage?: string };
+	publish?: { provider?: string; owner?: string; repo?: string };
 }
 
 const PACKAGE_ROOT = path.join(__dirname, "..", "..");
@@ -153,6 +163,59 @@ describe("Windows package config", () => {
 		const file = "electron-builder.win.yml";
 		const config = parse(fs.readFileSync(path.join(PACKAGE_ROOT, file), "utf8")) as BuilderConfig;
 		expect(config.electronLanguages).toContain("en-US");
+	});
+});
+
+describe("Linux package config", () => {
+	const file = "electron-builder.linux.yml";
+	const read = (name: string): BuilderConfig =>
+		parse(fs.readFileSync(path.join(PACKAGE_ROOT, name), "utf8")) as BuilderConfig;
+
+	it("ships the Linux sidecar and window icon as bundle resources", () => {
+		const config = read(file);
+		expect(config.extraResources).toContainEqual({ from: "resources/omp.linux-x64", to: "omp" });
+		expect(config.extraResources).toContainEqual({ from: "resources/icon.png", to: "icon.png" });
+		expect(
+			config.protocols?.flatMap(protocol => protocol.schemes ?? []),
+			`${file} ships no URL scheme`,
+		).toContain("omp");
+	});
+
+	it("builds an x64 AppImage and deb that share one desktop identity", () => {
+		const config = read(file);
+		expect(config.linux?.target).toEqual([
+			{ target: "AppImage", arch: ["x64"] },
+			{ target: "deb", arch: ["x64"] },
+		]);
+		expect(config.linux?.executableName).toBe("omp-gui");
+		expect(config.extraMetadata?.desktopName).toBe("omp-gui.desktop");
+		// Electron 35 under XWayland names the window class after app.setName("omp").
+		expect(config.linux?.desktop?.entry?.StartupWMClass).toBe("omp");
+		expect(config.linux?.maintainer).toBe("nornzach <287694139+nornzach@users.noreply.github.com>");
+		expect(config.extraMetadata?.homepage).toBe("https://github.com/nornzach/oh-my-pi-gui");
+	});
+
+	it("never writes --no-sandbox into the AppImage launch command", () => {
+		const config = read(file);
+		expect(config.toolsets?.appimage).toBe("1.0.3");
+		expect(config.appImage?.executableArgs).toEqual([]);
+	});
+
+	it("keeps a Chromium locale pak and the release owner", () => {
+		const config = read(file);
+		expect(config.electronLanguages).toContain("en-US");
+		expect(config.publish).toEqual({ provider: "github", owner: "nornzach", repo: "oh-my-pi-gui" });
+	});
+
+	it("packages Linux only through the Linux config", () => {
+		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+			scripts: Record<string, string>;
+		};
+		expect(pkg.scripts["package:linux"]).toBe(
+			"bun run build && electron-builder --config electron-builder.linux.yml --linux --x64",
+		);
+		// The default config packages resources/omp, the macOS arm64 sidecar.
+		expect(read("electron-builder.yml").linux).toBeUndefined();
 	});
 });
 

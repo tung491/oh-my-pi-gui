@@ -77,17 +77,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
 
-linux:
-  icon: resources/icons
-  category: Development
-  target:
-    - target: AppImage
-      arch: [x64]
-    - target: deb
-      arch: [x64]
-  desktop:
-    entry:
-      StartupWMClass: omp-gui
+# Linux packages build from electron-builder.linux.yml (bun run package:linux).
 
 publish:
   provider: github

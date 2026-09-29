@@ -1,0 +1,69 @@
+# Linux x64 packages: an AppImage and a .deb built from the Linux sidecar.
+# Self-contained like electron-builder.win.yml, so the macOS configs keep
+# packaging only their own sidecars (resources/omp, resources/omp.x64).
+appId: sh.omp.gui
+productName: omp
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**/*
+  - "!node_modules/**/*"
+extraResources:
+  - from: resources/omp.linux-x64
+    to: omp
+  # src/main/app-icons.ts points Linux windows at this for the X11 icon.
+  - from: resources/icon.png
+    to: icon.png
+# Becomes MimeType=x-scheme-handler/omp; in the .desktop entry.
+protocols:
+  - name: omp
+    schemes:
+      - omp
+asar: true
+compression: maximum
+# Electron reads desktopName from the packaged package.json; the deb names
+# its entry after linux.executableName, so both are omp-gui.desktop. The deb
+# target requires homepage, which would otherwise come from the git remote
+# of whichever fork runs the build.
+extraMetadata:
+  desktopName: omp-gui.desktop
+  homepage: https://github.com/nornzach/oh-my-pi-gui
+# The static AppImage runtime needs no libfuse2 and writes no --no-sandbox
+# into Exec; see README → Linux for the AppArmor profile it relies on.
+toolsets:
+  appimage: "1.0.3"
+
+linux:
+  executableName: omp-gui
+  icon: resources/icons
+  category: Development
+  # Matches the git authorship of the release commits (user-confirmed 2026-09-29).
+  maintainer: "nornzach <287694139+nornzach@users.noreply.github.com>"
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  desktop:
+    entry:
+      # Electron 35 runs under XWayland and names its X11 window class after
+      # app.setName("omp") in src/main/index.ts.
+      StartupWMClass: omp
+
+appImage:
+  executableArgs: []
+  artifactName: ${productName}-${version}-x86_64.${ext}
+
+deb:
+  artifactName: ${productName}_${version}_amd64.${ext}
+
+publish:
+  provider: github
+  owner: nornzach
+  repo: oh-my-pi-gui
+
+# Linux Chromium locale paks are region-tagged (locales/en-US.pak), as on
+# Windows; a bare `en` strips every pak and the renderer starts blank.
+electronLanguages:
+  - en-US
