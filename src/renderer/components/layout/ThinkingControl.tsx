@@ -36,7 +36,12 @@ function menuOptions(available: ThinkingLevel[]): ThinkingSelector[] {
 	return ["off", "auto", ...ladder];
 }
 
-export function ThinkingControl() {
+export function ThinkingControl({
+	menuItem = false,
+}: {
+	/** Row look inside the composer's compact run-settings menu; inline toolbar chip otherwise. */
+	menuItem?: boolean;
+}) {
 	const t = useT();
 	const rpc = useTabRpc();
 	const tabId = useRuntimeTabId();
@@ -149,7 +154,12 @@ export function ThinkingControl() {
 				aria-haspopup="menu"
 				onClick={() => setOpen(value => !value)}
 				title={t("input.thinking", { level: t(`input.thinking.name.${current}`) })}
-				className="omp-pressable flex h-8 items-center gap-1.5 rounded-lg px-2 text-omp-md font-medium hover:bg-[var(--omp-selected-bg)]"
+				className={cx(
+					"omp-pressable flex items-center gap-1.5 text-omp-md font-medium hover:bg-[var(--omp-selected-bg)]",
+					menuItem
+						? "h-8 rounded-lg px-2"
+						: "h-[30px] rounded-md border border-(--omp-border-muted) bg-(--omp-bg-secondary) px-2.5", // surface-ok: composer chip
+				)}
 				style={{ color: `var(--omp-thinking-${thinkingLevel ?? "off"})` }}
 			>
 				<Brain size={14} />

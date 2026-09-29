@@ -22,15 +22,23 @@ import { type SettingsStore, useSettingsStore } from "../../stores/settings";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 
-const triggerClass = (active: boolean) =>
+const triggerClass = (active: boolean, menuItem: boolean) =>
 	cx(
-		"omp-pressable flex h-8 items-center gap-1.5 rounded-lg border px-2 text-omp-md font-medium",
+		"omp-pressable flex items-center gap-1.5 border text-omp-md font-medium",
+		menuItem ? "h-8 rounded-lg px-2" : "h-[30px] rounded-md px-2.5",
 		active
 			? "border-[var(--omp-border-accent)] bg-[var(--omp-accent-dim)] text-[var(--omp-accent)]"
-			: "border-transparent text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)]",
+			: menuItem
+				? "border-transparent text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)]"
+				: "border-(--omp-border-muted) bg-(--omp-bg-secondary) text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)]", // surface-ok: composer chip
 	);
 
-export function ComposerModes() {
+export function ComposerModes({
+	menuItem = false,
+}: {
+	/** Row look inside the composer's compact run-settings menu; inline toolbar chip otherwise. */
+	menuItem?: boolean;
+}) {
 	const t = useT();
 	const rpc = useTabRpc();
 	const tabId = useRuntimeTabId();
@@ -146,7 +154,7 @@ export function ComposerModes() {
 				aria-haspopup="menu"
 				onClick={() => setMenuOpen(value => !value)}
 				title={triggerTitle}
-				className={triggerClass(activeModeLabels.length > 0)}
+				className={triggerClass(activeModeLabels.length > 0, menuItem)}
 			>
 				<SlidersHorizontal size={14} />
 				<span className="omp-composer-control-label">{t("modesPanel.title")}</span>

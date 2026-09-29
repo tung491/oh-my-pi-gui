@@ -19,7 +19,12 @@ import { ConfirmDialog } from "../common";
 
 const MODES: ApprovalMode[] = ["yolo", "write", "always-ask"];
 
-export function ApprovalControl() {
+export function ApprovalControl({
+	menuItem = false,
+}: {
+	/** Row look inside the composer's compact run-settings menu; inline toolbar chip otherwise. */
+	menuItem?: boolean;
+}) {
 	const t = useT();
 	const mode = useSettingsStore(s => s.approvalMode);
 	const setApprovalMode = useSettingsStore(s => s.setApprovalMode);
@@ -94,7 +99,10 @@ export function ApprovalControl() {
 				onClick={() => setOpen(value => !value)}
 				title={t("input.approval.title", { mode: t(`input.approval.${mode}`) })}
 				className={cx(
-					"omp-pressable flex h-8 items-center gap-1.5 rounded-lg px-2 text-omp-md font-medium hover:bg-[var(--omp-selected-bg)]",
+					"omp-pressable flex items-center gap-1.5 text-omp-md font-medium hover:bg-[var(--omp-selected-bg)]",
+					menuItem
+						? "h-8 rounded-lg px-2"
+						: "h-[30px] rounded-md border border-(--omp-border-muted) bg-(--omp-bg-secondary) px-2.5", // surface-ok: composer chip
 					mode === "yolo" ? "text-[var(--omp-accent)]" : "text-[var(--omp-muted)]",
 				)}
 			>

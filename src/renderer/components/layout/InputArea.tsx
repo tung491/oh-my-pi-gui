@@ -39,6 +39,7 @@ import { useSettingsStore } from "../../stores/settings";
 import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
+import { IconButton } from "../common";
 import { ApprovalControl } from "./ApprovalControl";
 import { ComposerModes } from "./ComposerModes";
 import { ContextUsagePopover } from "./ContextUsagePopover";
@@ -51,6 +52,12 @@ import { useComposerSubmit } from "./use-composer-submit";
 type SendMode = "prompt" | "steer" | "followUp";
 
 const MENTION_FS_DEBOUNCE_MS = 150;
+
+/** 30px composer toolbar chip; pair with a surface (sunken, or a state fill). */
+const CHIP = "omp-pressable flex h-[30px] items-center rounded-md border";
+const CHIP_SURFACE = "border-(--omp-border-muted) bg-(--omp-bg-secondary)"; // surface-ok: composer chip
+/** Square icon-only chip (draft editor, history, dictation, run-settings overflow). */
+const ICON_CHIP = "w-[30px] shrink-0 justify-center";
 
 /**
  * Composer: auto-growing textarea, Enter to send / Shift+Enter for newline,
@@ -691,6 +698,24 @@ export function InputArea() {
 			: t("input.steer")
 		: t("input.sendLabel");
 	const modeTitle = isStreaming ? t("input.streamingTitle", { mode: steeringMode }) : t("input.sendPrompt");
+	const sendButton = (
+		<IconButton
+			className="omp-pressable shadow-(--omp-shadow-sm) disabled:shadow-none"
+			disabled={
+				!routeReady ||
+				collabReadOnly ||
+				status !== "ready" ||
+				sending ||
+				submissionUncertain ||
+				(!text.trim() && images.length === 0)
+			}
+			icon={<ArrowUp size={16} strokeWidth={2.2} />}
+			label={t("input.send")}
+			onClick={() => send()}
+			size="md"
+			variant="solid"
+		/>
+	);
 
 	return (
 		<div className="omp-composer-region relative shrink-0 bg-transparent pb-1">
@@ -825,7 +850,7 @@ export function InputArea() {
 						/>
 					)}
 					<div
-						className="overflow-hidden rounded-xl border border-[var(--omp-input-border)] bg-[var(--omp-input-bg)] transition-[border-color,box-shadow] duration-150 focus-within:border-[var(--omp-input-focus-border)] focus-within:shadow-[var(--omp-shadow-glow)]"
+						className="overflow-hidden rounded-xl border border-(--omp-border) bg-(--omp-input-bg) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus-within:border-[var(--omp-input-focus-border)] focus-within:shadow-[var(--omp-shadow-glow)]"
 						style={modeColor ? { borderColor: modeColor } : undefined}
 					>
 						<div className="px-3.5 pb-1.5 pt-2.5">
@@ -934,18 +959,17 @@ export function InputArea() {
 						<div
 							ref={composerToolbarRef}
 							aria-busy={!routeReady}
-							className="omp-composer-toolbar flex min-h-10 flex-wrap items-center gap-1 border-t border-[var(--omp-border-muted)] px-2 py-1.5"
+							className="omp-composer-toolbar flex min-h-10 flex-wrap items-center gap-1.5 px-2 pt-1.5 pb-2"
 							inert={!routeReady}
 						>
-							<button
-								type="button"
+							<IconButton
 								disabled={collabReadOnly}
+								icon={<Paperclip size={16} />}
+								label={t("input.attach")}
 								onClick={() => fileInputRef.current?.click()}
-								title={t("input.attach")}
-								className="omp-pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
-							>
-								<Paperclip size={16} />
-							</button>
+								size="sm"
+								variant="ghost"
+							/>
 							<input
 								ref={fileInputRef}
 								type="file"
@@ -969,7 +993,12 @@ export function InputArea() {
 								disabled={collabReadOnly}
 								onClick={openDraftEditor}
 								title={t("editor.title")}
-								className="omp-pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
+								className={cx(
+									CHIP,
+									ICON_CHIP,
+									CHIP_SURFACE,
+									"text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+								)}
 							>
 								<SquarePen size={16} />
 							</button>
@@ -979,7 +1008,12 @@ export function InputArea() {
 								aria-label={t("input.history.title")}
 								title={t("input.history.title")}
 								onClick={() => setHistorySearchOpen(true)}
-								className="omp-pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
+								className={cx(
+									CHIP,
+									ICON_CHIP,
+									CHIP_SURFACE,
+									"text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+								)}
 							>
 								<History aria-hidden="true" size={16} />
 							</button>
@@ -991,10 +1025,13 @@ export function InputArea() {
 									disabled={collabReadOnly && !recording}
 									title={recording ? t("voice.mic.stop") : t("voice.mic.start")}
 									className={cx(
-										"omp-pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+										CHIP,
+										ICON_CHIP,
 										recording
-											? "bg-[var(--omp-error-dim)] text-[var(--omp-error)]"
-											: "text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+											? "border-transparent bg-[var(--omp-error-dim)] text-[var(--omp-error)]"
+											: CHIP_SURFACE,
+										!recording &&
+											"text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
 									)}
 								>
 									{recording ? (
@@ -1010,9 +1047,13 @@ export function InputArea() {
 								onClick={openModelPicker}
 								disabled={collabReadOnly}
 								title={t("input.model")}
-								className="omp-pressable flex h-8 min-w-0 max-w-52 items-center gap-2 rounded-lg px-2.5 text-omp-md font-medium text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
+								className={cx(
+									CHIP,
+									CHIP_SURFACE,
+									"min-w-0 max-w-52 gap-1.5 px-2.5 font-mono text-omp-sm font-medium text-(--omp-text) hover:bg-[var(--omp-selected-bg)]",
+								)}
 							>
-								<span className="h-2 w-2 shrink-0 rounded-full bg-[var(--omp-status-model)]" />
+								<span className="size-[7px] shrink-0 rounded-full bg-(--omp-brand)" />
 								<span className="omp-composer-model-label truncate">{model?.id ?? t("input.chooseModel")}</span>
 								<ChevronDown size={13} className="shrink-0 text-[var(--omp-dim)]" />
 							</button>
@@ -1029,7 +1070,12 @@ export function InputArea() {
 										title={t("input.moreModes")}
 										aria-label={t("input.moreModes")}
 										onClick={() => setRunSettingsOpen(open => !open)}
-										className="omp-pressable relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
+										className={cx(
+											CHIP,
+											ICON_CHIP,
+											CHIP_SURFACE,
+											"relative text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+										)}
 									>
 										<MoreHorizontal size={16} />
 										{runSettingsActive && (
@@ -1050,10 +1096,10 @@ export function InputArea() {
 													runSettingsClosing ? "omp-scale-out pointer-events-none" : "omp-pop-in"
 												}`}
 											>
-												<ThinkingControl />
+												<ThinkingControl menuItem />
 												<FastModeControl menuItem />
-												{!isChat && <ApprovalControl />}
-												{!isChat && <ComposerModes />}
+												{!isChat && <ApprovalControl menuItem />}
+												{!isChat && <ComposerModes menuItem />}
 											</div>,
 											document.body,
 										)}
@@ -1062,7 +1108,7 @@ export function InputArea() {
 								<div
 									data-run-settings-inline
 									inert={collabReadOnly}
-									className="flex shrink-0 items-center gap-0.5"
+									className="flex shrink-0 items-center gap-1.5"
 								>
 									<ThinkingControl />
 									<FastModeControl />
@@ -1098,52 +1144,20 @@ export function InputArea() {
 										>
 											{modeLabel}
 										</button>
-										<button
-											type="button"
-											onClick={() => send()}
-											disabled={
-												!routeReady ||
-												collabReadOnly ||
-												status !== "ready" ||
-												sending ||
-												submissionUncertain ||
-												(!text.trim() && images.length === 0)
-											}
-											aria-label={t("input.send")}
-											title={t("input.send")}
-											className="omp-pressable flex h-7 w-7 items-center justify-center rounded-md bg-[var(--omp-btn-primary-bg)] text-[var(--omp-btn-primary-text)] disabled:opacity-40"
-										>
-											<ArrowUp size={14} />
-										</button>
+										{sendButton}
 										<button
 											type="button"
 											disabled={!routeReady || collabReadOnly}
 											onClick={() => void abortActiveTurn(rpc, runtimeTabId)}
 											aria-label={t("input.abort")}
 											title={t("input.abort")}
-											className="omp-pressable flex h-7 w-7 items-center justify-center rounded-md bg-[var(--omp-error-dim)] text-[var(--omp-error)] hover:bg-[var(--omp-error)] hover:text-[var(--omp-btn-danger-text)]"
+											className="omp-pressable flex size-[34px] shrink-0 items-center justify-center rounded-md bg-[var(--omp-error-dim)] text-[var(--omp-error)] hover:bg-[var(--omp-error)] hover:text-[var(--omp-btn-danger-text)]"
 										>
-											<Square size={10} fill="currentColor" />
+											<Square size={12} fill="currentColor" />
 										</button>
 									</div>
 								) : (
-									<button
-										type="button"
-										onClick={() => send()}
-										disabled={
-											!routeReady ||
-											collabReadOnly ||
-											status !== "ready" ||
-											sending ||
-											submissionUncertain ||
-											(!text.trim() && images.length === 0)
-										}
-										aria-label={t("input.send")}
-										title={t("input.send")}
-										className="omp-pressable flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--omp-btn-primary-bg)] text-[var(--omp-btn-primary-text)] shadow-[var(--omp-shadow-sm)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
-									>
-										<ArrowUp size={14} strokeWidth={2.4} />
-									</button>
+									sendButton
 								)}
 							</div>
 						</div>
@@ -1167,8 +1181,8 @@ function FastModeControl({ menuItem = false }: { menuItem?: boolean }) {
 			onClick={() => void toggleFastMode()}
 			title={`${enabled ? t("input.fast.on") : t("input.fast.off")}${active ? t("input.fast.active") : ""}`}
 			className={cx(
-				"omp-pressable flex h-8 items-center gap-1.5 rounded-lg px-2 text-omp-md font-medium hover:bg-[var(--omp-selected-bg)]",
-				menuItem && "w-full",
+				"omp-pressable flex items-center gap-1.5 text-omp-md font-medium hover:bg-[var(--omp-selected-bg)]",
+				menuItem ? "h-8 w-full rounded-lg px-2" : "h-[30px] rounded-md border border-(--omp-border-muted) px-2.5",
 				enabled ? "text-[var(--omp-accent)]" : "text-[var(--omp-muted)]",
 			)}
 		>

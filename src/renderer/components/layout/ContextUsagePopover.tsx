@@ -215,6 +215,21 @@ export function ContextUsagePopover() {
 			>
 				<CircleGauge aria-hidden="true" size={14} strokeWidth={2} />
 				<span className="font-mono text-omp-xs tabular-nums">{formatContextUsage(view)}</span>
+				{capacityKnown && (
+					<span
+						aria-hidden="true"
+						className="h-1.5 w-12 shrink-0 overflow-hidden rounded-full bg-(--omp-progress-bg)"
+						data-context-meter
+					>
+						<span
+							className="block h-full"
+							style={{
+								width: `${percent}%`,
+								backgroundImage: "linear-gradient(135deg, var(--omp-brand), var(--omp-btn-primary-bg))",
+							}}
+						/>
+					</span>
+				)}
 			</button>
 
 			{mounted &&
