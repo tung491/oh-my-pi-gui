@@ -9,7 +9,7 @@
 
 ### Changed
 
-- **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged.
+- **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged. On Windows, `Ctrl+T` now opens a tab and `Ctrl+W` closes one; thinking has no default key there and can be bound in Hotkeys.
 
 ### Fixed
 
