@@ -15,6 +15,7 @@
 
 - **Launch arguments on a cold start**: a workspace path or `omp://` link passed to a packaged Linux or Windows build is honored when the app was not running.
 - **Deb updates**: a deb install runs only when you choose Restart & install, and a cancelled or failed install shows in the update banner.
+- **AppImage updates**: Restart & install asks about working tabs before replacing the file, then starts the new version once the old one has quit.
 
 ## [0.9.10] - 2026-09-24
 

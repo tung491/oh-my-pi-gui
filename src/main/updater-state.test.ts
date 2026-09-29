@@ -5,6 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+	asksBeforeInstall,
 	captureInstallError,
 	hasStableMacSigningIdentity,
 	installerPartialPath,
@@ -207,6 +208,13 @@ describe("Linux package kind and deb installs", () => {
 		expect(installsOnQuit("automatic", "appimage")).toBe(true);
 		expect(installsOnQuit("automatic", undefined)).toBe(true);
 		expect(installsOnQuit("manual", undefined)).toBe(false);
+	});
+
+	it("asks the quit prompt before a Linux install replaces the app", () => {
+		expect(asksBeforeInstall("deb")).toBe(true);
+		expect(asksBeforeInstall("appimage")).toBe(true);
+		expect(asksBeforeInstall("other")).toBe(false);
+		expect(asksBeforeInstall(undefined)).toBe(false);
 	});
 
 	it("returns the failure an install reported as an event", () => {

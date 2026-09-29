@@ -185,6 +185,16 @@ export function installsOnQuit(mode: UpdateInstallMode, kind: LinuxPackageKind |
 	return mode === "automatic" && kind !== "deb";
 }
 
+/**
+ * Linux installs that replace the app before electron-updater quits (a deb's
+ * pkexec + dpkg, an AppImage's file swap) must pass the working-tabs quit
+ * prompt first: a quit cancelled afterwards would keep the old process
+ * running on top of the new install.
+ */
+export function asksBeforeInstall(kind: LinuxPackageKind | undefined): boolean {
+	return kind === "deb" || kind === "appimage";
+}
+
 /** Run an install and return the error electron-updater dispatched: it reports failures as events, not throws. */
 export function captureInstallError(
 	subscribe: (listener: (error: Error) => void) => () => void,
