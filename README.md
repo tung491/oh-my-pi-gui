@@ -8,7 +8,7 @@
 <a href="https://github.com/nornzach/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/v/release/nornzach/oh-my-pi-gui?style=flat&colorA=222222&colorB=3FB950" alt="Release"></a>
 <a href="https://github.com/nornzach/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/downloads/nornzach/oh-my-pi-gui/total?style=flat&colorA=222222&colorB=58A6FF" alt="Downloads"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/github/license/nornzach/oh-my-pi-gui?style=flat&colorA=222222&colorB=BE185D" alt="License"></a>
-<img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-222222?style=flat" alt="Platform: macOS | Windows">
+<img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-222222?style=flat" alt="Platform: macOS | Windows | Linux">
 <img src="https://img.shields.io/badge/Electron-35-47848F?style=flat&logo=electron&logoColor=white" alt="Electron">
 <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white" alt="React">
 
@@ -161,6 +161,30 @@ Search with `⌘K`. Supported commands lead to native controls; pass-through and
 | Installer | [omp-0.9.10-setup.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-setup.exe) |
 | Portable | [omp-0.9.10-portable.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-portable.exe) |
 
+| Linux x64 (Ubuntu 24.04+) | Package |
+|---|---|
+| Debian package (recommended) | `omp_<version>_amd64.deb` from [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) |
+| AppImage | `omp-<version>-x86_64.AppImage` from [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) |
+
+On Linux, `sudo apt install ./omp_<version>_amd64.deb` installs the app to `/opt/omp`, the `omp-gui` launcher (the agent CLI keeps the name `omp`), the `omp://` link handler, and an AppArmor profile that keeps Chromium's sandbox working under Ubuntu's user-namespace restriction. Start it from the app grid or with `omp-gui /abs/project/dir`.
+
+In-app `.deb` updates have one known limit: electron-updater checks the downloaded `.deb`'s SHA-512 as you, and then `dpkg -i` reads that same file as root from your user-writable cache. Another program running as your user could swap the file in between. If that matters to you, install updates by hand with `sudo apt install ./omp_<version>_amd64.deb`.
+
+For the AppImage, save it as `~/Applications/omp.AppImage`, run `chmod +x` on it, and install this AppArmor profile as `omp-appimage` with `sudo install -m 0644 omp-appimage /etc/apparmor.d/omp-appimage && sudo apparmor_parser -r /etc/apparmor.d/omp-appimage`:
+
+```
+abi <abi/4.0>,
+include <tunables/global>
+
+profile omp-appimage @{HOME}/Applications/omp.AppImage flags=(unconfined) {
+  userns,
+
+  include if exists <local/omp-appimage>
+}
+```
+
+The profile grants user namespaces to whatever file sits at that path, and `~/Applications` is writable by any program running as you. Keep that directory for the omp AppImage only, and remove the profile (`sudo rm /etc/apparmor.d/omp-appimage && sudo systemctl reload apparmor`) when you stop using it. Without the profile, the AppImage runtime falls back to `--no-sandbox` on Ubuntu 24.04+, which leaves the renderer unsandboxed, so prefer the `.deb`. `omp://` links reach the AppImage only with desktop integration such as AppImageLauncher. On Wayland sessions, Electron 35 runs through XWayland.
+
 Open the DMG and drag **omp** into **Applications**. The build is ad-hoc signed but not notarized. If macOS blocks the first launch, use **right-click → Open**, or **System Settings → Privacy & Security → Open Anyway**, after confirming the download's source.
 
 Windows packages are currently unsigned. Windows SmartScreen may require **More info → Run anyway** on first launch after confirming the download's source.
@@ -185,6 +209,8 @@ Windows packages are currently unsigned. Windows SmartScreen may require **More 
 | `⌘,` | Settings |
 | `⌘B` / `⌘J` | Toggle sidebars |
 | `Esc` | Context-dependent close or abort; not an unconditional abort shortcut |
+
+On Linux and Windows, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+Shift+T`, `Ctrl+K`). The thinking toggle has no default chord there, because Ctrl+T opens a tab; assign one in Keyboard Shortcuts. On GNOME Wayland, `Ctrl+Shift+O` works only while an omp window is focused.
 
 <a id="en-development"></a>
 ### Development
@@ -217,7 +243,7 @@ Never stage `packages/gui/` into the monorepo: its untracked status there is int
 
 #### Build from source
 
-**Prerequisites:** Git and [Bun](https://bun.sh) **≥ 1.4**. macOS is required for the macOS sidecar and DMG commands; Windows x64 can be cross-built from macOS or Linux when the neighboring monorepo is available.
+**Prerequisites:** Git and [Bun](https://bun.sh) **≥ 1.4**. macOS is required for the macOS sidecar and DMG commands; Windows x64 can be cross-built from macOS or Linux when the neighboring monorepo is available. Linux x64 packages build on a Linux x64 host.
 
 ```bash
 # Clone the monorepo fork, then nest the GUI repository inside it.
@@ -240,7 +266,11 @@ bun run package:mac:arm64 -- --publish never    # dist/omp-<version>-arm64.dmg
 bun run package:mac:x64 -- --publish never      # dist/omp-<version>.dmg
 bun run build:omp:win                           # Windows x64 -> resources/omp.exe
 bun run package:win -- --publish never           # Windows NSIS + portable installers
+bun run build:omp:linux                        # Linux x64 -> resources/omp.linux-x64
+bun run package:linux -- --publish never        # dist/omp-<version>-x86_64.AppImage, dist/omp_<version>_amd64.deb, dist/latest-linux.yml
 ```
+
+The Linux config (`electron-builder.linux.yml`) bundles `resources/omp.linux-x64`; always package Linux with `package:linux`. On a Linux host, `bun run build:omp` writes `resources/omp` for `bun run dev`.
 
 `build:omp` compiles the neighboring monorepo agent source and embeds the native addon. It stages the matching `pi_natives` version, downloads the published package when needed, replaces stale addons, and restores temporary staging afterwards. Sidecars at `resources/omp*` are ignored build artifacts: **never commit them**.
 
@@ -289,6 +319,11 @@ The capture script renders the actual Electron GUI using a fresh temporary HOME,
 | Native addon download fails | Check registry access and whether that version is published. If necessary, from the monorepo root run `bun --cwd=packages/natives run build` with the required Rust toolchain, then rebuild the sidecar. |
 | Intel sidecar exits immediately | Check the sidecar architecture and package with `bun run package:mac:x64`, not the default config. |
 | A command or integration is unavailable | Some slash commands pass through or are unsupported. Configure external services/tools separately; use SSH settings rather than the disabled `/ssh` management commands. |
+| The AppImage starts with `--no-sandbox` | Install the `omp-appimage` AppArmor profile above for the exact path `~/Applications/omp.AppImage`, or use the `.deb`. |
+| `bun run dev` exits with `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ restricts unprivileged user namespaces. Install a `userns` profile for the dev Electron binary: use the AppImage profile above, named `omp-dev-electron`, with the path printed by `node -p "require('electron')"`. Do not make `chrome-sandbox` setuid root. |
+| No tray icon on Ubuntu | Enable the Ubuntu AppIndicators extension. |
+| A `.deb` update asks for the password twice, or the window freezes | Cancelling pkexec triggers electron-updater's `apt-get -f` retry, and the window waits while the prompt is open. |
+| `Ctrl+Shift+O` does nothing while another app is focused | GNOME delivers it only to focused XWayland windows. A refused registration is logged to `~/.config/omp/logs/gui-runtime.jsonl`. |
 
 <a id="en-release"></a>
 ### Release process (maintainers)
@@ -302,9 +337,9 @@ Releases belong only to [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh
 2. **Prepare the GUI release.** In `packages/gui/`, bump `package.json`, write the release's `CHANGELOG.md` entry, and update both language sections' install links and source/release notes.
 3. **Verify the GUI:** `bunx vitest run && bun run check:types && bun run build`; check touched supported files with Biome.
 4. **Record the release source.** Commit GUI release changes in the GUI repository, tag `vX.Y.Z`, and push `main` plus the tag to its `origin`. Keep both checkouts clean before producing release artifacts.
-5. **Build all sidecars:** `bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`. Run the two macOS sidecars and the Windows sidecar's `--smoke-test` on compatible hosts. Cross-compilation alone is not runtime verification.
-6. **Build and inspect installers:** build both DMGs with the macOS commands and Windows installers with `bun run package:win -- --publish never`. Mount each DMG; verify its app seal with `codesign --verify --deep --strict --verbose=2 "<path-to-omp.app>"`, its bundled sidecar architecture with `file "<path-to-omp.app>/Contents/Resources/omp"`, and the Windows package's `win-unpacked/resources/omp.exe` with `file`. On compatible hosts, launch each package, confirm sidecar `ready`, a successful `get_settings` RPC, and a settings toggle that persists.
-7. **Publish only verified artifacts.** Publish a GitHub Release with both DMGs, the Windows NSIS and portable installers, generated update metadata, and the changelog. Record the monorepo commit used for the sidecars, especially when it differs from upstream `main`. Never commit sidecar binaries or push to `upstream`.
+5. **Build all sidecars:** `bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`. Run the two macOS sidecars and the Windows sidecar's `--smoke-test` on compatible hosts. On a Linux x64 host, run `bun run build:omp:linux` and `resources/omp.linux-x64 --smoke-test`. Cross-compilation alone is not runtime verification.
+6. **Build and inspect installers:** build both DMGs with the macOS commands and Windows installers with `bun run package:win -- --publish never`. Mount each DMG; verify its app seal with `codesign --verify --deep --strict --verbose=2 "<path-to-omp.app>"`, its bundled sidecar architecture with `file "<path-to-omp.app>/Contents/Resources/omp"`, and the Windows package's `win-unpacked/resources/omp.exe` with `file`. On compatible hosts, launch each package, confirm sidecar `ready`, a successful `get_settings` RPC, and a settings toggle that persists. On Linux x64, run `bun run package:linux -- --publish never`, install the `.deb` and the AppImage, and run `OMP_GUI_TEST_APP=/opt/omp/omp-gui bunx playwright test e2e/packaged-smoke.e2e.ts`.
+7. **Publish only verified artifacts.** Publish a GitHub Release with both DMGs, the Windows NSIS and portable installers, the Linux AppImage and `.deb` with `latest-linux.yml` (without it, Linux update checks fail), generated update metadata, and the changelog. Record the monorepo commit used for the sidecars, especially when it differs from upstream `main`. Never commit sidecar binaries or push to `upstream`.
 
 </details>
 
@@ -453,6 +488,30 @@ v0.9.10 包含以下 GUI 改进与内置 Agent 更新：
 | 安装程序 | [omp-0.9.10-setup.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-setup.exe) |
 | 便携版 | [omp-0.9.10-portable.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-portable.exe) |
 
+| Linux x64（Ubuntu 24.04+） | 安装包 |
+|---|---|
+| Debian 包（推荐） | 从 [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) 下载 `omp_<version>_amd64.deb` |
+| AppImage | 从 [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) 下载 `omp-<version>-x86_64.AppImage` |
+
+在 Linux 上，`sudo apt install ./omp_<version>_amd64.deb` 会把应用安装到 `/opt/omp`，并安装 `omp-gui` 启动命令（Agent CLI 仍叫 `omp`）、`omp://` 链接处理程序，以及一个 AppArmor 配置文件，使 Chromium 沙箱在 Ubuntu 的用户命名空间限制下仍能工作。可从应用列表启动，或运行 `omp-gui /abs/project/dir`。
+
+应用内 `.deb` 更新有一个已知限制：electron-updater 以你的用户身份校验下载的 `.deb` 的 SHA-512，随后 `dpkg -i` 以 root 身份从你可写的缓存目录读取同一文件。以你的身份运行的其他程序可能在两者之间替换该文件。如果在意这一点，请手动安装更新：`sudo apt install ./omp_<version>_amd64.deb`。
+
+AppImage 请保存为 `~/Applications/omp.AppImage`，执行 `chmod +x`，再把下面的 AppArmor 配置保存为 `omp-appimage` 并安装：`sudo install -m 0644 omp-appimage /etc/apparmor.d/omp-appimage && sudo apparmor_parser -r /etc/apparmor.d/omp-appimage`：
+
+```
+abi <abi/4.0>,
+include <tunables/global>
+
+profile omp-appimage @{HOME}/Applications/omp.AppImage flags=(unconfined) {
+  userns,
+
+  include if exists <local/omp-appimage>
+}
+```
+
+该配置会把用户命名空间权限授予该路径上的任意文件，而 `~/Applications` 可被以你身份运行的任何程序写入。请只把该目录用于 omp AppImage，不再使用时删除配置（`sudo rm /etc/apparmor.d/omp-appimage && sudo systemctl reload apparmor`）。没有该配置时，AppImage 运行时在 Ubuntu 24.04+ 上会退回 `--no-sandbox`，渲染进程将不受沙箱保护，因此推荐使用 `.deb`。`omp://` 链接只有在桌面集成（例如 AppImageLauncher）下才会送达 AppImage。在 Wayland 会话中，Electron 35 通过 XWayland 运行。
+
 打开 DMG，把 **omp** 拖入**应用程序**。构建采用 ad-hoc 签名，未经 Apple 公证。如果 macOS 拦截首次启动，请先确认下载来源，再使用**右键 → 打开**，或**系统设置 → 隐私与安全性 → 仍要打开**。
 
 Windows 包当前未签名。首次启动前请确认下载来源；Windows SmartScreen 可能需要点击**更多信息 → 仍要运行**。
@@ -477,6 +536,8 @@ Windows 包当前未签名。首次启动前请确认下载来源；Windows Smar
 | `⌘,` | 设置 |
 | `⌘B` / `⌘J` | 切换侧栏 |
 | `Esc` | 按当前上下文关闭界面或中止执行，不是无条件中止快捷键 |
+
+在 Linux 和 Windows 上，⌘ 快捷键改用 Ctrl，并以文字显示（`Ctrl+T`、`Ctrl+Shift+T`、`Ctrl+K`）。思考开关在这些平台上没有默认快捷键，因为 Ctrl+T 用于新建标签页；可在键盘快捷键中自行指定。在 GNOME Wayland 上，`Ctrl+Shift+O` 仅在 omp 窗口获得焦点时生效。
 
 <a id="zh-development"></a>
 ### 开发
@@ -509,7 +570,7 @@ omp-monorepo/                    # nornzach/oh-my-pi：fork 与 sidecar 构建�
 
 #### 从源码构建
 
-**前置条件：**Git、[Bun](https://bun.sh) **≥ 1.4**。macOS sidecar 与 DMG 命令需要 macOS；Windows x64 sidecar 可以在 macOS 或 Linux 上交叉构建，但仍需相邻的 monorepo。
+**前置条件：**Git、[Bun](https://bun.sh) **≥ 1.4**。macOS sidecar 与 DMG 命令需要 macOS；Windows x64 sidecar 可以在 macOS 或 Linux 上交叉构建，但仍需相邻的 monorepo。Linux x64 安装包需在 Linux x64 宿主上构建。
 
 ```bash
 # 克隆 monorepo fork，再将 GUI 仓库嵌套其中。
@@ -532,7 +593,11 @@ bun run package:mac:arm64 -- --publish never    # dist/omp-<版本>-arm64.dmg
 bun run package:mac:x64 -- --publish never      # dist/omp-<版本>.dmg
 bun run build:omp:win                           # Windows x64 -> resources/omp.exe
 bun run package:win -- --publish never           # Windows NSIS + portable 安装包
+bun run build:omp:linux                        # Linux x64 -> resources/omp.linux-x64
+bun run package:linux -- --publish never        # dist/omp-<版本>-x86_64.AppImage、dist/omp_<版本>_amd64.deb、dist/latest-linux.yml
 ```
+
+Linux 配置（`electron-builder.linux.yml`）打包 `resources/omp.linux-x64`；Linux 必须使用 `package:linux` 打包。在 Linux 宿主上，`bun run build:omp` 会为 `bun run dev` 生成 `resources/omp`。
 
 `build:omp` 编译相邻的 monorepo Agent 源码并嵌入原生插件。它会准备匹配版本的 `pi_natives`，需要时下载已发布的包，替换旧插件，并在结束后还原临时准备的文件。`resources/omp*` 是被忽略的构建产物，**绝不能提交入库**。
 
@@ -581,6 +646,11 @@ bun scripts/capture-showcase.ts
 | 原生插件下载失败 | 检查 registry 访问及该版本是否已发布。必要时安装所需 Rust 工具链，在 monorepo 根目录运行 `bun --cwd=packages/natives run build`，然后重建 sidecar。 |
 | Intel sidecar 立即退出 | 检查 sidecar 架构，并使用 `bun run package:mac:x64` 打包，不要使用默认配置。 |
 | 命令或集成不可用 | 部分 slash 命令转交 Agent 或尚未支持。外部工具和服务需另行配置；SSH 管理使用设置页面，而非已停用的 `/ssh` 管理命令。 |
+| AppImage 以 `--no-sandbox` 启动 | 为确切路径 `~/Applications/omp.AppImage` 安装上文的 `omp-appimage` AppArmor 配置，或改用 `.deb`。 |
+| `bun run dev` 报错 `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ 限制了非特权用户命名空间。为开发用 Electron 二进制安装一个 `userns` 配置：沿用上文的 AppImage 配置，命名为 `omp-dev-electron`，路径改为 `node -p "require('electron')"` 输出的路径。不要把 `chrome-sandbox` 设为 setuid root。 |
+| Ubuntu 上没有托盘图标 | 启用 Ubuntu AppIndicators 扩展。 |
+| `.deb` 更新要求输入两次密码，或窗口卡住 | 取消 pkexec 会触发 electron-updater 的 `apt-get -f` 重试，提示框打开期间窗口会等待。 |
+| 其他应用获得焦点时 `Ctrl+Shift+O` 无效 | GNOME 只把它传给获得焦点的 XWayland 窗口。注册被拒绝时会记录到 `~/.config/omp/logs/gui-runtime.jsonl`。 |
 
 <a id="zh-release"></a>
 ### 发布流程（维护者）
@@ -594,9 +664,9 @@ bun scripts/capture-showcase.ts
 2. **准备 GUI 发布。**在 `packages/gui/` 提升 `package.json` 版本，撰写本次发布的 `CHANGELOG.md`，更新两种语言的安装链接与源码/发布说明。
 3. **验证 GUI：**`bunx vitest run && bun run check:types && bun run build`，并用 Biome 检查修改过且受其支持的文件。
 4. **记录发布源码。**GUI 发布改动在 GUI 仓库提交，打 `vX.Y.Z` 标签，向它的 `origin` 推送 `main` 与标签。生成发布产物前保持两个检出干净。
-5. **构建全部 sidecar：**`bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`。在兼容宿主上运行两个 macOS sidecar 与 Windows sidecar 的 `--smoke-test`；交叉编译成功不等于运行验证通过。
-6. **构建并检查安装包：**按 macOS 命令构建两个 DMG，按 `bun run package:win -- --publish never` 构建 Windows 安装包。逐个挂载 DMG，用 `codesign --verify --deep --strict --verbose=2 "<path-to-omp.app>"` 验证应用签名封装，用 `file "<path-to-omp.app>/Contents/Resources/omp"` 检查内置 sidecar 架构，并用 `file` 检查 Windows 包的 `win-unpacked/resources/omp.exe`。在兼容宿主上启动各平台应用，确认 sidecar `ready`、`get_settings` RPC 成功，以及设置开关可以持久化。
-7. **只发布验证过的产物。**GitHub Release 附带两个 DMG、Windows NSIS 与便携版安装包、更新元数据和 changelog，并记录构建 sidecar 使用的 monorepo commit，尤其在其不同于上游 `main` 时。绝不提交 sidecar 二进制，也不向 `upstream` 推送。
+5. **构建全部 sidecar：**`bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`。在兼容宿主上运行两个 macOS sidecar 与 Windows sidecar 的 `--smoke-test`；在 Linux x64 宿主上运行 `bun run build:omp:linux` 与 `resources/omp.linux-x64 --smoke-test`。交叉编译成功不等于运行验证通过。
+6. **构建并检查安装包：**按 macOS 命令构建两个 DMG，按 `bun run package:win -- --publish never` 构建 Windows 安装包。逐个挂载 DMG，用 `codesign --verify --deep --strict --verbose=2 "<path-to-omp.app>"` 验证应用签名封装，用 `file "<path-to-omp.app>/Contents/Resources/omp"` 检查内置 sidecar 架构，并用 `file` 检查 Windows 包的 `win-unpacked/resources/omp.exe`。在兼容宿主上启动各平台应用，确认 sidecar `ready`、`get_settings` RPC 成功，以及设置开关可以持久化。在 Linux x64 上运行 `bun run package:linux -- --publish never`，安装 `.deb` 与 AppImage，再运行 `OMP_GUI_TEST_APP=/opt/omp/omp-gui bunx playwright test e2e/packaged-smoke.e2e.ts`。
+7. **只发布验证过的产物。**GitHub Release 附带两个 DMG、Windows NSIS 与便携版安装包、Linux AppImage 与 `.deb` 及 `latest-linux.yml`（缺少它，Linux 更新检查会失败）、更新元数据和 changelog，并记录构建 sidecar 使用的 monorepo commit，尤其在其不同于上游 `main` 时。绝不提交 sidecar 二进制，也不向 `upstream` 推送。
 
 </details>
 

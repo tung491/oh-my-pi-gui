@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Linux x64 packages**: an AppImage and a `.deb` for Ubuntu 24.04+, with the bundled sidecar, `omp://` links, the tray and window icon, and `latest-linux.yml` update metadata.
+- **Linux CI**: type checks, unit tests and the GUI build run on Ubuntu for every push and pull request.
+
+### Changed
+
+- **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged.
+
+### Fixed
+
+- **Launch arguments on a cold start**: a workspace path or `omp://` link passed to a packaged Linux or Windows build is honored when the app was not running.
+- **Deb updates**: a deb install runs only when you choose Restart & install, and a cancelled or failed install shows in the update banner.
+
 ## [0.9.10] - 2026-09-24
 
 ### Added
