@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CustomProviderView } from "../../../shared/ipc-types";
 import type { ProviderDiscoveryState, ProviderInfo, ProvidersResult } from "../../../shared/rpc-types";
 import { useT } from "../../lib/i18n";
+import { loginProvider } from "../../lib/provider-login";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { toast } from "../../stores/toast";
@@ -234,15 +235,9 @@ export function ProvidersWindow({ pollMs = 2_500 }: { pollMs?: number }) {
 		const name = providers.find(p => p.id === providerId)?.name ?? providerId;
 		setBusyProvider(providerId);
 		try {
-			const res = await tabRpc.login(providerId);
-			if (!res.success) {
-				toast({ variant: "error", title: t("providers.loginFailed"), message: res.error });
-				return;
-			}
-			await load(true);
-			toast({ variant: "success", message: t("providers.loginSuccess", { provider: name }) });
-		} catch (cause) {
-			toast({ variant: "error", title: t("providers.loginFailed"), message: String(cause) });
+			await loginProvider(tabRpc, providerId, name, t, async () => {
+				await load(true);
+			});
 		} finally {
 			setBusyProvider(null);
 		}

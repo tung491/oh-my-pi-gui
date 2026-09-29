@@ -388,6 +388,20 @@
 	width: min(clamp(36rem, 40vw, 64rem), calc(100vw - 2rem));
 }
 
+/* First-run wizard: a navy stage behind a fixed two-column panel. Unlayered
+ * and after the size rules on purpose, so it overrides the default Modal size
+ * width and the overlay's backdrop utility. */
+.omp-onboarding-backdrop {
+	background:
+		radial-gradient(60% 50% at 50% 40%, rgba(45, 140, 255, 0.18), transparent 70%),
+		var(--omp-sidebar-bg);
+}
+
+.omp-onboarding-panel {
+	width: min(1000px, calc(100vw - 32px));
+	height: min(620px, calc(100dvh - 32px));
+}
+
 /* ---------------------------------------------------------------------------
  * Editorial transcript — an open reading rail for long agent sessions.
  * The existing component chrome remains available outside this scope; this
