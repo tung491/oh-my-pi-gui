@@ -16,3 +16,15 @@ export function resolveOmpCandidate(...parts: string[]): string | null {
 	}
 	return null;
 }
+
+/**
+ * Sidecar filename under resources/ for a cross-target build. Each packaged
+ * platform needs its own file: electron-builder.x64.yml ships omp.x64 (Intel
+ * macOS), electron-builder.win.yml ships omp.exe, electron-builder.linux.yml
+ * ships omp.linux-<arch>. The host build keeps writing resources/omp.
+ */
+export function sidecarOutName(osName: string, arch: string): string {
+	if (osName === "win32" || osName === "windows") return "omp.exe";
+	if (osName === "linux") return `omp.linux-${arch}`;
+	return arch === "x64" ? "omp.x64" : "omp";
+}

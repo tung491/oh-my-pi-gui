@@ -30,6 +30,7 @@
     "test:e2e": "playwright test",
     "bench": "vitest bench",
     "build:omp:win": "bun scripts/build-bundled-omp.ts --target bun-windows-x64-baseline",
+    "build:omp:linux": "bun scripts/build-bundled-omp.ts --target bun-linux-x64-baseline",
     "package:win:dir": "bun run build && electron-builder --config electron-builder.win.yml --win --x64 --dir"
   },
   "dependencies": {
