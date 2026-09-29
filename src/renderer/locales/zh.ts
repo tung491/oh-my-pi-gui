@@ -3283,4 +3283,5 @@ export const zh: Record<string, string> = {
 	"onboarding.ready.title": "准备就绪",
 	"onboarding.ready.provider": "已连接模型 Provider。",
 	"onboarding.wizard.version": "omp GUI 版本 {version}",
+	"settings.gui.themeCards": "界面主题",
 };

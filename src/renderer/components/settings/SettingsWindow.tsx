@@ -63,7 +63,7 @@ import { focusedSessionRuntime, sessionRuntime, withSessionRuntime } from "../..
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { CodeBlock } from "../chat/CodeBlock";
-import { Button, Input, Spinner, type TabItem, TextArea } from "../common";
+import { Button, IconButton, Input, Kbd, Spinner, type TabItem, TextArea, VifLogo } from "../common";
 import { isTopmostDialog, registerDialogLayer } from "../common/dialog-layer";
 import { ExtensionSettingsPage } from "../panels/ExtensionsPanel";
 import { InventorySettingsPage, type TabId as InventoryTabId } from "../panels/InventoryPanel";
@@ -102,6 +102,7 @@ import {
 	SSH_TAB_ID,
 	UPDATES_TAB_ID,
 } from "./settings-window-model";
+import { ThemeCards } from "./ThemeCards";
 import { UpdatesSettingsPage } from "./UpdatesSettingsPage";
 
 /** Settings without UI metadata (advanced): searchable flat list. */
@@ -913,6 +914,31 @@ export function SettingsWindow() {
 			ref={dialogRef}
 			role="dialog"
 		>
+			<div className="flex h-13 shrink-0 items-center gap-3 border-b border-(--omp-border-muted) bg-(--omp-bg-elevated) pr-3 pl-5">
+				<VifLogo height={18} />
+				<span aria-hidden="true" className="h-4 w-px shrink-0 bg-(--omp-border)" />
+				<h1 className="min-w-0 flex-1 truncate font-display text-omp-xl font-semibold text-(--omp-text)">
+					{t("settings.title")}
+				</h1>
+				{showGlobalSearch && (
+					<div className="relative w-[clamp(13rem,32vw,18rem)] max-w-full min-w-0 shrink">
+						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--omp-dim)" size={13} />
+						<input
+							aria-label={t("settings.searchPlaceholder")}
+							className="h-8 w-full rounded-lg border border-(--omp-input-border) bg-(--omp-input-bg) pr-12 pl-8 text-omp-sm text-(--omp-text) outline-none transition-colors placeholder:text-(--omp-dim) focus:border-(--omp-input-focus-border)"
+							onChange={event => setQuery(event.target.value)}
+							placeholder={t("settings.searchPlaceholder")}
+							ref={searchInputRef}
+							spellCheck={false}
+							value={query}
+						/>
+						<Kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--omp-dim)">
+							{displayShortcut("⌘K", keyboardPlatform)}
+						</Kbd>
+					</div>
+				)}
+				<IconButton icon={<X size={16} />} label={t("settings.close")} onClick={close} />
+			</div>
 			<div className="flex min-h-0 flex-1">
 				<nav className="settings-sidebar flex shrink-0 flex-col border-r border-(--omp-border-muted)">
 					<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -921,7 +947,7 @@ export function SettingsWindow() {
 								<button
 									type="button"
 									aria-expanded={group.items.some(item => item.id === tab)}
-									className="settings-nav-group-label mb-1 flex w-full items-center gap-1 rounded-lg px-3 py-2 text-left text-omp-md font-medium text-(--omp-text) hover:bg-(--omp-selected-bg)"
+									className="settings-nav-group-label omp-eyebrow mb-1 flex w-full items-center gap-1 rounded-lg px-3 py-2 text-left text-(--omp-dim) hover:bg-(--omp-selected-bg)"
 									onClick={() => {
 										setTab(group.items[0].id);
 										setQuery("");
@@ -940,9 +966,9 @@ export function SettingsWindow() {
 										const active = tb.id === tab;
 										return (
 											<button
-												className={`settings-nav-item flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-omp-md transition-colors ${
+												className={`settings-nav-item flex h-[34px] w-full items-center gap-2 rounded-lg px-3 text-left text-omp-md transition-colors ${
 													active
-														? "bg-(--omp-selected-bg) font-medium text-(--omp-text)"
+														? "bg-(--omp-selected-bg) font-medium text-(--omp-accent)"
 														: "text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
 												}`}
 												key={tb.id}
@@ -979,41 +1005,12 @@ export function SettingsWindow() {
 					</div>
 				</nav>
 				<main className="settings-main-canvas flex min-w-0 flex-1 flex-col overflow-hidden">
-					<header className="omp-column omp-column-workspace flex h-14 shrink-0 items-center gap-3 border-b border-(--omp-border-muted)">
-						<div className="min-w-0 flex-1">
-							{!managementTab && (
-								<h1 className="truncate text-omp-xl font-semibold tracking-[-0.015em] text-(--omp-text)">
-									{tabTitle({ id: tab, label: tab })}
-								</h1>
-							)}
-						</div>
-						{showGlobalSearch && (
-							<div className="relative w-[clamp(13rem,32vw,18rem)] max-w-full min-w-0 shrink">
-								<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--omp-dim)" size={13} />
-								<input
-									aria-label={t("settings.searchPlaceholder")}
-									className="h-8 w-full rounded-lg border border-(--omp-input-border) bg-(--omp-input-bg) pr-12 pl-8 text-omp-sm text-(--omp-text) outline-none transition-colors placeholder:text-(--omp-dim) focus:border-(--omp-input-focus-border)"
-									onChange={event => setQuery(event.target.value)}
-									placeholder={t("settings.searchPlaceholder")}
-									ref={searchInputRef}
-									spellCheck={false}
-									value={query}
-								/>
-								<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-(--omp-border-muted) px-1.5 py-0.5 text-omp-xxs text-(--omp-dim)">
-									{displayShortcut("⌘K", keyboardPlatform)}
-								</span>
-							</div>
-						)}
-						<button
-							aria-label={t("settings.close")}
-							className="flex h-8 w-8 items-center justify-center rounded-lg text-(--omp-muted) transition-colors hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
-							onClick={close}
-							type="button"
-						>
-							<X size={16} />
-						</button>
-					</header>
 					<div className="settings-content omp-column omp-column-workspace min-h-0 flex-1 overflow-y-auto py-4 min-[1080px]:py-5">
+						{!managementTab && (
+							<h2 className="mb-4 truncate font-display text-omp-xl font-semibold tracking-[-0.015em] text-(--omp-text)">
+								{tabTitle({ id: tab, label: tab })}
+							</h2>
+						)}
 						{!sidecarReady && isAgentSettingsTab && (
 							<SettingsConnectionNotice
 								busy={sidecarBusy}
@@ -1085,6 +1082,7 @@ export function SettingsWindow() {
 								{tab === GUI_TAB_ID && (
 									<>
 										<Section id="setting-gui-theme" title={t("settings.gui.theme")}>
+											<ThemeCards />
 											<Button
 												onClick={() => {
 													close();

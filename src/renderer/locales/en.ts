@@ -3339,4 +3339,5 @@ export const en: Record<string, string> = {
 	"onboarding.ready.title": "You're ready",
 	"onboarding.ready.provider": "A model provider is connected.",
 	"onboarding.wizard.version": "omp GUI {version}",
+	"settings.gui.themeCards": "GUI theme",
 };
