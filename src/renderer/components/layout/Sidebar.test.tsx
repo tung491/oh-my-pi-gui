@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { SessionInfo } from "../../../shared/ipc-types";
 import { useSidebarRecency } from "../../hooks/use-sidebar-recency";
 import { I18nProvider } from "../../lib/i18n";
+import { en } from "../../locales/en";
 import { useSessionStore } from "../../stores/session";
 import { useSidebarPrefs } from "../../stores/sidebar-prefs";
 import { useTabsStore } from "../../stores/tabs";
@@ -68,6 +69,9 @@ interface MockOmp {
 		get: Mock<(key: string) => Promise<unknown>>;
 		set: Mock<(key: string, value: unknown) => Promise<void>>;
 	};
+	updater: {
+		version: Mock<() => Promise<string>>;
+	};
 	rpc: Record<string, Mock<(...args: unknown[]) => Promise<unknown>>>;
 }
 
@@ -103,6 +107,9 @@ function installMockOmp(sessionList: SessionInfo[]): MockOmp {
 		prefs: {
 			get: vi.fn(async () => null),
 			set: vi.fn(async () => {}),
+		},
+		updater: {
+			version: vi.fn(async () => "0.9.10"),
 		},
 		rpc: new Proxy({} as MockOmp["rpc"], {
 			get: (target, prop) => {
@@ -181,6 +188,31 @@ async function fire(element: Element | TestElement | null, prop: "onClick" | "on
 
 function menuItemLabels(): string[] {
 	return [...document.body.querySelectorAll('[role="menu"] button')].map(b => (b.textContent ?? "").trim());
+}
+
+const TEXT_NODE = 3;
+
+interface NameNode {
+	nodeType: number;
+	textContent: string | null;
+	childNodes: ArrayLike<NameNode>;
+	getAttribute?: (name: string) => string | null;
+}
+
+/** The name assistive tech reads: aria-label, else the text outside aria-hidden subtrees. */
+function accessibleName(element: TestElement): string {
+	const label = element.getAttribute("aria-label");
+	if (label !== null) return label.trim();
+	const visibleText = (node: NameNode): string => {
+		if (node.nodeType === TEXT_NODE) return node.textContent ?? "";
+		if (node.getAttribute?.("aria-hidden") === "true") return "";
+		return Array.from(node.childNodes, visibleText).join("");
+	};
+	return visibleText(element as unknown as NameNode).trim();
+}
+
+function modeButtons(): TestElement[] {
+	return [...container.querySelectorAll('[aria-label="Choose workspace mode"] button')];
 }
 
 afterEach(async () => {
@@ -338,18 +370,13 @@ describe("Sidebar menus and pinned ordering", () => {
 		});
 		await mount(<Sidebar />);
 
-		const modeButton = container.querySelector('[aria-label="Choose workspace mode"], [aria-label="选择工作模式"]');
-		await fire(modeButton, "onClick");
-
-		const labels = menuItemLabels();
-		expect(labels.some(label => label.includes("Build, debug, and ship in a project"))).toBe(true);
-		expect(labels.some(label => label.includes("Full agent in your default workspace"))).toBe(true);
-		expect(labels).toHaveLength(2);
-
-		const workItem = [...document.body.querySelectorAll('[role="menu"] button')].find(button =>
-			(button.textContent ?? "").includes("Full agent in your default workspace"),
-		);
-		await fire(workItem as Element, "onClick");
+		expect(modeButtons().map(button => button.getAttribute("title"))).toEqual([
+			"Build, debug, and ship in a project",
+			"Full agent in your default workspace",
+		]);
+		const workButton = () => modeButtons().find(button => (button.textContent ?? "").trim() === "Work") ?? null;
+		await fire(workButton(), "onClick");
+		expect(workButton()?.getAttribute("aria-pressed")).toBe("true");
 		expect(container.querySelector("[data-sidebar-new-chat]")).toBeNull();
 		await fire(container.querySelector("[data-sidebar-new-agent]"), "onClick");
 
@@ -434,7 +461,10 @@ describe("Sidebar menus and pinned ordering", () => {
 
 		const signal = () => container.querySelector('[data-active="true"] .omp-signal-light') as unknown as Element;
 		expect(signal().getAttribute("aria-label")).toBe("Ready");
-		expect(signal().getAttribute("style")).toContain("--omp-dim");
+		const readyStyle = signal().getAttribute("style") ?? "";
+		expect(readyStyle).toContain("var(--omp-sidebar-muted)");
+		expect(readyStyle).not.toContain("--omp-sidebar-success");
+		expect(readyStyle).not.toContain("--omp-success");
 
 		await act(async () => {
 			useTabsStore.setState({ tabs: [{ ...useTabsStore.getState().tabs[0]!, status: "running" }] });
@@ -617,9 +647,8 @@ describe("Sidebar menus and pinned ordering", () => {
 		await mount(<Sidebar />);
 
 		expect(container.querySelector("[data-chat-section]")).not.toBeNull();
-		expect(
-			container.querySelector('[aria-label="Choose workspace mode"], [aria-label="选择工作模式"]')?.textContent,
-		).toContain("Code");
+		const codeButton = modeButtons().find(button => (button.textContent ?? "").trim() === "Code");
+		expect(codeButton?.getAttribute("aria-pressed")).toBe("true");
 	});
 
 	it("keeps the active task protected while it is compacting", async () => {
@@ -778,6 +807,79 @@ describe("Sidebar menus and pinned ordering", () => {
 			"/work/alpha/one.jsonl",
 			"/work/alpha/two.jsonl",
 		]);
+	});
+});
+
+describe("Sidebar VIF rail", () => {
+	it("renders the VIF rail", async () => {
+		const omp = installMockOmp(LIST);
+		omp.prefs.get.mockImplementation(async () => undefined);
+		seedStores();
+		useUiStore.setState({ settingsOpen: false });
+		await mount(<Sidebar />);
+
+		expect(container.querySelector('img[alt="VIF"]')).not.toBeNull();
+		const aside = container.querySelector("aside") as unknown as HTMLElement;
+		expect(aside.style.width).toBe("264px");
+
+		const navigation = container.querySelector("[data-sidebar-navigation]");
+		if (!navigation) throw new Error("sidebar navigation missing");
+		const navButtons = navigation.querySelectorAll("button");
+		for (const [index, label] of [
+			"Commands",
+			"Agent Hub",
+			"PR Center",
+			"Session stats",
+			"Providers & login",
+		].entries()) {
+			expect((navButtons[index]?.textContent ?? "").startsWith(label), `navigation item ${index}: ${label}`).toBe(
+				true,
+			);
+		}
+		const agentHub = navButtons[1];
+		if (!agentHub) throw new Error("Agent Hub navigation item missing");
+		expect(agentHub.querySelector("kbd")?.textContent).toBe("⌥A");
+		expect(accessibleName(agentHub)).toBe("Agent Hub");
+
+		// Strict e2e clicks resolve `{ name: "Settings", exact: true }`: only the nav item may carry it.
+		const sidebarButtons = container.querySelectorAll("aside button");
+		expect(sidebarButtons.filter(button => accessibleName(button) === "Settings")).toHaveLength(1);
+
+		const footer = () => container.querySelector("[data-sidebar-footer]");
+		expect(footer()).not.toBeNull();
+		await fire(footer()?.querySelector('button[aria-label="Open settings"]') ?? null, "onClick");
+		expect(useUiStore.getState().settingsOpen).toBe(true);
+
+		const footerText = () => footer()?.textContent ?? "";
+		expect(omp.updater.version).toHaveBeenCalled();
+		expect(footerText()).toContain("omp GUI 0.9.10");
+
+		await act(async () => {
+			useTabsStore.setState({
+				tabs: [{ id: "t0", cwd: "/work/alpha", status: "asleep", kind: "agent", unreadDone: false }],
+				activeTabId: "t0",
+			});
+		});
+		expect(footerText()).toContain(en["titlebar.status.asleep"]);
+		expect(footerText()).not.toContain(en["titlebar.status.ready"]);
+
+		await act(async () => {
+			useTabsStore.setState({ tabs: [], activeTabId: null });
+		});
+		expect(footer()).not.toBeNull();
+		expect(footerText()).not.toContain("omp GUI");
+		for (const key of [
+			"titlebar.status.working",
+			"titlebar.status.ready",
+			"titlebar.status.connecting",
+			"titlebar.status.asleep",
+			"titlebar.status.error",
+			"titlebar.status.exited",
+			"titlebar.status.restarting",
+			"tabs.done",
+		]) {
+			expect(footerText(), key).not.toContain(en[key]);
+		}
 	});
 });
 

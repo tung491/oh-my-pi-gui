@@ -3294,4 +3294,8 @@ export const en: Record<string, string> = {
 	"input.allowResend": "I checked; allow sending",
 	"brand.vif": "VIF",
 	"brand.wordmark": "omp",
+	"sidebar.nav.agentHub": "Agent Hub",
+	"sidebar.nav.prCenter": "PR Center",
+	"sidebar.footer.status": "omp GUI {version} · {status}",
+	"sidebar.footer.settings": "Open settings",
 };

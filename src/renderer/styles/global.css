@@ -572,7 +572,7 @@ summary,
 .omp-sidebar-session-row[data-active="true"]:hover .omp-sidebar-session-actions,
 .omp-sidebar-session-row[data-active="true"]:focus-within .omp-sidebar-session-actions,
 .omp-sidebar-session-row[data-active="true"][data-actions-open="true"] .omp-sidebar-session-actions {
-	background: linear-gradient(to right, transparent, var(--omp-selected-bg) 10px);
+	background: linear-gradient(to right, transparent, var(--omp-sidebar-item-active) 10px);
 }
 
 .omp-sidebar-group {

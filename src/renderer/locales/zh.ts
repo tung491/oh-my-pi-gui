@@ -3238,4 +3238,8 @@ export const zh: Record<string, string> = {
 	"input.allowResend": "已检查，允许发送",
 	"brand.vif": "VIF",
 	"brand.wordmark": "omp",
+	"sidebar.nav.agentHub": "Agent 中心",
+	"sidebar.nav.prCenter": "PR 中心",
+	"sidebar.footer.status": "omp GUI {version} · 状态：{status}",
+	"sidebar.footer.settings": "打开设置",
 };
