@@ -50,6 +50,7 @@ import { forkSessionFromGui, prefillComposer, retryFailedTurn } from "../../lib/
 import { exportSessionHtml } from "../../lib/export-session";
 import { useLang, useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
+import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { setCodeLineNumbersPref } from "../../lib/markdown";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "../../lib/messages";
 import { dumpTranscriptToClipboard } from "../../lib/transcript-copy";
@@ -179,6 +180,7 @@ export function SettingsConnectionNotice({
 }
 
 export function SettingsWindow() {
+	const keyboardPlatform = currentKeyboardPlatform();
 	const tabRpc = useTabRpc();
 	const t = useT();
 	const { lang } = useLang();
@@ -998,7 +1000,7 @@ export function SettingsWindow() {
 									value={query}
 								/>
 								<span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-(--omp-border-muted) px-1.5 py-0.5 text-omp-xxs text-(--omp-dim)">
-									⌘K
+									{displayShortcut("⌘K", keyboardPlatform)}
 								</span>
 							</div>
 						)}

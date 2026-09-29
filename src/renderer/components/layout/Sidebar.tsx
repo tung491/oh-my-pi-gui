@@ -38,7 +38,14 @@ import { dropSessionNow } from "../../hooks/use-session-switch";
 import { basename, cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
-import { compileKeymap, KEYMAP_ACTIONS, onEscape } from "../../lib/keymap";
+import {
+	compileKeymap,
+	currentKeyboardPlatform,
+	displayShortcut,
+	formatChord,
+	KEYMAP_ACTIONS,
+	onEscape,
+} from "../../lib/keymap";
 import { sessionDisplayTitle } from "../../lib/session-title";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { tabSignalPresentation } from "../../lib/tab-signal";
@@ -105,13 +112,14 @@ export function Sidebar() {
 	const tabRpc = useTabRpc();
 	const t = useT();
 	const keymapOverrides = useUiStore(state => state.keymapOverrides);
+	const keyboardPlatform = currentKeyboardPlatform();
 	const paletteShortcut = useMemo(
 		() =>
-			[...compileKeymap(KEYMAP_ACTIONS, keymapOverrides)]
+			[...compileKeymap(KEYMAP_ACTIONS, keymapOverrides, keyboardPlatform)]
 				.filter(([, action]) => action === "palette")
-				.map(([chord]) => chord)
+				.map(([chord]) => formatChord(chord, keyboardPlatform))
 				.join(" / "),
-		[keymapOverrides],
+		[keymapOverrides, keyboardPlatform],
 	);
 	const [mode, setMode] = useState<SidebarMode>("code");
 	const [navigationExpanded, setNavigationExpanded] = useState(true);
@@ -614,7 +622,7 @@ export function Sidebar() {
 								{
 									id: "agents",
 									icon: Bot,
-									label: t("titlebar.agentHub"),
+									label: t("titlebar.agentHub", { chord: displayShortcut("⌥A", currentKeyboardPlatform()) }),
 									onClick: () => useUiStore.getState().openAgentHub(),
 								},
 								{
@@ -638,7 +646,7 @@ export function Sidebar() {
 								{
 									id: "pull-requests",
 									icon: GitPullRequest,
-									label: t("titlebar.prCenter"),
+									label: t("titlebar.prCenter", { chord: displayShortcut("⌥P", currentKeyboardPlatform()) }),
 									onClick: () => useUiStore.getState().openPrCenter(),
 								},
 								{

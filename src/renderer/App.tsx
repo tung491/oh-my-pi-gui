@@ -54,7 +54,14 @@ import {
 import { exportSessionHtml } from "./lib/export-session";
 import { useLang, useT } from "./lib/i18n";
 import { isImeKeyEvent } from "./lib/ime";
-import { chordFromEvent, compileKeymap, KEYMAP_ACTION_BY_ID, KEYMAP_ACTIONS, type KeymapActionId } from "./lib/keymap";
+import {
+	chordFromEvent,
+	compileKeymap,
+	currentKeyboardPlatform,
+	KEYMAP_ACTION_BY_ID,
+	KEYMAP_ACTIONS,
+	type KeymapActionId,
+} from "./lib/keymap";
 import { abortActiveTurn, restoreQueuedMessages } from "./lib/messages";
 import { watchPluginActivation } from "./lib/plugin-activation";
 import { whenSidecarReady } from "./lib/sidecar-ready";
@@ -360,7 +367,11 @@ export function App() {
 	// plan/15 §3.5): keydown dispatch is an O(1) map hit, never a config walk.
 	// The memo recomputes only when the overrides object identity changes.
 	const keymapOverrides = useUiStore(s => s.keymapOverrides);
-	const keymap = useMemo(() => compileKeymap(KEYMAP_ACTIONS, keymapOverrides), [keymapOverrides]);
+	const keyboardPlatform = currentKeyboardPlatform();
+	const keymap = useMemo(
+		() => compileKeymap(KEYMAP_ACTIONS, keymapOverrides, keyboardPlatform),
+		[keymapOverrides, keyboardPlatform],
+	);
 
 	// Boot hydration of user keybinding overrides (prefs key "keymapOverrides").
 	useEffect(() => {

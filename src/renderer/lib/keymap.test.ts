@@ -15,11 +15,17 @@ import { NATIVE_CHORDS } from "../../shared/hotkeys";
 import {
 	chordFromEvent,
 	compileKeymap,
+	ctrlTwin,
 	detectConflicts,
+	displayShortcut,
+	formatChord,
 	KEYMAP_ACTIONS,
+	keyboardPlatformOf,
 	keymapActionsForGroup,
 	parseChord,
+	platformDefaults,
 	RESERVED_CHORDS,
+	reservedChordsFor,
 	reservedChordsForGroup,
 	sanitizeOverrides,
 	serializeChord,
@@ -241,5 +247,87 @@ describe("sanitizeOverrides", () => {
 		expect(sanitizeOverrides(KEYMAP_ACTIONS, null)).toEqual({});
 		expect(sanitizeOverrides(KEYMAP_ACTIONS, ["ctrl+o"])).toEqual({});
 		expect(sanitizeOverrides(KEYMAP_ACTIONS, "ctrl+o")).toEqual({});
+	});
+});
+
+describe("non-macOS keyboard", () => {
+	it("keeps macOS defaults exactly as declared", () => {
+		for (const action of KEYMAP_ACTIONS) expect(platformDefaults(action, "mac"), action.id).toBe(action.defaults);
+	});
+
+	it("gives every ⌘-only default a Ctrl twin elsewhere", () => {
+		const linux = (id: string) => platformDefaults(KEYMAP_ACTIONS.find(action => action.id === id)!, "linux");
+		expect(linux("tab.new")).toEqual(["⌃T", "⌘T"]);
+		expect(linux("tab.newChat")).toEqual(["⇧⌃T", "⇧⌘T"]);
+		expect(linux("tab.close")).toEqual(["⌃W", "⌘W"]);
+		expect(linux("palette")).toEqual(["⌃K", "⌘K"]);
+		expect(linux("model.cycleForward")).toEqual(["⌃P"]);
+		// ⌃T is tab.new's twin off macOS; the thinking toggle stays in the palette and remappable.
+		expect(linux("thinking.toggle")).toEqual([]);
+		expect(ctrlTwin("⇧⌘T")).toBe("⇧⌃T");
+		expect(ctrlTwin("⌥R")).toBe("⌥R");
+	});
+
+	it("gives every chord the app owns exactly one claimant off macOS", () => {
+		const claims = [
+			...KEYMAP_ACTIONS.flatMap(action => platformDefaults(action, "linux")),
+			...reservedChordsFor("linux").map(entry => entry.chord),
+		];
+		for (const chord of claims) expect(canonical(chord), `"${chord}"`).toBe(chord);
+		expect(new Set(claims).size).toBe(claims.length);
+	});
+
+	it("reserves the Ctrl form of every native accelerator off macOS", () => {
+		expect(
+			reservedChordsFor("linux")
+				.filter(entry => entry.hotkeyGroup === "native")
+				.map(entry => entry.chord),
+		).toEqual(NATIVE_CHORDS.map(entry => acceleratorToChord(entry.accelerator).replace("⌘", "⌃")));
+		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃N"] }, "linux")).toEqual([
+			{ kind: "error", chord: "⌃N", actionIds: ["retry", "session.new"] },
+		]);
+		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃N"] })).toEqual([]);
+	});
+
+	it("dispatches the Ctrl twins off macOS and leaves macOS dispatch alone", () => {
+		const linux = compileKeymap(KEYMAP_ACTIONS, {}, "linux");
+		expect(linux.get("⌃T")).toBe("tab.new");
+		expect(linux.get("⇧⌃T")).toBe("tab.newChat");
+		expect(linux.get("⌃W")).toBe("tab.close");
+		expect(linux.get("⌘T")).toBe("tab.new");
+		const mac = compileKeymap(KEYMAP_ACTIONS, {});
+		expect(mac.get("⌃T")).toBe("thinking.toggle");
+		expect(mac.get("⌃W")).toBeUndefined();
+	});
+
+	it("spells chords as text off macOS and keeps glyphs on macOS", () => {
+		expect(formatChord("⇧⌃T", "linux")).toBe("Ctrl+Shift+T");
+		expect(formatChord("⌥⇧P", "linux")).toBe("Alt+Shift+P");
+		expect(formatChord("⌃K / ⌘K", "linux")).toBe("Ctrl+K / Super+K");
+		expect(formatChord("⌃↵", "linux")).toBe("Ctrl+Enter");
+		expect(formatChord("⇧Enter", "linux")).toBe("Shift+Enter");
+		expect(formatChord("↑ / ↓", "linux")).toBe("↑ / ↓");
+		expect(formatChord("Esc", "linux")).toBe("Esc");
+		expect(formatChord("⌃K / ⌘K", "windows")).toBe("Ctrl+K / Win+K");
+		expect(formatChord("⇧⌃T", "windows")).toBe("Ctrl+Shift+T");
+		expect(formatChord("⇧⌘T", "mac")).toBe("⇧⌘T");
+		expect(displayShortcut("⌘N", "linux")).toBe("Ctrl+N");
+		expect(displayShortcut("⇧⌘T", "linux")).toBe("Ctrl+Shift+T");
+		expect(displayShortcut("⌘↵", "linux")).toBe("Ctrl+Enter");
+		expect(displayShortcut("⌥R", "linux")).toBe("Alt+R");
+		expect(displayShortcut("⌘K", "mac")).toBe("⌘K");
+	});
+
+	it("maps the host platform onto the keyboard layouts", () => {
+		expect(keyboardPlatformOf(undefined)).toBe("mac");
+		expect(keyboardPlatformOf("darwin")).toBe("mac");
+		expect(keyboardPlatformOf("linux")).toBe("linux");
+		expect(keyboardPlatformOf("win32")).toBe("windows");
+		expect(keyboardPlatformOf("freebsd")).toBe("linux");
+		// Windows compiles the same chords as Linux; only the labels differ.
+		expect(platformDefaults(KEYMAP_ACTIONS.find(action => action.id === "tab.close")!, "windows")).toEqual([
+			"⌃W",
+			"⌘W",
+		]);
 	});
 });

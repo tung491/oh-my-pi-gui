@@ -4,13 +4,17 @@ import { useT } from "../../lib/i18n";
 import {
 	chordFromEvent,
 	chordOwner,
+	currentKeyboardPlatform,
 	detectConflicts,
+	formatChord,
 	type HotkeyGroupId,
 	KEYMAP_ACTION_BY_ID,
 	KEYMAP_ACTIONS,
+	type KeyboardPlatform,
 	type KeymapActionId,
 	type KeymapConflict,
 	keymapActionsForGroup,
+	platformDefaults,
 	type ReservedChordGroup,
 	reservedChordsForGroup,
 } from "../../lib/keymap";
@@ -45,8 +49,8 @@ function remapRows(group: HotkeyGroupId): HotkeyRow[] {
 }
 
 /** Non-remappable rows for an owner class (composer keys, native chords). */
-function reservedRows(group: ReservedChordGroup): HotkeyRow[] {
-	return reservedChordsForGroup(group).map(entry => ({ keys: entry.chord, labelKey: entry.labelKey }));
+function reservedRows(group: ReservedChordGroup, platform: KeyboardPlatform): HotkeyRow[] {
+	return reservedChordsForGroup(group, platform).map(entry => ({ keys: entry.chord, labelKey: entry.labelKey }));
 }
 
 // GUI shortcut reference (plan/17 §6.2): the data-driven replacement for the
@@ -56,34 +60,36 @@ function reservedRows(group: ReservedChordGroup): HotkeyRow[] {
 // conflict-checks against are the ones on display. Unmodified keys (Enter, @,
 // /) and the shift-only ⇧Tab / Escape globals stay static; terminal-only TUI
 // rows (suspend, display reset, $EDITOR) are deliberately absent.
-const HOTKEY_GROUPS: HotkeyGroup[] = [
-	{
-		titleKey: "hotkeys.group.input",
-		rows: [
-			{ keys: "Enter", labelKey: "hotkeys.row.send" },
-			{ keys: "⇧Enter", labelKey: "hotkeys.row.newline" },
-			{ keys: "⌃Enter", labelKey: "hotkeys.row.followUpSend" },
-			{ keys: "-> / =>", labelKey: "hotkeys.row.queueShorthand" },
-			{ keys: "!", labelKey: "hotkeys.row.bashMode" },
-			{ keys: "$", labelKey: "hotkeys.row.pythonMode" },
-			{ keys: "@", labelKey: "hotkeys.row.mention" },
-			{ keys: "/", labelKey: "hotkeys.row.commands" },
-			{ keys: "↑ / ↓", labelKey: "hotkeys.row.historyNav" },
-			...reservedRows("input"),
-		],
-	},
-	{
-		titleKey: "hotkeys.group.generation",
-		rows: [
-			{ keys: "Esc", labelKey: "hotkeys.row.abort" },
-			{ keys: "⇧Tab", labelKey: "hotkeys.row.thinkingCycle" },
-			...remapRows("generation"),
-		],
-	},
-	{ titleKey: "hotkeys.group.view", rows: remapRows("view") },
-	{ titleKey: "hotkeys.group.session", rows: remapRows("session") },
-	{ titleKey: "hotkeys.group.native", rows: reservedRows("native") },
-];
+function hotkeyGroups(platform: KeyboardPlatform): HotkeyGroup[] {
+	return [
+		{
+			titleKey: "hotkeys.group.input",
+			rows: [
+				{ keys: "Enter", labelKey: "hotkeys.row.send" },
+				{ keys: "⇧Enter", labelKey: "hotkeys.row.newline" },
+				{ keys: "⌃Enter", labelKey: "hotkeys.row.followUpSend" },
+				{ keys: "-> / =>", labelKey: "hotkeys.row.queueShorthand" },
+				{ keys: "!", labelKey: "hotkeys.row.bashMode" },
+				{ keys: "$", labelKey: "hotkeys.row.pythonMode" },
+				{ keys: "@", labelKey: "hotkeys.row.mention" },
+				{ keys: "/", labelKey: "hotkeys.row.commands" },
+				{ keys: "↑ / ↓", labelKey: "hotkeys.row.historyNav" },
+				...reservedRows("input", platform),
+			],
+		},
+		{
+			titleKey: "hotkeys.group.generation",
+			rows: [
+				{ keys: "Esc", labelKey: "hotkeys.row.abort" },
+				{ keys: "⇧Tab", labelKey: "hotkeys.row.thinkingCycle" },
+				...remapRows("generation"),
+			],
+		},
+		{ titleKey: "hotkeys.group.view", rows: remapRows("view") },
+		{ titleKey: "hotkeys.group.session", rows: remapRows("session") },
+		{ titleKey: "hotkeys.group.native", rows: reservedRows("native", platform) },
+	];
+}
 
 interface ResolvedRow {
 	label: string;
@@ -98,6 +104,7 @@ interface CaptureState {
 
 /** Searchable shortcut reference panel with per-row keybinding remap (B3). */
 export function HotkeysDialog({ open }: { open: boolean }) {
+	const keyboardPlatform = currentKeyboardPlatform();
 	const t = useT();
 	const close = useUiStore(s => s.closeHotkeys);
 	const overrides = useUiStore(s => s.keymapOverrides);
@@ -143,8 +150,12 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 	const captureConflict: KeymapConflict | null = useMemo(() => {
 		if (!capture?.chord) return null;
 		const candidate = { ...overrides, [capture.actionId]: [capture.chord] };
-		return detectConflicts(KEYMAP_ACTIONS, candidate).find(conflict => conflict.chord === capture.chord) ?? null;
-	}, [capture, overrides]);
+		return (
+			detectConflicts(KEYMAP_ACTIONS, candidate, keyboardPlatform).find(
+				conflict => conflict.chord === capture.chord,
+			) ?? null
+		);
+	}, [capture, overrides, keyboardPlatform]);
 
 	const captureConflictLabel = useMemo(() => {
 		if (!capture || !captureConflict) return null;
@@ -162,29 +173,35 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 		const resolve = (row: HotkeyRow): ResolvedRow => {
 			if (isRemapRow(row)) {
 				const action = KEYMAP_ACTION_BY_ID[row.actionId];
+				const chords = overrides[action.id] ?? platformDefaults(action, keyboardPlatform);
 				return {
 					label: t(action.labelKey),
-					keys: (overrides[action.id] ?? action.defaults).join(" / "),
+					keys: chords.length > 0 ? formatChord(chords.join(" / "), keyboardPlatform) : t("hotkeys.unbound"),
 					actionId: row.actionId,
 				};
 			}
-			return { label: t(row.labelKey), keys: row.keys, actionId: null };
+			return { label: t(row.labelKey), keys: formatChord(row.keys, keyboardPlatform), actionId: null };
 		};
 		const q = query.trim().toLowerCase();
-		return HOTKEY_GROUPS.map(group => ({
-			...group,
-			rows: group.rows
-				.map(resolve)
-				.filter(row => !q || row.label.toLowerCase().includes(q) || row.keys.toLowerCase().includes(q)),
-		})).filter(group => group.rows.length > 0);
-	}, [query, t, overrides]);
+		return hotkeyGroups(keyboardPlatform)
+			.map(group => ({
+				...group,
+				rows: group.rows
+					.map(resolve)
+					.filter(row => !q || row.label.toLowerCase().includes(q) || row.keys.toLowerCase().includes(q)),
+			}))
+			.filter(group => group.rows.length > 0);
+	}, [query, t, overrides, keyboardPlatform]);
 
 	const saveCapture = () => {
 		if (!capture?.chord || !captureAction || captureConflict?.kind === "error") return;
 		setKeymapOverride(capture.actionId, [capture.chord]);
 		toast({
 			variant: "success",
-			message: t("hotkeys.remap.saved", { action: t(captureAction.labelKey), chord: capture.chord }),
+			message: t("hotkeys.remap.saved", {
+				action: t(captureAction.labelKey),
+				chord: formatChord(capture.chord, keyboardPlatform),
+			}),
 		});
 		setCapture(null);
 	};
@@ -251,7 +268,7 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 							{t("hotkeys.remap.rebinding", { action: t(captureAction.labelKey) })}
 						</span>
 						<kbd className="shrink-0 rounded-md border border-[var(--omp-border)] bg-[var(--omp-bg-elevated)] px-2 py-0.5 font-mono text-omp-sm text-[var(--omp-muted)]">
-							{capture.chord ?? t("hotkeys.remap.pressChord")}
+							{capture.chord ? formatChord(capture.chord, keyboardPlatform) : t("hotkeys.remap.pressChord")}
 						</kbd>
 						<Button
 							size="sm"

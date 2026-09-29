@@ -103,6 +103,7 @@ function subscribeTab<T>(channel: string, callback: (data: T, tabId: string) => 
 }
 
 const api: OmpApi = {
+	platform: process.platform,
 	runtime: {
 		report: (error: RuntimeErrorReport) => ipcRenderer.send(IPC_COMMANDS.RUNTIME_ERROR_REPORT, error),
 		logPath: () => ipcRenderer.invoke(IPC_COMMANDS.RUNTIME_LOG_PATH) as Promise<string>,

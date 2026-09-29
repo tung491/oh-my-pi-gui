@@ -862,6 +862,8 @@ export interface LogBatch {
 }
 
 export interface OmpApi {
+	/** process.platform of the host; drives the keyboard layout (Ctrl vs ⌘). */
+	readonly platform: string;
 	runtime: {
 		/** Best-effort fire-and-forget reporting so fatal render paths never wait on IPC. */
 		report(error: RuntimeErrorReport): void;

@@ -189,7 +189,7 @@ test.describe("installed package", () => {
 		const profile = await createProfile();
 		const { app, page } = await launch(profile);
 		try {
-			const platform = await page.evaluate(() => (window.omp as unknown as { platform?: string }).platform);
+			const platform = await page.evaluate(() => window.omp.platform);
 			expect(platform).toBe(process.platform);
 		} finally {
 			await app.close();

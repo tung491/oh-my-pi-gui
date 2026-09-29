@@ -52,6 +52,7 @@ afterEach(async () => {
 	container?.remove();
 	document.body.innerHTML = "";
 	useUiStore.setState({ keymapOverrides: {} });
+	Reflect.deleteProperty(window, "omp");
 });
 
 describe("HotkeysDialog", () => {
@@ -84,5 +85,26 @@ describe("HotkeysDialog", () => {
 		const chords = displayedChords();
 		expect(chords).toContain("⌥⇧R");
 		expect(chords).not.toContain("⌥R");
+	});
+
+	it("lists Ctrl chords as text on Linux", async () => {
+		(window as unknown as { omp: { platform: string } }).omp = { platform: "linux" };
+		await mount();
+		const chords = displayedChords();
+		expect(chords).toContain("Ctrl+Shift+T / Shift+Super+T");
+		expect(chords).toContain("Ctrl+W / Super+W");
+		expect(chords).toContain("Ctrl+Shift+O");
+		expect(chords).toContain("Shift+Enter");
+		expect(chords).toContain("Unbound");
+		expect(chords.filter(chord => /[⌘⌃⌥⇧]/.test(chord))).toEqual([]);
+	});
+
+	it("names the ⌘ forms after the Windows key on Windows", async () => {
+		(window as unknown as { omp: { platform: string } }).omp = { platform: "win32" };
+		await mount();
+		const chords = displayedChords();
+		expect(chords).toContain("Ctrl+W / Win+W");
+		expect(chords).toContain("Ctrl+Shift+T / Shift+Win+T");
+		expect(chords.filter(chord => /Super|[⌘⌃⌥⇧]/.test(chord))).toEqual([]);
 	});
 });

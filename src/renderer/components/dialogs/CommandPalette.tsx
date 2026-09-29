@@ -22,6 +22,7 @@ import {
 } from "../../lib/command-registry";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
+import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { retryLastTurn as retryLastTurnShared } from "../../lib/messages";
 import { openHandoffDialog } from "../../stores/fork-handoff";
 import { useModelStore } from "../../stores/model";
@@ -134,6 +135,7 @@ async function runAffordance(
 
 export function CommandPalette() {
 	const tabRpc = useTabRpc();
+	const keyboardPlatform = currentKeyboardPlatform();
 	const tabId = useRuntimeTabId();
 	const t = useT();
 	const open = useUiStore(state => state.commandPaletteOpen);
@@ -611,7 +613,7 @@ export function CommandPalette() {
 						)}
 						{item.shortcut && (
 							<kbd className="rounded border border-(--omp-border-muted) px-1 text-omp-xxs text-(--omp-dim)">
-								{item.shortcut}
+								{displayShortcut(item.shortcut, keyboardPlatform)}
 							</kbd>
 						)}
 					</span>
