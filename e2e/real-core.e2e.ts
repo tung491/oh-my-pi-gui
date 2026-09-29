@@ -227,7 +227,7 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		await page.screenshot({ path: "test-results/05-packaged-zh.png", scale: "css", animations: "disabled" });
 		await page.keyboard.press("Escape");
 		const backgrounds: string[] = [];
-		for (const theme of ["瓷白", "石墨"]) {
+		for (const theme of ["VIF 浅色", "VIF 海军蓝"]) {
 			await page.getByRole("button", { name: "选择主题", exact: true }).click();
 			const picker = page.getByRole("dialog", { name: "选择主题", exact: true });
 			await picker.getByPlaceholder("搜索主题…").fill(theme);
@@ -265,8 +265,8 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		await closeWelcomeIfPresent("欢迎使用 omp", "暂时跳过");
 		await page.getByRole("button", { name: "选择主题", exact: true }).click();
 		const freshPicker = page.getByRole("dialog", { name: "选择主题", exact: true });
-		await freshPicker.getByPlaceholder("搜索主题…").fill("瓷白");
-		await freshPicker.locator("button[aria-pressed]").filter({ hasText: "瓷白" }).click();
+		await freshPicker.getByPlaceholder("搜索主题…").fill("VIF 浅色");
+		await freshPicker.locator("button[aria-pressed]").filter({ hasText: "VIF 浅色" }).click();
 		await expect(freshPicker).toHaveCount(0);
 		const chosenBackground = await page.evaluate(() =>
 			getComputedStyle(document.documentElement).getPropertyValue("--omp-bg-primary"),
