@@ -12,10 +12,11 @@ import { nativeAccelerator } from "../shared/hotkeys";
 import type { SessionKind } from "../shared/ipc-types";
 import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
-import { setupDeepLinks } from "./deep-link";
+import { DEEP_LINK_PROTOCOL, setupDeepLinks } from "./deep-link";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { firstUsableCwd } from "./initial-cwd";
 import { registerIpcHandlers } from "./ipc";
+import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { writeRuntimeLog } from "./runtime-log";
@@ -130,8 +131,9 @@ function prefsStore(): Store<MainPrefs> {
 }
 
 function resolveExplicitStartupCwd(): string | undefined {
-	const explicitCwd = process.argv[2];
-	return explicitCwd && existsSync(explicitCwd) ? explicitCwd : undefined;
+	// Packaged Linux/Windows argv is [exe, …args]; a dev run is [electron, appDir, …args].
+	const request = parseLaunchArgv(launchArguments(process.argv, Boolean(process.defaultApp)), DEEP_LINK_PROTOCOL);
+	return request.kind === "path" ? resolve(request.path) : undefined;
 }
 
 function resolveInitialCwd(): string {
@@ -405,7 +407,8 @@ app.whenReady().then(() => {
 
 	// Global shortcut: Cmd+Shift+O — toggle focused window, else show the most
 	// recent, else spawn one (multi-window decision tree).
-	globalShortcut.register(nativeAccelerator("window.toggle"), () => {
+	const toggleAccelerator = nativeAccelerator("window.toggle");
+	const toggleRegistered = globalShortcut.register(toggleAccelerator, () => {
 		const focused = BrowserWindow.getFocusedWindow();
 		if (focused && !focused.isDestroyed() && windowManager.recordFor(focused)) {
 			if (focused.isVisible()) focused.hide();
@@ -423,6 +426,15 @@ app.whenReady().then(() => {
 		}
 		spawnWindow();
 	});
+	// Another client may already hold the chord, and under XWayland the grab
+	// only fires while an omp window has focus (README → Linux).
+	if (!toggleRegistered) {
+		writeRuntimeLog({
+			source: "global-shortcut",
+			message: `globalShortcut.register refused ${toggleAccelerator}`,
+			details: { accelerator: toggleAccelerator },
+		});
+	}
 	sessionIndex.start();
 	logWatcher.start();
 	// Read before the first window restores: every tab change rewrites the store,

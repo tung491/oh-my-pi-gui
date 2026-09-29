@@ -67,4 +67,10 @@ describe("runtime crash log", () => {
 			details: { launchInode: 100, currentInode: 101 },
 		});
 	});
+
+	it("keeps a refused global shortcut report under its own source", () => {
+		expect(normalizeRuntimeErrorReport({ source: "global-shortcut", message: "refused" }).source).toBe(
+			"global-shortcut",
+		);
+	});
 });

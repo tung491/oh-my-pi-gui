@@ -213,6 +213,7 @@ export type RuntimeErrorSource =
 	| "child-process"
 	| "main-uncaught"
 	| "main-unhandled-rejection"
+	| "global-shortcut"
 	| "unknown";
 
 /** Bounded, serializable renderer/main failure payload written as JSONL. */
