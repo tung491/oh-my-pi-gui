@@ -57,6 +57,7 @@ import { isImeKeyEvent } from "./lib/ime";
 import { chordFromEvent, compileKeymap, KEYMAP_ACTION_BY_ID, KEYMAP_ACTIONS, type KeymapActionId } from "./lib/keymap";
 import { abortActiveTurn, restoreQueuedMessages } from "./lib/messages";
 import { watchPluginActivation } from "./lib/plugin-activation";
+import { whenSidecarReady } from "./lib/sidecar-ready";
 import { closeActiveTab } from "./lib/tab-close";
 import { acceptsActiveTabEvents, onActiveTabRouteSettled, onActiveTabRouteState } from "./lib/tab-routing";
 import { focusedTabRpc } from "./lib/tab-rpc";
@@ -326,6 +327,7 @@ export function App() {
 	// Handle omp:// deep links (omp://new → new session; omp://session/<id> → switch).
 	useEffect(() => {
 		const handle = async (link: { action: "new-session" } | { action: "switch-session"; sessionId: string }) => {
+			await whenSidecarReady(window.omp.sidecar.getStatus, window.omp.events.onSidecarStatus);
 			if (link.action === "new-session") {
 				if (useSessionStore.getState().isStreaming) {
 					toast({ variant: "warning", title: t("deepLink.streaming"), message: t("deepLink.streamingDesc") });

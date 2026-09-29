@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseLaunchArgv } from "./launch-argv";
+import { launchArguments, parseLaunchArgv } from "./launch-argv";
 
 const directories = new Set(["/workspace/app", "/Applications/omp.app"]);
 const exists = (path: string): boolean => directories.has(path);
@@ -36,5 +36,27 @@ describe("parseLaunchArgv", () => {
 
 	it("only asks for focus when nothing names a link or a workspace", () => {
 		expect(parseLaunchArgv(["/tmp/not-a-directory"], "omp", () => false)).toEqual({ kind: "focus" });
+	});
+});
+
+describe("launchArguments", () => {
+	it("drops only the executable in a packaged launch", () => {
+		expect(launchArguments(["/opt/omp/omp-gui", "omp://new"], false)).toEqual(["omp://new"]);
+	});
+
+	it("drops the executable and the app directory in a dev launch", () => {
+		expect(launchArguments(["/electron", ".", "/workspace/app"], true)).toEqual(["/workspace/app"]);
+	});
+
+	it("finds a cold-start workspace or link behind Chromium switches", () => {
+		expect(
+			parseLaunchArgv(launchArguments(["/opt/omp/omp-gui", "--no-sandbox", "/workspace/app"], false), "omp", exists),
+		).toEqual({ kind: "path", path: "/workspace/app" });
+		expect(parseLaunchArgv(launchArguments(["/opt/omp/omp-gui", "omp://session/abc"], false), "omp", exists)).toEqual(
+			{
+				kind: "url",
+				url: "omp://session/abc",
+			},
+		);
 	});
 });
