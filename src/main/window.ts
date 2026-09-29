@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { app, BrowserWindow, dialog, Menu, type MessageBoxOptions, screen, shell } from "electron";
 import Store from "electron-store";
 import type { RunProgressState, SessionKind } from "../shared/ipc-types";
+import { linuxWindowIconPath } from "./app-icons";
 import { quitRisk, requestQuit } from "./app-quit";
 import { editableContextMenuTemplate } from "./editable-context-menu";
 import { getMainLanguage, mainT } from "./i18n";
@@ -112,6 +113,7 @@ export class WindowManager {
 						displayWorkAreas(),
 					);
 
+		const icon = linuxWindowIconPath(process.platform, app.isPackaged, process.resourcesPath, app.getAppPath());
 		const win = new BrowserWindow({
 			x: geometry.x,
 			y: geometry.y,
@@ -121,6 +123,7 @@ export class WindowManager {
 			minHeight: MIN_HEIGHT,
 			show: false,
 			autoHideMenuBar: process.platform === "win32",
+			...(icon ? { icon } : {}),
 			webPreferences: {
 				contextIsolation: true,
 				nodeIntegration: false,

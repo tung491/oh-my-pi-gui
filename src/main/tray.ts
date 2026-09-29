@@ -10,6 +10,7 @@
 
 import { app, Menu, nativeImage, Tray } from "electron";
 import { IPC_EVENTS, type MenuAction, type MenuActionPayload, type TrayState } from "../shared/ipc-types";
+import { trayIconBitmap } from "./app-icons";
 import { approvalLabel, formatTokens, menuSignature, type TrayLang, t, trayTooltip } from "./tray-labels";
 import type { SpawnWindow, WindowManager } from "./window";
 
@@ -23,41 +24,13 @@ let menuIsOpen = false;
 let tooltip = "omp";
 
 function buildIcon(): Electron.NativeImage {
-	// macOS status items are template images: the system applies the correct
-	// foreground color for light/dark and selected menu-bar states. Render at
-	// 2× so the small π mark remains crisp on Retina displays. The run status is
-	// text (tooltip + menu header); painting it here would turn the app mark
-	// into a large, visually noisy traffic-light dot.
-	const logicalSize = 18;
-	const scaleFactor = 2;
-	const pixelSize = logicalSize * scaleFactor;
-	const canvas = Buffer.alloc(pixelSize * pixelSize * 4, 0);
-	const fillRoundedRect = (left: number, top: number, right: number, bottom: number, radius: number) => {
-		for (let y = top; y < bottom; y++) {
-			for (let x = left; x < right; x++) {
-				const nearestX = Math.max(left + radius, Math.min(x + 0.5, right - radius));
-				const nearestY = Math.max(top + radius, Math.min(y + 0.5, bottom - radius));
-				const dx = x + 0.5 - nearestX;
-				const dy = y + 0.5 - nearestY;
-				if (dx * dx + dy * dy > radius * radius) continue;
-				const index = (y * pixelSize + x) * 4;
-				canvas[index + 3] = 255;
-			}
-		}
-	};
-
-	// A compact filled π: one cap, two stems and a short inward foot.
-	fillRoundedRect(4, 6, 32, 12, 3);
-	fillRoundedRect(9, 9, 15, 31, 3);
-	fillRoundedRect(21, 9, 28, 27, 3);
-	fillRoundedRect(16, 23, 28, 30, 3);
-
-	const image = nativeImage.createFromBuffer(canvas, {
-		width: pixelSize,
-		height: pixelSize,
-		scaleFactor,
+	const bitmap = trayIconBitmap(process.platform);
+	const image = nativeImage.createFromBuffer(bitmap.pixels, {
+		width: bitmap.size,
+		height: bitmap.size,
+		scaleFactor: bitmap.scaleFactor,
 	});
-	image.setTemplateImage(true);
+	if (bitmap.template) image.setTemplateImage(true);
 	return image;
 }
 
