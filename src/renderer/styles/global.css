@@ -443,6 +443,13 @@ kbd,
 	animation: omp-signal-light 2.8s ease-in-out infinite; /* motion-ok: slow semantic status signal */
 }
 
+/* Round variant for status pills: same signal, sized as a badge dot. */
+.omp-signal-light--dot {
+	width: 6px;
+	height: 6px;
+	flex: 0 0 6px;
+}
+
 .omp-signal-light.omp-tab-signal {
 	position: absolute;
 	inset: 0 auto 0 0;

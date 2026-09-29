@@ -3242,4 +3242,5 @@ export const zh: Record<string, string> = {
 	"sidebar.nav.prCenter": "PR 中心",
 	"sidebar.footer.status": "omp GUI {version} · 状态：{status}",
 	"sidebar.footer.settings": "打开设置",
+	"titlebar.metrics": "会话指标",
 };

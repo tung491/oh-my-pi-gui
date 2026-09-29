@@ -3298,4 +3298,5 @@ export const en: Record<string, string> = {
 	"sidebar.nav.prCenter": "PR Center",
 	"sidebar.footer.status": "omp GUI {version} · {status}",
 	"sidebar.footer.settings": "Open settings",
+	"titlebar.metrics": "Session metrics",
 };
