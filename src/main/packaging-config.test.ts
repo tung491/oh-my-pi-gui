@@ -248,3 +248,46 @@ describe("renderer content security policy", () => {
 		expect(sources("connect-src")).toEqual(["'self'"]);
 	});
 });
+
+describe("Linux CI workflow", () => {
+	const workflows = path.join(PACKAGE_ROOT, ".github", "workflows");
+	interface Workflow {
+		jobs?: Record<
+			string,
+			{
+				"runs-on"?: string;
+				env?: Record<string, string>;
+				steps?: { run?: string; uses?: string; with?: Record<string, string | boolean> }[];
+			}
+		>;
+	}
+
+	it("type-checks, tests and builds a clean clone on ubuntu-latest", () => {
+		const ci = parse(fs.readFileSync(path.join(workflows, "ci.yml"), "utf8")) as Workflow;
+		const job = ci.jobs?.linux;
+		expect(job?.["runs-on"]).toBe("ubuntu-latest");
+		expect(job?.steps?.flatMap(step => (step.run ? [step.run] : []))).toEqual([
+			"bun install",
+			"bun run check:types",
+			"bunx vitest run",
+			"bun run build",
+		]);
+		// Actions are pinned to full commit SHAs, and the checkout token is not left on disk.
+		const uses = job?.steps?.flatMap(step => (step.uses ? [step.uses] : [])) ?? [];
+		expect(uses).toHaveLength(2);
+		for (const action of uses) expect(action).toMatch(/^(actions\/checkout|oven-sh\/setup-bun)@[0-9a-f]{40}$/);
+		const checkout = job?.steps?.find(step => step.uses?.startsWith("actions/checkout@"));
+		expect(checkout?.with?.["persist-credentials"]).toBe(false);
+		const setupBun = job?.steps?.find(step => step.uses?.startsWith("oven-sh/setup-bun@"));
+		expect(setupBun?.with?.["bun-version"]).toMatch(/^\d+\.\d+\.\d+$/);
+		// Tests load electron through electron-store, so the binary must be installed.
+		expect(job?.env?.ELECTRON_SKIP_BINARY_DOWNLOAD).toBeUndefined();
+	});
+
+	it("leaves Pages deployment to the Pages workflow alone", () => {
+		const publishers = fs
+			.readdirSync(workflows)
+			.filter(name => fs.readFileSync(path.join(workflows, name), "utf8").includes("actions/deploy-pages"));
+		expect(publishers).toEqual(["pages.yml"]);
+	});
+});
