@@ -27,6 +27,14 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 	lg: "h-10 gap-2 rounded-md px-6 text-omp-lg",
 };
 
+/**
+ * The class string a `Button` of this variant and size renders with, for a
+ * control that must look like a Button but owns its own element and behavior.
+ */
+export function buttonClasses(variant: ButtonVariant, size: ButtonSize): string {
+	return `inline-flex select-none items-center justify-center border font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,filter,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--omp-accent) active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]}`;
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 	variant?: ButtonVariant;
 	size?: ButtonSize;
@@ -53,7 +61,7 @@ export function Button({
 	return (
 		<button
 			type={type ?? "button"}
-			className={`inline-flex select-none items-center justify-center border font-medium whitespace-nowrap transition-[background-color,border-color,color,box-shadow,filter,transform] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--omp-accent) active:translate-y-px disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className ?? ""}`.trim()}
+			className={`${buttonClasses(variant, size)} ${className ?? ""}`.trim()}
 			disabled={disabled || loading}
 			{...rest}
 		>

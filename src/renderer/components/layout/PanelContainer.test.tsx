@@ -237,4 +237,58 @@ describe("PanelContainer chat tab filter", () => {
 		expect(read).toHaveBeenCalledWith("/tmp/my query.sql", 200_000);
 		expect(document.querySelector("aside pre")?.textContent).toContain("SELECT 1;");
 	});
+
+	it("keeps the workspace heading and a named close control", async () => {
+		seedActiveTab("agent");
+		useUiStore.setState({ panelTab: "files", panelVisible: true });
+		await mount(<PanelContainer />);
+
+		expect(document.querySelector("aside h2")?.textContent).toBe("Workspace");
+		const close = document.querySelector('aside button[aria-label="Close workspace"]');
+		expect(close?.getAttribute("title")).toBe("Close workspace");
+		const tabs = [...document.querySelectorAll("aside button[aria-pressed]")].map(button => [
+			button.getAttribute("aria-label"),
+			button.getAttribute("aria-pressed"),
+		]);
+		expect(tabs).toEqual([
+			["Diff", "false"],
+			["Files", "true"],
+			["Logs", "false"],
+		]);
+
+		await act(async () => {
+			close?.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		expect(useUiStore.getState().panelVisible).toBe(false);
+	});
+
+	it("groups the diff sources under one labelled control", async () => {
+		seedActiveTab("agent");
+		useUiStore.setState({ panelTab: "diff", panelVisible: true });
+		ompWindow.omp = {
+			rpc: {
+				getGitChanges: vi.fn(async () => ({
+					type: "response",
+					command: "get_git_changes",
+					success: true,
+					data: { isRepo: true, root: "/work", base: "main", files: [], truncated: false },
+				})),
+			},
+		};
+		await mount(<PanelContainer />);
+
+		const group = document.querySelector('[role="group"][aria-label="Diff source"]');
+		expect(group).not.toBeNull();
+		const modes = [...(group?.querySelectorAll("button") ?? [])].map(button => [
+			(button.textContent ?? "").trim(),
+			button.getAttribute("aria-pressed"),
+		]);
+		expect(modes).toEqual([
+			["Repository", "true"],
+			["Edit results", "false"],
+			["History", "false"],
+			["Artifacts", "false"],
+		]);
+		expect(document.querySelector('[role="alert"]')).toBeNull();
+	});
 });

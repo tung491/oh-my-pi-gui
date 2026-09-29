@@ -3246,4 +3246,8 @@ export const zh: Record<string, string> = {
 	"chat.assistantName": "omp 助手",
 	"chat.retryTurn": "重试本轮",
 	"chat.process.steps": "{count} 个步骤",
+	"diffPanel.source": "差异来源",
+	"diffPanel.filesChanged": "{count} 个文件已更改",
+	"diffPanel.openInEditor": "在编辑器中打开",
+	"diffPanel.openInEditorScript": "脚本文件被打开时可能会被执行，请在编辑器中打开。",
 };

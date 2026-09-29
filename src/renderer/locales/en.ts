@@ -3302,4 +3302,8 @@ export const en: Record<string, string> = {
 	"chat.assistantName": "omp",
 	"chat.retryTurn": "Retry this turn",
 	"chat.process.steps": "{count} step{plural}",
+	"diffPanel.source": "Diff source",
+	"diffPanel.filesChanged": "{count} files changed",
+	"diffPanel.openInEditor": "Open in editor",
+	"diffPanel.openInEditorScript": "Script files can run when opened, so open this one from your editor.",
 };

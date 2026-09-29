@@ -4,7 +4,7 @@
 
 export { AsyncSection, type AsyncSectionProps } from "./AsyncSection";
 export { Badge, type BadgeProps, type BadgeVariant } from "./Badge";
-export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
+export { Button, type ButtonProps, type ButtonSize, type ButtonVariant, buttonClasses } from "./Button";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { IconButton, type IconButtonProps, type IconButtonSize, type IconButtonVariant } from "./IconButton";
 export { Input, type InputProps, TextArea, type TextAreaProps } from "./Input";
