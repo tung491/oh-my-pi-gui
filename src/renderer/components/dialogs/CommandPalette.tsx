@@ -31,7 +31,7 @@ import { useSettingsStore } from "../../stores/settings";
 import { useActiveTabKind } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
-import { Spinner } from "../common";
+import { Kbd, Spinner } from "../common";
 import { isTopmostDialog, registerDialogLayer } from "../common/dialog-layer";
 
 const RECENT_KEY = "omp.palette.recent";
@@ -581,8 +581,10 @@ export function CommandPalette() {
 		return (
 			<button
 				aria-disabled={disabled}
-				className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors ${
-					isActive ? "bg-(--omp-selected-bg)" : "hover:bg-(--omp-bg-tertiary)"
+				className={`flex min-h-[52px] w-full items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors ${
+					isActive
+						? "bg-(--omp-selected-bg) shadow-[inset_0_0_0_1px_var(--omp-border-accent)]"
+						: "hover:bg-(--omp-bg-tertiary)"
 				} ${disabled ? "opacity-45" : ""}`}
 				data-palette-index={index}
 				data-command-name={item.name}
@@ -594,14 +596,17 @@ export function CommandPalette() {
 				onMouseEnter={() => setActiveIndex(index)}
 				type="button"
 			>
-				{options?.recent ? (
-					<History className="shrink-0 text-(--omp-accent)" size={12} />
-				) : (
-					<Slash className="shrink-0 text-(--omp-accent)" size={12} />
-				)}
-				<span className="min-w-0 flex-1">
+				<span
+					aria-hidden="true"
+					className={`flex size-7 shrink-0 items-center justify-center rounded-[22%] text-(--omp-accent) ${
+						isActive ? "bg-(--omp-bg-elevated) shadow-(--omp-shadow-sm)" : "bg-(--omp-selected-bg)"
+					}`}
+				>
+					{options?.recent ? <History size={15} /> : <Slash size={15} />}
+				</span>
+				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 					<span className="flex items-center gap-1.5">
-						<span className="truncate text-xs font-medium text-(--omp-text)">{item.label}</span>
+						<span className="truncate text-omp-lg font-medium text-(--omp-text)">{item.label}</span>
 						{toggleOn !== null && (
 							<span
 								className={`rounded px-1 text-omp-xxs font-semibold uppercase ${
@@ -611,13 +616,8 @@ export function CommandPalette() {
 								{toggleOn ? t("palette.on") : t("palette.off")}
 							</span>
 						)}
-						{item.shortcut && (
-							<kbd className="rounded border border-(--omp-border-muted) px-1 text-omp-xxs text-(--omp-dim)">
-								{displayShortcut(item.shortcut, keyboardPlatform)}
-							</kbd>
-						)}
 					</span>
-					<span className="block truncate text-omp-xs text-(--omp-muted)">
+					<span className="block truncate text-omp-sm text-(--omp-text-secondary)">
 						{disabled
 							? item.affordance.kind === "unavailable"
 								? item.affordance.reason
@@ -625,6 +625,11 @@ export function CommandPalette() {
 							: item.description}
 					</span>
 				</span>
+				{item.shortcut && (
+					<kbd className="omp-kbd shrink-0 font-medium text-(--omp-muted)">
+						{displayShortcut(item.shortcut, keyboardPlatform)}
+					</kbd>
+				)}
 				{options?.categoryLabel && (
 					<span className="shrink-0 text-omp-xxs tracking-wide text-(--omp-dim) uppercase">
 						{options.categoryLabel}
@@ -681,9 +686,7 @@ export function CommandPalette() {
 						value={query}
 					/>
 					{loading && <Spinner size="sm" />}
-					<kbd className="shrink-0 rounded border border-(--omp-border-muted) px-1.5 py-0.5 text-omp-xxs text-(--omp-dim)">
-						esc
-					</kbd>
+					<kbd className="omp-kbd shrink-0 font-medium text-(--omp-muted)">esc</kbd>
 				</div>
 				{commandsError !== null && (
 					<div className="flex items-center gap-2 border-b border-(--omp-border-muted) px-3 py-1.5">
@@ -703,7 +706,7 @@ export function CommandPalette() {
 						</button>
 					</div>
 				)}
-				<div className="omp-command-list overflow-y-auto p-1.5" ref={listRef}>
+				<div className="omp-command-list overflow-y-auto px-2 pt-1 pb-2" ref={listRef}>
 					{flatList.length === 0 && !loading && (
 						<div className="px-3 py-8 text-center text-xs text-(--omp-dim)">
 							{workingItems.length === 0 ? t("palette.noCommands") : t("palette.noMatch")}
@@ -714,15 +717,13 @@ export function CommandPalette() {
 						<>
 							{recentItems.length > 0 && (
 								<div className="mb-1">
-									<div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0.5 text-omp-xxs font-semibold tracking-widest text-(--omp-dim) uppercase">
-										{t("palette.recent")}
-									</div>
+									<div className="omp-eyebrow px-3 pt-2.5 pb-1.5 text-(--omp-dim)">{t("palette.recent")}</div>
 									{recentItems.map(item => renderItem(item, { recent: true }))}
 								</div>
 							)}
 							{Array.from(grouped.entries()).map(([category, items]) => (
 								<div key={category} className="mb-1">
-									<div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0.5 text-omp-xxs font-semibold tracking-widest text-(--omp-dim) uppercase">
+									<div className="omp-eyebrow px-3 pt-3 pb-1.5 text-(--omp-dim)">
 										{t(`category.${category}`)}
 									</div>
 									{items.map(item => renderItem(item))}
@@ -732,6 +733,22 @@ export function CommandPalette() {
 					) : (
 						flatList.map(item => renderItem(item))
 					)}
+				</div>
+				<div
+					className="flex items-center gap-4 border-t border-(--omp-border-muted) bg-(--omp-bg-secondary) px-4 py-2.5 text-omp-sm text-(--omp-muted)" // surface-ok: palette footer
+					data-palette-footer
+				>
+					<span className="flex items-center gap-1.5">
+						<Kbd className="bg-(--omp-bg-elevated) font-medium">↑↓</Kbd>
+						{t("palette.footer.navigate")}
+					</span>
+					<span className="flex items-center gap-1.5">
+						<Kbd className="bg-(--omp-bg-elevated) font-medium">↵</Kbd>
+						{t("palette.footer.run")}
+					</span>
+					<span className="ml-auto font-mono font-medium">
+						{t("palette.footer.count", { count: results.length })}
+					</span>
 				</div>
 			</div>
 		</div>

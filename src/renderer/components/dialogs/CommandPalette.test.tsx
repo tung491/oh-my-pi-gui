@@ -245,3 +245,21 @@ describe("sidecar command fetch failure", () => {
 		expect(container.querySelector('[role="alert"]')).toBeNull();
 	});
 });
+
+describe("footer", () => {
+	it("hints navigation and run, and counts the command rows it renders", async () => {
+		seedTab("agent");
+		await mount();
+
+		const footerText = (): string => container.querySelector("[data-palette-footer]")?.textContent ?? "";
+		expect(footerText()).toContain(translate("palette.footer.navigate"));
+		expect(footerText()).toContain(translate("palette.footer.run"));
+		expect(rows().length).toBeGreaterThan(0);
+		expect(footerText()).toContain(translate("palette.footer.count", { count: rows().length }));
+
+		// Drilling into a submenu swaps the rows, and the count follows them.
+		await click(rowByLabel(translate("cmd.security")));
+		expect(rows().length).toBeGreaterThan(0);
+		expect(footerText()).toContain(translate("palette.footer.count", { count: rows().length }));
+	});
+});

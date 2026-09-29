@@ -19,12 +19,23 @@ import { applyModelInfo, hydrateSession } from "../../hooks/use-rpc-events";
 import { formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
+import { availableFilters, filterModels, type ModelFilter } from "../../lib/model-filters";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useRuntimeTabId } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
-import { Badge, Modal, Spinner } from "../common";
+import { Badge, Button, Modal, Spinner, Tag } from "../common";
+
+const FILTER_LABEL_KEYS: Record<ModelFilter, string> = {
+	all: "modelPicker.filter.all",
+	connected: "modelPicker.filter.connected",
+	reasoning: "modelPicker.filter.reasoning",
+};
+
+const TILE = "flex size-7 shrink-0 items-center justify-center rounded-[22%]";
+const TILE_CURRENT = `${TILE} bg-[linear-gradient(135deg,var(--omp-brand),var(--omp-btn-primary-bg))] text-(--omp-btn-primary-text)`;
+const TILE_OTHER = `${TILE} border border-(--omp-border-muted) bg-(--omp-bg-secondary) text-(--omp-muted)`; // surface-ok: model tile
 
 export function ModelPicker() {
 	const tabRpc = useTabRpc();
@@ -36,12 +47,14 @@ export function ModelPicker() {
 	const current = useModelStore(state => state.model);
 	const refreshAvailableModels = useModelStore(state => state.refreshAvailableModels);
 	const openProviders = useUiStore(state => state.openProviders);
+	const openModelRoles = useUiStore(state => state.openModelRoles);
 	// Live session usage: models whose window is smaller render with an
 	// over-context warning and compact-first on pick (TUI markOverContext parity).
 	const contextUsage = useSessionStore(state => state.contextUsage);
 	const sidecarReady = useSessionStore(state => state.status) === "ready";
 
 	const [query, setQuery] = useState("");
+	const [filter, setFilter] = useState<ModelFilter>("all");
 	const [providers, setProviders] = useState<LoginProvider[]>([]);
 	const [switching, setSwitching] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -95,6 +108,7 @@ export function ModelPicker() {
 	useEffect(() => {
 		if (!open) return undefined;
 		setQuery("");
+		setFilter("all");
 		setActiveIndex(0);
 		requestAnimationFrame(() => inputRef.current?.focus());
 		void load(false);
@@ -109,24 +123,28 @@ export function ModelPicker() {
 		return map;
 	}, [providers]);
 
+	const filters = useMemo(() => availableFilters(availableModels), [availableModels]);
+	// A catalog refresh can drop the last reasoning model; fall back to All
+	// instead of filtering on a tag that is no longer offered.
+	const activeFilter: ModelFilter = filters.includes(filter) ? filter : "all";
+	useEffect(() => {
+		if (activeFilter !== filter) setFilter(activeFilter);
+	}, [activeFilter, filter]);
+
 	const groups = useMemo(() => {
-		const q = query.trim().toLowerCase();
-		const filtered = availableModels.filter(
-			model =>
-				q.length === 0 ||
-				model.id.toLowerCase().includes(q) ||
-				model.provider.toLowerCase().includes(q) ||
-				model.name?.toLowerCase().includes(q) ||
-				model.description?.toLowerCase().includes(q),
-		);
-		const map = new Map<string, typeof filtered>();
+		const filtered = filterModels(availableModels, {
+			query,
+			filter: activeFilter,
+			isConnected: provider => authByProvider.get(provider)?.authenticated === true,
+		});
+		const map = new Map<string, ModelInfo[]>();
 		for (const model of filtered) {
 			const list = map.get(model.provider) ?? [];
 			list.push(model);
 			map.set(model.provider, list);
 		}
 		return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-	}, [availableModels, query]);
+	}, [activeFilter, authByProvider, availableModels, query]);
 
 	// Flat row order (group order → in-group order) for keyboard navigation.
 	const flatOptions = useMemo(
@@ -227,33 +245,47 @@ export function ModelPicker() {
 	return (
 		<Modal
 			ariaLabel={t("modelPicker.searchLabel")}
-			bodyClassName="p-0"
+			bodyClassName="flex flex-col p-0"
 			chromeless
 			onClose={close}
 			open={open}
 			placement="top"
 			size="picker"
 		>
-			<div className="flex h-full flex-col">
-				<div className="flex items-center gap-2.5 border-b border-(--omp-border-muted) px-3.5 py-2.5">
-					<Search className="shrink-0 text-(--omp-dim)" size={14} />
-					<input
-						aria-activedescendant={flatOptions.length > 0 ? `${listboxId}-option-${activeIndex}` : undefined}
-						aria-controls={listboxId}
-						aria-label={t("modelPicker.searchLabel")}
-						className="min-w-0 flex-1 bg-transparent text-sm text-(--omp-text) placeholder:text-(--omp-dim) focus:outline-none"
-						onChange={event => setQuery(event.target.value)}
-						onKeyDown={onKeyDown}
-						placeholder={t("modelPicker.placeholder")}
-						ref={inputRef}
-						value={query}
-					/>
-					<kbd className="shrink-0 rounded border border-(--omp-border-muted) px-1.5 py-0.5 text-omp-xxs text-(--omp-dim)">
-						esc
-					</kbd>
+			<div className="flex min-h-0 flex-1 flex-col">
+				<div className="flex shrink-0 flex-col gap-2.5 border-b border-(--omp-border-muted) px-3.5 py-2.5">
+					<div className="flex items-center gap-2.5">
+						<Search className="shrink-0 text-(--omp-dim)" size={14} />
+						<input
+							aria-activedescendant={flatOptions.length > 0 ? `${listboxId}-option-${activeIndex}` : undefined}
+							aria-controls={listboxId}
+							aria-label={t("modelPicker.searchLabel")}
+							className="min-w-0 flex-1 bg-transparent text-sm text-(--omp-text) placeholder:text-(--omp-dim) focus:outline-none"
+							onChange={event => setQuery(event.target.value)}
+							onKeyDown={onKeyDown}
+							placeholder={t("modelPicker.placeholder")}
+							ref={inputRef}
+							value={query}
+						/>
+						<kbd className="omp-kbd shrink-0 font-medium text-(--omp-muted)">esc</kbd>
+					</div>
+					<div className="flex items-center gap-2">
+						<div aria-label={t("modelPicker.filter.aria")} className="flex flex-wrap gap-2" role="group">
+							{filters.map(value => (
+								<Tag key={value} onClick={() => setFilter(value)} selected={value === activeFilter}>
+									{t(FILTER_LABEL_KEYS[value])}
+								</Tag>
+							))}
+						</div>
+						{!loading && !error && (
+							<span className="ml-auto shrink-0 font-mono text-omp-sm text-(--omp-muted)">
+								{t("modelPicker.count", { count: flatOptions.length })}
+							</span>
+						)}
+					</div>
 				</div>
 				<div
-					className="min-h-0 flex-1 overflow-y-auto p-1.5"
+					className="min-h-0 flex-1 overflow-y-auto px-2 pt-1 pb-2"
 					id={listboxId}
 					ref={listRef}
 					role={showOptions ? "listbox" : undefined}
@@ -281,18 +313,17 @@ export function ModelPicker() {
 						<div className="py-10 text-center text-xs text-(--omp-dim)">{t("modelPicker.empty")}</div>
 					) : groups.length === 0 ? (
 						<div className="py-10 text-center text-xs text-(--omp-dim)">
-							{t("modelPicker.noMatch", { query })}
+							{query.trim().length > 0
+								? t("modelPicker.noMatch", { query })
+								: t("modelPicker.count", { count: 0 })}
 						</div>
 					) : (
 						groups.map(([provider, models]) => {
 							const auth = authByProvider.get(provider);
 							return (
 								<section aria-label={provider} className="mb-1" key={provider} role="group">
-									<div className="flex items-center gap-2 px-2.5 pt-2 pb-1">
-										<Cpu className="shrink-0 text-(--omp-dim)" size={10} />
-										<span className="text-omp-xxs font-semibold tracking-widest text-(--omp-dim) uppercase">
-											{provider}
-										</span>
+									<div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+										<span className="omp-eyebrow text-(--omp-dim)">{provider}</span>
 										{auth && (
 											<Badge variant={auth.authenticated ? "success" : auth.available ? "warning" : "muted"}>
 												{auth.authenticated
@@ -314,7 +345,7 @@ export function ModelPicker() {
 												{t("providers.login")}
 											</button>
 										)}
-										<span className="ml-auto text-omp-xxs tabular-nums text-(--omp-dim)">
+										<span className="ml-auto font-mono text-omp-xxs tabular-nums text-(--omp-dim)">
 											{models.length}
 										</span>
 									</div>
@@ -327,7 +358,7 @@ export function ModelPicker() {
 										return (
 											<button
 												aria-selected={isCurrent}
-												className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors ${
+												className={`flex min-h-[58px] w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
 													isActive ? "bg-(--omp-selected-bg)" : "hover:bg-(--omp-bg-tertiary)"
 												}`}
 												data-option-index={optionIndex}
@@ -340,10 +371,13 @@ export function ModelPicker() {
 												role="option"
 												type="button"
 											>
+												<span aria-hidden="true" className={isCurrent ? TILE_CURRENT : TILE_OTHER}>
+													<Cpu size={15} />
+												</span>
 												<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-													<div className="flex min-w-0 items-center gap-1.5">
+													<div className="flex min-w-0 items-center gap-2">
 														<span
-															className={`truncate text-xs ${isCurrent ? "font-semibold text-(--omp-accent)" : over ? "text-(--omp-dim)" : "text-(--omp-text)"}`}
+															className={`truncate text-omp-lg font-semibold ${isCurrent ? "text-(--omp-accent)" : over ? "text-(--omp-dim)" : "text-(--omp-text)"}`}
 														>
 															{model.name || model.id}
 														</span>
@@ -365,7 +399,7 @@ export function ModelPicker() {
 													</div>
 													{((model.name && model.name !== model.id) || model.description) && (
 														<span
-															className="truncate font-mono text-omp-xxs text-(--omp-dim)"
+															className="truncate font-mono text-omp-sm text-(--omp-muted)"
 															title={model.description}
 														>
 															{[
@@ -378,12 +412,12 @@ export function ModelPicker() {
 													)}
 												</div>
 												{model.int != null && Number.isFinite(model.int) && (
-													<span className="shrink-0 font-mono text-omp-xxs text-(--omp-dim)">
+													<span className="shrink-0 font-mono text-omp-sm text-(--omp-muted)">
 														{t("modelPicker.intelligence", { value: Math.round(model.int) })}
 													</span>
 												)}
 												{model.tps != null && Number.isFinite(model.tps) && model.tps > 0 && (
-													<span className="shrink-0 font-mono text-omp-xxs text-(--omp-dim)">
+													<span className="shrink-0 font-mono text-omp-sm font-medium text-(--omp-text)">
 														{t("modelPicker.speed", {
 															value: model.tps >= 10 ? Math.round(model.tps) : model.tps.toFixed(1),
 														})}
@@ -404,7 +438,7 @@ export function ModelPicker() {
 													</span>
 												)}
 												{switching === key && <Spinner size="sm" />}
-												{isCurrent && <Check className="shrink-0 text-(--omp-accent)" size={13} />}
+												{isCurrent && <Check className="shrink-0 text-(--omp-accent)" size={16} />}
 											</button>
 										);
 									})}
@@ -412,6 +446,32 @@ export function ModelPicker() {
 							);
 						})
 					)}
+				</div>
+				<div
+					className="flex shrink-0 items-center gap-2 border-t border-(--omp-border-muted) bg-(--omp-bg-secondary) py-2.5 pr-3 pl-4" // surface-ok: sunken picker footer
+					data-model-picker-footer
+				>
+					<span className="min-w-0 flex-1 text-omp-sm text-(--omp-muted)">{t("modelPicker.footer.hint")}</span>
+					<Button
+						onClick={() => {
+							close();
+							openModelRoles();
+						}}
+						size="sm"
+						variant="ghost"
+					>
+						{t("modelPicker.footer.assignRoles")}
+					</Button>
+					<Button
+						onClick={() => {
+							close();
+							openProviders();
+						}}
+						size="sm"
+						variant="secondary"
+					>
+						{t("modelPicker.footer.manageProviders")}
+					</Button>
 				</div>
 			</div>
 		</Modal>
