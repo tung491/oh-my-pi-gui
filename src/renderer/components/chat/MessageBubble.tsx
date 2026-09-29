@@ -245,6 +245,7 @@ export const MessageBubble = memo(function MessageBubble({
 	const tabId = useRuntimeTabId();
 	const [copied, setCopied] = useState(false);
 	const [branching, setBranching] = useState(false);
+	const [retrying, setRetrying] = useState(false);
 	const switchPending = useSessionStore(state => state.switchPending !== null);
 	if (message.role === "bashExecution" || message.role === "pythonExecution") {
 		return <ExecutionBubble message={message} />;
@@ -319,12 +320,14 @@ export const MessageBubble = memo(function MessageBubble({
 	// store reads in retryLastTurn run before its first await, so the runtime
 	// scope keeps them on this pane even when another pane holds focus.
 	const handleRetry = () => {
+		if (retrying || switchPending) return;
+		setRetrying(true);
 		const onEmpty = () =>
 			toast({ variant: "warning", title: t("palette.retryNothing"), message: t("palette.retryNothingDesc") });
 		const run = () => retryLastTurn(onEmpty, rpc);
-		void (tabId ? withSessionRuntime(tabId, run) : run()).catch(error =>
-			toast({ variant: "error", title: t("palette.failed"), message: String(error) }),
-		);
+		void (tabId ? withSessionRuntime(tabId, run) : run())
+			.catch(error => toast({ variant: "error", title: t("palette.failed"), message: String(error) }))
+			.finally(() => setRetrying(false));
 	};
 
 	if (isUser) {
@@ -517,7 +520,7 @@ export const MessageBubble = memo(function MessageBubble({
 						/>
 						{retryable && (
 							<IconButton
-								disabled={switchPending}
+								disabled={retrying || switchPending}
 								icon={<RotateCcw size={14} />}
 								label={t("chat.retryTurn")}
 								onClick={handleRetry}

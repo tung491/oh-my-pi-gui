@@ -618,6 +618,33 @@ describe("MessageBubble turn chrome", () => {
 		}
 	});
 
+	it("sends one retry when Retry is clicked again before the first send settles", async () => {
+		installWindowRpc();
+		let release: (value: RpcResponse) => void = () => {};
+		const command = vi.fn<TabCommand>(
+			() =>
+				new Promise<RpcResponse>(resolve => {
+					release = resolve;
+				}),
+		);
+		const runtime = paneRuntime(command, [paneQuestion, paneAnswer]);
+		const container = await mount(
+			<SessionRuntimeProvider runtime={runtime}>
+				<MessageBubble message={paneAnswer} retryable />
+			</SessionRuntimeProvider>,
+		);
+		const retry = container.querySelector('button[aria-label="Retry this turn"]') as TestElement | null;
+		if (!retry) throw new Error("Retry button did not render");
+
+		await click(retry);
+		await click(retry);
+		expect(command).toHaveBeenCalledTimes(1);
+
+		release(response(true));
+		await settle();
+		expect(retry.getAttribute("disabled")).toBeNull();
+	});
+
 	it("offers Retry only on the turn marked retryable", async () => {
 		const runtime = paneRuntime(
 			vi.fn<TabCommand>(async () => response(true)),
