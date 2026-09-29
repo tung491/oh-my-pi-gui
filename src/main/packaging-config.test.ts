@@ -44,6 +44,9 @@ function macConfigs(): { file: string; config: BuilderConfig }[] {
 		.filter(entry => entry.config.mac);
 }
 
+/** Gitignored local variants: every guard below still checks them when present, but none is required. */
+const LOCAL_ONLY_CONFIGS = new Set(["electron-builder.trial.yml"]);
+
 describe("mac bundle configs", () => {
 	const configs = macConfigs();
 
@@ -53,9 +56,10 @@ describe("mac bundle configs", () => {
 		expect(
 			configs
 				.map(entry => entry.file)
+				.filter(file => !LOCAL_ONLY_CONFIGS.has(file))
 				.sort()
 				.join(","),
-		).toBe("electron-builder.trial.yml,electron-builder.x64.yml,electron-builder.yml");
+		).toBe("electron-builder.x64.yml,electron-builder.yml");
 	});
 
 	it("registers the omp:// scheme that src/main/deep-link.ts handles", () => {
