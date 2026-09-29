@@ -16,6 +16,8 @@ import {
 	PointElement,
 	Tooltip,
 } from "chart.js";
+import { CHART_COLOR_TOKENS } from "./chart-tokens";
+import { getThemeSelectionVersion } from "./themes";
 
 Chart.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Filler, Tooltip, Legend);
 
@@ -24,22 +26,22 @@ const css = (name: string, fallback: string): string =>
 
 /** Scheme-aware fallbacks, used only when the theme stylesheets failed to load. */
 const FALLBACK_DARK = {
-	text: "#e4e4e7",
-	muted: "#777d88",
-	dim: "#5f6673",
-	grid: "#3d424a",
-	accent: "#3b82f6",
+	text: "#ebedef",
+	muted: "#b6bac2",
+	dim: "#a2a8b1",
+	grid: "#233147",
+	accent: "#7db9ff",
 	error: "#f87171",
-	surface: "#26262e",
+	surface: "#233147",
 };
 const FALLBACK_LIGHT = {
-	text: "#172033",
-	muted: "#596578",
-	dim: "#677386",
-	grid: "#d9e0ea",
-	accent: "#2563eb",
-	error: "#cf3f4f",
-	surface: "#edf1f6",
+	text: "#1e293b",
+	muted: "#4a5a70",
+	dim: "#56667d",
+	grid: "#e7eef8",
+	accent: "#1b5fcc",
+	error: "#b91c1c",
+	surface: "#e7eef8",
 };
 
 const chartFallbacks = () => {
@@ -50,27 +52,6 @@ const chartFallbacks = () => {
 		typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: light)").matches;
 	return osLight ? FALLBACK_LIGHT : FALLBACK_DARK;
 };
-
-/**
- * Palette for multi-series charts (cycled). Derived from theme tokens — every
- * token below is a plain hex value in all five themes and both stylesheets,
- * so consumers can append alpha suffixes (`${color}26`). Module-level
- * resolution is fine: this module lazy-loads with the stats dashboard, after
- * the theme is applied. Ordered for hue spread; exact duplicates (small
- * palettes like nord/solarized reuse hues across roles) are removed below.
- */
-const CHART_COLOR_TOKENS = [
-	"--omp-accent",
-	"--omp-md-code",
-	"--omp-success",
-	"--omp-thinking-xhigh",
-	"--omp-warning",
-	"--omp-syntax-string",
-	"--omp-error",
-	"--omp-syntax-number",
-	"--omp-syntax-type",
-	"--omp-muted",
-] as const;
 
 /** Scheme-neutral palette (medium tones) for the no-stylesheet fallback path. */
 const CHART_COLOR_FALLBACKS = [
@@ -86,9 +67,23 @@ const CHART_COLOR_FALLBACKS = [
 	"#64748b",
 ];
 
-const resolvedChartColors = CHART_COLOR_TOKENS.map((token, index) => css(token, CHART_COLOR_FALLBACKS[index]));
+let chartColorCache: { version: number; colors: string[] } | null = null;
 
-export const CHART_COLORS = resolvedChartColors.filter((color, index) => resolvedChartColors.indexOf(color) === index);
+/**
+ * Palette for multi-series charts (cycled), resolved from the active theme's
+ * CHART_COLOR_TOKENS. Memoized per theme selection, so a switch (VIF Light to
+ * VIF Navy, or between named themes) re-reads the tokens on the next call.
+ * Exact duplicates (small palettes like nord/solarized reuse hues across
+ * roles) are removed.
+ */
+export function chartColors(): string[] {
+	const version = getThemeSelectionVersion();
+	if (chartColorCache?.version === version) return chartColorCache.colors;
+	const resolved = CHART_COLOR_TOKENS.map((token, index) => css(token, CHART_COLOR_FALLBACKS[index]));
+	const colors = resolved.filter((color, index) => resolved.indexOf(color) === index);
+	chartColorCache = { version, colors };
+	return colors;
+}
 
 export function chartTheme() {
 	const fb = chartFallbacks();

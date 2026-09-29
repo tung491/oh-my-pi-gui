@@ -1,147 +1,133 @@
-/* omp GUI — Porcelain. Keep in sync with THEMES.light. */
+/* omp GUI — VIF Light. Keep in sync with THEMES.light. */
 
 :root[data-theme="light"] {
 	color-scheme: light;
 
-	--omp-accent: #315f86;
-	--omp-accent-bright: #274f73;
-	--omp-accent-dim: rgba(49, 95, 134, 0.08);
-	--omp-accent-glow: rgba(49, 95, 134, 0.16);
-
-	--omp-border: #d7dddf;
-	--omp-border-accent: rgba(49, 95, 134, 0.52);
-	--omp-border-muted: #e4e8e9;
-	--omp-border-strong: #a4afb5;
-	--omp-success: #326747;
-	--omp-success-dim: rgba(50, 103, 71, 0.08);
-	--omp-error: #9f4545;
-	--omp-error-dim: rgba(159, 69, 69, 0.08);
-	--omp-warning: #80601e;
-	--omp-warning-dim: rgba(128, 96, 30, 0.08);
-	--omp-info: #315f83;
-	--omp-info-dim: rgba(49, 95, 131, 0.08);
-	--omp-text: #22282d;
-	--omp-text-secondary: #4d585f;
-
-	--omp-bg-primary: #fcfcfb;
-	--omp-bg-secondary: #f3f5f5;
-	--omp-bg-tertiary: #e7ebec;
+	--omp-accent: #1b5fcc;
+	--omp-accent-bright: #174fa8;
+	--omp-accent-dim: rgba(45, 140, 255, 0.1);
+	--omp-accent-glow: rgba(45, 140, 255, 0.35);
+	--omp-border: #d8e3f2;
+	--omp-border-accent: rgba(45, 140, 255, 0.52);
+	--omp-border-muted: #e7eef8;
+	--omp-border-strong: #b9c8dd;
+	--omp-success: #157a3a;
+	--omp-success-dim: rgba(22, 163, 74, 0.1);
+	--omp-error: #b91c1c;
+	--omp-error-dim: rgba(220, 38, 38, 0.08);
+	--omp-warning: #8a5b00;
+	--omp-warning-dim: rgba(255, 197, 49, 0.16);
+	--omp-info: #1b5fcc;
+	--omp-info-dim: rgba(45, 140, 255, 0.1);
+	--omp-text: #1e293b;
+	--omp-text-secondary: #3b4a61;
+	--omp-bg-primary: #f7f9fc;
+	--omp-bg-secondary: #f2f6fb;
+	--omp-bg-tertiary: #e7eef8;
 	--omp-bg-elevated: #ffffff;
-	--omp-selected-bg: rgba(49, 95, 134, 0.09);
-	--omp-user-msg-bg: #f3f5f5;
-	--omp-user-msg-border: #d7dddf;
-	--omp-custom-msg-bg: #f3f5f5;
-	--omp-code-bg: #f3f5f5;
-
-	--omp-tool-pending-bg: #f3f5f5;
-	--omp-tool-success-bg: rgba(50, 103, 71, 0.045);
-	--omp-tool-error-bg: rgba(159, 69, 69, 0.065);
-	--omp-tool-output: #4d585f;
+	--omp-selected-bg: rgba(45, 140, 255, 0.1);
+	--omp-user-msg-bg: #ffffff;
+	--omp-user-msg-border: #e7eef8;
+	--omp-custom-msg-bg: #f2f6fb;
+	--omp-code-bg: #fbfcfe;
+	--omp-tool-pending-bg: #f2f6fb;
+	--omp-tool-success-bg: rgba(22, 163, 74, 0.045);
+	--omp-tool-error-bg: rgba(220, 38, 38, 0.065);
+	--omp-tool-output: #3b4a61;
 	--omp-tool-rail-running: var(--omp-accent);
-	--omp-tool-rail-done: #326747;
-	--omp-tool-rail-error: #9f4545;
-
-	--omp-md-heading: #22282d;
-	--omp-md-link: #315f86;
-	--omp-md-link-url: #59646b;
-	--omp-md-code: #944c42;
-	--omp-md-code-block: #22282d;
-	--omp-md-code-block-border: #d7dddf;
-	--omp-md-quote: #4d585f;
-	--omp-md-quote-border: #a4afb5;
-	--omp-md-hr: #d7dddf;
-	--omp-md-list-bullet: #59646b;
-
-	--omp-diff-added: #326747;
-	--omp-diff-added-bg: rgba(50, 103, 71, 0.07);
-	--omp-diff-removed: #9f4545;
-	--omp-diff-removed-bg: rgba(159, 69, 69, 0.07);
-	--omp-diff-context: #59646b;
-
-	--omp-syntax-comment: #5f6a71;
-	--omp-syntax-keyword: #315f83;
-	--omp-syntax-function: #2b655f;
-	--omp-syntax-variable: #22282d;
-	--omp-syntax-string: #805c2e;
-	--omp-syntax-number: #944c42;
-	--omp-syntax-type: #516939;
-	--omp-syntax-operator: #4d585f;
-	--omp-syntax-punctuation: #59646b;
-
-	--omp-thinking-off: #5f6a71;
-	--omp-thinking-minimal: #59646b;
-	--omp-thinking-low: #4d585f;
-	--omp-thinking-medium: #315f86;
-	--omp-thinking-high: #274f73;
-	--omp-thinking-xhigh: #22282d;
-
-	--omp-status-bg: #f0f2f2;
-	--omp-status-model: #4d585f;
-	--omp-status-path: #59646b;
-	--omp-status-git-clean: #326747;
-	--omp-status-git-dirty: #80601e;
-	--omp-status-context: #4d585f;
-	--omp-status-spend: #4d585f;
+	--omp-tool-rail-done: #157a3a;
+	--omp-tool-rail-error: #b91c1c;
+	--omp-md-heading: #1e293b;
+	--omp-md-link: #1b5fcc;
+	--omp-md-link-url: #56667d;
+	--omp-md-code: #1b5fcc;
+	--omp-md-code-block: #1e293b;
+	--omp-md-code-block-border: #e7eef8;
+	--omp-md-quote: #3b4a61;
+	--omp-md-quote-border: #b9c8dd;
+	--omp-md-hr: #e7eef8;
+	--omp-md-list-bullet: #56667d;
+	--omp-diff-added: #157a3a;
+	--omp-diff-added-bg: rgba(22, 163, 74, 0.09);
+	--omp-diff-removed: #b91c1c;
+	--omp-diff-removed-bg: rgba(220, 38, 38, 0.07);
+	--omp-diff-context: #56667d;
+	--omp-syntax-comment: #56667d;
+	--omp-syntax-keyword: #1b5fcc;
+	--omp-syntax-function: #0b6e85;
+	--omp-syntax-variable: #1e293b;
+	--omp-syntax-string: #9c4a00;
+	--omp-syntax-number: #a3336b;
+	--omp-syntax-type: #3f6212;
+	--omp-syntax-operator: #3b4a61;
+	--omp-syntax-punctuation: #56667d;
+	--omp-thinking-off: #56667d;
+	--omp-thinking-minimal: #4a5a70;
+	--omp-thinking-low: #3b4a61;
+	--omp-thinking-medium: #1b5fcc;
+	--omp-thinking-high: #174fa8;
+	--omp-thinking-xhigh: #1e293b;
+	--omp-status-bg: #f2f6fb;
+	--omp-status-model: #3b4a61;
+	--omp-status-path: #56667d;
+	--omp-status-git-clean: #157a3a;
+	--omp-status-git-dirty: #8a5b00;
+	--omp-status-context: #3b4a61;
+	--omp-status-spend: #3b4a61;
 	--omp-status-subagents: var(--omp-accent);
-	--omp-status-muted: #59646b;
-	--omp-status-dim: #5f6a71;
-	--omp-status-text: #22282d;
-	--omp-status-sep: #d7dddf;
-
-	--omp-muted: #59646b;
-	--omp-dim: #5f6a71;
-	--omp-link: #315f86;
-	--omp-custom-msg-label: #315f86;
-
+	--omp-status-muted: #56667d;
+	--omp-status-dim: #56667d;
+	--omp-status-text: #1e293b;
+	--omp-status-sep: #d8e3f2;
+	--omp-muted: #4a5a70;
+	--omp-dim: #56667d;
+	--omp-link: #1b5fcc;
+	--omp-custom-msg-label: #1b5fcc;
 	--omp-input-bg: #ffffff;
-	--omp-input-border: #d7dddf;
+	--omp-input-border: #d8e3f2;
 	--omp-input-focus-border: var(--omp-accent);
-	--omp-input-glow: rgba(49, 95, 134, 0.1);
-
-	--omp-btn-primary-bg: #22282d;
-	--omp-btn-primary-text: #fcfcfb;
-	--omp-btn-secondary-bg: #e7ebec;
-	--omp-btn-secondary-text: #22282d;
+	--omp-input-glow: rgba(45, 140, 255, 0.35);
+	--omp-btn-primary-bg: #1b5fcc;
+	--omp-btn-primary-text: #ffffff;
+	--omp-btn-secondary-bg: #ffffff;
+	--omp-btn-secondary-text: #1b5fcc;
 	--omp-btn-danger-bg: var(--omp-error);
 	--omp-btn-danger-text: #ffffff;
-
-	--omp-badge-bg: #e7ebec;
-	--omp-badge-text: #4d585f;
+	--omp-badge-bg: #f2f6fb;
+	--omp-badge-text: #3b4a61;
 	--omp-badge-accent: var(--omp-accent);
-
-	--omp-overlay-bg: rgba(20, 28, 32, 0.28);
+	--omp-overlay-bg: rgba(10, 26, 51, 0.48);
 	--omp-modal-bg: #ffffff;
-	--omp-modal-border: #d7dddf;
-
+	--omp-modal-border: #e7eef8;
 	--omp-toast-bg: #ffffff;
-	--omp-toast-text: #22282d;
-	--omp-toast-border: #d7dddf;
-
-	--omp-progress-bg: #e7ebec;
+	--omp-toast-text: #1e293b;
+	--omp-toast-border: #d8e3f2;
+	--omp-progress-bg: #e7eef8;
 	--omp-progress-fill: var(--omp-accent);
-
-	--omp-sidebar-bg: #f0f2f2;
-	--omp-sidebar-item-hover: #e7ebec;
-	--omp-sidebar-item-active: rgba(49, 95, 134, 0.1);
-
-	--omp-selection-bg: rgba(49, 95, 134, 0.19);
-	--omp-selection-text: #22282d;
-
-	--omp-scrollbar-thumb: #a4afb5;
+	--omp-sidebar-bg: #0a1a33;
+	--omp-sidebar-item-hover: #19283f;
+	--omp-sidebar-item-active: rgba(255, 255, 255, 0.1);
+	--omp-brand: #2d8cff;
+	--omp-sidebar-text: #ebedef;
+	--omp-sidebar-muted: #a2a8b1;
+	--omp-sidebar-border: #313f54;
+	--omp-sidebar-accent: #00d4ff;
+	--omp-sidebar-success: #4ade80;
+	--omp-sidebar-warning: #ffc531;
+	--omp-sidebar-error: #f87171;
+	--omp-selection-bg: rgba(45, 140, 255, 0.22);
+	--omp-selection-text: #1e293b;
+	--omp-scrollbar-thumb: #b9c8dd;
 	--omp-scrollbar-track: transparent;
-
 	--omp-streaming-cursor: var(--omp-accent);
-	--omp-streaming-highlight: rgba(49, 95, 134, 0.04);
-
-	--omp-panel-bg: #f0f2f2;
-	--omp-panel-border: #e4e8e9;
-	--omp-panel-header: #59646b;
-
-	--omp-titlebar-bg: #f0f2f2;
-	--omp-titlebar-text: #22282d;
-
-	--omp-shadow-sm: 0 1px 2px rgba(32, 40, 48, 0.035);
-	--omp-shadow-md: 0 6px 18px rgba(32, 40, 48, 0.07);
-	--omp-shadow-lg: 0 16px 48px rgba(32, 40, 48, 0.13);
+	--omp-streaming-highlight: rgba(45, 140, 255, 0.04);
+	--omp-panel-bg: #ffffff;
+	--omp-panel-border: #e7eef8;
+	--omp-panel-header: #56667d;
+	--omp-titlebar-bg: #ffffff;
+	--omp-titlebar-text: #1e293b;
+	--omp-shadow-sm: 0 1px 2px rgba(10, 26, 51, 0.05), 0 2px 8px rgba(27, 95, 204, 0.06);
+	--omp-shadow-md: 0 2px 4px rgba(10, 26, 51, 0.06), 0 10px 28px rgba(27, 95, 204, 0.1);
+	--omp-shadow-lg: 0 8px 20px rgba(10, 26, 51, 0.1), 0 24px 60px rgba(27, 95, 204, 0.16);
 	--omp-shadow-glow: 0 0 0 1px var(--omp-border-accent);
 }

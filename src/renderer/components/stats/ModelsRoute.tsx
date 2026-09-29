@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Bar, Line } from "react-chartjs-2";
-import { baseChartOptions, bucketLabels, CHART_COLORS, compact, formatMs, formatUsd } from "../../lib/chart";
+import { baseChartOptions, bucketLabels, chartColors, compact, formatMs, formatUsd } from "../../lib/chart";
 import "../../lib/chart";
 import { useStats } from "../../hooks/use-stats";
 import { useT } from "../../lib/i18n";
@@ -132,6 +132,7 @@ export function ModelsRoute({ range, refreshKey }: { range: StatsRange; refreshK
 		[stats],
 	);
 	const usageChart = useMemo(() => {
+		const colors = chartColors();
 		const top = byModel.slice(0, 10);
 		return {
 			labels: top.map(row => row.model),
@@ -139,8 +140,8 @@ export function ModelsRoute({ range, refreshKey }: { range: StatsRange; refreshK
 				{
 					label: t("stats.col.requests"),
 					data: top.map(row => row.totalRequests),
-					backgroundColor: top.map((_, index) => `${CHART_COLORS[index % CHART_COLORS.length]}99`),
-					borderColor: top.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
+					backgroundColor: top.map((_, index) => `${colors[index % colors.length]}99`),
+					borderColor: top.map((_, index) => colors[index % colors.length]),
 					borderWidth: 1,
 				},
 			],
@@ -148,6 +149,7 @@ export function ModelsRoute({ range, refreshKey }: { range: StatsRange; refreshK
 	}, [byModel, t]);
 
 	const perfChart = useMemo(() => {
+		const colors = chartColors();
 		const points = stats?.modelPerformanceSeries ?? [];
 		const topModels = byModel.slice(0, 5).map(row => row.model);
 		const timestamps = [...new Set(points.map(point => point.timestamp))].sort((a, b) => a - b);
@@ -159,7 +161,7 @@ export function ModelsRoute({ range, refreshKey }: { range: StatsRange; refreshK
 					const point = points.find(p => p.timestamp === ts && p.model === model);
 					return point?.avgTokensPerSecond ?? null;
 				}),
-				borderColor: CHART_COLORS[index % CHART_COLORS.length],
+				borderColor: colors[index % colors.length],
 				backgroundColor: "transparent",
 				tension: 0.3,
 				pointRadius: 0,

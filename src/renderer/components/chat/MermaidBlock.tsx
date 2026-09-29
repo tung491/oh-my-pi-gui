@@ -1,22 +1,25 @@
 /**
  * Mermaid diagram block: renders ```mermaid fences as real SVG diagrams.
  * The mermaid package (~500KB) is dynamically imported only when a mermaid
- * fence actually appears. Rendered SVG is cached by (theme, source hash);
- * parse failures fall back to the plain CodeBlock showing the source.
+ * fence actually appears. Diagrams use mermaid's "base" theme fed from the
+ * active GUI tokens (lib/mermaid-theme). Rendered SVG is cached by (theme
+ * key, source hash); parse failures fall back to the plain CodeBlock showing
+ * the source.
  */
 
 import type { Mermaid, MermaidConfig } from "mermaid";
 import { memo, useEffect, useState } from "react";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
+import { type MermaidThemeConfig, mermaidThemeConfig, mermaidThemeKey } from "../../lib/mermaid-theme";
 import type { ResolvedTheme } from "../../lib/theme";
 import { Spinner } from "../common/Spinner";
 import { CodeBlock } from "./CodeBlock";
 
 let mermaidPromise: Promise<Mermaid> | null = null;
-/** Theme the shared mermaid singleton was last initialized with. */
-let initializedTheme: ResolvedTheme | null = null;
-/** Rendered SVG cache, keyed by `${theme}:${fnv(source)}`. */
+/** Theme key the shared mermaid singleton was last initialized with. */
+let initializedThemeKey: string | null = null;
+/** Rendered SVG cache, keyed by `${themeKey}:${fnv(source)}`. */
 const svgCache = new Map<string, string>();
 const CACHE_LIMIT = 50;
 let renderSeq = 0;
@@ -76,19 +79,25 @@ function sanitizeSvg(svg: string): string {
 	return new XMLSerializer().serializeToString(root);
 }
 
-async function renderDiagram(source: string, theme: ResolvedTheme): Promise<string> {
-	const key = `${theme}:${hashSource(source)}`;
+/** Mermaid theme derived from the GUI tokens, plus its cache identity. */
+interface MermaidTheme {
+	config: MermaidThemeConfig;
+	key: string;
+}
+
+async function renderDiagram(source: string, theme: MermaidTheme): Promise<string> {
+	const key = `${theme.key}:${hashSource(source)}`;
 	const cached = svgCache.get(key);
 	if (cached !== undefined) return cached;
 	const mermaid = await loadMermaid();
-	if (initializedTheme !== theme) {
+	if (initializedThemeKey !== theme.key) {
 		const config: MermaidConfig = {
+			...theme.config,
 			startOnLoad: false,
-			theme: theme === "dark" ? "dark" : "default",
 			securityLevel: "strict",
 		};
 		mermaid.initialize(config);
-		initializedTheme = theme;
+		initializedThemeKey = theme.key;
 	}
 	const id = `omp-mermaid-${renderSeq++}`;
 	let svg: string;
@@ -115,15 +124,28 @@ function readResolvedTheme(): ResolvedTheme {
 	return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
+/** Builds the mermaid theme from the tokens currently applied to <html>. */
+function readMermaidTheme(): MermaidTheme {
+	const styles = typeof window === "undefined" ? null : getComputedStyle(document.documentElement);
+	const config = mermaidThemeConfig(token => styles?.getPropertyValue(token).trim() ?? "", readResolvedTheme());
+	return { config, key: mermaidThemeKey(config) };
+}
+
 /**
- * Resolved GUI scheme, tracked via the `data-theme` attribute on <html> so
- * custom themes (lib/themes) and OS flips in "system" mode both re-render.
+ * Mermaid theme for the active GUI theme. Tracks `data-theme` (scheme flips,
+ * OS changes in "system" mode) and the inline `style` on <html>, where
+ * lib/themes writes named-theme tokens, so a same-scheme switch (for
+ * example nord to gruvbox) also re-renders. Unrelated style writes keep the
+ * previous state because the key is unchanged.
  */
-function useResolvedTheme(): ResolvedTheme {
-	const [theme, setTheme] = useState<ResolvedTheme>(readResolvedTheme);
+function useMermaidTheme(): MermaidTheme {
+	const [theme, setTheme] = useState<MermaidTheme>(readMermaidTheme);
 	useEffect(() => {
-		const observer = new MutationObserver(() => setTheme(readResolvedTheme()));
-		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+		const observer = new MutationObserver(() => {
+			const next = readMermaidTheme();
+			setTheme(previous => (next.key === previous.key ? previous : next));
+		});
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "style"] });
 		return () => observer.disconnect();
 	}, []);
 	return theme;
@@ -154,8 +176,8 @@ interface RenderState {
 
 export const MermaidBlock = memo(function MermaidBlock({ code, className }: MermaidBlockProps) {
 	const t = useT();
-	const theme = useResolvedTheme();
-	const cacheKey = `${theme}:${hashSource(code)}`;
+	const theme = useMermaidTheme();
+	const cacheKey = `${theme.key}:${hashSource(code)}`;
 	const [state, setState] = useState<RenderState>(() => ({
 		key: cacheKey,
 		svg: svgCache.get(cacheKey) ?? null,

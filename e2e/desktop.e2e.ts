@@ -163,7 +163,7 @@ test("math survives history reload and scrolls inside its column in both themes"
 	await expect(markdown.locator(".katex-html").filter({ hasText: "显存有效带宽" })).toHaveCount(1);
 	await expect(markdown.locator("h1, h2, .katex-error")).toHaveCount(0);
 	const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-	for (const theme of ["Graphite", "Porcelain"]) {
+	for (const theme of ["VIF Navy", "VIF Light"]) {
 		await command("/theme");
 		const picker = page.getByRole("dialog");
 		await picker.getByPlaceholder("Search themes…").fill(theme);
@@ -206,12 +206,12 @@ test("math survives history reload and scrolls inside its column in both themes"
 test("all named themes apply with readable primary text and no stale scheme tokens", async () => {
 	test.setTimeout(90_000);
 	const labels = [
-		"Graphite",
+		"VIF Navy",
 		"Slate",
 		"Deep Sea",
 		"Espresso",
 		"Ember",
-		"Porcelain",
+		"VIF Light",
 		"Ivory",
 		"Sand",
 		"Rose Quartz",
@@ -607,8 +607,8 @@ test("failed preference writes retain edits and never allow a premature restart"
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "Choose theme", exact: true }).click();
 	const picker = page.getByRole("dialog");
-	await picker.getByPlaceholder("Search themes…").fill("Porcelain");
-	await picker.locator("button[aria-pressed]").filter({ hasText: "Porcelain" }).click();
+	await picker.getByPlaceholder("Search themes…").fill("VIF Light");
+	await picker.locator("button[aria-pressed]").filter({ hasText: "VIF Light" }).click();
 	await expect(picker).toHaveCount(0);
 	await expect(page.getByRole("alert").filter({ hasText: "audit appearance write refused" })).toBeVisible();
 	expect(errors).toEqual([]);

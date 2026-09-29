@@ -139,7 +139,7 @@ export function OverviewRoute({ range, refreshKey }: { range: StatsRange; refres
 										label: t("stats.col.requests"),
 										data: series.map(point => point.requests),
 										borderColor: theme.accent,
-										backgroundColor: `${theme.accent}22`,
+										backgroundColor: `${theme.accent}1a`,
 										fill: true,
 										tension: 0.3,
 										pointRadius: 0,

@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Bar } from "react-chartjs-2";
-import { baseChartOptions, CHART_COLORS, compact, formatUsd } from "../../lib/chart";
+import { baseChartOptions, chartColors, compact, formatUsd } from "../../lib/chart";
 import "../../lib/chart";
 import { useStats } from "../../hooks/use-stats";
 import { useT } from "../../lib/i18n";
@@ -95,6 +95,7 @@ export function ToolsRoute({ range, refreshKey }: { range: StatsRange; refreshKe
 
 	const byTool = useMemo(() => [...(stats?.byTool ?? [])].sort((a, b) => b.calls - a.calls), [stats]);
 	const barChart = useMemo(() => {
+		const colors = chartColors();
 		const top = byTool.slice(0, 12);
 		return {
 			labels: top.map(row => row.tool),
@@ -102,8 +103,8 @@ export function ToolsRoute({ range, refreshKey }: { range: StatsRange; refreshKe
 				{
 					label: t("stats.tools.col.calls"),
 					data: top.map(row => row.calls),
-					backgroundColor: top.map((_, index) => `${CHART_COLORS[index % CHART_COLORS.length]}99`),
-					borderColor: top.map((_, index) => CHART_COLORS[index % CHART_COLORS.length]),
+					backgroundColor: top.map((_, index) => `${colors[index % colors.length]}99`),
+					borderColor: top.map((_, index) => colors[index % colors.length]),
 					borderWidth: 1,
 				},
 			],
