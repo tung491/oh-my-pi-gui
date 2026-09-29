@@ -28,8 +28,9 @@ import { useNowTick } from "../../lib/now-tick";
 import { useSessionStore } from "../../stores/session";
 import { useSubagentsStore } from "../../stores/subagents";
 import { toast } from "../../stores/toast";
-import { Badge, Button, Input, Modal, Spinner, type TabItem, Tabs } from "../common";
+import { Badge, Button, IconButton, Input, Modal, Spinner, type TabItem, Tabs, Tag } from "../common";
 import { type AgentSettingsRpc, type AgentSettingsState, useAgentSettings } from "./agent-hub-settings";
+import { filterByStatus, HUB_FILTER_ALL, statusGroups } from "./hub-filter";
 import { SubagentTranscript } from "./SubagentTranscript";
 import {
 	formatElapsed,
@@ -514,6 +515,9 @@ function hubStatusOrder(status: string): number {
 	return 3;
 }
 
+/** One grid for the header and every row, so the columns line up. */
+const HUB_COLUMNS = "grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,10rem)_4.5rem_7.5rem] items-center gap-x-4 px-3";
+
 const HubRow = memo(function HubRow({
 	agent,
 	now,
@@ -551,94 +555,96 @@ const HubRow = memo(function HubRow({
 	const revivable = parked && agent.kind !== "advisor";
 
 	return (
-		<div className="rounded-lg border border-(--omp-border-muted) bg-transparent">
-			<div className="flex items-center">
+		<div
+			className={cx(HUB_COLUMNS, "min-h-15 border-b border-(--omp-border-muted) py-2.5 last:border-b-0")}
+			data-agent-id={agent.id}
+			role="row"
+		>
+			<span className="flex min-w-0" role="cell">
+				<Badge dot={!meta.live} variant={meta.variant}>
+					{meta.live && <Spinner size="sm" />}
+					{t(meta.labelKey)}
+				</Badge>
+			</span>
+			{/* Primary line: index and task label (opens the transcript, like the
+			    row used to). Secondary line: agent type, provenance/kind badges,
+			    and the latest progress note. */}
+			<span className="flex min-w-0 flex-col gap-1" role="cell">
 				<button
-					className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-2 text-left"
+					className="flex min-w-0 cursor-pointer items-baseline gap-1.5 text-left"
 					onClick={onView}
 					type="button"
 				>
-					<Badge dot pulse={meta.live} variant={meta.variant}>
-						{t(meta.labelKey)}
-					</Badge>
 					<span className="shrink-0 font-mono text-omp-xs text-(--omp-dim) tabular-nums">#{agent.index}</span>
 					<span className="min-w-0 truncate text-omp-md font-medium text-(--omp-text)">{title}</span>
-					<span className="ml-auto shrink-0 text-omp-xs text-(--omp-dim) tabular-nums">
-						{elapsed !== null ? formatElapsed(elapsed) : "—"}
-					</span>
 				</button>
-				{/* 查看消息 opens the transcript slide-over; abort/revive are the TUI
-				    hub `x`/`r` parity actions via abort_subagent / revive_subagent.
-				    Abort is inline-confirmed like session deletes. */}
-				<button
-					type="button"
-					title={t("agentHub.hub.viewMessages")}
+				<span className="flex min-w-0 items-center gap-2 text-omp-xs">
+					<span className="shrink-0 font-medium text-(--omp-muted)">{agent.agent}</span>
+					{agent.agentSource && <Badge variant="muted">{sourceLabel(t, agent.agentSource)}</Badge>}
+					<Badge variant="muted">
+						{agent.kind === "advisor" ? t("agentHub.hub.readOnly") : t("agentHub.hub.kind.sub")}
+					</Badge>
+					{lastUpdate && <span className="min-w-0 truncate text-(--omp-dim)">{lastUpdate}</span>}
+				</span>
+			</span>
+			<span className="min-w-0 truncate font-mono text-omp-sm text-(--omp-dim)" role="cell" title={model}>
+				{model ?? "—"}
+			</span>
+			<span className="font-mono text-omp-sm font-medium text-(--omp-text) tabular-nums" role="cell">
+				{elapsed !== null ? formatElapsed(elapsed) : "—"}
+			</span>
+			{/* 查看消息 opens the transcript slide-over; abort/revive are the TUI
+			    hub `x`/`r` parity actions via abort_subagent / revive_subagent.
+			    Abort is inline-confirmed like session deletes. */}
+			<span className="flex items-center justify-end gap-0.5" role="cell">
+				<IconButton
+					icon={<MessageSquare size={14} />}
+					label={t("agentHub.hub.viewMessages")}
 					onClick={onView}
-					className="omp-pressable mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-selected-bg) hover:text-(--omp-accent)"
-				>
-					<MessageSquare size={11} />
-				</button>
+					size="sm"
+				/>
 				{actionableLive && actionState !== "confirming" && (
-					<button
-						type="button"
+					<IconButton
 						disabled={actionState === "working" || !sidecarReady}
-						title={!sidecarReady ? t("agentHub.notConnected") : t("agentHub.hub.abortAgent")}
+						icon={<Square fill="currentColor" size={12} />}
+						label={t("agentHub.hub.abortAgent")}
 						onClick={onAbort}
-						className="omp-pressable mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-error-dim) hover:text-(--omp-error) disabled:opacity-40"
-					>
-						<Square size={10} fill="currentColor" />
-					</button>
+						size="sm"
+						title={!sidecarReady ? t("agentHub.notConnected") : undefined}
+					/>
 				)}
 				{actionableLive && actionState === "confirming" && (
-					<span className="mr-2 flex shrink-0 items-center gap-0.5">
+					<>
 						<button
 							type="button"
 							disabled={!sidecarReady}
 							title={t("agentHub.hub.confirmAbort")}
 							onClick={onAbortConfirm}
-							className="omp-pressable flex h-6 w-6 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--omp-error)_35%,transparent)] bg-transparent text-(--omp-error)"
+							className="omp-pressable flex size-7 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--omp-error)_35%,transparent)] bg-transparent text-(--omp-error)"
 						>
-							<Check size={12} />
+							<Check size={13} />
 						</button>
 						<button
 							type="button"
 							title={t("agentHub.hub.cancelAbort")}
 							onClick={onAbortCancel}
-							className="omp-pressable flex h-6 w-6 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-selected-bg)"
+							className="omp-pressable flex size-7 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-selected-bg)"
 						>
-							<X size={12} />
+							<X size={13} />
 						</button>
-					</span>
+					</>
 				)}
 				{revivable && (
-					<button
-						type="button"
+					<IconButton
 						disabled={actionState === "working" || !sidecarReady}
-						title={!sidecarReady ? t("agentHub.notConnected") : t("agentHub.hub.reviveAgent")}
+						icon={<RefreshCw size={14} />}
+						label={t("agentHub.hub.reviveAgent")}
 						onClick={onRevive}
-						className="omp-pressable mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-selected-bg) hover:text-(--omp-accent) disabled:opacity-40"
-					>
-						<RefreshCw size={11} />
-					</button>
+						size="sm"
+						title={!sidecarReady ? t("agentHub.notConnected") : undefined}
+					/>
 				)}
-			</div>
-			{/* Secondary line: agent type, provenance/kind badges, resolved model,
-			    and the latest progress note. */}
-			<div className="flex items-center gap-2 px-3 pb-2 text-omp-xs">
-				<span className="shrink-0 font-medium text-(--omp-muted)">{agent.agent}</span>
-				{agent.agentSource && <Badge variant="muted">{sourceLabel(t, agent.agentSource)}</Badge>}
-				<Badge variant="muted">
-					{agent.kind === "advisor" ? t("agentHub.hub.readOnly") : t("agentHub.hub.kind.sub")}
-				</Badge>
-				{model && (
-					<span className="min-w-0 truncate font-mono text-(--omp-dim)" title={model}>
-						{model}
-					</span>
-				)}
-				{lastUpdate && (
-					<span className="ml-auto min-w-0 flex-1 truncate text-right text-(--omp-dim)">{lastUpdate}</span>
-				)}
-			</div>
+			</span>
 		</div>
 	);
 });
@@ -725,14 +731,13 @@ function HubTab() {
 		return count;
 	}, [subagents]);
 
-	// Per-status badge tallies over the statuses actually present on the wire —
-	// a Map, not a fixed-key record, so unknown statuses are shown instead of
-	// silently producing NaN.
-	const counts = useMemo(() => {
-		const result = new Map<string, number>();
-		for (const agent of subagents.values()) result.set(agent.status, (result.get(agent.status) ?? 0) + 1);
-		return result;
-	}, [subagents]);
+	// Filter Tags over the status labels actually present, so an unknown status
+	// still gets a Tag. A selection whose label left the roster falls back to
+	// "all" on render instead of stranding an empty table.
+	const [statusFilter, setStatusFilter] = useState<string>(HUB_FILTER_ALL);
+	const groups = useMemo(() => statusGroups(sorted), [sorted]);
+	const activeFilter = groups.some(group => group.labelKey === statusFilter) ? statusFilter : HUB_FILTER_ALL;
+	const visible = useMemo(() => filterByStatus(sorted, activeFilter), [sorted, activeFilter]);
 
 	const hasRunning = liveCount > 0;
 	const now = useNowTick(hasRunning);
@@ -860,11 +865,20 @@ function HubTab() {
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col gap-3 p-4">
 			<div className="flex shrink-0 flex-wrap items-center gap-2">
-				{[...counts].map(([status, count]) => (
-					<Badge dot key={status} pulse={statusMeta(status).live} variant={statusMeta(status).variant}>
-						{t(statusMeta(status).labelKey)} {count}
-					</Badge>
-				))}
+				<div aria-label={t("agentHub.hub.filterAria")} className="flex flex-wrap items-center gap-2" role="group">
+					<Tag onClick={() => setStatusFilter(HUB_FILTER_ALL)} selected={activeFilter === HUB_FILTER_ALL}>
+						{t("agentHub.hub.filterAll", { count: sorted.length })}
+					</Tag>
+					{groups.map(group => (
+						<Tag
+							key={group.labelKey}
+							onClick={() => setStatusFilter(group.labelKey)}
+							selected={activeFilter === group.labelKey}
+						>
+							{t(group.labelKey)} {group.count}
+						</Tag>
+					))}
+				</div>
 				<Button
 					aria-pressed={agentsPaused}
 					disabled={!sidecarReady}
@@ -896,8 +910,8 @@ function HubTab() {
 					</Button>
 				</span>
 			</div>
-			<div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-				{sorted.length === 0 ? (
+			{sorted.length === 0 ? (
+				<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 					<div className="m-auto flex flex-col items-center gap-2 px-3 py-8 text-center text-omp-sm leading-relaxed text-(--omp-dim)">
 						{/* The roster never loaded is a different claim from none spawned. */}
 						{loadError ? (
@@ -926,8 +940,37 @@ function HubTab() {
 							</>
 						)}
 					</div>
-				) : (
-					sorted.map(agent => (
+				</div>
+			) : (
+				<div
+					aria-label={t("agentHub.tabs.hub")}
+					className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+					role="table"
+				>
+					<div
+						className={cx(
+							HUB_COLUMNS,
+							"sticky top-0 z-[1] h-9 shrink-0 border-b border-(--omp-border-muted) bg-(--omp-modal-bg)",
+						)}
+						role="row"
+					>
+						<span className="omp-eyebrow text-(--omp-dim)" role="columnheader">
+							{t("stats.col.status")}
+						</span>
+						<span className="omp-eyebrow text-(--omp-dim)" role="columnheader">
+							{t("agentHub.hub.col.agent")}
+						</span>
+						<span className="omp-eyebrow text-(--omp-dim)" role="columnheader">
+							{t("stats.col.model")}
+						</span>
+						<span className="omp-eyebrow text-(--omp-dim)" role="columnheader">
+							{t("agentHub.hub.col.elapsed")}
+						</span>
+						<span className="omp-eyebrow text-right text-(--omp-dim)" role="columnheader">
+							{t("agentHub.hub.col.actions")}
+						</span>
+					</div>
+					{visible.map(agent => (
 						<HubRow
 							agent={agent}
 							key={agent.id}
@@ -940,9 +983,9 @@ function HubTab() {
 							onRevive={() => void reviveAgent(agent.id)}
 							sidecarReady={sidecarReady}
 						/>
-					))
-				)}
-			</div>
+					))}
+				</div>
+			)}
 			<div className="shrink-0 border-t border-(--omp-border-muted) pt-2 text-omp-xs leading-relaxed text-(--omp-dim)">
 				{t("agentHub.hub.gapNote")}
 			</div>

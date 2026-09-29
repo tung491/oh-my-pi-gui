@@ -46,11 +46,17 @@ export function MetricCard({
 	value,
 	sub,
 	tone = "default",
+	badge,
+	children,
 }: {
 	label: string;
 	value: string;
 	sub?: string;
 	tone?: "default" | "accent" | "success" | "warning" | "error";
+	/** Status pill shown before the sub line (e.g. a health verdict). */
+	badge?: ReactNode;
+	/** Extra content under the value, such as a meter. */
+	children?: ReactNode;
 }) {
 	const valueColor = {
 		default: "text-(--omp-text)",
@@ -60,10 +66,16 @@ export function MetricCard({
 		error: "text-(--omp-error)",
 	}[tone];
 	return (
-		<div className="rounded-lg border border-(--omp-border-muted) bg-transparent px-3.5 py-3 transition-colors hover:border-(--omp-border)">
-			<div className="text-omp-xxs font-semibold tracking-widest text-(--omp-dim) uppercase">{label}</div>
-			<div className={`mt-1 text-xl font-semibold tabular-nums ${valueColor}`}>{value}</div>
-			{sub && <div className="mt-0.5 text-omp-xs text-(--omp-muted)">{sub}</div>}
+		<div className="flex flex-col rounded-xl border border-(--omp-border-muted) bg-(--omp-bg-elevated) px-4 py-3.5 shadow-(--omp-shadow-sm)">
+			<div className="omp-eyebrow text-(--omp-dim)">{label}</div>
+			<div className={`mt-1.5 font-display text-xl font-semibold tabular-nums ${valueColor}`}>{value}</div>
+			{(badge || sub) && (
+				<div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-omp-xs text-(--omp-muted)">
+					{badge}
+					{sub && <span>{sub}</span>}
+				</div>
+			)}
+			{children && <div className="mt-2">{children}</div>}
 		</div>
 	);
 }

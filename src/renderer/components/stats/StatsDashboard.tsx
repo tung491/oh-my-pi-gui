@@ -8,7 +8,7 @@ import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "../../lib/i18n";
 import { toast } from "../../stores/toast";
-import { Button, Modal } from "../common";
+import { Badge, Button, Modal, SegmentedControl, type SegmentedOption } from "../common";
 import { BehaviorRoute } from "./BehaviorRoute";
 import { CostsRoute } from "./CostsRoute";
 import { ErrorsRoute } from "./ErrorsRoute";
@@ -22,6 +22,9 @@ import { ToolsRoute } from "./ToolsRoute";
 
 export const STATS_RANGES = ["1h", "24h", "7d", "30d", "90d", "all"] as const;
 export type StatsRange = (typeof STATS_RANGES)[number];
+
+/** The range values are their own labels (the showcase capture clicks "7d" by name). */
+const RANGE_OPTIONS: readonly SegmentedOption<StatsRange>[] = STATS_RANGES.map(value => ({ value, label: value }));
 
 const ROUTES = [
 	{ id: "overview", labelKey: "stats.overview" },
@@ -116,15 +119,16 @@ export function StatsDashboard({ open, onClose }: { open: boolean; onClose: () =
 			title={t("stats.titleWith", { section: active ? t(active.labelKey) : "" })}
 		>
 			<div className="flex h-full flex-col">
-				<div className="flex flex-wrap items-center gap-2 border-b border-(--omp-border-muted) px-4 py-2">
-					<nav aria-label={t("stats.sectionsAria")} className="flex flex-wrap items-center gap-0.5">
+				<div className="flex shrink-0 flex-wrap items-center gap-x-3 border-b border-(--omp-border-muted) px-4">
+					<Badge>{t("stats.local")}</Badge>
+					<nav aria-label={t("stats.sectionsAria")} className="flex flex-wrap items-center self-end">
 						{ROUTES.map(item => (
 							<button
 								aria-current={route === item.id ? "page" : undefined}
-								className={`rounded-md px-2.5 py-1 text-omp-sm font-medium transition-colors ${
+								className={`shrink-0 whitespace-nowrap px-3 pt-2.5 pb-3 text-omp-sm ${
 									route === item.id
-										? "bg-(--omp-selected-bg) text-(--omp-accent)"
-										: "text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
+										? "font-semibold text-(--omp-accent) shadow-[inset_0_-2px_0_0_var(--omp-accent)]"
+										: "font-medium text-(--omp-muted) hover:text-(--omp-text)"
 								}`}
 								key={item.id}
 								onClick={() => setRoute(item.id)}
@@ -134,28 +138,14 @@ export function StatsDashboard({ open, onClose }: { open: boolean; onClose: () =
 							</button>
 						))}
 					</nav>
-					<div className="ml-auto flex items-center gap-2">
-						<div
-							aria-label={t("stats.rangeAria")}
-							className="flex items-center gap-0.5 rounded-md border border-(--omp-border-muted) p-0.5"
-							role="group"
-						>
-							{STATS_RANGES.map(value => (
-								<button
-									aria-pressed={range === value}
-									className={`rounded px-2 py-0.5 text-omp-xs font-medium tabular-nums transition-colors ${
-										range === value
-											? "bg-(--omp-btn-primary-bg) text-(--omp-btn-primary-text)"
-											: "text-(--omp-muted) hover:text-(--omp-text)"
-									}`}
-									key={value}
-									onClick={() => setRange(value)}
-									type="button"
-								>
-									{value}
-								</button>
-							))}
-						</div>
+					<div className="ml-auto flex items-center gap-3 py-1.5">
+						<SegmentedControl
+							ariaLabel={t("stats.rangeAria")}
+							className="font-mono tabular-nums"
+							onChange={setRange}
+							options={RANGE_OPTIONS}
+							value={range}
+						/>
 						<Button
 							icon={<RefreshCw className={syncing ? "animate-spin" : undefined} size={11} />}
 							onClick={() => void sync()}
@@ -166,7 +156,10 @@ export function StatsDashboard({ open, onClose }: { open: boolean; onClose: () =
 						</Button>
 					</div>
 				</div>
-				<div key={`${route}:${refreshKey}`} className="min-h-0 flex-1 overflow-y-auto p-4">
+				<div
+					key={`${route}:${refreshKey}`}
+					className="min-h-0 flex-1 overflow-y-auto bg-(--omp-bg-primary) p-4" // surface-ok: dashboard canvas under the cards
+				>
 					<p className="mb-3 text-omp-xs text-(--omp-dim)">{t("stats.scope", { range })}</p>
 					{route === "overview" && <OverviewRoute range={range} refreshKey={refreshKey} />}
 					{route === "models" && <ModelsRoute range={range} refreshKey={refreshKey} />}
