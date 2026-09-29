@@ -46,7 +46,17 @@ const VENDOR_CHUNK_RULES: ReadonlyArray<readonly [RegExp, string]> = [
 	[/[\\/]node_modules[\\/]@dnd-kit[\\/]/, "dnd-kit"],
 ];
 
+/**
+ * Build-time helpers that any chunk may import. Left unassigned, Rollup folds a
+ * helper into the first manual chunk that depends on it: the dynamic-import
+ * preload helper landed inside the lazy mermaid chunk, so the entry statically
+ * imported — and evaluated — all of mermaid at startup just to reach it. Pinning
+ * them to the eager react chunk keeps every vendor chunk truly on demand.
+ */
+const SHARED_HELPER_ID = /^\0(?:vite\/preload-helper|commonjsHelpers)/;
+
 function manualChunks(id: string): string | undefined {
+	if (SHARED_HELPER_ID.test(id)) return "react";
 	if (!id.includes("node_modules")) return undefined;
 	for (const [pattern, chunk] of VENDOR_CHUNK_RULES) {
 		if (pattern.test(id)) return chunk;

@@ -7,7 +7,6 @@ import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
 import { CollabDialog } from "./components/dialogs/CollabDialog";
 import { CommandPalette } from "./components/dialogs/CommandPalette";
-import { ComposerEditorDialog } from "./components/dialogs/ComposerEditorDialog";
 import { ContextReportDialog } from "./components/dialogs/ContextReportDialog";
 import { CopySelectorDialog } from "./components/dialogs/CopySelectorDialog";
 import { DebugConsoleDialog } from "./components/dialogs/DebugConsoleDialog";
@@ -84,6 +83,9 @@ import { subscribeUpdaterStatus } from "./stores/updater";
 
 // Heavy overlays code-split: they render null while closed, so they download
 // only on first open instead of bloating the eager bundle.
+const ComposerEditorDialog = lazy(() =>
+	import("./components/dialogs/ComposerEditorDialog").then(m => ({ default: m.ComposerEditorDialog })),
+);
 const SettingsWindow = lazy(() =>
 	import("./components/settings/SettingsWindow").then(m => ({ default: m.SettingsWindow })),
 );
@@ -778,7 +780,11 @@ export function App() {
 			<PlanApprovalDialog />
 			<HotkeysDialog open={hotkeysOpen} />
 			{importDialogOpen && <ImportForeignDialog />}
-			{composerEditorOpen && <ComposerEditorDialog />}
+			{composerEditorOpen && (
+				<Suspense fallback={null}>
+					<ComposerEditorDialog />
+				</Suspense>
+			)}
 			<Suspense fallback={null}>
 				<StatsDashboard open={statsDashboardOpen} onClose={closeStatsDashboard} />
 			</Suspense>

@@ -376,7 +376,9 @@ app.whenReady().then(() => {
 	sessionIndex = new SessionIndex(undefined, initialCwd);
 	statsClient = new StatsClient();
 	// Built-in stats dashboard: spawned from the SAME bundled binary. No
-	// external `omp stats` process is required (closed loop).
+	// external `omp stats` process is required (closed loop). Not started here:
+	// it is a whole second runtime most sessions never read, so the first
+	// dashboard request spawns it through the STATS_FETCH revive path.
 	if (bundledOmp) {
 		statsServer = new StatsServerManager(bundledOmp);
 		statsServer.on("ready", (port: number) => {
@@ -385,7 +387,6 @@ app.whenReady().then(() => {
 		statsServer.on("exit", () => {
 			statsClient.port = 0;
 		});
-		statsServer.start();
 	}
 	logWatcher = new LogWatcher();
 

@@ -68,7 +68,7 @@ export interface IpcDeps {
 	sidecarPool: SidecarPool;
 	sessionIndex: SessionIndex;
 	statsClient: StatsClient;
-	/** Demand-driven revive for the bundled stats server (no server → "exhausted"). */
+	/** Demand-driven start/revive for the bundled stats server (no server → "exhausted"). */
 	statsRestart: () => Revive;
 	logWatcher: LogWatcher;
 	windowManager: WindowManager;

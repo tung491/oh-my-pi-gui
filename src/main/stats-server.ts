@@ -2,7 +2,7 @@
  * The GUI's built-in stats dashboard server, spawned from the SAME bundled
  * omp binary as the agent sidecar (`omp stats --no-open`).
  *
- * Internal to the GUI's closed loop: spawned on app start, killed on quit,
+ * Internal to the GUI's closed loop: spawned by the first dashboard read, killed on quit,
  * localhost-only. No external `omp stats` process is required and none is
  * consulted — if an external process already owns the port, this reports the
  * conflict rather than silently using it.
