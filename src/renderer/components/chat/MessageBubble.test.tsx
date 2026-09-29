@@ -1,10 +1,23 @@
 import { parseHTML } from "linkedom";
-import { act } from "react";
-import { createRoot } from "react-dom/client";
+import { act, type ReactElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
-import type { AgentMessage } from "../../../shared/rpc-types";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { AgentMessage, RpcResponse } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
+import { createMessagesStore, useMessagesStore } from "../../stores/messages";
+import { createSessionStore } from "../../stores/session";
+import {
+	addRuntimeStore,
+	deleteSessionRuntime,
+	registerSessionRuntime,
+	type SessionRuntime,
+	SessionRuntimeProvider,
+	setFocusedSessionRuntime,
+	type TabCommand,
+	withSessionRuntime,
+} from "../../stores/session-runtime-context";
+import { useToastStore } from "../../stores/toast";
 import { useToolsStore } from "../../stores/tools";
 
 import { MessageBubble } from "./MessageBubble";
@@ -41,7 +54,83 @@ const toolResultMessage: AgentMessage = {
 	timestamp: "2026-08-02T12:00:01.000Z",
 };
 
-afterEach(() => {
+const PANE_TAB = "pane-retry";
+
+interface TestElement {
+	dispatchEvent: (event: object) => boolean;
+	textContent: string | null;
+	getAttribute: (name: string) => string | null;
+}
+
+let mountedRoot: Root | null = null;
+let mountedContainer: HTMLDivElement | null = null;
+
+async function mount(element: ReactElement) {
+	const container = document.createElement("div");
+	document.body.appendChild(container);
+	const root = createRoot(container);
+	mountedRoot = root;
+	mountedContainer = container;
+	await act(async () => {
+		root.render(<I18nProvider>{element}</I18nProvider>);
+	});
+	return container;
+}
+
+/** Dispatch inside act(); linkedom's Event has a getter-only eventPhase React writes to. */
+async function dispatch(target: TestElement, event: InstanceType<typeof Event>): Promise<void> {
+	Object.defineProperty(event, "eventPhase", { value: 0, writable: true, configurable: true });
+	await act(async () => {
+		target.dispatchEvent(event);
+	});
+}
+
+async function click(element: TestElement): Promise<void> {
+	await dispatch(element, new Event("click", { bubbles: true, cancelable: true }));
+}
+
+/** Let the click's promise chain (RPC, then catch) settle. */
+async function settle(): Promise<void> {
+	await act(async () => {
+		await new Promise(resolve => setTimeout(resolve, 0));
+	});
+}
+
+function response(success: boolean): RpcResponse {
+	return success
+		? { type: "response", command: "prompt", success: true }
+		: { type: "response", command: "prompt", success: false, error: "x" };
+}
+
+/** A split-view pane runtime with its own client and its own transcript. */
+function paneRuntime(command: TabCommand, messages: AgentMessage[]): SessionRuntime {
+	const runtime = registerSessionRuntime({ tabId: PANE_TAB, command, stores: new Map() });
+	addRuntimeStore(runtime, "messages", createMessagesStore());
+	addRuntimeStore(runtime, "session", createSessionStore());
+	withSessionRuntime(PANE_TAB, () => useMessagesStore.setState({ messages }));
+	return runtime;
+}
+
+function installWindowRpc() {
+	const prompt = vi.fn(async () => response(true));
+	const abortAndPrompt = vi.fn(async () => response(true));
+	(window as unknown as Record<string, unknown>).omp = { rpc: { prompt, abortAndPrompt } };
+	return { prompt, abortAndPrompt };
+}
+
+afterEach(async () => {
+	if (mountedRoot) {
+		const root = mountedRoot;
+		await act(async () => root.unmount());
+	}
+	mountedContainer?.remove();
+	mountedRoot = null;
+	mountedContainer = null;
+	deleteSessionRuntime(PANE_TAB);
+	setFocusedSessionRuntime(null);
+	delete (window as unknown as Record<string, unknown>).omp;
+	useMessagesStore.getState().reset();
+	useToastStore.setState({ toasts: [] });
 	useToolsStore.getState().reset();
 });
 
@@ -427,5 +516,119 @@ describe("MessageBubble noise filtering", () => {
 		);
 		expect(html).toContain('class="omp-transcript-content min-w-0"');
 		expect(html).not.toContain('class="min-w-0 flex-1"');
+	});
+});
+
+describe("MessageBubble turn chrome", () => {
+	const at = "2026-08-02T12:00:00.000Z";
+	const paneQuestion: AgentMessage = {
+		role: "user",
+		content: [{ type: "text", text: "pane question" }],
+		timestamp: at,
+	};
+	const paneAnswer: AgentMessage = {
+		role: "assistant",
+		content: [{ type: "text", text: "pane answer" }],
+		model: "claude-sonnet-4",
+		timestamp: at,
+	};
+
+	function seedOtherPane(): void {
+		// The window-level store holds a different conversation; a retry that
+		// escaped its pane would re-send this text instead.
+		useMessagesStore.setState({
+			messages: [{ role: "user", content: [{ type: "text", text: "other pane question" }], timestamp: at }],
+		});
+	}
+
+	it("heads an assistant turn with the omp avatar, the model, and the time", async () => {
+		const container = await mount(<MessageBubble message={paneAnswer} />);
+		const avatar = container.querySelector("[data-assistant-avatar]");
+		expect(avatar).not.toBeNull();
+		expect(avatar?.getAttribute("aria-hidden")).toBe("true");
+		expect(container.textContent).toContain("omp");
+		expect(container.textContent).toContain("claude-sonnet-4");
+	});
+
+	it("marks the user card with an avatar and the author name", async () => {
+		const container = await mount(<MessageBubble message={paneQuestion} />);
+		const avatar = container.querySelector("[data-user-avatar]");
+		expect(avatar).not.toBeNull();
+		expect(avatar?.getAttribute("aria-hidden")).toBe("true");
+		expect(avatar?.nextElementSibling?.classList.contains("omp-user-bubble")).toBe(true);
+		expect(container.querySelector(".omp-user-bubble")?.textContent).toContain("You");
+	});
+
+	it("re-sends the pane's last user message through the pane's own client", async () => {
+		const windowRpc = installWindowRpc();
+		const command = vi.fn<TabCommand>(async () => response(true));
+		const runtime = paneRuntime(command, [paneQuestion, paneAnswer]);
+		seedOtherPane();
+		const container = await mount(
+			<SessionRuntimeProvider runtime={runtime}>
+				<MessageBubble message={paneAnswer} retryable />
+			</SessionRuntimeProvider>,
+		);
+		const retry = container.querySelector('button[aria-label="Retry this turn"]') as TestElement | null;
+		if (!retry) throw new Error("Retry button did not render");
+		expect(retry.getAttribute("title")).toBe("Retry this turn");
+		expect(retry.getAttribute("title") ?? "").not.toMatch(/[⌘⌥⌃⇧]/);
+
+		await click(retry);
+		await settle();
+
+		expect(command).toHaveBeenCalledWith(
+			expect.objectContaining({ type: "prompt", message: "pane question" }),
+			undefined,
+		);
+		expect(command).not.toHaveBeenCalledWith(expect.objectContaining({ message: "other pane question" }), undefined);
+		expect(windowRpc.prompt).not.toHaveBeenCalled();
+		expect(windowRpc.abortAndPrompt).not.toHaveBeenCalled();
+	});
+
+	it("surfaces a failed retry as an error toast instead of an unhandled rejection", async () => {
+		installWindowRpc();
+		const unhandled = vi.fn();
+		process.on("unhandledRejection", unhandled);
+		try {
+			const command = vi.fn<TabCommand>(async () => response(false));
+			const runtime = paneRuntime(command, [paneQuestion, paneAnswer]);
+			const container = await mount(
+				<SessionRuntimeProvider runtime={runtime}>
+					<MessageBubble message={paneAnswer} retryable />
+				</SessionRuntimeProvider>,
+			);
+			const retry = container.querySelector('button[aria-label="Retry this turn"]') as TestElement | null;
+			if (!retry) throw new Error("Retry button did not render");
+
+			await click(retry);
+			await settle();
+
+			expect(command).toHaveBeenCalledTimes(1);
+			expect(useToastStore.getState().toasts).toContainEqual(
+				expect.objectContaining({
+					variant: "error",
+					title: "Command failed",
+					message: expect.stringContaining("x"),
+				}),
+			);
+			expect(unhandled).not.toHaveBeenCalled();
+		} finally {
+			process.off("unhandledRejection", unhandled);
+		}
+	});
+
+	it("offers Retry only on the turn marked retryable", async () => {
+		const runtime = paneRuntime(
+			vi.fn<TabCommand>(async () => response(true)),
+			[paneQuestion, paneAnswer],
+		);
+		const container = await mount(
+			<SessionRuntimeProvider runtime={runtime}>
+				<MessageBubble message={paneAnswer} />
+			</SessionRuntimeProvider>,
+		);
+		expect(container.textContent).toContain("pane answer");
+		expect(container.querySelector('button[aria-label="Retry this turn"]')).toBeNull();
 	});
 });

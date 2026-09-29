@@ -432,6 +432,12 @@
 	--omp-column-workspace: 104rem;
 }
 
+/* The conversation reads at 820px; the transcript rows and the composer shell
+ * both derive from this, so they narrow together. Settings keeps 60rem. */
+.omp-workspace-main {
+	--omp-column-reading: 51.25rem;
+}
+
 .omp-column {
 	width: 100%;
 	margin-inline: auto;
@@ -645,12 +651,11 @@
 }
 
 .omp-transcript-editorial .omp-user-bubble {
-	border: 0;
-	border-left: 2px solid var(--omp-transcript-user-border);
-	border-radius: 0;
-	background: color-mix(in srgb, var(--omp-transcript-user-bg) 28%, transparent);
-	box-shadow: none !important;
-	padding: 8px 0 8px 12px;
+	border: 1px solid var(--omp-user-msg-border);
+	border-radius: 12px;
+	background: var(--omp-user-msg-bg);
+	box-shadow: var(--omp-shadow-sm);
+	padding: 12px 16px 14px;
 }
 
 .omp-transcript-editorial .omp-user-bubble-layout {
@@ -704,15 +709,16 @@
 }
 
 .omp-execution-group {
-	overflow: visible;
-	border: 0;
-	background: transparent;
+	overflow: hidden;
+	border: 1px solid var(--omp-border-muted);
+	border-radius: 12px;
 }
 
 .omp-execution-group-header {
-	min-height: 24px;
-	border-radius: 7px;
-	padding: 2px 0;
+	min-height: 40px;
+	border-radius: 0;
+	padding: 0 12px;
+	background: var(--omp-bg-secondary); /* surface-ok: execution header */
 	transition: color var(--omp-motion-fast) var(--omp-ease), background-color var(--omp-motion-fast) var(--omp-ease);
 }
 
@@ -723,10 +729,6 @@
 .omp-execution-group-body {
 	margin-top: 0;
 	padding: 0 0 2px 10px;
-}
-
-.omp-transcript-editorial .omp-execution-group-title {
-	display: none;
 }
 
 .omp-transcript-editorial .omp-execution-group-summary {
@@ -770,13 +772,23 @@
 	display: none;
 }
 
-.omp-transcript-editorial .omp-tool-status-icon {
+.omp-transcript-editorial :not(.omp-tool-icon-tile) > .omp-tool-status-icon {
 	display: none;
+}
+
+.omp-transcript-editorial .omp-tool-icon-tile {
+	display: inline-grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	background: var(--omp-selected-bg);
+	color: var(--omp-accent);
 }
 
 .omp-transcript-editorial .omp-tool-header {
 	min-height: 24px;
-	padding: 2px 0;
+	padding: 0 8px;
 	font-size: calc(var(--gui-font-size, 15px) * 11 / 15);
 }
 
@@ -787,7 +799,7 @@
 .omp-transcript-editorial .omp-tool-name {
 	min-width: 34px;
 	font-size: calc(var(--gui-font-size, 15px) * 11 / 15);
-	font-weight: 700;
+	font-weight: 600;
 	letter-spacing: 0;
 }
 
@@ -982,11 +994,13 @@
 .omp-transcript-editorial .markdown-body code {
 	border: 0;
 	border-radius: 4px;
-	background: color-mix(in srgb, var(--omp-transcript-code-bg) 85%, var(--omp-text) 15%);
+	color: var(--omp-md-code);
+	background: var(--omp-selected-bg);
 }
 
 .omp-transcript-editorial .markdown-body pre code {
 	background: transparent;
+	color: var(--omp-md-code-block);
 }
 
 .omp-transcript-editorial .markdown-body a {

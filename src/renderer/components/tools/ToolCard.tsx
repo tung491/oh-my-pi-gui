@@ -107,24 +107,26 @@ export function ToolCard({ toolCallId, toolName, args, runningIndicator = "spinn
 				type="button"
 				aria-expanded={expanded}
 				onClick={() => setExpanded(v => !v)}
-				className="omp-tool-header flex w-full items-center gap-2 py-2 pl-3.5 pr-2.5 text-left transition-colors duration-150 hover:bg-[var(--omp-selected-bg)]/40"
+				className="omp-tool-header flex h-9 w-full items-center gap-2 py-2 pl-3.5 pr-2.5 text-left transition-colors duration-150 hover:bg-[var(--omp-selected-bg)]/40"
 			>
-				{status === "running" && runningIndicator === "spinner" ? (
-					<Loader2 size={12} className="omp-tool-status-icon shrink-0 animate-spin text-[var(--omp-accent)]" />
-				) : status === "running" ? (
-					<span aria-hidden className="omp-tool-status-icon flex h-3 w-3 shrink-0 items-center justify-center">
-						<span className="h-1.5 w-1.5 rounded-full bg-[var(--omp-accent)]" />
-					</span>
-				) : status === "aborted" ? (
-					<span className="omp-tool-status-icon flex shrink-0 items-center">
-						<Ban size={12} className="text-[var(--omp-warning)]" />
-						<span className="sr-only">{t("tools.status.interrupted")}</span>
-					</span>
-				) : isError ? (
-					<X size={12} className="omp-tool-status-icon shrink-0 text-[var(--omp-error)]" />
-				) : (
-					<Check size={12} className="omp-tool-status-icon shrink-0 text-[var(--omp-success)]" />
-				)}
+				<span className="omp-tool-icon-tile shrink-0">
+					{status === "running" && runningIndicator === "spinner" ? (
+						<Loader2 size={12} className="omp-tool-status-icon shrink-0 animate-spin text-[var(--omp-accent)]" />
+					) : status === "running" ? (
+						<span aria-hidden className="omp-tool-status-icon flex h-3 w-3 shrink-0 items-center justify-center">
+							<span className="h-1.5 w-1.5 rounded-full bg-[var(--omp-accent)]" />
+						</span>
+					) : status === "aborted" ? (
+						<span className="omp-tool-status-icon flex shrink-0 items-center">
+							<Ban size={12} className="text-[var(--omp-warning)]" />
+							<span className="sr-only">{t("tools.status.interrupted")}</span>
+						</span>
+					) : isError ? (
+						<X size={12} className="omp-tool-status-icon shrink-0 text-[var(--omp-error)]" />
+					) : (
+						<Check size={12} className="omp-tool-status-icon shrink-0 text-[var(--omp-success)]" />
+					)}
+				</span>
 				<span className="omp-tool-name shrink-0 font-mono text-omp-md font-semibold tracking-tight text-[var(--omp-text)]">
 					{toolName}
 				</span>

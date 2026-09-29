@@ -3243,4 +3243,7 @@ export const zh: Record<string, string> = {
 	"sidebar.footer.status": "omp GUI {version} · 状态：{status}",
 	"sidebar.footer.settings": "打开设置",
 	"titlebar.metrics": "会话指标",
+	"chat.assistantName": "omp 助手",
+	"chat.retryTurn": "重试本轮",
+	"chat.process.steps": "{count} 个步骤",
 };

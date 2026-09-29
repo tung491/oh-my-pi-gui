@@ -22,9 +22,9 @@ const { ToolCard } = await import("../tools/ToolCard");
 let container: HTMLElement;
 let root: Root;
 
-function toolEntry(status: "running" | "error", isError = false): ToolEntry {
+function toolEntry(status: "running" | "error" | "done", isError = false, toolName = "bash"): ToolEntry {
 	return {
-		toolName: "bash",
+		toolName,
 		args: {},
 		status,
 		partialResult: null,
@@ -143,6 +143,19 @@ describe("ExecutionGroup", () => {
 			useToolsStore.setState({ activeTools: new Map([["tool-1", toolEntry("running")]]) });
 		});
 		expect(container.querySelector('[data-testid="details"]')).toBeNull();
+	});
+
+	it("names the distinct tools of the group in its header", async () => {
+		useToolsStore.setState({
+			activeTools: new Map([
+				["tool-1", toolEntry("done", false, "read")],
+				["tool-2", toolEntry("done", false, "bash")],
+			]),
+		});
+		await mount(["tool-1", "tool-2"]);
+
+		expect(container.querySelector(".omp-execution-group-header")?.textContent).toContain("read · bash");
+		expect(container.querySelector('[data-state="complete"]')).not.toBeNull();
 	});
 
 	it("keeps one animated status for a live group while running child steps remain visible", async () => {

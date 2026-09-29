@@ -142,6 +142,15 @@ function SessionTranscript() {
 		// Archived todo changes interleave by timestamp (transcript archive rows).
 		return mergeTodoSnapshots(grouped, todoHistory);
 	}, [displayMessages, hiddenCount, transcriptDetail, todoHistory, expandedProcessKeys]);
+	// Retry belongs to the last assistant message row only (process and read
+	// groups own no footer), and only while the pane is idle.
+	const lastAssistantMessage = useMemo(() => {
+		for (let index = historyRows.length - 1; index >= 0; index--) {
+			const row = historyRows[index];
+			if (row?.kind === "message" && row.message.role === "assistant") return row.message;
+		}
+		return null;
+	}, [historyRows]);
 
 	// The assistant message exists as an empty shell from message_start until
 	// the first delta — only real content swaps the status row for the
@@ -599,7 +608,12 @@ function SessionTranscript() {
 								>
 									<div className="omp-transcript-row w-full">
 										{row.kind === "message" ? (
-											<MessageBubble message={row.message} reaction={row.reaction} runningIndicator="dot" />
+											<MessageBubble
+												message={row.message}
+												reaction={row.reaction}
+												retryable={!isStreaming && row.message === lastAssistantMessage}
+												runningIndicator="dot"
+											/>
 										) : row.kind === "readGroup" ? (
 											<ReadGroupCard entries={row.entries} runningIndicator="dot" usage={row.usage} />
 										) : row.kind === "process" ? (

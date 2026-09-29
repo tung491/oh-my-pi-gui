@@ -1,4 +1,4 @@
-import { Archive, Bot, Check, Copy, FileText, GitBranch, Terminal } from "lucide-react";
+import { Archive, Bot, Check, Copy, FileText, GitBranch, RotateCcw, Terminal, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useState } from "react";
 import type { AgentMessage, ImageContent, MessageContent, ToolCallContent } from "../../../shared/rpc-types";
@@ -6,14 +6,15 @@ import { AnsiText, hasAnsi } from "../../lib/ansi";
 import { copyText, cx, formatClock, formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { MarkdownRenderer } from "../../lib/markdown";
-import { forkSessionFromMessageInNewTab, isRenderableMessageText } from "../../lib/messages";
+import { forkSessionFromMessageInNewTab, isRenderableMessageText, retryLastTurn } from "../../lib/messages";
 import { extractModelMentions, type ModelMentionChip } from "../../lib/model-mentions";
 import { PREVIEW_SCROLL_LG } from "../../lib/preview";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { useSessionStore } from "../../stores/session";
-import { useRuntimeTabId } from "../../stores/session-runtime-context";
+import { useRuntimeTabId, withSessionRuntime } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { toolEntryKey } from "../../stores/tools";
+import { IconButton } from "../common";
 import { type RunningIndicator, ToolCard } from "../tools/ToolCard";
 import { CustomMessageCard, isCustomMessageCardType } from "./CustomMessageCard";
 import { ThinkingBlock } from "./ThinkingBlock";
@@ -27,6 +28,8 @@ export interface MessageBubbleProps {
 	runningIndicator?: RunningIndicator;
 	/** Opening assistant emoji projected onto this user turn. */
 	reaction?: string;
+	/** The pane's last finished assistant turn: offer Retry (re-send the last user message). */
+	retryable?: boolean;
 }
 
 const COMPACTION_METHOD_KEYS: Record<string, string> = {
@@ -234,6 +237,7 @@ export const MessageBubble = memo(function MessageBubble({
 	message,
 	compact = false,
 	reaction,
+	retryable = false,
 	runningIndicator = "spinner",
 }: MessageBubbleProps) {
 	const t = useT();
@@ -311,13 +315,29 @@ export const MessageBubble = memo(function MessageBubble({
 		}
 	};
 
+	// Re-send this pane's last user message through this pane's client. The
+	// store reads in retryLastTurn run before its first await, so the runtime
+	// scope keeps them on this pane even when another pane holds focus.
+	const handleRetry = () => {
+		const onEmpty = () =>
+			toast({ variant: "warning", title: t("palette.retryNothing"), message: t("palette.retryNothingDesc") });
+		const run = () => retryLastTurn(onEmpty, rpc);
+		void (tabId ? withSessionRuntime(tabId, run) : run()).catch(error =>
+			toast({ variant: "error", title: t("palette.failed"), message: String(error) }),
+		);
+	};
+
 	if (isUser) {
 		return (
-			<div className="omp-user-turn group flex justify-end px-6 py-2.5">
-				<div
-					className="omp-transcript-content omp-user-bubble omp-fade-up relative rounded-xl border border-[var(--omp-user-msg-border)] bg-[var(--omp-user-msg-bg)] px-3.5 py-3"
-					style={{ boxShadow: "var(--omp-shadow-sm)" }}
+			<div className="omp-user-turn group flex justify-end gap-3 px-6 py-2.5">
+				<span
+					aria-hidden="true"
+					className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-(--omp-selected-bg) text-(--omp-accent)"
+					data-user-avatar=""
 				>
+					<User size={15} />
+				</span>
+				<div className="omp-transcript-content omp-user-bubble omp-fade-up relative">
 					{reaction ? (
 						<span
 							aria-label={reaction}
@@ -432,6 +452,9 @@ export const MessageBubble = memo(function MessageBubble({
 	// don't need the 28px hover footer plus py-3 padding. Tool-only copy would
 	// be empty; the Process disclosure owns the grouped chrome and branch point.
 	const compactChrome = compact || (!sawNonToolBlock && !message.errorMessage && !customLabel && !isSteering);
+	const showHeader = isAssistant && !compactChrome;
+	const model = typeof message.model === "string" ? message.model : "";
+	const headerMeta = [model, timestamp].filter(Boolean).join(" · ");
 
 	return (
 		<div
@@ -444,6 +467,23 @@ export const MessageBubble = memo(function MessageBubble({
 			)}
 		>
 			<div className="omp-transcript-content min-w-0">
+				{showHeader && (
+					<div className="mb-2 flex min-w-0 items-center gap-2">
+						<span
+							aria-hidden="true"
+							className="flex size-7 shrink-0 items-center justify-center rounded-[22%] bg-[linear-gradient(135deg,var(--omp-brand),var(--omp-btn-primary-bg))] text-(--omp-btn-primary-text)"
+							data-assistant-avatar=""
+						>
+							<Terminal size={15} />
+						</span>
+						<span className="shrink-0 text-omp-md font-semibold text-(--omp-text)">
+							{t("chat.assistantName")}
+						</span>
+						{headerMeta && (
+							<span className="min-w-0 truncate font-mono text-omp-sm text-(--omp-muted)">{headerMeta}</span>
+						)}
+					</div>
+				)}
 				{customLabel && (
 					<div className="mb-2 text-omp-sm font-bold tracking-[0.1em] text-[var(--omp-status-context)] uppercase">
 						{customLabel}
@@ -463,27 +503,37 @@ export const MessageBubble = memo(function MessageBubble({
 				)}
 				<UsageRow message={message} />
 				{!compactChrome && (
-					<div className="mt-2 flex items-center gap-1.5 text-omp-xs tabular-nums text-[var(--omp-dim)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-						{timestamp && <span className="font-mono">{timestamp}</span>}
-						<button
-							type="button"
+					<div className="mt-2 flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+						{/* The assistant header already carries the time. */}
+						{!showHeader && timestamp && (
+							<span className="mr-1 font-mono text-omp-xs tabular-nums text-(--omp-dim)">{timestamp}</span>
+						)}
+						<IconButton
+							icon={copied ? <Check size={14} className="text-(--omp-success)" /> : <Copy size={14} />}
+							label={t("chat.copyMessage")}
 							onClick={handleCopy}
-							title={t("chat.copyMessage")}
-							className="omp-pressable flex h-7 w-7 items-center justify-center rounded-md text-[var(--omp-dim)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
-						>
-							{copied ? <Check size={13} className="text-[var(--omp-success)]" /> : <Copy size={13} />}
-						</button>
+							size="sm"
+							variant="ghost"
+						/>
+						{retryable && (
+							<IconButton
+								disabled={switchPending}
+								icon={<RotateCcw size={14} />}
+								label={t("chat.retryTurn")}
+								onClick={handleRetry}
+								size="sm"
+								variant="ghost"
+							/>
+						)}
 						{isAssistant && (
-							<button
-								type="button"
-								onClick={() => void handleBranch()}
+							<IconButton
 								disabled={branching || switchPending}
-								aria-label={t("chat.branchFromHere")}
-								title={t("chat.branchFromHere")}
-								className="omp-pressable flex h-7 w-7 items-center justify-center rounded-md text-[var(--omp-dim)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)] disabled:cursor-wait disabled:opacity-50"
-							>
-								<GitBranch size={13} />
-							</button>
+								icon={<GitBranch size={14} />}
+								label={t("chat.branchFromHere")}
+								onClick={() => void handleBranch()}
+								size="sm"
+								variant="ghost"
+							/>
 						)}
 					</div>
 				)}

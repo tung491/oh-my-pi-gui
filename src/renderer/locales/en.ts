@@ -3299,4 +3299,7 @@ export const en: Record<string, string> = {
 	"sidebar.footer.status": "omp GUI {version} · {status}",
 	"sidebar.footer.settings": "Open settings",
 	"titlebar.metrics": "Session metrics",
+	"chat.assistantName": "omp",
+	"chat.retryTurn": "Retry this turn",
+	"chat.process.steps": "{count} step{plural}",
 };
