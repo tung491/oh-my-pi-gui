@@ -86,6 +86,7 @@ describe("UpdateBanner", () => {
 
 		expect(container.textContent).toContain("Restart & install");
 		expect(container.textContent).not.toContain("Open installer");
+		expect(container.textContent).not.toMatch(/Finder|DMG/i);
 	});
 
 	it("keeps user-initiated verification failures visible with a retry action", async () => {

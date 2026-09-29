@@ -61,6 +61,7 @@ type MainTextKey =
 	| "restart.title"
 	| "updates.downloadFailed"
 	| "updates.hashMismatch"
+	| "updates.installFailed"
 	| "updates.installerMissing"
 	| "updates.noResult"
 	| "updates.openInstallerFailed"
@@ -135,6 +136,10 @@ const TEXT: Record<MainTextKey, Record<MainLanguage, string>> = {
 	"updates.hashMismatch": {
 		en: "The downloaded installer failed SHA-512 verification and was removed.",
 		zh: "下载的安装程序未通过 SHA-512 校验，已被删除。",
+	},
+	"updates.installFailed": {
+		en: "The update could not be installed.",
+		zh: "无法安装更新。",
 	},
 	"updates.installerMissing": {
 		en: "This release does not include the required installer for this Mac.",

@@ -1,11 +1,16 @@
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+	captureInstallError,
 	hasStableMacSigningIdentity,
 	installerPartialPath,
+	installsOnQuit,
+	linuxPackageKind,
+	packageTypeAt,
 	planInstallerTransfer,
 	selectMacInstaller,
 	settleIncompleteUpdateCheck,
@@ -170,5 +175,49 @@ describe("installer debris sweep", () => {
 
 	it("says nothing when the downloads directory doesn't exist yet", async () => {
 		expect(await sweepInstallerPartials(path.join(dir, "absent"))).toEqual([]);
+	});
+});
+
+describe("Linux package kind and deb installs", () => {
+	it("reads the deb marker electron-builder writes into resources", () => {
+		const directory = fs.mkdtempSync(path.join(os.tmpdir(), "omp-package-type-"));
+		try {
+			expect(packageTypeAt(directory)).toBeUndefined();
+			fs.writeFileSync(path.join(directory, "package-type"), "deb\n");
+			expect(packageTypeAt(directory)).toBe("deb");
+		} finally {
+			fs.rmSync(directory, { recursive: true, force: true });
+		}
+	});
+
+	it("trusts APPIMAGE only when this process runs from the mounted image", () => {
+		const mounted = { APPIMAGE: "/home/u/Applications/omp.AppImage", APPDIR: "/tmp/.mount_ompAbC" };
+		// A leaked deb marker inside the AppImage loses to the runtime.
+		expect(linuxPackageKind(mounted, "/tmp/.mount_ompAbC/omp-gui", "deb")).toBe("appimage");
+		// A .deb omp launched from another AppImage app's terminal inherits its variables.
+		const inherited = { APPIMAGE: "/home/u/Applications/Editor.AppImage", APPDIR: "/tmp/.mount_EditorX" };
+		expect(linuxPackageKind(inherited, "/opt/omp/omp-gui", "deb")).toBe("deb");
+		expect(linuxPackageKind({ APPIMAGE: "/home/u/x.AppImage" }, "/opt/omp/omp-gui", "deb")).toBe("deb");
+		expect(linuxPackageKind({}, "/opt/omp/omp-gui", "deb")).toBe("deb");
+		expect(linuxPackageKind({}, "/opt/omp/omp-gui", undefined)).toBe("other");
+	});
+
+	it("never starts a deb's privileged install at quit", () => {
+		expect(installsOnQuit("automatic", "deb")).toBe(false);
+		expect(installsOnQuit("automatic", "appimage")).toBe(true);
+		expect(installsOnQuit("automatic", undefined)).toBe(true);
+		expect(installsOnQuit("manual", undefined)).toBe(false);
+	});
+
+	it("returns the failure an install reported as an event", () => {
+		const emitter = new EventEmitter();
+		const subscribe = (listener: (error: Error) => void) => {
+			emitter.on("error", listener);
+			return () => emitter.off("error", listener);
+		};
+		const failure = captureInstallError(subscribe, () => emitter.emit("error", new Error("pkexec dismissed")));
+		expect(failure?.message).toBe("pkexec dismissed");
+		expect(captureInstallError(subscribe, () => {})).toBeUndefined();
+		expect(emitter.listenerCount("error")).toBe(0);
 	});
 });

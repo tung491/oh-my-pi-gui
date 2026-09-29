@@ -15,16 +15,21 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { app, BrowserWindow, ipcMain, net, shell } from "electron";
-import type { UpdateInfo } from "electron-updater";
+import type { AppUpdater, UpdateInfo } from "electron-updater";
 import pkg from "electron-updater";
 import type { UpdateInstallMode, UpdateStatus } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS } from "../shared/ipc-types";
+import { approveQuitBeforeInstall, withdrawQuitApproval } from "./app-quit";
 import { mainT } from "./i18n";
 import {
+	captureInstallError,
 	hasStableMacSigningIdentity,
 	installerPartialPath,
+	installsOnQuit,
+	linuxPackageKind,
 	type MacInstallerArchitecture,
 	type MacInstallerAsset,
+	packageTypeAt,
 	planInstallerTransfer,
 	selectMacInstaller,
 	settleIncompleteUpdateCheck,
@@ -32,7 +37,16 @@ import {
 	sweepInstallerPartials,
 } from "./updater-state";
 
-const { autoUpdater } = pkg;
+const linuxKind =
+	process.platform === "linux"
+		? linuxPackageKind(
+				{ APPIMAGE: process.env.APPIMAGE, APPDIR: process.env.APPDIR },
+				process.execPath,
+				packageTypeAt(process.resourcesPath),
+			)
+		: undefined;
+// electron-updater picks its Linux class from resources/package-type alone.
+const autoUpdater: AppUpdater = linuxKind === "appimage" ? new pkg.AppImageUpdater() : pkg.autoUpdater;
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const RELEASE_DOWNLOAD_BASE = "https://github.com/nornzach/oh-my-pi-gui/releases/download/";
@@ -204,7 +218,7 @@ export function setupUpdater(): void {
 	// sweep can identify for sure.
 	if (process.platform === "darwin") void sweepInstallerPartials(app.getPath("downloads"));
 	autoUpdater.autoDownload = false;
-	autoUpdater.autoInstallOnAppQuit = installMode === "automatic";
+	autoUpdater.autoInstallOnAppQuit = installsOnQuit(installMode, linuxKind);
 	// Dev/preview verification gate: electron-updater skips unpackaged apps
 	// unless forced. Pair with OMP_DEV_UPDATE_MODE=manual to exercise the DMG path.
 	if (process.env.OMP_DEV_UPDATE_CHECK === "1") autoUpdater.forceDevUpdateConfig = true;
@@ -311,7 +325,28 @@ export function setupUpdater(): void {
 			}
 			return;
 		}
-		autoUpdater.quitAndInstall();
+		// A deb runs pkexec + dpkg before electron-updater quits, so the
+		// working-tabs prompt must come first: once dpkg ran, a cancelled quit
+		// would leave the new version installed under the old process.
+		if (linuxKind === "deb" && !(await approveQuitBeforeInstall())) return;
+		// A deb installs through pkexec + dpkg synchronously and reports a
+		// cancelled prompt or failed install only as an "error" event, which the
+		// passive handler keeps out of the banner.
+		const failure = captureInstallError(
+			listener => {
+				autoUpdater.on("error", listener);
+				return () => autoUpdater.removeListener("error", listener);
+			},
+			() => autoUpdater.quitAndInstall(),
+		);
+		if (failure) {
+			if (linuxKind === "deb") withdrawQuitApproval();
+			broadcast({
+				state: "error",
+				message: `${mainT("updates.installFailed")} (${failure.message})`,
+				showInBanner: true,
+			});
+		}
 	});
 	ipcMain.handle(IPC_COMMANDS.UPDATER_GET_STATUS, () => current);
 	ipcMain.handle(IPC_COMMANDS.UPDATER_VERSION, () => appVersion());
