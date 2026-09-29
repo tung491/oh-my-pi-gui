@@ -16,3 +16,4 @@ export { Spinner, type SpinnerProps, type SpinnerSize } from "./Spinner";
 export { type TabItem, Tabs, type TabsProps } from "./Tabs";
 export { ToastStack } from "./Toast";
 export { type TreeNode, TreeView, type TreeViewProps } from "./TreeView";
+export { VifLogo, type VifLogoProps } from "./VifLogo";

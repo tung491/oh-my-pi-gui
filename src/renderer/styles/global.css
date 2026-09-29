@@ -3,13 +3,17 @@
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
 @import "@fontsource/jetbrains-mono/600.css";
+@import "@fontsource/poppins/500.css";
+@import "@fontsource/poppins/600.css";
+@import "@fontsource/poppins/700.css";
 
 /* ============================================================================
-   Typography — Inter for latin, PingFang/YaHei for CJK, JetBrains Mono for code
+   Typography — Poppins for display, Inter for body, PingFang/YaHei for CJK,
+   JetBrains Mono for code. Every face is bundled; nothing loads remotely.
    ============================================================================ */
 
 @theme {
-	--font-display: "Inter Variable", "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+	--font-display: "Poppins", "Inter Variable", "SF Pro Display", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
 	--font-body: "Inter Variable", "SF Pro Text", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 	--font-mono: "JetBrains Mono", "SFMono-Regular", "Cascadia Code", ui-monospace, monospace;
 
@@ -31,6 +35,26 @@
 	--radius-xl: 0.875rem;
 	--radius-2xl: 1.125rem;
 	--radius-3xl: 1.5rem;
+}
+
+/* Shared type classes live in the components layer so call-site utilities
+   override them. The eyebrow sets no color: every call site passes one that
+   reads on its own surface. */
+@layer components {
+	.omp-eyebrow {
+		font-size: var(--text-omp-xxs);
+		font-weight: 600;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+
+	.omp-kbd {
+		font-family: var(--font-mono);
+		font-size: var(--text-omp-xxs);
+		padding: 2px 6px;
+		border-radius: 4px;
+		border: 1px solid var(--omp-border);
+	}
 }
 
 /* Shared semantic aliases follow every named theme and system mode. Keeping
@@ -168,6 +192,14 @@ kbd,
 	border-radius: 4px;
 }
 
+/* The soft focus glow lives in the base layer (zero specificity via :where)
+   so component utilities that set their own ring or shadow still win. */
+@layer base {
+	:where(:focus-visible) {
+		box-shadow: 0 0 0 4px var(--omp-accent-glow);
+	}
+}
+
 /* ============================================================================
    Window drag regions
    ============================================================================ */
@@ -187,10 +219,10 @@ kbd,
 
 :root {
 	--omp-motion-instant: 90ms; /* motion-ok: token definition */
-	--omp-motion-fast: 150ms;
-	--omp-motion-med: 240ms;
-	--omp-motion-slow: 380ms; /* motion-ok: token definition */
-	--omp-ease: cubic-bezier(0.25, 1, 0.35, 1);
+	--omp-motion-fast: 120ms;
+	--omp-motion-med: 180ms;
+	--omp-motion-slow: 280ms; /* motion-ok: token definition */
+	--omp-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 	--omp-ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
 	--omp-ease-spring: cubic-bezier(0.34, 1.42, 0.64, 1);
 }

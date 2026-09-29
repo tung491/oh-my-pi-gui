@@ -3236,4 +3236,6 @@ export const zh: Record<string, string> = {
 	"input.deliveryUnknownTitle": "发送结果未确认",
 	"input.deliveryUnknown": "未收到发送确认，任务可能已经执行。请先检查对话和队列，再决定是否重发草稿。",
 	"input.allowResend": "已检查，允许发送",
+	"brand.vif": "VIF",
+	"brand.wordmark": "omp",
 };

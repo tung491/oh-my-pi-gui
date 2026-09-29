@@ -3292,4 +3292,6 @@ export const en: Record<string, string> = {
 	"input.deliveryUnknown":
 		"Delivery was not confirmed. The task may already be running. Check its transcript and queue before sending this draft again.",
 	"input.allowResend": "I checked; allow sending",
+	"brand.vif": "VIF",
+	"brand.wordmark": "omp",
 };
