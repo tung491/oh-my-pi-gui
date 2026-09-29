@@ -7,7 +7,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build && bun scripts/check-main-bundle.ts",
+    "build": "electron-vite build && bun scripts/check-main-bundle.ts && bun scripts/check-renderer-chunks.ts",
     "preview": "electron-vite preview",
     "package": "bun run build && electron-builder",
     "package:mac": "bun run build && electron-builder --mac",
