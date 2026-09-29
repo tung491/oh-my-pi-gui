@@ -45,5 +45,8 @@ publish:
   owner: nornzach
   repo: oh-my-pi-gui
 
+# Windows Chromium locale paks are region-tagged (locales/en-US.pak), unlike
+# macOS's en.lproj. A bare `en` matches no file, electron-builder strips every
+# pak, and the renderer crashes on launch — a blank window.
 electronLanguages:
-  - en
+  - en-US

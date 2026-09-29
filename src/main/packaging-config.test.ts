@@ -18,6 +18,7 @@ interface BuilderConfig {
 	protocols?: { name: string; schemes?: string[] }[];
 	mac?: { extendInfo?: Record<string, unknown> };
 	win?: { target?: { target?: string; arch?: string[] }[] };
+	electronLanguages?: string[];
 }
 
 const PACKAGE_ROOT = path.join(__dirname, "..", "..");
@@ -140,6 +141,14 @@ describe("Windows package config", () => {
 			{ target: "nsis", arch: ["x64"] },
 			{ target: "portable", arch: ["x64"] },
 		]);
+	});
+
+	it("keeps a Chromium locale pak the renderer can load", () => {
+		// Windows paks are named locales/en-US.pak; a bare "en" filter strips all
+		// of them and the sandboxed renderer crashes at startup (blank window).
+		const file = "electron-builder.win.yml";
+		const config = parse(fs.readFileSync(path.join(PACKAGE_ROOT, file), "utf8")) as BuilderConfig;
+		expect(config.electronLanguages).toContain("en-US");
 	});
 });
 
