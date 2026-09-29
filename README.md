@@ -272,6 +272,8 @@ bun run package:linux -- --publish never        # dist/omp-<version>-x86_64.AppI
 
 The Linux config (`electron-builder.linux.yml`) bundles `resources/omp.linux-x64`; always package Linux with `package:linux`. On a Linux host, `bun run build:omp` writes `resources/omp` for `bun run dev`.
 
+Inside the monorepo, `bun install` resolves `packages/gui` as a workspace member and never updates this repository's `bun.lock`, which CI installs with `--frozen-lockfile`. After changing dependencies in `package.json`, regenerate the lockfile from a checkout outside the monorepo, for example `git worktree add --detach /tmp/omp-gui-lock HEAD`, then `bun install --ignore-scripts` there, and copy its `bun.lock` back.
+
 `build:omp` compiles the neighboring monorepo agent source and embeds the native addon. It stages the matching `pi_natives` version, downloads the published package when needed, replaces stale addons, and restores temporary staging afterwards. Sidecars at `resources/omp*` are ignored build artifacts: **never commit them**.
 
 Packaging rebuilds the Electron app, **not the agent sidecar**. Re-run the matching `build:omp*` after agent/RPC changes or upstream updates. The arm64 config uses `resources/omp`; the Intel config uses `resources/omp.x64`. Always use `package:mac:x64` for Intel—using the default config can package the wrong architecture.
@@ -598,6 +600,8 @@ bun run package:linux -- --publish never        # dist/omp-<版本>-x86_64.AppIm
 ```
 
 Linux 配置（`electron-builder.linux.yml`）打包 `resources/omp.linux-x64`；Linux 必须使用 `package:linux` 打包。在 Linux 宿主上，`bun run build:omp` 会为 `bun run dev` 生成 `resources/omp`。
+
+在 monorepo 内，`bun install` 会把 `packages/gui` 当作 workspace 成员解析，不会更新本仓库的 `bun.lock`，而 CI 使用 `--frozen-lockfile` 安装。修改 `package.json` 依赖后，请在 monorepo 之外的检出中重新生成锁文件，例如 `git worktree add --detach /tmp/omp-gui-lock HEAD`，在其中运行 `bun install --ignore-scripts`，再把生成的 `bun.lock` 复制回来。
 
 `build:omp` 编译相邻的 monorepo Agent 源码并嵌入原生插件。它会准备匹配版本的 `pi_natives`，需要时下载已发布的包，替换旧插件，并在结束后还原临时准备的文件。`resources/omp*` 是被忽略的构建产物，**绝不能提交入库**。
 

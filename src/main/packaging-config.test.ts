@@ -267,7 +267,7 @@ describe("Linux CI workflow", () => {
 		const job = ci.jobs?.linux;
 		expect(job?.["runs-on"]).toBe("ubuntu-latest");
 		expect(job?.steps?.flatMap(step => (step.run ? [step.run] : []))).toEqual([
-			"bun install",
+			"bun install --frozen-lockfile",
 			"bun run check:types",
 			"bunx vitest run",
 			"bun run build",
