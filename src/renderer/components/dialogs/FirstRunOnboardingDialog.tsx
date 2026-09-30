@@ -8,7 +8,7 @@ import { loginProvider } from "../../lib/provider-login";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { useSessionStore } from "../../stores/session";
 import { useUiStore } from "../../stores/ui";
-import { Badge, Button, Modal, StepList, VifLogo } from "../common";
+import { Badge, Button, Modal, SaiAtlasLogo, StepList } from "../common";
 import { RadioGroup } from "../settings/editors/RadioGroup";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 
@@ -437,7 +437,7 @@ export function FirstRunOnboardingDialog() {
 				ariaLabel={t("onboarding.title")}
 				backdrop={
 					<>
-						<VifLogo className="absolute top-6 left-8 text-(--omp-sidebar-text)" height={22} />
+						<SaiAtlasLogo kind="lockup" surface="sidebar" height={32} className="absolute top-6 left-8" />
 						<span className="absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-omp-xs text-(--omp-sidebar-muted)">
 							{guiVersion && t("onboarding.wizard.version", { version: guiVersion })}
 						</span>

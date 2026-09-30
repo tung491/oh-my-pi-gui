@@ -1720,6 +1720,9 @@ export function applyThemeByName(selection: ThemeSelection, opts: { persist?: bo
 		baseThemeTokens = null;
 		applyTheme("system");
 	}
+	// Both VIF stylesheets that "system" resolves to have navy sidebars.
+	document.documentElement.dataset.sidebarScheme =
+		selection === "system" ? "dark" : sidebarSchemeOf(THEMES[selection]);
 	writeOverlay();
 	if (persist) {
 		void saveGuiPreference("themeName", selection, () => {});
@@ -1762,6 +1765,21 @@ export function resolveTokenColor(theme: ThemeDefinition, key: ThemeTokenKey): s
 	const match = /^var\((--omp-[a-z-]+)\)$/.exec(value);
 	if (!match) return value;
 	return theme.tokens[match[1] as ThemeTokenKey] ?? value;
+}
+
+/**
+ * The logo tone a theme's sidebar surfaces need, published as
+ * `<html data-sidebar-scheme>`. It is separate from the page scheme because
+ * VIF Light keeps a navy sidebar while the legacy light themes have light
+ * ones. Overlays never write `--omp-sidebar-bg`, so it is static per theme.
+ */
+export function sidebarSchemeOf(theme: ThemeDefinition): "dark" | "light" {
+	const hex = resolveTokenColor(theme, "--omp-sidebar-bg");
+	const luminance = [0.2126, 0.7152, 0.0722].reduce((sum, weight, i) => {
+		const channel = Number.parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+		return sum + weight * (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+	}, 0);
+	return luminance < 0.18 ? "dark" : "light";
 }
 
 // ============================================================================

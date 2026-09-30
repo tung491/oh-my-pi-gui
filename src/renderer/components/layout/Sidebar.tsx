@@ -49,7 +49,7 @@ import { useSidebarPrefs } from "../../stores/sidebar-prefs";
 import { useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
-import { Button, IconButton, Kbd, SegmentedControl, VifLogo } from "../common";
+import { Button, IconButton, Kbd, SaiAtlasLogo, SegmentedControl } from "../common";
 import { ConfirmDialog } from "../common/ConfirmDialog";
 import { anchorFromEvent, ContextMenu, type ContextMenuAnchor } from "../common/ContextMenu";
 import { LangSwitcher } from "../common/LangSwitcher";
@@ -680,7 +680,7 @@ export function Sidebar() {
 				style={{ width: sidebarWidth }}
 			>
 				<div className="drag-region flex h-14 shrink-0 items-center gap-1 border-b border-(--omp-sidebar-border) pl-4 pr-2.5">
-					<VifLogo height={18} />
+					<SaiAtlasLogo kind="lockup" surface="sidebar" height={28} />
 					<div className="flex-1" />
 					<IconButton
 						variant="onDark"

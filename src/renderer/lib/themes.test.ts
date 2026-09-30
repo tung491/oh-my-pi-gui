@@ -8,7 +8,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CHART_COLOR_TOKENS } from "./chart-tokens";
 import { MERMAID_THEME_TOKENS } from "./mermaid-theme";
-import { resolveTokenColor, THEME_TOKEN_KEYS, THEMES, type ThemeTokenKey, TRANSCRIPT_OVERLAY_VARS } from "./themes";
+import {
+	resolveTokenColor,
+	sidebarSchemeOf,
+	THEME_TOKEN_KEYS,
+	THEMES,
+	type ThemeName,
+	type ThemeTokenKey,
+	TRANSCRIPT_OVERLAY_VARS,
+} from "./themes";
 
 /** Brand fill plus the always-navy sidebar group, defined by every theme. */
 const VIF_LAYOUT_TOKENS = [
@@ -119,6 +127,30 @@ describe("theme registry", () => {
 		expect(THEMES.dark.label).toBe("VIF Navy");
 		expect(THEMES.light.tokens["--omp-sidebar-bg"]).toBe("#0a1a33");
 		expect(THEMES.dark.tokens["--omp-bg-primary"]).toBe("#0a1a33");
+	});
+
+	it("defines every sidebar surface as an opaque hex color", () => {
+		for (const [name, theme] of Object.entries(THEMES)) {
+			expect(resolveTokenColor(theme, "--omp-sidebar-bg"), name).toMatch(/^#[0-9a-f]{6}$/i);
+		}
+	});
+
+	it("derives which logo tone each sidebar needs", () => {
+		const expected: Record<ThemeName, "dark" | "light"> = {
+			dark: "dark",
+			light: "dark",
+			titanium: "dark",
+			nord: "dark",
+			latte: "dark",
+			gruvbox: "dark",
+			solarized: "light",
+			paper: "light",
+			dawn: "light",
+			frost: "light",
+			matcha: "light",
+		};
+		const actual = Object.fromEntries(Object.entries(THEMES).map(([name, theme]) => [name, sidebarSchemeOf(theme)]));
+		expect(actual).toEqual(expected);
 	});
 
 	it("keeps sidebar text readable on the sidebar surface", () => {

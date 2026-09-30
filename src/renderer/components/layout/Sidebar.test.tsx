@@ -818,7 +818,10 @@ describe("Sidebar VIF rail", () => {
 		useUiStore.setState({ settingsOpen: false });
 		await mount(<Sidebar />);
 
-		expect(container.querySelector('img[alt="VIF"]')).not.toBeNull();
+		const header = container.querySelector(".drag-region");
+		const lockup = Array.from(header?.querySelectorAll('img[alt="Sai ATLAS"]') ?? []);
+		expect(lockup.map(img => img.getAttribute("data-logo-tone"))).toEqual(["dark", "light"]);
+		expect(container.querySelector('img[alt="VIF"]')).toBeNull();
 		const aside = container.querySelector("aside") as unknown as HTMLElement;
 		expect(aside.style.width).toBe("264px");
 

@@ -63,7 +63,7 @@ import { focusedSessionRuntime, sessionRuntime, withSessionRuntime } from "../..
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { CodeBlock } from "../chat/CodeBlock";
-import { Button, IconButton, Input, Kbd, Spinner, type TabItem, TextArea, VifLogo } from "../common";
+import { Button, IconButton, Input, Kbd, SaiAtlasLogo, Spinner, type TabItem, TextArea } from "../common";
 import { isTopmostDialog, registerDialogLayer } from "../common/dialog-layer";
 import { ExtensionSettingsPage } from "../panels/ExtensionsPanel";
 import { InventorySettingsPage, type TabId as InventoryTabId } from "../panels/InventoryPanel";
@@ -915,8 +915,8 @@ export function SettingsWindow() {
 			role="dialog"
 		>
 			<div className="flex h-13 shrink-0 items-center gap-3 border-b border-(--omp-border-muted) bg-(--omp-bg-elevated) pr-3 pl-5">
-				<VifLogo height={18} />
-				<span aria-hidden="true" className="h-4 w-px shrink-0 bg-(--omp-border)" />
+				<SaiAtlasLogo kind="lockup" surface="page" height={24} />
+				<span aria-hidden="true" className="h-5 w-px shrink-0 bg-(--omp-border)" />
 				<h1 className="min-w-0 flex-1 truncate font-display text-omp-xl font-semibold text-(--omp-text)">
 					{t("settings.title")}
 				</h1>

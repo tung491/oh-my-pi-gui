@@ -31,7 +31,7 @@ import { toast } from "../../stores/toast";
 import { type TodoSnapshot, useTodoStore } from "../../stores/todo";
 import { type ToolEntry, toolEntryKey, useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
-import { PiLogo } from "../common";
+import { SaiAtlasLogo } from "../common";
 import { ReadGroupCard } from "../tools/ReadGroupCard";
 import { ToolCard } from "../tools/ToolCard";
 import { ConversationNavigator } from "./ConversationNavigator";
@@ -552,8 +552,8 @@ function SessionTranscript() {
 					)}
 					{status !== "starting" && rows.length === 0 && !isStreaming && !switchPending && (
 						<div className="omp-empty-canvas flex min-h-full flex-col justify-center pb-20">
-							<div className="omp-empty-logo mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--omp-btn-primary-bg)] text-[var(--omp-btn-primary-text)]">
-								<PiLogo size={22} />
+							<div className="omp-empty-logo mb-6">
+								<SaiAtlasLogo kind="icon" surface="page" height={48} className="[&>img]:rounded-[22%]" />
 							</div>
 							<h1 className="font-display text-[30px] font-semibold leading-tight tracking-[-0.025em] text-[var(--omp-text)]">
 								{isChat ? t("chat.empty.title.chat") : t("chat.empty.title")}

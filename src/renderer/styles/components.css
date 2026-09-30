@@ -1196,3 +1196,34 @@
 		pointer-events: auto;
 	}
 }
+
+/* ---------------------------------------------------------------------------
+ * Sai ATLAS logo tone (SaiAtlasLogo)
+ *
+ * Each logo renders both tones; the surface underneath picks one. Page
+ * surfaces follow data-theme, sidebar surfaces follow data-sidebar-scheme.
+ * Layered so utilities can still style the images, which is why the images
+ * must carry no display utility of their own.
+ * ------------------------------------------------------------------------- */
+@layer components {
+	[data-logo-surface] > img {
+		display: block;
+	}
+	[data-logo-surface] > [data-logo-tone="light"] {
+		display: none;
+	}
+	:root[data-theme="light"] [data-logo-surface="page"] > [data-logo-tone="dark"],
+	:root[data-sidebar-scheme="light"] [data-logo-surface="sidebar"] > [data-logo-tone="dark"] {
+		display: none;
+	}
+	:root[data-theme="light"] [data-logo-surface="page"] > [data-logo-tone="light"],
+	:root[data-sidebar-scheme="light"] [data-logo-surface="sidebar"] > [data-logo-tone="light"] {
+		display: block;
+	}
+	[data-assistant-avatar] > [data-logo-tone="light"] {
+		box-shadow: var(--omp-shadow-sm);
+	}
+	[data-assistant-avatar] > [data-logo-tone="dark"] {
+		box-shadow: 0 0 24px var(--omp-accent-glow);
+	}
+}

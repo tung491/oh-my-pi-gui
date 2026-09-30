@@ -541,11 +541,13 @@ describe("MessageBubble turn chrome", () => {
 		});
 	}
 
-	it("heads an assistant turn with the omp avatar, the model, and the time", async () => {
+	it("heads an assistant turn with the app-icon avatar, the author, the model, and the time", async () => {
 		const container = await mount(<MessageBubble message={paneAnswer} />);
 		const avatar = container.querySelector("[data-assistant-avatar]");
 		expect(avatar).not.toBeNull();
 		expect(avatar?.getAttribute("aria-hidden")).toBe("true");
+		expect(avatar?.querySelector('img[data-logo-tone="light"][src$="sai-atlas-icon-on-light.svg"]')).not.toBeNull();
+		expect(avatar?.querySelector('img[data-logo-tone="dark"][src$="sai-atlas-icon-on-dark.svg"]')).not.toBeNull();
 		expect(container.textContent).toContain("omp");
 		expect(container.textContent).toContain("claude-sonnet-4");
 	});

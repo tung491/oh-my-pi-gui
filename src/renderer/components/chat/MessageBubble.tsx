@@ -14,7 +14,7 @@ import { useSessionStore } from "../../stores/session";
 import { useRuntimeTabId, withSessionRuntime } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { toolEntryKey } from "../../stores/tools";
-import { IconButton } from "../common";
+import { IconButton, SaiAtlasLogo } from "../common";
 import { type RunningIndicator, ToolCard } from "../tools/ToolCard";
 import { CustomMessageCard, isCustomMessageCardType } from "./CustomMessageCard";
 import { ThinkingBlock } from "./ThinkingBlock";
@@ -513,13 +513,13 @@ export const MessageBubble = memo(function MessageBubble({
 			<div className="omp-transcript-content min-w-0">
 				{showHeader && (
 					<div className="mb-2 flex min-w-0 items-center gap-2">
-						<span
-							aria-hidden="true"
-							className="flex size-7 shrink-0 items-center justify-center rounded-[22%] bg-[linear-gradient(135deg,var(--omp-brand),var(--omp-btn-primary-bg))] text-(--omp-btn-primary-text)"
+						<SaiAtlasLogo
+							kind="icon"
+							surface="page"
+							height={28}
 							data-assistant-avatar=""
-						>
-							<Terminal size={15} />
-						</span>
+							className="shrink-0 [&>img]:rounded-[22%]"
+						/>
 						<span className="shrink-0 text-omp-md font-semibold text-(--omp-text)">
 							{t("chat.assistantName")}
 						</span>
