@@ -310,7 +310,7 @@ export function TitleBar() {
 				variant="ghost"
 			/>
 
-			<div className="omp-titlebar-identity no-drag flex min-w-0 items-center gap-1.5">
+			<div className="omp-titlebar-identity no-drag flex min-w-0 items-center gap-1.5 overflow-hidden">
 				<button
 					className="omp-pressable flex min-w-0 max-w-48 items-center gap-2 truncate rounded-lg px-2 py-1.5 text-omp-lg font-medium text-(--omp-text-secondary) hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)] disabled:cursor-not-allowed disabled:text-[var(--omp-dim)]"
 					disabled={isStreaming}
@@ -393,11 +393,11 @@ export function TitleBar() {
 					<Coins aria-hidden="true" className={metricIcon} size={13} />
 					{visibleStats ? formatCost(visibleStats.history?.cost ?? visibleStats.cost, 4) : "—"}
 				</span>
-				<span className={metricSegment} title={t("titlebar.contextTooltip")}>
+				<span className={cx(metricSegment, "omp-titlebar-command")} title={t("titlebar.contextTooltip")}>
 					<CircleGauge aria-hidden="true" className={metricIcon} size={13} />
 					{contextView.capacityKnown ? `${Math.round(contextView.percent)}%` : "—"}
 				</span>
-				<span className={metricSegment} title={t("titlebar.metric.cacheHit")}>
+				<span className={cx(metricSegment, "omp-titlebar-command")} title={t("titlebar.metric.cacheHit")}>
 					<Gauge aria-hidden="true" className={metricIcon} size={13} />
 					{formatPercent(cacheHit, 0)}
 				</span>
@@ -415,7 +415,7 @@ export function TitleBar() {
 				title={t("titlebar.workspace")}
 				variant="secondary"
 			>
-				{t("panel.title")}
+				<span className="omp-titlebar-command">{t("panel.title")}</span>
 			</Button>
 			<IconButton
 				aria-expanded={actionsMenu !== null}
