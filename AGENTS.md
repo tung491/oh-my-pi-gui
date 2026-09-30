@@ -1,6 +1,6 @@
 # GUI Development Rules
 
-This file governs the **omp GUI sub-repository**. Read it before any edit here — the directory layout (a repo nested inside the omp monorepo) is unusual and getting it wrong breaks builds or leaks commits into the wrong remote.
+This file governs the **Sai ATLAS GUI sub-repository**. Read it before any edit here — the directory layout (a repo nested inside the omp monorepo) is unusual and getting it wrong breaks builds or leaks commits into the wrong remote.
 
 ## Repository Identity
 
@@ -17,6 +17,14 @@ This file governs the **omp GUI sub-repository**. Read it before any edit here �
 
 - **All GUI work commits to this repo and pushes to `origin/main`.** Never commit GUI paths into the enclosing monorepo's git — from its perspective this directory is an intentionally untracked, self-contained checkout.
 - Agent-side work (RPC commands, session logic, `packages/agent|coding-agent|ai|…`) belongs to the **monorepo**, commits at the monorepo root, and pushes to `nornzach/oh-my-pi` (fork) — it does not exist in this repo's history even though the files sit above this directory.
+
+### Product identity
+
+- The product is **Sai ATLAS**, the AI assistant for SAI OS — always both words, never the second one alone. The name lives in `PRODUCT_NAME` (`src/shared/product.ts`) and the `brand.name` locale key.
+- The agent stays **omp**: the sidecar, the `omp` CLI, `~/.omp`, `omp://` links and the `--omp-*`/`omp-*` code names are not renamed.
+- `appId` is `vn.io.vif.saiatlas` (`APP_ID` in `src/shared/product.ts`), and every Windows config pins `nsis.guid` to the old app id's GUID so the installer upgrades an existing omp install in place. Never change either; `packaging-config.test.ts` guards both.
+- The profile path is pinned to `<appData>/@oh-my-pi/omp-gui` by `src/main/pin-user-data.ts`. Never add `productName` to `package.json` or rename its `name`, or a future change could move everyone's settings.
+- Brand art comes from the VIF Brand Design System artifact (`<Logo brand="atlas">`) and the brand canvas: the in-app files in `src/renderer/public/brand/`, and `resources/icon-source.svg` / `resources/tray-source.svg` for the OS icons, which `bun run gen:icons` rebuilds (including `src/main/tray-mark.ts`).
 
 ### Upstream sync (pulling new omp features)
 
@@ -66,7 +74,7 @@ The GUI runs the agent as a **bundled sidecar** (`resources/omp`, a compiled `Bu
 - Check: `bun run check:types` (tsc) and `bunx biome check .` — keep touched files clean even if legacy diagnostics remain.
 - Test: `bunx vitest run` (full suite must stay green).
 - Build: `bun run build` (electron-vite → `out/`), then `bun run package:mac:arm64 -- --publish never` (arm64) or `bun run package:mac:x64 -- --publish never` (Intel). Linux x64 (on a Linux x64 host): `bun run build:omp:linux`, then `bun run package:linux -- --publish never` (AppImage + .deb + `latest-linux.yml`).
-- Release flow: bump `version` in `package.json`, write the CHANGELOG section, update README install links, commit, tag `vX.Y.Z`, push `main` + tag to `origin`, build both DMGs, smoke-test each mounted DMG (sidecar `ready`, `get_settings` RPC, one settings toggle), then publish the GitHub Release with both DMGs, both ZIPs and the combined `latest-mac.yml` — the built-in updater resolves the matching DMG from that file, so a release without it (or with only one architecture's entries) breaks update checks. For Linux, build the AppImage and .deb on Linux x64, run `e2e/packaged-smoke.e2e.ts` against the installed .deb, and publish `latest-linux.yml` with both packages.
+- Release flow: bump `version` in `package.json`, write the CHANGELOG section, update README install links, commit, tag `vX.Y.Z`, push `main` + tag to `origin`, build both DMGs, smoke-test each mounted `Sai ATLAS.app` (sidecar `ready`, `get_settings` RPC, one settings toggle), then publish the GitHub Release with both `Sai-ATLAS-` DMGs, the `omp-<version>-arm64.dmg` / `omp-<version>.dmg` bridge copies (byte-identical; every release until 1.0.0), both ZIPs (`Sai-ATLAS-<version>-arm64.zip`, `Sai-ATLAS-<version>.zip`) and a combined `latest-mac.yml` that lists every DMG — the built-in updater resolves the matching DMG from that file, so a release without it (or with only one architecture's entries) breaks update checks, and 0.9.x builds find their update only through the `omp-` names. Until 1.0.0, open every release body with the Mac migration steps from the README (quit omp, install Sai ATLAS, move `omp.app` to the Trash, re-pin, grant microphone and notification access again): the DMG installs beside `omp.app` rather than replacing it, and the 0.9.x update screen never shows release notes. For Linux, build the AppImage and .deb on Linux x64, run `e2e/packaged-smoke.e2e.ts` against the installed .deb, and publish `latest-linux.yml` with both packages.
 - CI: `.github/workflows/ci.yml` runs check:types, vitest and build on ubuntu-latest.
 - Every release's DMGs embed the sidecar compiled from the monorepo — record the monorepo commit in the release notes if it isn't upstream `main`.
 - **The public site is `site/`** (`site/index.html` + `site/assets/`). Pages is configured as `build_type=workflow`, so `.github/workflows/pages.yml` is the only publisher: a push to `main` touching `site/**` deploys it. Its version string and DMG links are read from the GitHub releases API at page load, so a release needs **no site edit**; the values in the HTML are only the no-JS fallback.
