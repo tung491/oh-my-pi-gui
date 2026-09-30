@@ -248,7 +248,10 @@ export function FirstRunOnboardingDialog() {
 			dismiss();
 			return;
 		}
-		if (step !== PROVIDER_STEP) {
+		// A provider is already usable (the user came Back from model choice), so
+		// the provider step has nothing left to do: advance instead of acting on a
+		// choice that may have fallen back once its sign-in option dropped out.
+		if (step !== PROVIDER_STEP || ready) {
 			setStep(step + 1);
 			return;
 		}

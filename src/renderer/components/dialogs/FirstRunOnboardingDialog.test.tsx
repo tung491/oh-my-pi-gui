@@ -272,6 +272,32 @@ describe("FirstRunOnboardingDialog", () => {
 		expect(omp.rpc.login).toHaveBeenCalledWith("anthropic");
 	});
 
+	it("continues to model choice after going back from it once a provider is ready", async () => {
+		const omp = installMockOmp([provider({ id: "anthropic", name: "Anthropic" })]);
+		useSessionStore.getState().setStatus("ready", "/tmp/project");
+		await mount(<FirstRunOnboardingDialog />);
+
+		await click(buttonNamed("Continue"));
+		await selectOption("Sign in with Anthropic");
+		omp.rpc.getProviders.mockResolvedValue(
+			success([provider({ id: "anthropic", name: "Anthropic", authenticated: true, modelCount: 2 })]),
+		);
+		await click(buttonNamed("Continue"));
+		expect(omp.rpc.login).toHaveBeenCalledTimes(1);
+		expect(currentStep()).toBe("Choose models");
+
+		await click(buttonNamed("Back"));
+		expect(currentStep()).toBe("Connect a provider");
+		// The signed-in provider's option is gone, so the selection falls back.
+		expect(document.querySelector('[role="radiogroup"]')?.textContent ?? "").not.toContain("Sign in with Anthropic");
+
+		await click(buttonNamed("Continue"));
+		expect(currentStep()).toBe("Choose models");
+		expect(useUiStore.getState().providersOpen).toBe(false);
+		expect(useUiStore.getState().providerConfigOpen).toBe(false);
+		expect(omp.rpc.login).toHaveBeenCalledTimes(1);
+	});
+
 	it("stays closed after Skip for now, even when readiness is checked again", async () => {
 		const omp = installMockOmp();
 		useSessionStore.getState().setStatus("ready", "/tmp/project");
