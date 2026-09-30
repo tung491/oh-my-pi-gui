@@ -49,6 +49,18 @@ describe("sidebar logo scheme", () => {
 		applyThemeByName("system", { persist: false });
 		expect(document.documentElement.dataset.sidebarScheme).toBe("dark");
 	});
+
+	it("derives the system selection's tone from the theme the OS resolves to", () => {
+		vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+		const navy = THEMES.light.tokens["--omp-sidebar-bg"];
+		THEMES.light.tokens["--omp-sidebar-bg"] = "#ffffff";
+		try {
+			applyThemeByName("system", { persist: false });
+			expect(document.documentElement.dataset.sidebarScheme).toBe("light");
+		} finally {
+			THEMES.light.tokens["--omp-sidebar-bg"] = navy;
+		}
+	});
 });
 
 describe("validatePluginThemeTokens", () => {

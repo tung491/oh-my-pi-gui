@@ -1720,9 +1720,8 @@ export function applyThemeByName(selection: ThemeSelection, opts: { persist?: bo
 		baseThemeTokens = null;
 		applyTheme("system");
 	}
-	// Both VIF stylesheets that "system" resolves to have navy sidebars.
-	document.documentElement.dataset.sidebarScheme =
-		selection === "system" ? "dark" : sidebarSchemeOf(THEMES[selection]);
+	// "system" re-runs this on every OS change (App's watchSystemTheme), so its tone stays derived too.
+	document.documentElement.dataset.sidebarScheme = sidebarSchemeOf(resolveThemeSelection(selection));
 	writeOverlay();
 	if (persist) {
 		void saveGuiPreference("themeName", selection, () => {});
