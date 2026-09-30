@@ -10,6 +10,7 @@
 ### Changed
 
 - **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged. On Windows, `Ctrl+T` now opens a tab and `Ctrl+W` closes one; thinking has no default key there and can be bound in Hotkeys.
+- **VIF redesign**: the interface moves to the VIF design system. VIF Light and VIF Navy replace Porcelain and Graphite as the default light and dark themes, with a navy sidebar, Poppins headings, a five-step first-run wizard, and a refreshed palette, model picker, workspace panel, settings, statistics, and Agent Hub. Other named themes remain available.
 
 ### Fixed
 

@@ -305,6 +305,8 @@ bun scripts/capture-showcase.ts
 
 The capture script renders the actual Electron GUI using a fresh temporary HOME, Electron profile, synthetic `aurora-web` project, and synthetic sidecar—**no live credentials or personal workspace are used**. It writes localized showcase images to `docs/screenshots/en/` and `docs/screenshots/zh/`. Scripted conversations, model lists, agent states, and metrics make the scenes reproducible; they are not provider tests or real usage records. This fixture setup is not an OS sandbox.
 
+Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light theme instead of the default dark theme, `SHOWCASE_OUT=<dir>` writes to `<dir>/en` and `<dir>/zh` instead of `docs/screenshots`, and `SHOWCASE_ONBOARDING=1` also captures the first-run wizard as `00-onboarding.png`. On Linux the script passes the display variables (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) through to Electron.
+
 </details>
 
 <a id="en-help"></a>
@@ -633,6 +635,8 @@ bun scripts/capture-showcase.ts
 ```
 
 截图脚本使用全新的临时 HOME、Electron 配置目录、合成 `aurora-web` 项目与合成 sidecar，渲染真实 Electron GUI，**不使用真实凭据或个人工作区**。本地化图片输出到 `docs/screenshots/en/` 与 `docs/screenshots/zh/`。对话、模型列表、Agent 状态和指标由脚本构造，便于复现；它们不是 Provider 测试或真实使用记录。这套展示数据环境不是操作系统沙箱。
+
+可选环境变量：`SHOWCASE_THEME=light` 截取 VIF 浅色主题（默认深色）；`SHOWCASE_OUT=<目录>` 输出到 `<目录>/en` 与 `<目录>/zh`，不写入 `docs/screenshots`；`SHOWCASE_ONBOARDING=1` 额外截取首次运行向导 `00-onboarding.png`。在 Linux 上，脚本会把显示相关变量（`DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`）传给 Electron。
 
 </details>
 
