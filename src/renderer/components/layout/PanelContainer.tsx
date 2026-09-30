@@ -158,7 +158,7 @@ export function PanelContainer() {
 								type="button"
 								onClick={() => setPanelTab(id)}
 								className={cx(
-									"omp-pressable relative flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-3.5 pt-2.5 pb-3 text-omp-md",
+									"omp-inspector-tab omp-pressable relative flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-3.5 pt-2.5 pb-3 text-omp-md",
 									active
 										? "font-semibold text-(--omp-accent) shadow-[inset_0_-2px_0_0_var(--omp-accent)]"
 										: "font-medium text-(--omp-muted) hover:text-(--omp-text)",

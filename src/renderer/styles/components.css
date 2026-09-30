@@ -740,6 +740,12 @@
 	background: color-mix(in srgb, var(--omp-selected-bg) 22%, transparent);
 }
 
+/* The group clips to its rounded border, and the header fills it edge to
+   edge, so an outside focus ring would be cut away: draw it inset. */
+.omp-execution-group-header:focus-visible {
+	outline-offset: -2px;
+}
+
 .omp-execution-group-body {
 	margin-top: 0;
 	padding: 0 0 2px 10px;

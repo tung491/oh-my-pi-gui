@@ -536,8 +536,9 @@ summary,
 	position: relative;
 }
 
+/* The rail is navy in every VIF theme: mark with the rail's own accent. */
 .omp-sidebar-session-row[data-switch-pending="true"] {
-	box-shadow: inset 2px 0 0 var(--omp-accent);
+	box-shadow: inset 2px 0 0 var(--omp-sidebar-accent);
 }
 
 .omp-sidebar-session-actions,
@@ -693,6 +694,12 @@ summary,
 
 .omp-inspector-tab-label {
 	display: inline;
+}
+
+/* The tab strip scrolls horizontally at exactly the tab height, which clips
+   an outside focus ring: draw it inset. */
+.omp-inspector-tab:focus-visible {
+	outline-offset: -2px;
 }
 
 @media (max-width: 1000px) {
