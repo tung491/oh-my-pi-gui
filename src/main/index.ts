@@ -3,13 +3,15 @@
  * App lifecycle: ready → window, sidecar, session index, IPC, tray, menu, deep links, updater.
  */
 
-import { existsSync, mkdirSync } from "node:fs";
+import "./pin-user-data";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { app, BrowserWindow, globalShortcut, nativeImage, session } from "electron";
 import Store from "electron-store";
 import { nativeAccelerator } from "../shared/hotkeys";
 import type { SessionKind } from "../shared/ipc-types";
+import { APP_ID, PRODUCT_NAME } from "../shared/product";
 import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
 import { DEEP_LINK_PROTOCOL, setupDeepLinks } from "./deep-link";
@@ -32,14 +34,6 @@ import { setupUpdater } from "./updater";
 import { WindowManager } from "./window";
 import { resolveWindowSpawnTarget } from "./window-spawn-target";
 
-// Honor Electron's explicit profile before acquiring its instance lock.
-const userDataDirectory = app.commandLine.getSwitchValue("user-data-dir");
-if (userDataDirectory) {
-	const directory = resolve(userDataDirectory);
-	mkdirSync(directory, { recursive: true });
-	app.setPath("userData", directory);
-}
-
 // Single instance lock
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -48,7 +42,10 @@ if (!gotLock) {
 
 // App identity: the dev run shows "Electron" + the default atom icon in the
 // dock otherwise. Packaged builds get both from the bundle via electron-builder.
-app.setName("omp");
+// The name no longer decides the profile path (./pin-user-data fixes it), and
+// it comes after the lock because Windows keys that lock on the name.
+app.setName(PRODUCT_NAME);
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 {
 	const dockIcon = join(app.getAppPath(), "resources", "icon.png");
 	if (process.platform === "darwin" && existsSync(dockIcon)) {
