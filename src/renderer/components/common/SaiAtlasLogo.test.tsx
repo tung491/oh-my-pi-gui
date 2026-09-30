@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
 import { parseHTML } from "linkedom";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,6 +21,7 @@ globals.requestAnimationFrame = (callback: () => void) => setTimeout(callback, 0
 
 /** Structural stand-in for linkedom nodes, keeping tests decoupled from its types. */
 interface TestElement {
+	className: string;
 	style: { height: string };
 	remove: () => void;
 	getAttribute: (name: string) => string | null;
@@ -42,6 +45,20 @@ async function mount(element: ReactElement): Promise<void> {
 function images(): TestElement[] {
 	return Array.from(container.querySelectorAll("img"));
 }
+
+/** `display` per selector in the stylesheet that swaps the logo tones. */
+function toneDisplayRules(): Map<string, string> {
+	const css = readFileSync(path.join(__dirname, "..", "..", "styles", "components.css"), "utf8");
+	const rules = new Map<string, string>();
+	for (const [, selectors, display] of css.matchAll(/([^{}]*data-logo-[^{}]*)\{\s*display:\s*([\w-]+);\s*\}/g)) {
+		for (const selector of selectors.split(",")) rules.set(selector.trim(), display);
+	}
+	return rules;
+}
+
+/** Tailwind display utilities, with or without a variant prefix. */
+const DISPLAY_UTILITY =
+	/(?:^|:)(?:block|inline(?:-block|-flex|-grid|-table)?|flex|grid|table(?:-[a-z]+)*|flow-root|contents|list-item|hidden)$/;
 
 afterEach(async () => {
 	await act(async () => {
@@ -81,6 +98,28 @@ describe("SaiAtlasLogo", () => {
 		for (const img of images()) {
 			expect(img.getAttribute("alt")).toBe("");
 			expect(img.style.height).toBe("48px");
+		}
+	});
+
+	it("leaves the tone swap to the stylesheet", async () => {
+		// A display utility on an <img> would beat the swap rules and show both tones.
+		await mount(<SaiAtlasLogo kind="lockup" surface="page" height={28} className="[&>img]:rounded-[22%]" />);
+		for (const img of images()) {
+			expect(
+				img.className.split(/\s+/).filter(name => DISPLAY_UTILITY.test(name)),
+				img.className,
+			).toEqual([]);
+		}
+
+		const rules = toneDisplayRules();
+		expect(rules.get('[data-logo-surface] > [data-logo-tone="light"]')).toBe("none");
+		for (const [surface, scheme] of [
+			["page", "data-theme"],
+			["sidebar", "data-sidebar-scheme"],
+		]) {
+			const light = `:root[${scheme}="light"] [data-logo-surface="${surface}"]`;
+			expect(rules.get(`${light} > [data-logo-tone="dark"]`), `${surface} dark tone`).toBe("none");
+			expect(rules.get(`${light} > [data-logo-tone="light"]`), `${surface} light tone`).toBe("block");
 		}
 	});
 });
