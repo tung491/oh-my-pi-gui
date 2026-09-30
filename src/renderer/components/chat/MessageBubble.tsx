@@ -1,6 +1,6 @@
 import { Archive, Bot, Check, Copy, FileText, GitBranch, RotateCcw, Terminal, User } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { AgentMessage, ImageContent, MessageContent, ToolCallContent } from "../../../shared/rpc-types";
 import { AnsiText, hasAnsi } from "../../lib/ansi";
 import { copyText, cx, formatClock, formatTokens } from "../../lib/format";
@@ -65,6 +65,13 @@ function ToolCardWithResult({ call, runningIndicator }: { call: ToolCallContent;
 }
 
 const FILE_PREVIEW_CHARS = 12_000;
+/**
+ * How long an acknowledged Retry stays disabled waiting for its turn to start.
+ * The sidecar acks `prompt` before the turn's agent_start reaches the pane, so
+ * the guard holds until streaming begins; this bounds it for a send that never
+ * starts a turn.
+ */
+const RETRY_STREAM_GRACE_MS = 5_000;
 
 function ExecutionBubble({ message }: { message: AgentMessage }) {
 	const t = useT();
@@ -246,7 +253,25 @@ export const MessageBubble = memo(function MessageBubble({
 	const [copied, setCopied] = useState(false);
 	const [branching, setBranching] = useState(false);
 	const [retrying, setRetrying] = useState(false);
+	const retryGraceRef = useRef<number | null>(null);
 	const switchPending = useSessionStore(state => state.switchPending !== null);
+	// A read-only collab viewer cannot prompt (the composer disables Send the
+	// same way), so Retry would only earn a sidecar rejection.
+	const collabReadOnly = useSessionStore(state => state.collab?.readOnly === true);
+	// Only a bubble with a retry in flight follows the streaming flag; the rest
+	// select a constant and never re-render on turn start or end.
+	const retriedTurnStarted = useSessionStore(state => retrying && state.isStreaming);
+	useEffect(() => {
+		if (retriedTurnStarted) setRetrying(false);
+	}, [retriedTurnStarted]);
+	// The grace timer lives only while the guard is up (and never past unmount).
+	useEffect(() => {
+		if (!retrying) return;
+		return () => {
+			if (retryGraceRef.current !== null) window.clearTimeout(retryGraceRef.current);
+			retryGraceRef.current = null;
+		};
+	}, [retrying]);
 	if (message.role === "bashExecution" || message.role === "pythonExecution") {
 		return <ExecutionBubble message={message} />;
 	}
@@ -319,15 +344,31 @@ export const MessageBubble = memo(function MessageBubble({
 	// Re-send this pane's last user message through this pane's client. The
 	// store reads in retryLastTurn run before its first await, so the runtime
 	// scope keeps them on this pane even when another pane holds focus.
+	// The guard stays up past the acknowledgement until the retried turn starts
+	// streaming (which hides Retry), so a second click cannot send it twice.
 	const handleRetry = () => {
-		if (retrying || switchPending) return;
+		if (retrying || switchPending || collabReadOnly) return;
 		setRetrying(true);
-		const onEmpty = () =>
+		let sent = true;
+		const onEmpty = () => {
+			sent = false;
 			toast({ variant: "warning", title: t("palette.retryNothing"), message: t("palette.retryNothingDesc") });
-		const run = () => retryLastTurn(onEmpty, rpc);
-		void (tabId ? withSessionRuntime(tabId, run) : run())
-			.catch(error => toast({ variant: "error", title: t("palette.failed"), message: String(error) }))
-			.finally(() => setRetrying(false));
+		};
+		const inPane = <T,>(read: () => T): T => (tabId ? withSessionRuntime(tabId, read) : read());
+		void inPane(() => retryLastTurn(onEmpty, rpc)).then(
+			() => {
+				// Nothing sent, or the turn already started: nothing left to guard.
+				if (!sent || inPane(() => useSessionStore.getState().isStreaming)) {
+					setRetrying(false);
+					return;
+				}
+				retryGraceRef.current = window.setTimeout(() => setRetrying(false), RETRY_STREAM_GRACE_MS);
+			},
+			error => {
+				toast({ variant: "error", title: t("palette.failed"), message: String(error) });
+				setRetrying(false);
+			},
+		);
 	};
 
 	if (isUser) {
@@ -520,7 +561,7 @@ export const MessageBubble = memo(function MessageBubble({
 						/>
 						{retryable && (
 							<IconButton
-								disabled={retrying || switchPending}
+								disabled={retrying || switchPending || collabReadOnly}
 								icon={<RotateCcw size={14} />}
 								label={t("chat.retryTurn")}
 								onClick={handleRetry}

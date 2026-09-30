@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentMessage, RpcResponse } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
 import { createMessagesStore, useMessagesStore } from "../../stores/messages";
-import { createSessionStore } from "../../stores/session";
+import { createSessionStore, useSessionStore } from "../../stores/session";
 import {
 	addRuntimeStore,
 	deleteSessionRuntime,
@@ -605,6 +605,8 @@ describe("MessageBubble turn chrome", () => {
 			await settle();
 
 			expect(command).toHaveBeenCalledTimes(1);
+			// A rejected send starts no turn, so Retry is usable again at once.
+			expect(retry.getAttribute("disabled")).toBeNull();
 			expect(useToastStore.getState().toasts).toContainEqual(
 				expect.objectContaining({
 					variant: "error",
@@ -642,7 +644,85 @@ describe("MessageBubble turn chrome", () => {
 
 		release(response(true));
 		await settle();
+		expect(command).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps Retry disabled after the send is acknowledged until the retried turn starts streaming", async () => {
+		const command = vi.fn<TabCommand>(async () => response(true));
+		const runtime = paneRuntime(command, [paneQuestion, paneAnswer]);
+		const container = await mount(
+			<SessionRuntimeProvider runtime={runtime}>
+				<MessageBubble message={paneAnswer} retryable />
+			</SessionRuntimeProvider>,
+		);
+		const retry = container.querySelector('button[aria-label="Retry this turn"]') as TestElement | null;
+		if (!retry) throw new Error("Retry button did not render");
+
+		await click(retry);
+		await settle();
+		// The prompt is acknowledged before its agent_start event lands.
+		expect(retry.getAttribute("disabled")).not.toBeNull();
+		await click(retry);
+		await settle();
+		expect(command).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			withSessionRuntime(PANE_TAB, () => useSessionStore.setState({ isStreaming: true }));
+		});
 		expect(retry.getAttribute("disabled")).toBeNull();
+	});
+
+	it("re-enables Retry when an acknowledged send never starts a turn", async () => {
+		vi.useFakeTimers();
+		try {
+			const command = vi.fn<TabCommand>(async () => response(true));
+			const runtime = paneRuntime(command, [paneQuestion, paneAnswer]);
+			const container = await mount(
+				<SessionRuntimeProvider runtime={runtime}>
+					<MessageBubble message={paneAnswer} retryable />
+				</SessionRuntimeProvider>,
+			);
+			const retry = container.querySelector('button[aria-label="Retry this turn"]') as TestElement | null;
+			if (!retry) throw new Error("Retry button did not render");
+
+			await click(retry);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(1000);
+			});
+			expect(retry.getAttribute("disabled")).not.toBeNull();
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(10_000);
+			});
+			expect(retry.getAttribute("disabled")).toBeNull();
+			await click(retry);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(0);
+			});
+			expect(command).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("disables Retry while the shared session is read-only for this viewer", async () => {
+		const command = vi.fn<TabCommand>(async () => response(true));
+		const runtime = paneRuntime(command, [paneQuestion, paneAnswer]);
+		withSessionRuntime(PANE_TAB, () =>
+			useSessionStore.setState({ collab: { role: "guest", readOnly: true, participants: [] } }),
+		);
+		const container = await mount(
+			<SessionRuntimeProvider runtime={runtime}>
+				<MessageBubble message={paneAnswer} retryable />
+			</SessionRuntimeProvider>,
+		);
+		const retry = container.querySelector('button[aria-label="Retry this turn"]') as TestElement | null;
+		if (!retry) throw new Error("Retry button did not render");
+		expect(retry.getAttribute("disabled")).not.toBeNull();
+
+		await click(retry);
+		await settle();
+		expect(command).not.toHaveBeenCalled();
 	});
 
 	it("offers Retry only on the turn marked retryable", async () => {

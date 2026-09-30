@@ -143,11 +143,16 @@ function SessionTranscript() {
 		return mergeTodoSnapshots(grouped, todoHistory);
 	}, [displayMessages, hiddenCount, transcriptDetail, todoHistory, expandedProcessKeys]);
 	// Retry belongs to the last assistant message row only (process and read
-	// groups own no footer), and only while the pane is idle.
+	// groups own no footer), and only while the pane is idle. Retry re-sends the
+	// latest user message, so a user row after that answer (a turn still waiting
+	// for its reply, or one whose reply folded into a process row) means the
+	// answer is no longer the trailing turn and offers no Retry.
 	const lastAssistantMessage = useMemo(() => {
 		for (let index = historyRows.length - 1; index >= 0; index--) {
 			const row = historyRows[index];
-			if (row?.kind === "message" && row.message.role === "assistant") return row.message;
+			if (row?.kind !== "message") continue;
+			if (row.message.role === "user") return null;
+			if (row.message.role === "assistant") return row.message;
 		}
 		return null;
 	}, [historyRows]);
