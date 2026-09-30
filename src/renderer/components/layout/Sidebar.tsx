@@ -241,6 +241,10 @@ export function Sidebar() {
 		};
 	}, []);
 	const footerSignal = activeTab ? tabSignalPresentation(activeTab, isStreaming || isCompacting) : null;
+	const footerStatus =
+		footerSignal && guiVersion !== null
+			? t("sidebar.footer.status", { version: guiVersion, status: t(footerSignal.labelKey) })
+			: null;
 
 	useEffect(() => {
 		void window.omp.sidecar
@@ -1002,9 +1006,12 @@ export function Sidebar() {
 							style={{ backgroundColor: sidebarSignalColor(footerSignal.color) }}
 						/>
 					)}
-					{footerSignal && guiVersion !== null && (
-						<span className="ml-1 min-w-0 truncate font-mono text-omp-xs text-(--omp-sidebar-muted)">
-							{t("sidebar.footer.status", { version: guiVersion, status: t(footerSignal.labelKey) })}
+					{footerStatus !== null && (
+						<span
+							className="ml-1 min-w-0 truncate font-mono text-omp-xs text-(--omp-sidebar-muted)"
+							title={footerStatus}
+						>
+							{footerStatus}
 						</span>
 					)}
 					<div className="flex-1" />

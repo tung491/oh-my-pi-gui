@@ -885,6 +885,26 @@ describe("Sidebar VIF rail", () => {
 			expect(footerText(), key).not.toContain(en[key]);
 		}
 	});
+
+	it("shows the whole footer status on hover, since the rail truncates it", async () => {
+		installMockOmp(LIST);
+		seedStores();
+		await mount(<Sidebar />);
+
+		const status = () =>
+			Array.from(container.querySelectorAll("[data-sidebar-footer] span")).find(span =>
+				span.textContent?.startsWith("Sai ATLAS"),
+			);
+		expect(status()?.textContent).toBe(`Sai ATLAS 0.9.10 · ${en["titlebar.status.ready"]}`);
+		expect(status()?.getAttribute("title")).toBe(status()?.textContent);
+
+		await act(async () => {
+			useTabsStore.setState({
+				tabs: [{ id: "t0", cwd: "/work/alpha", status: "asleep", kind: "agent", unreadDone: false }],
+			});
+		});
+		expect(status()?.getAttribute("title")).toBe(`Sai ATLAS 0.9.10 · ${en["titlebar.status.asleep"]}`);
+	});
 });
 
 describe("Sidebar session-list failures", () => {
