@@ -1,6 +1,6 @@
 /**
  * Installed-package smoke test. Point OMP_GUI_TEST_APP at an installed
- * executable, e.g. OMP_GUI_TEST_APP=/opt/omp/omp-gui bunx playwright test
+ * executable, e.g. OMP_GUI_TEST_APP="/opt/Sai ATLAS/sai-atlas" bunx playwright test
  * e2e/packaged-smoke.e2e.ts. Each launch gets a throwaway profile, so the
  * user's omp settings and sessions are never touched. On Linux the app still
  * registers itself as the omp:// handler in ~/.config/mimeapps.list; back that

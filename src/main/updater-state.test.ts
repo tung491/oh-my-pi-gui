@@ -36,20 +36,20 @@ describe("update check terminal state", () => {
 
 describe("manual macOS installer selection", () => {
 	const files = [
-		{ url: "omp-0.8.4-arm64-mac.zip", sha512: "arm-zip" },
-		{ url: "omp-0.8.4-arm64.dmg", sha512: "arm-dmg", size: 120 },
-		{ url: "https://example.test/omp-0.8.4-mac.zip", sha512: "x64-zip" },
-		{ url: "https://example.test/omp-0.8.4.dmg", sha512: "x64-dmg", size: 140 },
+		{ url: "Sai-ATLAS-0.8.4-arm64-mac.zip", sha512: "arm-zip" },
+		{ url: "Sai-ATLAS-0.8.4-arm64.dmg", sha512: "arm-dmg", size: 120 },
+		{ url: "https://example.test/Sai-ATLAS-0.8.4-mac.zip", sha512: "x64-zip" },
+		{ url: "https://example.test/Sai-ATLAS-0.8.4.dmg", sha512: "x64-dmg", size: 140 },
 	];
 
 	it("selects the exact DMG for each supported architecture", () => {
 		expect(selectMacInstaller(files, "0.8.4", "arm64")).toEqual({
-			name: "omp-0.8.4-arm64.dmg",
+			name: "Sai-ATLAS-0.8.4-arm64.dmg",
 			sha512: "arm-dmg",
 			size: 120,
 		});
 		expect(selectMacInstaller(files, "0.8.4", "x64")).toEqual({
-			name: "omp-0.8.4.dmg",
+			name: "Sai-ATLAS-0.8.4.dmg",
 			sha512: "x64-dmg",
 			size: 140,
 		});
@@ -64,6 +64,15 @@ describe("manual macOS installer selection", () => {
 				"x64",
 			),
 		).toBeUndefined();
+	});
+
+	it("no longer installs the old-name bridge copies of a release", () => {
+		const bridge = [
+			{ url: "omp-0.8.4-arm64.dmg", sha512: "arm-dmg" },
+			{ url: "omp-0.8.4.dmg", sha512: "x64-dmg" },
+		];
+		expect(selectMacInstaller(bridge, "0.8.4", "arm64")).toBeUndefined();
+		expect(selectMacInstaller(bridge, "0.8.4", "x64")).toBeUndefined();
 	});
 });
 
@@ -114,15 +123,17 @@ describe("manual installer transfer", () => {
 });
 
 describe("installer debris sweep", () => {
+	// 0.9.x wrote omp- names; later releases write Sai-ATLAS- names.
 	const ENTRIES = [
 		"omp-0.9.7.dmg.download-4242",
-		"omp-0.9.8.dmg.download-99",
+		"Sai-ATLAS-0.9.8.dmg.download-99",
 		"omp-0.9.8.dmg.partial",
-		"omp-0.9.7 (1).dmg.partial",
+		"Sai-ATLAS-0.9.7 (1).dmg.partial",
 		"holiday.dmg.partial",
 		"notes.partial",
 		"install-omp.dmg.download-1",
-		"omp-0.9.9-arm64.dmg",
+		"Sai-ATLAS-notes.dmg.partial",
+		"Sai-ATLAS-0.9.9-arm64.dmg",
 	];
 	let dir: string;
 
@@ -137,38 +148,40 @@ describe("installer debris sweep", () => {
 
 	it("clears PID-keyed orphans that no restart could ever continue", async () => {
 		expect((await sweepInstallerPartials(dir)).sort()).toEqual([
+			"Sai-ATLAS-0.9.8.dmg.download-99",
 			"omp-0.9.7.dmg.download-4242",
-			"omp-0.9.8.dmg.download-99",
 		]);
 	});
 
 	it("keeps every current-name partial while nothing is downloading", async () => {
 		await sweepInstallerPartials(dir);
 		expect(fs.existsSync(path.join(dir, "omp-0.9.8.dmg.partial"))).toBe(true);
+		expect(fs.existsSync(path.join(dir, "Sai-ATLAS-0.9.7 (1).dmg.partial"))).toBe(true);
 	});
 
 	it("drops a superseded release's partial once the current download names its own", async () => {
-		const active = installerPartialPath(path.join(dir, "omp-0.9.9-arm64.dmg"));
+		const active = installerPartialPath(path.join(dir, "Sai-ATLAS-0.9.9-arm64.dmg"));
 		fs.writeFileSync(active, "x");
 		const removed = await sweepInstallerPartials(dir, active);
 		expect(removed.sort()).toEqual([
-			"omp-0.9.7 (1).dmg.partial",
+			"Sai-ATLAS-0.9.7 (1).dmg.partial",
+			"Sai-ATLAS-0.9.8.dmg.download-99",
 			"omp-0.9.7.dmg.download-4242",
-			"omp-0.9.8.dmg.download-99",
 			"omp-0.9.8.dmg.partial",
 		]);
 		expect(fs.existsSync(active)).toBe(true);
 	});
 
 	it("leaves files the updater never wrote where they are", async () => {
-		const active = installerPartialPath(path.join(dir, "omp-0.9.9-arm64.dmg"));
+		const active = installerPartialPath(path.join(dir, "Sai-ATLAS-0.9.9-arm64.dmg"));
 		await sweepInstallerPartials(dir, active);
 		await sweepInstallerPartials(dir);
 		for (const name of [
 			"holiday.dmg.partial",
 			"notes.partial",
 			"install-omp.dmg.download-1",
-			"omp-0.9.9-arm64.dmg",
+			"Sai-ATLAS-notes.dmg.partial",
+			"Sai-ATLAS-0.9.9-arm64.dmg",
 		]) {
 			expect(fs.existsSync(path.join(dir, name)), name).toBe(true);
 		}

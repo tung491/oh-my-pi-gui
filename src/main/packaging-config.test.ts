@@ -9,15 +9,22 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { type PlistObject, parsePlistFile, savePlistFile } from "app-builder-lib/out/util/plist";
+import { UUID } from "builder-util-runtime";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { APP_ID, PRODUCT_NAME } from "../shared/product";
+import { type MacInstallerArchitecture, selectMacInstaller } from "./updater-state";
 
 interface BuilderConfig {
+	appId?: string;
+	productName?: string;
 	afterPack?: string;
 	extraResources?: { from: string; to: string }[];
 	protocols?: { name: string; schemes?: string[] }[];
-	mac?: { extendInfo?: Record<string, unknown> };
+	mac?: { icon?: string; artifactName?: string; extendInfo?: Record<string, unknown> };
 	win?: { target?: { target?: string; arch?: string[] }[] };
+	nsis?: { guid?: string; shortcutName?: string; artifactName?: string };
+	portable?: { artifactName?: string };
 	electronLanguages?: string[];
 	linux?: {
 		executableName?: string;
@@ -25,16 +32,21 @@ interface BuilderConfig {
 		target?: { target?: string; arch?: string[] }[];
 		desktop?: { entry?: Record<string, string> };
 	};
-	appImage?: { executableArgs?: string[] };
+	appImage?: { executableArgs?: string[]; artifactName?: string };
+	deb?: { packageName?: string; artifactName?: string };
 	toolsets?: { appimage?: string };
-	extraMetadata?: { desktopName?: string; homepage?: string };
+	extraMetadata?: { name?: string; productName?: string; desktopName?: string; homepage?: string };
 	publish?: { provider?: string; owner?: string; repo?: string };
 }
 
 const PACKAGE_ROOT = path.join(__dirname, "..", "..");
 const require = createRequire(import.meta.url);
 
-type AfterPackHook = (context: { electronPlatformName: string; appOutDir: string }) => Promise<void>;
+type AfterPackHook = (context: {
+	electronPlatformName: string;
+	appOutDir: string;
+	packager: { appInfo: { productFilename: string } };
+}) => Promise<void>;
 
 const PRIVACY_KEYS = [
 	"NSMicrophoneUsageDescription",
@@ -43,15 +55,18 @@ const PRIVACY_KEYS = [
 	"NSBluetoothPeripheralUsageDescription",
 ];
 
-function macConfigs(): { file: string; config: BuilderConfig }[] {
+function builderConfigs(): { file: string; config: BuilderConfig }[] {
 	return fs
 		.readdirSync(PACKAGE_ROOT)
 		.filter(name => /^electron-builder.*\.yml$/.test(name))
 		.map(file => ({
 			file,
 			config: parse(fs.readFileSync(path.join(PACKAGE_ROOT, file), "utf8")) as BuilderConfig,
-		}))
-		.filter(entry => entry.config.mac);
+		}));
+}
+
+function macConfigs(): { file: string; config: BuilderConfig }[] {
+	return builderConfigs().filter(entry => entry.config.mac);
 }
 
 /** Gitignored local variants: every guard below still checks them when present, but none is required. */
@@ -85,8 +100,8 @@ describe("mac bundle configs", () => {
 			for (const key of PRIVACY_KEYS) {
 				const value = info[key];
 				// Electron's own default reads "This app needs access to the camera":
-				// a prompt that names no product and claims a capability omp never uses.
-				const namesApp = typeof value === "string" && /\bomp\b/.test(value);
+				// a prompt that names no product and claims a capability Sai ATLAS never uses.
+				const namesApp = typeof value === "string" && /\bSai ATLAS\b/.test(value);
 				expect(namesApp, `${file} → ${key}`).toBe(true);
 			}
 		}
@@ -107,10 +122,10 @@ describe("mac bundle configs", () => {
 
 	it("restores ATS in the completed bundle after electron-builder enables arbitrary loads", async () => {
 		const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), "omp-bundle-policy-"));
-		const plistPath = path.join(directory, "omp.app", "Contents", "Info.plist");
+		const plistPath = path.join(directory, `${PRODUCT_NAME}.app`, "Contents", "Info.plist");
 		const loopback = { NSExceptionAllowsInsecureHTTPLoads: true };
 		const original: PlistObject = {
-			CFBundleIdentifier: "sh.omp.gui",
+			CFBundleIdentifier: APP_ID,
 			CFBundleURLTypes: [{ CFBundleURLSchemes: ["omp"] }],
 			NSAppTransportSecurity: {
 				NSAllowsArbitraryLoads: true,
@@ -126,7 +141,11 @@ describe("mac bundle configs", () => {
 				expect(hookPath, `${file} declares no afterPack policy hook`).toBe("scripts/after-pack.cjs");
 				if (!hookPath) continue;
 				const afterPack = require(path.resolve(PACKAGE_ROOT, hookPath)).afterPack as AfterPackHook;
-				await afterPack({ electronPlatformName: "darwin", appOutDir: directory });
+				await afterPack({
+					electronPlatformName: "darwin",
+					appOutDir: directory,
+					packager: { appInfo: { productFilename: PRODUCT_NAME } },
+				});
 				expect(await parsePlistFile(plistPath), `${file} leaves arbitrary loads enabled in the bundle`).toEqual({
 					...original,
 					NSAppTransportSecurity: {
@@ -187,10 +206,11 @@ describe("Linux package config", () => {
 			{ target: "AppImage", arch: ["x64"] },
 			{ target: "deb", arch: ["x64"] },
 		]);
-		expect(config.linux?.executableName).toBe("omp-gui");
-		expect(config.extraMetadata?.desktopName).toBe("omp-gui.desktop");
-		// Electron 35 under XWayland names the window class after app.setName("omp").
-		expect(config.linux?.desktop?.entry?.StartupWMClass).toBe("omp");
+		expect(config.linux?.executableName).toBe("sai-atlas");
+		expect(config.extraMetadata?.desktopName).toBe("sai-atlas.desktop");
+		expect(config.deb?.packageName).toBe("sai-atlas");
+		// Electron 35 under XWayland names the window class after app.setName(PRODUCT_NAME).
+		expect(config.linux?.desktop?.entry?.StartupWMClass).toBe(PRODUCT_NAME);
 		expect(config.linux?.maintainer).toBe("nornzach <287694139+nornzach@users.noreply.github.com>");
 		expect(config.extraMetadata?.homepage).toBe("https://github.com/nornzach/oh-my-pi-gui");
 	});
@@ -216,6 +236,98 @@ describe("Linux package config", () => {
 		);
 		// The default config packages resources/omp, the macOS arm64 sidecar.
 		expect(read("electron-builder.yml").linux).toBeUndefined();
+	});
+});
+
+/**
+ * electron-builder derives the NSIS GUID as
+ * `UUID.v5(appId, UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3"))` (NsisTarget.js) —
+ * with the namespace parsed, not passed as a string, which yields another id.
+ * This is that GUID for the old appId `sh.omp.gui`: pinned so the installer
+ * finds an existing omp install and upgrades it in place. Never change it.
+ */
+const OMP_NSIS_GUID = "9d72fc94-91dd-54d1-8fda-3b6e5e8d23f2";
+
+/** Expands electron-builder's `${macro}` placeholders in an artifact file name. */
+function artifactFile(pattern: string | undefined, macros: Record<string, string>): string | undefined {
+	return pattern?.replace(/\$\{(\w+)\}/g, (placeholder, key: string) => macros[key] ?? placeholder);
+}
+
+/** The option block that names each electron-builder target's output file. */
+const ARTIFACT_OPTIONS: Record<string, "nsis" | "portable" | "appImage" | "deb"> = {
+	nsis: "nsis",
+	portable: "portable",
+	AppImage: "appImage",
+	deb: "deb",
+};
+
+describe("product identity in every builder config", () => {
+	const configs = builderConfigs();
+
+	it("names the product and app id the main process uses", () => {
+		expect(configs.length).toBeGreaterThanOrEqual(4);
+		for (const { file, config } of configs) {
+			expect(config.productName, file).toBe(PRODUCT_NAME);
+			expect(config.appId, file).toBe(APP_ID);
+		}
+	});
+
+	it("keeps the old install's NSIS GUID so Windows upgrades in place", () => {
+		expect(UUID.v5("sh.omp.gui", UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3"))).toBe(OMP_NSIS_GUID);
+		const windows = configs.filter(({ config }) => config.win?.target?.some(target => target.target === "nsis"));
+		expect(windows.map(entry => entry.file).sort()).toEqual(["electron-builder.win.yml", "electron-builder.yml"]);
+		for (const { file, config } of windows) {
+			expect(config.nsis?.guid, file).toBe(OMP_NSIS_GUID);
+			expect(config.nsis?.shortcutName, file).toBe(PRODUCT_NAME);
+		}
+	});
+
+	it("gives every target it builds an explicit file name without spaces", () => {
+		for (const { file, config } of configs) {
+			const names: [string, string | undefined][] = [];
+			if (config.mac) names.push(["mac", config.mac.artifactName]);
+			for (const { target } of [...(config.win?.target ?? []), ...(config.linux?.target ?? [])]) {
+				const option = target ? ARTIFACT_OPTIONS[target] : undefined;
+				expect(option, `${file} builds an unknown target ${target}`).toBeDefined();
+				if (option) names.push([option, config[option]?.artifactName]);
+			}
+			for (const [option, name] of names) {
+				expect(name, `${file} → ${option}.artifactName`).toBeDefined();
+				expect(name, `${file} → ${option}.artifactName`).not.toContain(" ");
+			}
+		}
+	});
+
+	it("names the DMGs the updater looks for", () => {
+		const byFile = new Map(configs.map(({ file, config }) => [file, config.mac?.artifactName]));
+		const variants: [string, MacInstallerArchitecture][] = [
+			["electron-builder.yml", "arm64"],
+			["electron-builder.x64.yml", "x64"],
+		];
+		for (const [file, arch] of variants) {
+			const name = artifactFile(byFile.get(file), { version: "1.2.3", arch, ext: "dmg" });
+			expect(name, `${file} names no DMG`).toBeDefined();
+			expect(selectMacInstaller([{ url: name ?? "", sha512: "sha" }], "1.2.3", arch)?.name, file).toBe(name);
+		}
+	});
+
+	it("converts the PNG app icon for both mac bundles", () => {
+		for (const { file, config } of macConfigs()) expect(config.mac?.icon, file).toBe("resources/icon.png");
+	});
+
+	it("leaves the profile path to package.json name", () => {
+		// Electron derives userData from productName, then name; src/main/pin-user-data.ts
+		// pins the name-derived path, and none of these may start moving it.
+		for (const { file, config } of configs) {
+			expect(config.extraMetadata?.name, file).toBeUndefined();
+			expect(config.extraMetadata?.productName, file).toBeUndefined();
+		}
+		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+			name?: string;
+			productName?: string;
+		};
+		expect(pkg.name).toBe("@oh-my-pi/omp-gui");
+		expect(pkg.productName).toBeUndefined();
 	});
 });
 

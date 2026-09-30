@@ -1,8 +1,8 @@
 # Linux x64 packages: an AppImage and a .deb built from the Linux sidecar.
 # Self-contained like electron-builder.win.yml, so the macOS configs keep
 # packaging only their own sidecars (resources/omp, resources/omp.x64).
-appId: sh.omp.gui
-productName: omp
+appId: vn.io.vif.saiatlas
+productName: Sai ATLAS
 directories:
   buildResources: resources
   output: dist
@@ -23,11 +23,11 @@ protocols:
 asar: true
 compression: maximum
 # Electron reads desktopName from the packaged package.json; the deb names
-# its entry after linux.executableName, so both are omp-gui.desktop. The deb
+# its entry after linux.executableName, so both are sai-atlas.desktop. The deb
 # target requires homepage, which would otherwise come from the git remote
 # of whichever fork runs the build.
 extraMetadata:
-  desktopName: omp-gui.desktop
+  desktopName: sai-atlas.desktop
   homepage: https://github.com/nornzach/oh-my-pi-gui
 # The static AppImage runtime needs no libfuse2 and writes no --no-sandbox
 # into Exec; see README → Linux for the AppArmor profile it relies on.
@@ -35,7 +35,7 @@ toolsets:
   appimage: "1.0.3"
 
 linux:
-  executableName: omp-gui
+  executableName: sai-atlas
   icon: resources/icons
   category: Development
   # Matches the git authorship of the release commits (user-confirmed 2026-09-29).
@@ -48,15 +48,17 @@ linux:
   desktop:
     entry:
       # Electron 35 runs under XWayland and names its X11 window class after
-      # app.setName("omp") in src/main/index.ts.
-      StartupWMClass: omp
+      # app.setName(PRODUCT_NAME) in src/main/index.ts.
+      StartupWMClass: Sai ATLAS
 
 appImage:
   executableArgs: []
-  artifactName: ${productName}-${version}-x86_64.${ext}
+  artifactName: Sai-ATLAS-${version}-x86_64.${ext}
 
 deb:
-  artifactName: ${productName}_${version}_amd64.${ext}
+  # The default would be the spaced product name, which dpkg rejects.
+  packageName: sai-atlas
+  artifactName: sai-atlas_${version}_amd64.${ext}
 
 publish:
   provider: github

@@ -24,7 +24,7 @@ export function selectMacInstaller(
 	version: string,
 	architecture: MacInstallerArchitecture,
 ): MacInstallerAsset | undefined {
-	const expectedName = architecture === "arm64" ? `omp-${version}-arm64.dmg` : `omp-${version}.dmg`;
+	const expectedName = architecture === "arm64" ? `Sai-ATLAS-${version}-arm64.dmg` : `Sai-ATLAS-${version}.dmg`;
 	for (const file of files) {
 		let name = file.url;
 		try {
@@ -64,11 +64,12 @@ export function settleIncompleteUpdateCheck(
 
 const PARTIAL_SUFFIX = ".partial";
 /**
- * Only names the updater itself could have written: `omp-<version>[-arm64][ (n)].dmg`
- * plus a partial suffix. Downloads is the user's directory, so anything else —
- * including a lookalike like `holiday.dmg.partial` — must survive the sweep.
+ * Only names an updater could have written: `Sai-ATLAS-<version>[-arm64][ (n)].dmg`,
+ * or the `omp-` form 0.9.x releases downloaded before the rename, plus a partial
+ * suffix. Downloads is the user's directory, so anything else — including a
+ * lookalike like `holiday.dmg.partial` — must survive the sweep.
  */
-const INSTALLER_DEBRIS = /^omp-[\d.]+(?:-arm64)?(?: \(\d+\))?\.dmg(?:\.partial|\.download-\d+)$/;
+const INSTALLER_DEBRIS = /^(?:omp|Sai-ATLAS)-[\d.]+(?:-arm64)?(?: \(\d+\))?\.dmg(?:\.partial|\.download-\d+)$/;
 const HASH_CHUNK_BYTES = 1024 * 1024;
 
 /**
