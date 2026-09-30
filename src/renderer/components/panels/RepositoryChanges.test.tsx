@@ -362,6 +362,61 @@ describe("RepositoryChanges", () => {
 		expect(openPath).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		["docs/Deploy.terminal", "darwin"],
+		["links/home.webloc", "darwin"],
+		["links/tool.fileloc", "linux"],
+		["links/news.INETLOC", "linux"],
+		["apps/launch.jnlp", "win32"],
+		["scripts/build.py", "darwin"],
+		["scripts/build.py", "win32"],
+	])("refuses to open the launcher %s on %s", async (path, platform) => {
+		installWorkspaceOmp(repo([{ path, status: "M" }]), { [path]: textPreview(path) }, platform);
+		await mount();
+		await select(path);
+
+		expect(openButton().disabled).toBe(true);
+		expect(openButton().getAttribute("title")).toBe(SCRIPT_TITLE);
+		await click(openButton());
+		await flush();
+		expect(openPath).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		"links/site.url",
+		"admin/console.msc",
+		"remote/host.rdp",
+		"apps/tool.appref-ms",
+		"shell/Explorer.SCF",
+		"search/repo.searchConnector-ms",
+		"config/keys.reg",
+		"drivers/setup.inf",
+		"com/widget.sct",
+	])("refuses to open %s on Windows, where the shell launches it", async path => {
+		installWorkspaceOmp(repo([{ path, status: "M" }]), { [path]: textPreview(path) }, "win32");
+		await mount();
+		await select(path);
+
+		expect(openButton().disabled).toBe(true);
+		expect(openButton().getAttribute("title")).toBe(SCRIPT_TITLE);
+		await click(openButton());
+		await flush();
+		expect(openPath).not.toHaveBeenCalled();
+	});
+
+	it("opens a .reg file on mac, where no shell handler imports it", async () => {
+		installWorkspaceOmp(repo([{ path: "config/keys.reg", status: "M" }]), {
+			"config/keys.reg": textPreview("config/keys.reg"),
+		});
+		await mount();
+		await select("config/keys.reg");
+
+		expect(openButton().disabled).toBe(false);
+		await click(openButton());
+		await flush();
+		expect(openPath).toHaveBeenCalledWith("/repo/config/keys.reg");
+	});
+
 	it("counts the changed files in the footer, marking a truncated list", async () => {
 		installWorkspaceOmp(repo([{ path: "src/a.ts", status: "M" }]), {});
 		await mount();

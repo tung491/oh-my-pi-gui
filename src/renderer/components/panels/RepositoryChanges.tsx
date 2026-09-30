@@ -10,23 +10,56 @@ import { useTabRpc } from "../../lib/tab-rpc";
 import { Button, buttonClasses, IconButton, Input } from "../common";
 import { PathLink } from "../tools/PathLink";
 
-/** Extensions the OS default handler runs instead of opening for editing. */
+/**
+ * Extensions the OS default handler runs or launches instead of opening for
+ * editing: scripts, macOS Terminal/URL/location launchers, Java Web Start, and
+ * Python (the py.exe launcher on Windows, Python Launcher on macOS).
+ */
 const SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set([
 	".bat",
 	".cmd",
 	".command",
 	".desktop",
+	".fileloc",
+	".inetloc",
+	".jnlp",
 	".ps1",
+	".py",
 	".sh",
+	".terminal",
 	".tool",
 	".vbe",
 	".vbs",
+	".webloc",
 	".wsf",
 	".wsh",
 ]);
 
-/** Extra extensions Windows runs on open (Windows Script Host, HTML applications, windowed Python). */
-const WINDOWS_SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set([".hta", ".js", ".jse", ".pyw"]);
+/**
+ * Extra extensions the Windows shell runs or launches on open: Windows Script
+ * Host, HTML applications, windowed Python, Internet shortcuts, MMC snap-ins,
+ * Remote Desktop, ClickOnce, Explorer command/library/search-connector files,
+ * registry imports, setup information, and scriptlets.
+ */
+const WINDOWS_SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set([
+	".appref-ms",
+	".application",
+	".hta",
+	".inf",
+	".js",
+	".jse",
+	".library-ms",
+	".msc",
+	".pyw",
+	".rdp",
+	".reg",
+	".scf",
+	".sct",
+	".searchconnector-ms",
+	".url",
+	".website",
+	".wsc",
+]);
 
 /** Whether opening this file with the OS default handler would run it; reads the file name only, never a folder. */
 function opensAsProgram(path: string, platform: KeyboardPlatform): boolean {
