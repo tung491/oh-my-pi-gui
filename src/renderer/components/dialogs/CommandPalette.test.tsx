@@ -247,7 +247,35 @@ describe("sidecar command fetch failure", () => {
 });
 
 describe("footer", () => {
-	it("hints navigation and run, and counts the command rows it renders", async () => {
+	/** The palette's recents key; Node's own localStorage is unavailable without --localstorage-file. */
+	const RECENT_KEY = "omp.palette.recent";
+	let storageDescriptor: PropertyDescriptor | undefined;
+
+	/** A Map-backed localStorage, so recents persist the way the palette stores them. */
+	function installLocalStorage(seed: Record<string, string>): void {
+		storageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+		const entries = new Map(Object.entries(seed));
+		const storage: Pick<Storage, "getItem" | "setItem" | "removeItem" | "clear"> = {
+			getItem: key => entries.get(key) ?? null,
+			setItem: (key, value) => {
+				entries.set(key, String(value));
+			},
+			removeItem: key => {
+				entries.delete(key);
+			},
+			clear: () => entries.clear(),
+		};
+		Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+	}
+
+	afterEach(() => {
+		if (storageDescriptor) Object.defineProperty(globalThis, "localStorage", storageDescriptor);
+		else Reflect.deleteProperty(globalThis, "localStorage");
+		storageDescriptor = undefined;
+	});
+
+	it("hints navigation and run, and counts each command once even when recents pin a copy", async () => {
+		installLocalStorage({ [RECENT_KEY]: JSON.stringify(["settings", "theme"]) });
 		seedTab("agent");
 		await mount();
 
@@ -256,12 +284,18 @@ describe("footer", () => {
 			translate("palette.footer.count", { count, plural: count === 1 ? "" : "s" });
 		expect(footerText()).toContain(translate("palette.footer.navigate"));
 		expect(footerText()).toContain(translate("palette.footer.run"));
-		expect(rows().length).toBeGreaterThan(0);
-		expect(footerText()).toContain(countText(rows().length));
 
-		// Drilling into a submenu swaps the rows, and the count follows them.
+		// Both recents render twice: pinned on top, and again in their category.
+		const names = rows().map(row => row.getAttribute("data-command-name"));
+		const distinct = new Set(names).size;
+		expect(names.filter(name => name === "settings")).toHaveLength(2);
+		expect(names.filter(name => name === "theme")).toHaveLength(2);
+		expect(names).toHaveLength(distinct + 2);
+		expect(footerText().endsWith(countText(distinct))).toBe(true);
+
+		// Drilling into a submenu swaps the rows (no recents there), and the count follows them.
 		await click(rowByLabel(translate("cmd.security")));
 		expect(rows().length).toBeGreaterThan(0);
-		expect(footerText()).toContain(countText(rows().length));
+		expect(footerText().endsWith(countText(rows().length))).toBe(true);
 	});
 });
