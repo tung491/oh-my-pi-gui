@@ -253,7 +253,7 @@ describe("FirstRunOnboardingDialog", () => {
 		await click(buttonNamed("Continue"));
 		await click(buttonNamed("Continue"));
 		expect(currentStep()).toBe("Ready");
-		await click(buttonNamed("Start using omp"));
+		await click(buttonNamed("Start using Sai ATLAS"));
 		await waitForExit();
 		expect(dialog()).toBeNull();
 		expect(omp.prefs.set).not.toHaveBeenCalled();

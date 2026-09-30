@@ -6,6 +6,7 @@
  */
 
 import type { TrayState } from "../shared/ipc-types";
+import { PRODUCT_NAME } from "../shared/product";
 
 export type TrayStatus = TrayState["status"];
 export type TrayLang = "zh" | "en";
@@ -81,8 +82,8 @@ export function formatTokens(n: number): string {
 
 /** Hover text: the icon itself stays a static template mark by design. */
 export function trayTooltip(state: TrayState | null): string {
-	if (!state) return "omp";
-	return `omp — ${state.projectName} · ${statusLabel(state.language === "en" ? "en" : "zh", state.status)}`;
+	if (!state) return PRODUCT_NAME;
+	return `${PRODUCT_NAME} — ${state.projectName} · ${statusLabel(state.language === "en" ? "en" : "zh", state.status)}`;
 }
 
 /**

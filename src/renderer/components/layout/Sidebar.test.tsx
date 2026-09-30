@@ -856,7 +856,7 @@ describe("Sidebar VIF rail", () => {
 
 		const footerText = () => footer()?.textContent ?? "";
 		expect(omp.updater.version).toHaveBeenCalled();
-		expect(footerText()).toContain("omp GUI 0.9.10");
+		expect(footerText()).toContain("Sai ATLAS 0.9.10");
 
 		await act(async () => {
 			useTabsStore.setState({
@@ -871,7 +871,7 @@ describe("Sidebar VIF rail", () => {
 			useTabsStore.setState({ tabs: [], activeTabId: null });
 		});
 		expect(footer()).not.toBeNull();
-		expect(footerText()).not.toContain("omp GUI");
+		expect(footerText()).not.toContain("Sai ATLAS 0.9");
 		for (const key of [
 			"titlebar.status.working",
 			"titlebar.status.ready",

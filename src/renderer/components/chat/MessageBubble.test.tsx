@@ -548,7 +548,7 @@ describe("MessageBubble turn chrome", () => {
 		expect(avatar?.getAttribute("aria-hidden")).toBe("true");
 		expect(avatar?.querySelector('img[data-logo-tone="light"][src$="sai-atlas-icon-on-light.svg"]')).not.toBeNull();
 		expect(avatar?.querySelector('img[data-logo-tone="dark"][src$="sai-atlas-icon-on-dark.svg"]')).not.toBeNull();
-		expect(container.textContent).toContain("omp");
+		expect(container.textContent).toContain("Sai ATLAS");
 		expect(container.textContent).toContain("claude-sonnet-4");
 	});
 

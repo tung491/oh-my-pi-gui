@@ -10,6 +10,7 @@
 
 import { app, Menu, nativeImage, Tray } from "electron";
 import { IPC_EVENTS, type MenuAction, type MenuActionPayload, type TrayState } from "../shared/ipc-types";
+import { PRODUCT_NAME } from "../shared/product";
 import { trayIconBitmap } from "./app-icons";
 import { approvalLabel, formatTokens, menuSignature, type TrayLang, t, trayTooltip } from "./tray-labels";
 import type { SpawnWindow, WindowManager } from "./window";
@@ -21,7 +22,7 @@ let trayState: TrayState | null = null;
 /** Label set the currently installed native menu renders, and whether it is open. */
 let installedSignature: string | null = null;
 let menuIsOpen = false;
-let tooltip = "omp";
+let tooltip = PRODUCT_NAME;
 
 function buildIcon(): Electron.NativeImage {
 	const bitmap = trayIconBitmap(process.platform);
@@ -224,5 +225,5 @@ export function destroyTray(): void {
 	trayState = null;
 	installedSignature = null;
 	menuIsOpen = false;
-	tooltip = "omp";
+	tooltip = PRODUCT_NAME;
 }
