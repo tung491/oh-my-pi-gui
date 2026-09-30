@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { launchesWhenOpened, opensAsProgram } from "./launchable-path";
+import { launchesWhenOpened, launchPlatformOf, opensAsProgram } from "./launchable-path";
 
 const textFile = { isFile: true, mode: 0o100644 };
 const executableFile = { isFile: true, mode: 0o100755 };
@@ -14,7 +14,17 @@ describe("opensAsProgram", () => {
 	);
 
 	it("treats Windows shell launchers as programs only on Windows", () => {
-		for (const path of ["notes.url", "run.js", "shortcut.lnk", "setup.msi"]) {
+		for (const path of [
+			"notes.url",
+			"run.js",
+			"shortcut.lnk",
+			"setup.msi",
+			"sites/example.com",
+			"plot.scr",
+			"help.chm",
+			"app.pyz",
+			"mod.pyc",
+		]) {
 			expect(opensAsProgram(path, "windows")).toBe(true);
 			expect(opensAsProgram(path, "mac")).toBe(false);
 		}
@@ -36,8 +46,8 @@ describe("opensAsProgram", () => {
 		}
 	});
 
-	it("treats a macOS application bundle as a program", () => {
-		expect(opensAsProgram("/Applications/Calculator.app", "mac")).toBe(true);
+	it("leaves a regular file named like a bundle to the folder check", () => {
+		expect(opensAsProgram("ebin/demo.app", "mac")).toBe(false);
 	});
 });
 
@@ -51,6 +61,12 @@ describe("launchesWhenOpened", () => {
 		expect(launchesWhenOpened("/repo/src", folder, "mac")).toBe(false);
 	});
 
+	it("refuses a macOS application bundle, which is a folder, but not a text file named .app", () => {
+		expect(launchesWhenOpened("/Applications/Calculator.app", folder, "mac")).toBe(true);
+		expect(launchesWhenOpened("/repo/ebin/demo.app", textFile, "mac")).toBe(false);
+		expect(launchesWhenOpened("/repo/Tool.app", folder, "linux")).toBe(false);
+	});
+
 	it("keeps the executable bit out of the decision off macOS", () => {
 		expect(launchesWhenOpened("/mnt/usb/notes.txt", executableFile, "linux")).toBe(false);
 		expect(launchesWhenOpened("C:\\repo\\notes.txt", executableFile, "windows")).toBe(false);
@@ -59,5 +75,14 @@ describe("launchesWhenOpened", () => {
 	it("still refuses launchers by name on every platform", () => {
 		expect(launchesWhenOpened("/repo/deploy.sh", textFile, "linux")).toBe(true);
 		expect(launchesWhenOpened("C:\\repo\\link.url", textFile, "windows")).toBe(true);
+	});
+});
+
+describe("launchPlatformOf", () => {
+	it("maps Node platform names", () => {
+		expect(launchPlatformOf("darwin")).toBe("mac");
+		expect(launchPlatformOf("win32")).toBe("windows");
+		expect(launchPlatformOf("linux")).toBe("linux");
+		expect(launchPlatformOf("freebsd")).toBe("linux");
 	});
 });
