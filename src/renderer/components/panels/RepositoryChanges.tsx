@@ -1,74 +1,15 @@
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { opensAsProgram } from "../../../shared/launchable-path";
 import type { RpcGitChanges, RpcGitDiff } from "../../../shared/rpc-types";
 import { DiffView, diffLineCounts } from "../../lib/diff";
-import { basename, cx } from "../../lib/format";
+import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
-import { currentKeyboardPlatform, type KeyboardPlatform } from "../../lib/keymap";
+import { currentKeyboardPlatform } from "../../lib/keymap";
 import type { TabRpc } from "../../lib/tab-rpc";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { Button, buttonClasses, IconButton, Input } from "../common";
 import { PathLink } from "../tools/PathLink";
-
-/**
- * Extensions the OS default handler runs or launches instead of opening for
- * editing: scripts, macOS Terminal/URL/location launchers, Java Web Start, and
- * Python (the py.exe launcher on Windows, Python Launcher on macOS).
- */
-const SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set([
-	".bat",
-	".cmd",
-	".command",
-	".desktop",
-	".fileloc",
-	".inetloc",
-	".jnlp",
-	".ps1",
-	".py",
-	".sh",
-	".terminal",
-	".tool",
-	".vbe",
-	".vbs",
-	".webloc",
-	".wsf",
-	".wsh",
-]);
-
-/**
- * Extra extensions the Windows shell runs or launches on open: Windows Script
- * Host, HTML applications, windowed Python, Internet shortcuts, MMC snap-ins,
- * Remote Desktop, ClickOnce, Explorer command/library/search-connector files,
- * registry imports, setup information, and scriptlets.
- */
-const WINDOWS_SCRIPT_EXTENSIONS: ReadonlySet<string> = new Set([
-	".appref-ms",
-	".application",
-	".hta",
-	".inf",
-	".js",
-	".jse",
-	".library-ms",
-	".msc",
-	".pyw",
-	".rdp",
-	".reg",
-	".scf",
-	".sct",
-	".searchconnector-ms",
-	".url",
-	".website",
-	".wsc",
-]);
-
-/** Whether opening this file with the OS default handler would run it; reads the file name only, never a folder. */
-function opensAsProgram(path: string, platform: KeyboardPlatform): boolean {
-	const name = basename(path).toLowerCase();
-	const dot = name.lastIndexOf(".");
-	if (dot < 0) return false;
-	const extension = name.slice(dot);
-	return SCRIPT_EXTENSIONS.has(extension) || (platform === "windows" && WINDOWS_SCRIPT_EXTENSIONS.has(extension));
-}
 
 /** Status tile colors: additions and untracked files read as added, deletions as removed, the rest as accent. */
 function statusTileClasses(status: string, selected: boolean): string {

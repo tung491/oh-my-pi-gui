@@ -43,6 +43,7 @@ import type {
 } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS, type RunProgressState, type TrayState } from "../shared/ipc-types";
 import { parseLaunchProfile } from "../shared/launch-profile";
+import { launchesWhenOpened } from "../shared/launchable-path";
 import type { RpcCommand, RpcSessionState } from "../shared/rpc-types";
 import { requestQuit } from "./app-quit";
 import { BenchmarkRunner } from "./benchmark-runner";
@@ -771,7 +772,10 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// relative paths resolve inside the calling window's workspace (escapes
 	// refused), absolute paths pass through: the agent can legitimately touch
 	// files outside the workspace. When no editor association exists, reveal
-	// the file in the file manager instead of failing.
+	// the file in the file manager instead of failing. A path the default
+	// handler would run (a script, launcher, program, or on macOS any
+	// executable file) is revealed, never opened: one click on an
+	// agent-written link must not execute it.
 	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_PATH, async (event, target: string): Promise<IpcOpenPathResult> => {
 		if (typeof target !== "string" || !target.trim()) return { ok: false, error: "Empty path" };
 		let resolved = target.startsWith("~/") ? path.join(os.homedir(), target.slice(2)) : target;
@@ -785,10 +789,12 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		// A stale tool card can reference a file that no longer exists (or never
 		// did outside the workspace). Both openPath and showItemInFolder fail
 		// silently on missing paths, so detect it here and let the link toast.
-		try {
-			await fsp.access(resolved);
-		} catch {
-			return { ok: false, error: "File not found" };
+		const stats = await fsp.stat(resolved).catch(() => null);
+		if (!stats) return { ok: false, error: "File not found" };
+		const platform = process.platform === "darwin" ? "mac" : process.platform === "win32" ? "windows" : "linux";
+		if (launchesWhenOpened(resolved, { isFile: stats.isFile(), mode: stats.mode }, platform)) {
+			shell.showItemInFolder(resolved);
+			return { ok: true, resolvedPath: resolved };
 		}
 		const openError = await shell.openPath(resolved);
 		if (!openError) return { ok: true, resolvedPath: resolved };
