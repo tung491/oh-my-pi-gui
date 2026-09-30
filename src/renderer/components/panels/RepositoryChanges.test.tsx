@@ -420,7 +420,7 @@ describe("RepositoryChanges", () => {
 	it("counts the changed files in the footer, marking a truncated list", async () => {
 		installWorkspaceOmp(repo([{ path: "src/a.ts", status: "M" }]), {});
 		await mount();
-		expect(footer().textContent).toContain("1 files changed");
+		expect(footer().textContent).toContain("1 file changed");
 
 		await act(async () => {
 			root.unmount();

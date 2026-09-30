@@ -248,7 +248,9 @@ export function OverviewRoute({ range, refreshKey }: { range: StatsRange; refres
 						<MetricCard
 							badge={
 								<Badge variant={errorRateElevated ? "error" : "success"}>
-									{t(errorRateElevated ? "stats.overview.elevated" : "stats.overview.healthy")}
+									{errorRateElevated
+										? t("stats.overview.elevated", { limit: ERROR_RATE_LIMIT * 100 })
+										: t("stats.overview.healthy")}
 								</Badge>
 							}
 							label={t("stats.overview.errorRate")}

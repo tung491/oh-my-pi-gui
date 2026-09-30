@@ -725,7 +725,6 @@ export const en: Record<string, string> = {
 	"onboarding.setupRequired": "Setup required",
 	"onboarding.description":
 		"No runnable model provider was detected. Choose a standard provider or add an OpenAI-/Anthropic-compatible endpoint; omp will pick up the configuration immediately.",
-	"onboarding.recommended": "Recommended",
 	"onboarding.provider.title": "Connect a provider",
 	"onboarding.provider.description":
 		"Sign in or enter an API key for a supported provider such as Anthropic, OpenAI, DeepSeek, or OpenRouter.",
@@ -734,7 +733,6 @@ export const en: Record<string, string> = {
 	"onboarding.custom.title": "Custom provider and model",
 	"onboarding.custom.description":
 		"Add a compatible endpoint and at least one exact model ID. The GUI writes the models.yml entry for you.",
-	"onboarding.custom.location": "Stored in ~/.omp/agent/models.yml and live-reloaded by the agent.",
 	"onboarding.custom.action": "Configure custom provider",
 	"onboarding.parameters.title": "How custom parameters work",
 	"onboarding.parameters.description": "Required fields come first; model capabilities and limits are optional.",
@@ -749,8 +747,6 @@ export const en: Record<string, string> = {
 	"onboarding.stillMissing": "No runnable model was found yet. Finish either setup path, then check again.",
 	"onboarding.invalidResponse": "The provider readiness response was invalid.",
 	"onboarding.checkFailed": "Could not check provider readiness: {error}",
-	"onboarding.checkHint":
-		"This check reads local provider and model configuration only; it does not send a model request.",
 	"onboarding.later": "Skip for now",
 	"onboarding.recheck": "I've configured it — check again",
 
@@ -3296,6 +3292,7 @@ export const en: Record<string, string> = {
 	"brand.wordmark": "omp",
 	"sidebar.nav.agentHub": "Agent Hub",
 	"sidebar.nav.prCenter": "PR Center",
+	"sidebar.nav.shortcutTitle": "{label} ({shortcut})",
 	"sidebar.footer.status": "omp GUI {version} · {status}",
 	"sidebar.footer.settings": "Open settings",
 	"titlebar.metrics": "Session metrics",
@@ -3303,12 +3300,12 @@ export const en: Record<string, string> = {
 	"chat.retryTurn": "Retry this turn",
 	"chat.process.steps": "{count} step{plural}",
 	"diffPanel.source": "Diff source",
-	"diffPanel.filesChanged": "{count} files changed",
+	"diffPanel.filesChanged": "{count} file{plural} changed",
 	"diffPanel.openInEditor": "Open in editor",
 	"diffPanel.openInEditorScript": "Script files can run when opened, so open this one from your editor.",
 	"palette.footer.navigate": "Navigate",
 	"palette.footer.run": "Run",
-	"palette.footer.count": "{count} commands",
+	"palette.footer.count": "{count} command{plural}",
 	"modelPicker.filter.all": "All",
 	"modelPicker.filter.connected": "Connected",
 	"modelPicker.filter.reasoning": "Reasoning",
@@ -3342,7 +3339,7 @@ export const en: Record<string, string> = {
 	"settings.gui.themeCards": "GUI theme",
 	"stats.local": "Local",
 	"stats.overview.healthy": "Healthy",
-	"stats.overview.elevated": "Above 5%",
+	"stats.overview.elevated": "Above {limit}%",
 	"stats.overview.costPerDay": "{cost} / day",
 	"stats.overview.showTable": "Show as table",
 	"stats.overview.showChart": "Show as chart",

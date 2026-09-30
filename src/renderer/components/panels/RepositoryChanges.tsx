@@ -264,6 +264,7 @@ export function RepositoryChanges() {
 					<span className="min-w-0 flex-1 text-omp-xs text-(--omp-muted)">
 						{t("diffPanel.filesChanged", {
 							count: changes.truncated ? `${changes.files.length}+` : changes.files.length,
+							plural: changes.truncated || changes.files.length !== 1 ? "s" : "",
 						})}
 					</span>
 					{canOpen && changes.root ? (

@@ -840,6 +840,7 @@ describe("Sidebar VIF rail", () => {
 		if (!agentHub) throw new Error("Agent Hub navigation item missing");
 		expect(agentHub.querySelector("kbd")?.textContent).toBe("⌥A");
 		expect(accessibleName(agentHub)).toBe("Agent Hub");
+		expect(agentHub.getAttribute("title")).toBe("Agent Hub (⌥A)");
 
 		// Strict e2e clicks resolve `{ name: "Settings", exact: true }`: only the nav item may carry it.
 		const sidebarButtons = container.querySelectorAll("aside button");

@@ -747,7 +747,7 @@ export function CommandPalette() {
 						{t("palette.footer.run")}
 					</span>
 					<span className="ml-auto font-mono font-medium">
-						{t("palette.footer.count", { count: results.length })}
+						{t("palette.footer.count", { count: results.length, plural: results.length === 1 ? "" : "s" })}
 					</span>
 				</div>
 			</div>

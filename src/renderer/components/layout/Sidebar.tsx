@@ -656,7 +656,12 @@ export function Sidebar() {
 				type="button"
 				onClick={item.onClick}
 				data-command-center-entry={item.id === "commands" ? true : undefined}
-				title={item.title ?? (item.shortcut ? `${item.label} (${item.shortcut})` : undefined)}
+				title={
+					item.title ??
+					(item.shortcut
+						? t("sidebar.nav.shortcutTitle", { label: item.label, shortcut: item.shortcut })
+						: undefined)
+				}
 				className="omp-pressable flex h-[34px] w-full min-w-0 items-center gap-2.5 rounded-lg px-2.5 text-left text-omp-md text-(--omp-sidebar-muted) hover:bg-(--omp-sidebar-item-active) hover:text-(--omp-sidebar-text)"
 			>
 				<Icon aria-hidden="true" className="shrink-0" size={16} />

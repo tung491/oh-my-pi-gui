@@ -252,14 +252,16 @@ describe("footer", () => {
 		await mount();
 
 		const footerText = (): string => container.querySelector("[data-palette-footer]")?.textContent ?? "";
+		const countText = (count: number): string =>
+			translate("palette.footer.count", { count, plural: count === 1 ? "" : "s" });
 		expect(footerText()).toContain(translate("palette.footer.navigate"));
 		expect(footerText()).toContain(translate("palette.footer.run"));
 		expect(rows().length).toBeGreaterThan(0);
-		expect(footerText()).toContain(translate("palette.footer.count", { count: rows().length }));
+		expect(footerText()).toContain(countText(rows().length));
 
 		// Drilling into a submenu swaps the rows, and the count follows them.
 		await click(rowByLabel(translate("cmd.security")));
 		expect(rows().length).toBeGreaterThan(0);
-		expect(footerText()).toContain(translate("palette.footer.count", { count: rows().length }));
+		expect(footerText()).toContain(countText(rows().length));
 	});
 });
