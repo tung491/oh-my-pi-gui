@@ -562,7 +562,13 @@ const HubRow = memo(function HubRow({
 		>
 			<span className="flex min-w-0" role="cell">
 				<Badge dot={!meta.live} variant={meta.variant}>
-					{meta.live && <Spinner size="sm" />}
+					{/* Decorative: the badge text names the status, and a status
+					    region per live row would announce every one as loading. */}
+					{meta.live && (
+						<span aria-hidden="true" className="inline-flex">
+							<Spinner size="sm" />
+						</span>
+					)}
 					{t(meta.labelKey)}
 				</Badge>
 			</span>

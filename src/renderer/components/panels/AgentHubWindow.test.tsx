@@ -182,6 +182,26 @@ describe("AgentHubWindow hub tab", () => {
 		expect(omp.setAgentsPaused).toHaveBeenCalledWith(false);
 		expect(useSessionStore.getState().agentsPaused).toBe(false);
 	});
+	it("keeps live-row spinners out of the accessibility tree", async () => {
+		installOmpMock();
+		seedHub();
+		await mount(<AgentHubWindow initialTab="hub" onClose={() => {}} open />);
+
+		/** A status region assistive tech can reach: not under an aria-hidden ancestor. */
+		const exposed = (node: Element): boolean => {
+			for (let current: Element | null = node; current; current = current.parentElement) {
+				if (current.getAttribute("aria-hidden") === "true") return false;
+			}
+			return true;
+		};
+		for (const id of ["a1", "a2"]) {
+			const row = document.querySelector(`[role="row"][data-agent-id="${id}"]`);
+			if (!row) throw new Error(`row ${id} not found`);
+			expect(row.querySelector("svg.animate-spin")).not.toBeNull();
+			expect([...row.querySelectorAll('[role="status"]')].filter(exposed)).toHaveLength(0);
+		}
+	});
+
 	it("distinguishes same-type agents by task label and shows model/kind/status", async () => {
 		installOmpMock();
 		seedHub();
