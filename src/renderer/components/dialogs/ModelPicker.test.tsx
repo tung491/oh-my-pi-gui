@@ -8,7 +8,7 @@ import { parseHTML } from "linkedom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import type { LoginProvider, ModelInfo, ProviderInfo } from "../../../shared/rpc-types";
+import type { LoginProvider, ModelInfo } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
@@ -40,7 +40,6 @@ interface TestElement {
 }
 
 const ok = (data?: unknown) => ({ type: "response" as const, command: "x", success: true as const, data });
-const fail = (error: string) => ({ type: "response" as const, command: "x", success: false as const, error });
 
 const SONNET: ModelInfo = {
 	provider: "anthropic",
@@ -50,38 +49,11 @@ const SONNET: ModelInfo = {
 };
 const HAIKU: ModelInfo = { provider: "anthropic", id: "claude-haiku-4-5", name: "Claude Haiku 4.5", reasoning: false };
 const GEMINI: ModelInfo = { provider: "google", id: "gemini-3-pro", name: "Gemini 3 Pro", reasoning: false };
-const GPT: ModelInfo = { provider: "openai", id: "gpt-5.2", name: "GPT-5.2", reasoning: false };
 
 const PROVIDERS: LoginProvider[] = [
 	{ id: "anthropic", name: "Anthropic", available: true, authenticated: true },
 	{ id: "google", name: "Google", available: true, authenticated: false },
 ];
-/** Credential state from get_providers; OpenAI is an API-key provider with no login flow. */
-function providerInfo(overrides: Partial<Record<string, Partial<ProviderInfo>>> = {}): ProviderInfo[] {
-	const base: ProviderInfo[] = [
-		{
-			id: "anthropic",
-			name: "Anthropic",
-			authenticated: true,
-			authKind: "oauth",
-			loginAvailable: true,
-			disabled: false,
-			modelCount: 2,
-		},
-		{ id: "google", name: "Google", authenticated: false, loginAvailable: true, disabled: false, modelCount: 1 },
-		{
-			id: "openai",
-			name: "OpenAI",
-			authenticated: true,
-			authKind: "apikey",
-			loginAvailable: false,
-			disabled: false,
-			modelCount: 1,
-		},
-	];
-	return base.map(provider => ({ ...provider, ...overrides[provider.id] }));
-}
-
 let container: TestElement;
 let root: Root;
 let rpc: Record<string, Mock>;
@@ -163,7 +135,6 @@ beforeEach(() => {
 	catalog = [SONNET, HAIKU, GEMINI];
 	rpc = {
 		getLoginProviders: vi.fn(async () => ok({ providers: PROVIDERS })),
-		getProviders: vi.fn(async () => ok({ providers: providerInfo() })),
 		getAvailableModels: vi.fn(async () => ok({ models: catalog, generation: 1 })),
 	};
 	(window as unknown as { omp: { rpc: Record<string, Mock> } }).omp = { rpc };
@@ -179,80 +150,43 @@ afterEach(async () => {
 });
 
 describe("filters and count", () => {
-	it("renders All, Connected, and Reasoning tags with the model count and the unchanged search field", async () => {
+	it("renders All and Reasoning tags with the model count and the unchanged search field", async () => {
 		await mount();
 
-		expect(filterTags().map(candidate => candidate.textContent?.trim())).toEqual(["All", "Connected", "Reasoning"]);
-		expect(filterTags().some(candidate => candidate.textContent?.includes("Fast"))).toBe(false);
+		expect(filterTags().map(candidate => candidate.textContent?.trim())).toEqual(["All", "Reasoning"]);
+		expect(filterTags().some(candidate => /Fast|Connected/.test(candidate.textContent ?? ""))).toBe(false);
 		expect(tag("All").getAttribute("aria-pressed")).toBe("true");
-		expect(tag("Connected").getAttribute("aria-pressed")).toBe("false");
+		expect(tag("Reasoning").getAttribute("aria-pressed")).toBe("false");
 		expect(body().textContent).toContain("3 models");
 
 		const input = body().querySelector('input[aria-label="Search models"]');
 		expect(input?.getAttribute("placeholder")).toBe("Search models…");
 	});
 
-	it("hides models of unauthenticated providers under Connected and recounts", async () => {
-		await mount();
-		expect(optionNames().some(name => name.includes("Gemini 3 Pro"))).toBe(true);
-
-		await click(tag("Connected"));
-
-		expect(tag("Connected").getAttribute("aria-pressed")).toBe("true");
-		expect(tag("All").getAttribute("aria-pressed")).toBe("false");
-		const names = optionNames();
-		expect(names.some(name => name.includes("Claude Sonnet 4.5"))).toBe(true);
-		expect(names.some(name => name.includes("Claude Haiku 4.5"))).toBe(true);
-		expect(names.some(name => name.includes("Gemini 3 Pro"))).toBe(false);
-		expect(body().textContent).toContain("2 models");
-	});
-
-	it("keeps models of API-key providers under Connected", async () => {
-		catalog = [SONNET, HAIKU, GEMINI, GPT];
-		await mount();
-		await click(tag("Connected"));
-		const names = optionNames();
-		expect(names.some(name => name.includes("GPT-5.2"))).toBe(true);
-		expect(names.some(name => name.includes("Gemini 3 Pro"))).toBe(false);
-		expect(body().textContent).toContain("3 models");
-	});
-
-	it("drops a disabled provider's models under Connected even when it has credentials", async () => {
-		catalog = [SONNET, HAIKU, GEMINI, GPT];
-		rpc.getProviders = vi.fn(async () => ok({ providers: providerInfo({ openai: { disabled: true } }) }));
-		await mount();
-		await click(tag("Connected"));
-		expect(optionNames().some(name => name.includes("GPT-5.2"))).toBe(false);
-		expect(body().textContent).toContain("2 models");
-	});
-
-	it("keeps only reasoning models under Reasoning", async () => {
+	it("keeps only reasoning models under Reasoning and recounts", async () => {
 		await mount();
 		await click(tag("Reasoning"));
+
+		expect(tag("Reasoning").getAttribute("aria-pressed")).toBe("true");
+		expect(tag("All").getAttribute("aria-pressed")).toBe("false");
 		const names = optionNames();
 		expect(names).toHaveLength(1);
 		expect(names[0]).toContain("Claude Sonnet 4.5");
+		expect(body().textContent).toContain("1 model");
+		expect(body().textContent).not.toContain("1 models");
 	});
 
-	it("offers no Reasoning tag when no model reports reasoning", async () => {
+	it("offers no filter tags when no model reports reasoning, and still shows the count", async () => {
 		catalog = [HAIKU, GEMINI];
 		await mount();
-		expect(filterTags().map(candidate => candidate.textContent?.trim())).toEqual(["All", "Connected"]);
-	});
-
-	it("shows the count instead of a search miss when Connected has no provider data to match", async () => {
-		rpc.getProviders = vi.fn(async () => fail("providers unavailable"));
-		await mount();
-		await click(tag("Connected"));
-		expect(optionNames()).toEqual([]);
-		expect(body().textContent).toContain("0 models");
-		expect(body().textContent).not.toContain("No models match");
+		expect(body().querySelector('[role="group"][aria-label="Filter models"]')).toBeNull();
+		expect(body().textContent).toContain("2 models");
 	});
 
 	it("starts from All every time the picker opens", async () => {
 		await mount();
-		await click(tag("Connected"));
-		expect(tag("Connected").getAttribute("aria-pressed")).toBe("true");
+		await click(tag("Reasoning"));
+		expect(tag("Reasoning").getAttribute("aria-pressed")).toBe("true");
 
 		await act(async () => useUiStore.setState({ modelPickerOpen: false }));
 		await act(async () => useUiStore.setState({ modelPickerOpen: true }));

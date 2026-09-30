@@ -3252,7 +3252,6 @@ export const zh: Record<string, string> = {
 	"palette.footer.run": "执行",
 	"palette.footer.count": "{count} 条命令",
 	"modelPicker.filter.all": "全部",
-	"modelPicker.filter.connected": "已连接",
 	"modelPicker.filter.reasoning": "推理",
 	"modelPicker.filter.aria": "筛选模型",
 	"modelPicker.count": "{count} 个模型",

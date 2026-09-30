@@ -14,7 +14,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { LoginProvider, ModelInfo, ProviderInfo } from "../../../shared/rpc-types";
+import type { LoginProvider, ModelInfo } from "../../../shared/rpc-types";
 import { applyModelInfo, hydrateSession } from "../../hooks/use-rpc-events";
 import { formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
@@ -29,28 +29,12 @@ import { Badge, Button, Modal, Spinner, Tag } from "../common";
 
 const FILTER_LABEL_KEYS: Record<ModelFilter, string> = {
 	all: "modelPicker.filter.all",
-	connected: "modelPicker.filter.connected",
 	reasoning: "modelPicker.filter.reasoning",
 };
 
 const TILE = "flex size-7 shrink-0 items-center justify-center rounded-[22%]";
 const TILE_CURRENT = `${TILE} bg-[linear-gradient(135deg,var(--omp-brand),var(--omp-btn-primary-bg))] text-(--omp-btn-primary-text)`;
 const TILE_OTHER = `${TILE} border border-(--omp-border-muted) bg-(--omp-bg-secondary) text-(--omp-muted)`; // surface-ok: model tile
-
-/** Providers with enabled credentials of any kind (OAuth, API key, or env), read
- * from `get_providers`; the login list alone misses providers without a login flow. */
-function connectedProviderIds(result: PromiseSettledResult<{ success: boolean; data?: unknown }>): Set<string> {
-	const ids = new Set<string>();
-	if (result.status !== "fulfilled" || !result.value.success) return ids;
-	const providers = (result.value.data as { providers?: unknown } | undefined)?.providers;
-	if (!Array.isArray(providers)) return ids;
-	for (const provider of providers) {
-		if (typeof provider !== "object" || provider === null) continue;
-		const { id, authenticated, disabled } = provider as Partial<ProviderInfo>;
-		if (typeof id === "string" && authenticated === true && disabled !== true) ids.add(id);
-	}
-	return ids;
-}
 
 export function ModelPicker() {
 	const tabRpc = useTabRpc();
@@ -71,7 +55,6 @@ export function ModelPicker() {
 	const [query, setQuery] = useState("");
 	const [filter, setFilter] = useState<ModelFilter>("all");
 	const [providers, setProviders] = useState<LoginProvider[]>([]);
-	const [connected, setConnected] = useState<ReadonlySet<string>>(() => new Set());
 	const [switching, setSwitching] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -97,14 +80,12 @@ export function ModelPicker() {
 				setLoading(false);
 				return;
 			}
-			const [providersResult, credentialsResult, modelsResult] = await Promise.allSettled([
+			const [providersResult, modelsResult] = await Promise.allSettled([
 				tabRpc.getLoginProviders(),
-				tabRpc.getProviders(),
 				refreshAvailableModels(forceRefresh),
 			]);
 			if (version !== requestVersion.current) return;
 			setLoading(false);
-			setConnected(connectedProviderIds(credentialsResult));
 			const providersOk = providersResult.status === "fulfilled" && providersResult.value.success;
 			if (providersOk) {
 				const data = providersResult.value.data as { providers?: LoginProvider[] } | undefined;
@@ -150,11 +131,7 @@ export function ModelPicker() {
 	}, [activeFilter, filter]);
 
 	const groups = useMemo(() => {
-		const filtered = filterModels(availableModels, {
-			query,
-			filter: activeFilter,
-			isConnected: provider => connected.has(provider),
-		});
+		const filtered = filterModels(availableModels, { query, filter: activeFilter });
 		const map = new Map<string, ModelInfo[]>();
 		for (const model of filtered) {
 			const list = map.get(model.provider) ?? [];
@@ -162,7 +139,7 @@ export function ModelPicker() {
 			map.set(model.provider, list);
 		}
 		return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-	}, [activeFilter, availableModels, connected, query]);
+	}, [activeFilter, availableModels, query]);
 
 	// Flat row order (group order → in-group order) for keyboard navigation.
 	const flatOptions = useMemo(
@@ -288,16 +265,21 @@ export function ModelPicker() {
 						<kbd className="omp-kbd shrink-0 font-medium text-(--omp-muted)">esc</kbd>
 					</div>
 					<div className="flex items-center gap-2">
-						<div aria-label={t("modelPicker.filter.aria")} className="flex flex-wrap gap-2" role="group">
-							{filters.map(value => (
-								<Tag key={value} onClick={() => setFilter(value)} selected={value === activeFilter}>
-									{t(FILTER_LABEL_KEYS[value])}
-								</Tag>
-							))}
-						</div>
+						{filters.length > 1 && (
+							<div aria-label={t("modelPicker.filter.aria")} className="flex flex-wrap gap-2" role="group">
+								{filters.map(value => (
+									<Tag key={value} onClick={() => setFilter(value)} selected={value === activeFilter}>
+										{t(FILTER_LABEL_KEYS[value])}
+									</Tag>
+								))}
+							</div>
+						)}
 						{!loading && !error && (
 							<span className="ml-auto shrink-0 font-mono text-omp-sm text-(--omp-muted)">
-								{t("modelPicker.count", { count: flatOptions.length })}
+								{t("modelPicker.count", {
+									count: flatOptions.length,
+									plural: flatOptions.length === 1 ? "" : "s",
+								})}
 							</span>
 						)}
 					</div>
@@ -333,7 +315,7 @@ export function ModelPicker() {
 						<div className="py-10 text-center text-xs text-(--omp-dim)">
 							{query.trim().length > 0
 								? t("modelPicker.noMatch", { query })
-								: t("modelPicker.count", { count: 0 })}
+								: t("modelPicker.count", { count: 0, plural: "s" })}
 						</div>
 					) : (
 						groups.map(([provider, models]) => {

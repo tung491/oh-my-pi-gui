@@ -27,17 +27,14 @@ const GEMINI: ModelInfo = {
 const LOCAL: ModelInfo = { provider: "ollama", id: "qwen3:8b" };
 const MODELS = [SONNET, HAIKU, GEMINI, LOCAL];
 
-const everyone = () => true;
-
 describe("filterModels", () => {
 	it("keeps every model, in order, for an empty or blank query with the all filter", () => {
-		expect(filterModels(MODELS, { query: "", filter: "all", isConnected: everyone })).toEqual(MODELS);
-		expect(filterModels(MODELS, { query: "   ", filter: "all", isConnected: everyone })).toEqual(MODELS);
+		expect(filterModels(MODELS, { query: "", filter: "all" })).toEqual(MODELS);
+		expect(filterModels(MODELS, { query: "   ", filter: "all" })).toEqual(MODELS);
 	});
 
 	it("matches the query case-insensitively against id, provider, name, and description", () => {
-		const search = (query: string) =>
-			filterModels(MODELS, { query, filter: "all", isConnected: everyone }).map(model => model.id);
+		const search = (query: string) => filterModels(MODELS, { query, filter: "all" }).map(model => model.id);
 		expect(search("QWEN3")).toEqual(["qwen3:8b"]);
 		expect(search("Google")).toEqual(["gemini-3-flash"]);
 		expect(search("haiku 4.5")).toEqual(["claude-haiku-4-5"]);
@@ -46,43 +43,26 @@ describe("filterModels", () => {
 		expect(search("no-such-model")).toEqual([]);
 	});
 
-	it("keeps only models whose provider is connected under the connected filter", () => {
-		const connected = new Set(["anthropic"]);
-		const result = filterModels(MODELS, {
-			query: "",
-			filter: "connected",
-			isConnected: provider => connected.has(provider),
-		});
-		expect(result).toEqual([SONNET, HAIKU]);
-	});
-
 	it("keeps only models that report reasoning === true under the reasoning filter", () => {
-		expect(filterModels(MODELS, { query: "", filter: "reasoning", isConnected: everyone })).toEqual([SONNET]);
+		expect(filterModels(MODELS, { query: "", filter: "reasoning" })).toEqual([SONNET]);
 	});
 
 	it("applies the query and the filter together", () => {
-		const result = filterModels(MODELS, {
-			query: "claude",
-			filter: "connected",
-			isConnected: provider => provider === "anthropic",
-		});
-		expect(result).toEqual([SONNET, HAIKU]);
-		expect(
-			filterModels(MODELS, { query: "haiku", filter: "reasoning", isConnected: everyone }).map(model => model.id),
-		).toEqual([]);
+		expect(filterModels(MODELS, { query: "claude", filter: "reasoning" })).toEqual([SONNET]);
+		expect(filterModels(MODELS, { query: "haiku", filter: "reasoning" }).map(model => model.id)).toEqual([]);
 	});
 });
 
 describe("availableFilters", () => {
 	it("offers reasoning when at least one model reasons", () => {
-		expect(availableFilters(MODELS)).toEqual(["all", "connected", "reasoning"]);
+		expect(availableFilters(MODELS)).toEqual(["all", "reasoning"]);
 	});
 
-	it("omits reasoning when no model reports it, and never offers a fast filter", () => {
+	it("omits reasoning when no model reports it, and never offers a fast or connected filter", () => {
 		const filters = availableFilters([HAIKU, GEMINI, LOCAL]);
-		expect(filters).toEqual(["all", "connected"]);
-		expect(filters).not.toContain("fast");
+		expect(filters).toEqual(["all"]);
 		expect(availableFilters(MODELS)).not.toContain("fast");
-		expect(availableFilters([])).toEqual(["all", "connected"]);
+		expect(availableFilters(MODELS)).not.toContain("connected");
+		expect(availableFilters([])).toEqual(["all"]);
 	});
 });
