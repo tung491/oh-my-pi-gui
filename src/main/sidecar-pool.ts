@@ -330,18 +330,38 @@ export class SidecarPool {
 			return;
 		}
 		if (entry.sidecar.status !== "asleep") return;
-		const snapshot = entry.hibernated;
-		if (snapshot) {
-			entry.hibernated = null;
-			entry.lastActivityAt = Date.now();
-			// A session deleted while the tab slept cleared sessionFile: wake
-			// fresh rather than auto-resume a session another tab may own.
-			entry.sidecar.wake(entry.sessionFile ?? null, restoreModesGate(snapshot));
+		if (entry.hibernated) {
+			this.#wake(entry, entry.hibernated);
 			return;
 		}
 		const sessionPath = entry.sessionFile;
 		if (sessionPath) entry.sidecar.restart(undefined, sessionPath);
 		else entry.sidecar.start();
+	}
+
+	#wake(entry: PoolEntry, snapshot: HibernationSnapshot): void {
+		entry.hibernated = null;
+		entry.lastActivityAt = Date.now();
+		// A session deleted while the tab slept cleared sessionFile: wake
+		// fresh rather than auto-resume a session another tab may own.
+		entry.sidecar.wake(entry.sessionFile ?? null, restoreModesGate(snapshot));
+	}
+
+	/**
+	 * A user's restart of `sidecar`'s tab. A tab that is still hibernated (its
+	 * wake queued behind the old process's exit, say) wakes instead, so it keeps
+	 * its session and the modes it slept with. A restart onto another session
+	 * drops them, as it does for an awake tab.
+	 */
+	restart(sidecar: SidecarManager, sessionPath?: string): void {
+		for (const entry of this.#entries) {
+			if (entry.sidecar !== sidecar || !entry.hibernated) continue;
+			if (sessionPath === undefined || sessionPath === entry.sessionFile) {
+				this.#wake(entry, entry.hibernated);
+				return;
+			}
+		}
+		sidecar.restart(undefined, sessionPath);
 	}
 
 	/** Per-tab light wiring, attached for the entry's whole life: TAB_STATUS pushes. */

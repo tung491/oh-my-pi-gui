@@ -907,7 +907,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		if (!sidecar) throw new Error("Unknown tab");
 		const sessionPath =
 			typeof payload?.sessionPath === "string" && payload.sessionPath ? payload.sessionPath : undefined;
-		sidecar.restart(undefined, sessionPath);
+		sidecarPool.restart(sidecar, sessionPath);
 	});
 
 	ipcMain.handle(IPC_COMMANDS.SIDECAR_SELECT_PROJECT, async event => {

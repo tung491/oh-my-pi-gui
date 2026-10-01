@@ -630,6 +630,38 @@ describe("tab hibernation: waking", () => {
 		pool.disposeAll();
 	});
 
+	it("wakes a tab restarted while its wake waits for the old process, keeping its modes", async () => {
+		const { pool, window, back, backFile } = harness();
+		back.replies.get_state = { planModeEnabled: true };
+		back.drain = Promise.withResolvers<void>();
+		await idlePast();
+		pool.setActiveTab(window.win, "back");
+		expect(back.wakes).toEqual([]);
+		const restarts = back.restarts.length;
+		pool.restart(back as unknown as SidecarManager);
+		expect(back.restarts).toHaveLength(restarts);
+		expect(back.wakes.map(wake => wake.sessionPath)).toEqual([backFile]);
+		await back.becomeReady();
+		expect(back.commandTypes()).toContain("set_plan_mode");
+		// The wake queued behind the drain finds the tab already up.
+		back.drain.resolve();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(back.wakes).toHaveLength(1);
+		pool.disposeAll();
+	});
+
+	it("restarts a sleeping tab onto another session without the modes it slept with", async () => {
+		const { pool, back } = harness();
+		back.replies.get_state = { planModeEnabled: true };
+		await idlePast();
+		const other = savedSession("other");
+		const restarts = back.restarts.length;
+		pool.restart(back as unknown as SidecarManager, other);
+		expect(back.wakes).toEqual([]);
+		expect(back.restarts.slice(restarts)).toEqual([other]);
+		pool.disposeAll();
+	});
+
 	it("launches fresh when the session was deleted while the tab slept", async () => {
 		const { pool, window, back } = harness();
 		await idlePast();
