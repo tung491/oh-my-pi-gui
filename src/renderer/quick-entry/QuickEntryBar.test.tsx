@@ -236,6 +236,17 @@ describe("QuickEntryBar", () => {
 		expect(bar.submit).toHaveBeenCalledWith({ text: "run the tests", target: { kind: "work" } });
 	});
 
+	it("keeps the target of a draft kept across summons", async () => {
+		await mount();
+		await act(async () => {
+			button(en["quickEntry.target.agent"]).dispatchEvent(new Event("click", { bubbles: true }));
+		});
+		await type("half written");
+		await bar.push(baseState({ showId: 2 }));
+		await keyDown(textarea(), "Enter");
+		expect(bar.submit).toHaveBeenCalledWith({ text: "half written", target: { kind: "work" } });
+	});
+
 	it("fills an empty draft with a restored message and consumes it once", async () => {
 		const restored = {
 			id: "r1",

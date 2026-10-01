@@ -91,7 +91,8 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 		if (newShow) {
 			seenShowId.current = state.showId;
 			applyScheme();
-			setTarget(state.target);
+			// A kept draft keeps the target it was written for.
+			if (draftRef.current.trim() === "") setTarget(state.target);
 			setError(null);
 			setFocusTick(tick => tick + 1);
 		}
