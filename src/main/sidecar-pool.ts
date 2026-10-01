@@ -763,8 +763,8 @@ export class SidecarPool {
 		const owner = this.#sessionOwners.get(sessionPath);
 		const entry = owner ? this.#byTabId.get(owner.tabId) : undefined;
 		if (!entry) return false;
-		// A hibernating process may still write the file during its teardown.
-		if (entry.draining) return true;
+		// A stopped process may still write the file during its teardown.
+		if (entry.draining || entry.sidecar.draining) return true;
 		return entry.status !== "asleep" && entry.status !== "exited" && entry.status !== "error";
 	}
 

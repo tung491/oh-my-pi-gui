@@ -260,6 +260,10 @@ export class SidecarManager extends EventEmitter {
 	#freshLaunchPending: boolean;
 	/** Set by wake(); runs on the first `ready` of whichever spawn gets there, then clears. */
 	#readyGate: ReadyGate | null = null;
+	/** The session a wake was resuming when its gate refused; a plain restart() continues it. */
+	#refusedWakeSessionPath: string | null = null;
+	/** A child still running its own teardown; the next spawn waits for it to exit. */
+	#draining: Promise<void> | null = null;
 	#disposed = false;
 
 	constructor(options: SidecarOptions) {
@@ -280,6 +284,11 @@ export class SidecarManager extends EventEmitter {
 		return this.#rpcClient;
 	}
 
+	/** True while a stopped child is still running its own teardown. */
+	get draining(): boolean {
+		return this.#draining !== null;
+	}
+
 	start(): void {
 		if (this.#disposed) return;
 		// Closed loop: only the bundled binary (or an explicit source override)
@@ -291,7 +300,10 @@ export class SidecarManager extends EventEmitter {
 		this.#setStatus("starting");
 		const resolveProxyEnv = this.#options.proxyEnv;
 		const resolveShellEnv = this.#options.shellEnv;
-		if (!resolveProxyEnv && !resolveShellEnv) {
+		// A hibernated child may still be writing its session file; a second
+		// process on the same file must not start until it has exited.
+		const draining = this.#draining;
+		if (!resolveProxyEnv && !resolveShellEnv && !draining) {
 			this.#spawn();
 			return;
 		}
@@ -304,6 +316,7 @@ export class SidecarManager extends EventEmitter {
 		void Promise.all([
 			resolveProxyEnv ? resolveProxyEnv().catch(fallback) : Promise.resolve({}),
 			resolveShellEnv ? resolveShellEnv().catch(fallback) : Promise.resolve({}),
+			draining,
 		]).then(([proxyEnv, shellEnv]) => {
 			if (this.#disposed || seq !== this.#startSeq) return;
 			this.#proxyEnvVars = proxyEnv;
@@ -521,11 +534,16 @@ export class SidecarManager extends EventEmitter {
 	}
 
 	#handleReady(ready: RpcReadyFrame): void {
-		this.#resumeSessionPath = null;
 		// Freshness is a creation contract, not a restart policy. Once the new
 		// tab has booted successfully, later crash/manual restarts may auto-resume
-		// the session it has since created or opened.
-		this.#freshLaunchPending = false;
+		// the session it has since created or opened. A woken tab has booted only
+		// once its gate passes: a child that dies mid-gate respawns onto the same
+		// session.
+		const booted = (): void => {
+			this.#resumeSessionPath = null;
+			this.#freshLaunchPending = false;
+		};
+		if (!this.#readyGate) booted();
 		// Negotiation settles after this frame — and when the sidecar dies on boot,
 		// `#cleanup()` rejects the pending command on a generation that is already
 		// gone. Unguarded, that rejection announced "ready" and zeroed the restart
@@ -547,8 +565,19 @@ export class SidecarManager extends EventEmitter {
 				this.#readyGate = null;
 				this.#restartCount = 0;
 				const extra = { modesNotRestored: outcome.modesNotRestored };
-				if (outcome.error) this.#setStatus("error", outcome.error, extra);
-				else this.#setStatus("ready", undefined, extra);
+				if (!outcome.error) {
+					booted();
+					this.#setStatus("ready", undefined, extra);
+					return;
+				}
+				// A refused wake must not leave an agent running without the modes
+				// it slept with. Stop it the way hibernation does, and keep its
+				// session so a plain restart() continues it without them.
+				this.#refusedWakeSessionPath = this.#resumeSessionPath;
+				const child = this.#child;
+				this.#cleanup();
+				this.#setStatus("error", outcome.error, extra);
+				if (child) void this.#drain(child, HIBERNATE_DRAIN_MS, HIBERNATE_TERM_MS);
 			};
 			void gate(client).then(settle, (err: unknown) =>
 				settle({ error: err instanceof Error ? err.message : String(err) }),
@@ -655,9 +684,12 @@ export class SidecarManager extends EventEmitter {
 	}
 
 	restart(cwd?: string, resumeSessionPath?: string): void {
+		// A tab whose wake was refused keeps its session unless it is re-rooted.
+		const refused = cwd ? null : this.#refusedWakeSessionPath;
+		this.#refusedWakeSessionPath = null;
 		this.kill();
 		if (cwd) this.#options = { ...this.#options, cwd };
-		this.#resumeSessionPath = resumeSessionPath ?? null;
+		this.#resumeSessionPath = resumeSessionPath ?? refused;
 		this.#restartCount = 0;
 		this.start();
 	}
@@ -692,16 +724,33 @@ export class SidecarManager extends EventEmitter {
 		const child = this.#child;
 		this.#cleanup();
 		this.#setStatus("asleep", "Hibernated");
-		if (!child || child.exitCode !== null || child.signalCode !== null) return;
+		if (child) await this.#drain(child, drainMs, termMs);
+	}
+
+	/**
+	 * Close `child`'s stdin and wait for it to exit, escalating to SIGTERM and
+	 * then SIGKILL. Tracked so start() never spawns beside a child that is
+	 * still writing its session file.
+	 */
+	#drain(child: ChildProcess, drainMs: number, termMs: number): Promise<void> {
+		if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
 		const exited = new Promise<void>(resolve => child.once("exit", () => resolve()));
-		child.stdin?.end();
-		if (await settlesWithin(exited, drainMs)) return;
-		console.warn(`[sidecar] still running ${drainMs}ms after stdin closed; sending SIGTERM`);
-		child.kill("SIGTERM");
-		if (await settlesWithin(exited, termMs)) return;
-		console.warn(`[sidecar] still running ${termMs}ms after SIGTERM; sending SIGKILL`);
-		child.kill("SIGKILL");
-		await settlesWithin(exited, termMs);
+		const stopped = (async () => {
+			child.stdin?.end();
+			if (await settlesWithin(exited, drainMs)) return;
+			console.warn(`[sidecar] still running ${drainMs}ms after stdin closed; sending SIGTERM`);
+			child.kill("SIGTERM");
+			if (await settlesWithin(exited, termMs)) return;
+			console.warn(`[sidecar] still running ${termMs}ms after SIGTERM; sending SIGKILL`);
+			child.kill("SIGKILL");
+			await settlesWithin(exited, termMs);
+		})();
+		const previous = this.#draining;
+		const tracked: Promise<void> = Promise.all([previous, stopped]).then(() => {
+			if (this.#draining === tracked) this.#draining = null;
+		});
+		this.#draining = tracked;
+		return tracked;
 	}
 
 	/**
@@ -710,6 +759,7 @@ export class SidecarManager extends EventEmitter {
 	 * session another tab may own. `gate` runs before `ready` is announced.
 	 */
 	wake(sessionPath: string | null, gate: ReadyGate | null = null): void {
+		this.#refusedWakeSessionPath = null;
 		this.#readyGate = gate;
 		this.#resumeSessionPath = sessionPath;
 		if (!sessionPath) this.#freshLaunchPending = true;

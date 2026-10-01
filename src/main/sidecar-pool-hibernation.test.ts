@@ -36,6 +36,15 @@ class HibernationFake extends EventEmitter {
 	wakes: Array<{ sessionPath: string | null; gate: ReadyGate | null }> = [];
 	restarts: Array<string | undefined> = [];
 	starts = 0;
+	/** A child the manager stopped is still running its own teardown. */
+	draining = false;
+
+	/** As SidecarManager does: every extension UI request is also a frame. */
+	emitExtensionUi(request: Record<string, unknown>): void {
+		const frame = { type: "extension_ui_request", ...request };
+		this.emit("extensionUi", frame);
+		this.emit("frame", frame);
+	}
 	readonly rpcClient: {
 		command: (command: RpcCommand, timeoutMs?: number) => Promise<RpcResponse>;
 		pendingCount: number;
@@ -385,13 +394,7 @@ describe("tab hibernation: cheap checks keep a tab awake", () => {
 
 	it("while a blocking extension request is unanswered, until it is answered", async () => {
 		const { pool, back } = harness();
-		back.emit("extensionUi", {
-			type: "extension_ui_request",
-			id: "ask-1",
-			method: "confirm",
-			title: "t",
-			message: "m",
-		});
+		back.emitExtensionUi({ id: "ask-1", method: "confirm", title: "t", message: "m" });
 		await idlePast(IDLE_MS * 2);
 		expect(back.hibernations).toBe(0);
 		// Answered through the side channel, whichever sidecar the fallback picks.
@@ -403,24 +406,33 @@ describe("tab hibernation: cheap checks keep a tab awake", () => {
 
 	it("while a blocking extension request is unanswered, until the sidecar cancels it", async () => {
 		const { pool, back } = harness();
-		back.emit("extensionUi", {
-			type: "extension_ui_request",
-			id: "ask-2",
-			method: "select",
-			title: "t",
-			options: [],
-		});
+		back.emitExtensionUi({ id: "ask-2", method: "select", title: "t", options: [] });
 		await idlePast(IDLE_MS * 2);
 		expect(back.hibernations).toBe(0);
-		back.emit("extensionUi", { type: "extension_ui_request", id: "c-1", method: "cancel", targetId: "ask-2" });
+		back.emitExtensionUi({ id: "c-1", method: "cancel", targetId: "ask-2" });
 		await idlePast();
 		expect(back.hibernations).toBe(1);
 		pool.disposeAll();
 	});
 
-	it("ignores fire-and-forget extension updates", async () => {
+	it("does not wait on a fire-and-forget extension update", async () => {
 		const { pool, back } = harness();
-		back.emit("extensionUi", { type: "extension_ui_request", id: "w-1", method: "setStatus", key: "k", text: "t" });
+		back.emitExtensionUi({ id: "w-1", method: "setStatus", key: "k", text: "t" });
+		await idlePast();
+		expect(back.hibernations).toBe(1);
+		pool.disposeAll();
+	});
+
+	it("stays awake while an extension keeps updating its widgets", async () => {
+		// Every frame counts as activity, so a periodic status update keeps the
+		// tab awake: the safe direction, since main cannot tell a clock from
+		// progress on real work.
+		const { pool, back } = harness();
+		for (let elapsed = 0; elapsed < IDLE_MS * 3; elapsed += IDLE_MS / 2) {
+			back.emitExtensionUi({ id: `w-${elapsed}`, method: "setStatus", key: "k", text: String(elapsed) });
+			await vi.advanceTimersByTimeAsync(IDLE_MS / 2);
+		}
+		expect(back.hibernations).toBe(0);
 		await idlePast();
 		expect(back.hibernations).toBe(1);
 		pool.disposeAll();
@@ -589,6 +601,19 @@ describe("tab hibernation: waking", () => {
 		back.drain.resolve();
 		await vi.advanceTimersByTimeAsync(0);
 		expect(back.wakes).toHaveLength(1);
+		pool.disposeAll();
+	});
+
+	it("keeps a refused wake's session owned while the stopped child drains", async () => {
+		const { pool, window, back } = harness();
+		await idlePast();
+		pool.setActiveTab(window.win, "back");
+		// The gate refused: the manager reports error and stops the child.
+		back.draining = true;
+		back.emitStatus("error", "Plan mode could not be restored", ["plan"]);
+		expect(pool.sessionOwnerIsLive(back.sessionFile as string)).toBe(true);
+		back.draining = false;
+		expect(pool.sessionOwnerIsLive(back.sessionFile as string)).toBe(false);
 		pool.disposeAll();
 	});
 

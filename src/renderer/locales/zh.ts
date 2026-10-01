@@ -3107,7 +3107,7 @@ export const zh: Record<string, string> = {
 	"events.sidecarNoResponse": "Sidecar 已就绪，但未响应命令",
 	"events.sidecarProcessFailed": "Sidecar 进程失败",
 	"events.hibernation.planNotRestored":
-		"此标签页已从休眠中恢复，但无法重新开启计划模式，因此 agent 已暂停。重启后将在不开启计划模式的情况下继续。",
+		"此标签页已从休眠中恢复，但无法重新开启计划模式，因此 agent 已停止。重启后将继续此会话，但不开启计划模式。",
 	"events.hibernation.modesNotRestored": "此标签页已从休眠中恢复，但无法重新开启{modes}。",
 	"events.hibernation.mode.loop": "循环模式",
 	"events.hibernation.mode.plan": "计划模式",

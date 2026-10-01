@@ -5,7 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import Store from "electron-store";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandOutputFrame, PromptResultFrame, SidecarStatus, SidecarStatusPayload } from "../shared/rpc-types";
-import { missingSidecarMessage, type SidecarFailureReport, SidecarManager } from "./sidecar";
+import { missingSidecarMessage, type ReadyGate, type SidecarFailureReport, SidecarManager } from "./sidecar";
 
 async function waitForReady(sidecar: SidecarManager): Promise<void> {
 	const ready = Promise.withResolvers<void>();
@@ -610,23 +610,91 @@ process.stdin.on("end", () => {
 			}
 		});
 
-		it("goes to error instead of ready when the gate refuses", async () => {
+		const refusePlanMode: ReadyGate = async client => {
+			const response = await client.command({ type: "set_plan_mode", enabled: true });
+			return response.success ? {} : { error: "Plan mode could not be restored", modesNotRestored: ["plan"] };
+		};
+
+		it("stops the child and goes to error instead of ready when the gate refuses", async () => {
 			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-refused-"));
-			const { binaryPath } = await fakeSidecar(tempDir, { fail: ["set_plan_mode"] });
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { fail: ["set_plan_mode"] });
 			const statuses: SidecarStatusPayload[] = [];
 			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
 			sidecar.on("status", payload => statuses.push(payload));
 			try {
-				sidecar.wake(path.join(tempDir, "session.jsonl"), async client => {
-					const response = await client.command({ type: "set_plan_mode", enabled: true });
-					return response.success ? {} : { error: "Plan mode could not be restored" };
-				});
+				sidecar.wake(path.join(tempDir, "session.jsonl"), refusePlanMode);
 				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
 				expect(statuses[statuses.length - 1]).toMatchObject({
 					status: "error",
 					message: "Plan mode could not be restored",
+					modesNotRestored: ["plan"],
 				});
 				expect(statuses.some(payload => payload.status === "ready")).toBe(false);
+				expect(sidecar.rpcClient).toBeNull();
+				// Stopped the way hibernation stops it: stdin EOF, no signal.
+				await expect.poll(() => sidecar.draining, { timeout: 5_000, interval: 25 }).toBe(false);
+				const lines = await logLines(logPath);
+				expect(lines).toContain("eof");
+				expect(lines).not.toContain("term");
+				expect(isAlive(spawnedPids(lines)[0])).toBe(false);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("continues a refused wake's session on a plain restart, but not when re-rooted", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-restart-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { fail: ["set_plan_mode"] });
+			const sessionPath = path.join(tempDir, "session.jsonl");
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			try {
+				sidecar.wake(sessionPath, refusePlanMode);
+				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
+				let ready = waitForReady(sidecar);
+				sidecar.restart();
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
+
+				await sidecar.hibernate();
+				sidecar.wake(sessionPath, refusePlanMode);
+				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
+				const otherProject = path.join(tempDir, "other");
+				await fs.mkdir(otherProject);
+				ready = waitForReady(sidecar);
+				sidecar.restart(otherProject);
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui"]);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		}, 15_000);
+
+		it("waits for a hibernating child to exit before a restart spawns the next one", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-drain-restart-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { exitOnEof: false });
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			try {
+				let ready = waitForReady(sidecar);
+				sidecar.start();
+				await ready;
+
+				const stopped = sidecar.hibernate({ drainMs: 300, termMs: 300 });
+				expect(sidecar.draining).toBe(true);
+				ready = waitForReady(sidecar);
+				sidecar.restart();
+				await ready;
+				await stopped;
+
+				const lines = await logLines(logPath);
+				const spawns = lines.flatMap((line, index) => (line.startsWith("spawn ") ? [index] : []));
+				expect(spawns).toHaveLength(2);
+				// Only after the old child acknowledged SIGTERM did the new one start.
+				expect(lines.indexOf("term")).toBeGreaterThan(-1);
+				expect(spawns[1]).toBeGreaterThan(lines.indexOf("term"));
+				expect(isAlive(spawnedPids(lines)[0])).toBe(false);
+				expect(sidecar.draining).toBe(false);
 			} finally {
 				sidecar.dispose();
 				await fs.rm(tempDir, { recursive: true, force: true });
@@ -636,19 +704,27 @@ process.stdin.on("end", () => {
 		it("re-runs the gate on the respawn when the child dies mid-gate", async () => {
 			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-crash-"));
 			const { binaryPath, logPath } = await fakeSidecar(tempDir, { crashOnceOn: "set_plan_mode" });
+			const sessionPath = path.join(tempDir, "session.jsonl");
 			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
 			let gateRuns = 0;
 			try {
 				const ready = waitForReady(sidecar);
-				sidecar.wake(path.join(tempDir, "session.jsonl"), async client => {
+				sidecar.wake(sessionPath, async client => {
 					gateRuns++;
 					const response = await client.command({ type: "set_plan_mode", enabled: true });
 					return response.success ? {} : { error: "Plan mode could not be restored" };
 				});
 				await ready;
 				expect(gateRuns).toBe(2);
-				const commands = (await logLines(logPath)).filter(line => line === "cmd set_plan_mode");
-				expect(commands).toHaveLength(2);
+				const lines = await logLines(logPath);
+				expect(lines.filter(line => line === "cmd set_plan_mode")).toHaveLength(2);
+				// The respawn resumes the session the wake was for, not whatever
+				// auto-resume would pick.
+				const argvs = lines.filter(line => line.startsWith("spawn ")).map(line => line.slice(line.indexOf("[")));
+				expect(argvs.map(argv => JSON.parse(argv))).toEqual([
+					["--mode", "rpc-ui", "--session", sessionPath],
+					["--mode", "rpc-ui", "--session", sessionPath],
+				]);
 			} finally {
 				sidecar.dispose();
 				await fs.rm(tempDir, { recursive: true, force: true });

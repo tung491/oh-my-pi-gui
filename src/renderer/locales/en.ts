@@ -3157,7 +3157,7 @@ export const en: Record<string, string> = {
 	"events.sidecarNoResponse": "Sidecar ready but not responding to commands",
 	"events.sidecarProcessFailed": "Sidecar process failed",
 	"events.hibernation.planNotRestored":
-		"This tab woke from hibernation, but plan mode could not be turned back on, so the agent is paused. Restart it to continue without plan mode.",
+		"This tab woke from hibernation, but plan mode could not be turned back on, so the agent was stopped. Restart it to continue this session without plan mode.",
 	"events.hibernation.modesNotRestored": "This tab woke from hibernation, but {modes} could not be turned back on.",
 	"events.hibernation.mode.loop": "loop mode",
 	"events.hibernation.mode.plan": "plan mode",
