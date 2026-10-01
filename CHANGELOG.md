@@ -4,11 +4,16 @@
 
 ### Added
 
+- **Quick entry**: press `Control+Shift+Space` in any app to open a small bar, type a request, and send it as a new Chat or Agent tab in the main window. Unsent text stays in the bar. Rebind the chord or turn it off in Keyboard Shortcuts; `sai-atlas --quick-entry` opens the bar from a terminal or a desktop shortcut.
 - **Linux x64 packages**: an AppImage and a `.deb` for Ubuntu 24.04+, with the bundled sidecar, `omp://` links, the tray and window icon, and `latest-linux.yml` update metadata.
 - **Linux CI**: type checks, unit tests and the GUI build run on Ubuntu for every push and pull request.
 
 ### Changed
 
+- **Electron 44**: the app runs on Electron 44.4.5 (Chromium 152, Node 24).
+- **Native Wayland**: on Linux the app runs natively on Wayland, and global shortcuts go through the desktop's GlobalShortcuts portal (GNOME asks once to allow them). Start it with `--ozone-platform=x11` to use XWayland. The desktop entry is `vn.io.vif.saiatlas.desktop`.
+- **macOS 13 or later**: Electron 44 needs macOS 13, and the updater does not offer this release to macOS 12.
+- **File dialogs**: save and open dialogs start in the folder last used in that window.
 - **Sai ATLAS**: the GUI is now Sai ATLAS, the AI assistant for SAI OS; the bundled agent is still omp, and settings and sessions carry over. Installers are named `Sai-ATLAS-…`, and the Linux package and launcher are `sai-atlas`. The app id is now `vn.io.vif.saiatlas`, so macOS asks for microphone and notification access again, while the Windows installer upgrades an existing omp install in place (pin Sai ATLAS to the taskbar again if you had pinned omp). On macOS, quit omp before installing, then move `omp.app` to the Trash. Source-built Linux installs remove the old `omp` package first.
 - **Icon generation**: `bun run gen:icons` no longer writes `resources/icon.icns`; the mac bundles take `resources/icon.png`, which electron-builder converts on any build host. The tray mark is generated from the Sai ATLAS artwork into `src/main/tray-mark.ts`.
 - **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged. On Windows, `Ctrl+T` now opens a tab and `Ctrl+W` closes one; thinking has no default key there and can be bound in Hotkeys.
@@ -16,6 +21,7 @@
 
 ### Fixed
 
+- **Clipboard host tool**: a clipboard read that fails is reported to the agent instead of leaving its call unanswered.
 - **Launch arguments on a cold start**: a workspace path or `omp://` link passed to a packaged Linux or Windows build is honored when the app was not running.
 - **Deb updates**: a deb install runs only when you choose Restart & install, and a cancelled or failed install shows in the update banner.
 - **AppImage updates**: Restart & install asks about working tabs before replacing the file, then starts the new version once the old one has quit.
