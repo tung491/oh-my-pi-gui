@@ -731,22 +731,53 @@ process.stdin.on("end", () => {
 			}
 		}, 10_000);
 
-		it("drops a pending gate on an explicit restart", async () => {
-			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-dropped-"));
+		it("keeps a pending wake's session and gate on a plain restart", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-kept-"));
 			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const sessionPath = path.join(tempDir, "session.jsonl");
 			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
 			const gate = vi.fn(async () => ({}));
 			try {
-				sidecar.wake(path.join(tempDir, "session.jsonl"), gate);
+				sidecar.wake(sessionPath, gate);
 				const ready = waitForReady(sidecar);
+				// Restarted before the wake reached `ready`, as the banner or palette does.
 				sidecar.restart();
 				await ready;
-				expect(gate).not.toHaveBeenCalled();
-				expect(await logLines(logPath)).not.toContain("cmd set_plan_mode");
+				expect(gate).toHaveBeenCalledTimes(1);
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
 			} finally {
 				sidecar.dispose();
 				await fs.rm(tempDir, { recursive: true, force: true });
 			}
 		});
+
+		it("drops a pending gate when a restart re-roots the tab or opens another session", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-dropped-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const sessionPath = path.join(tempDir, "session.jsonl");
+			const otherSession = path.join(tempDir, "other.jsonl");
+			const otherProject = path.join(tempDir, "other");
+			await fs.mkdir(otherProject);
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			const gate = vi.fn(async () => ({}));
+			try {
+				sidecar.wake(sessionPath, gate);
+				let ready = waitForReady(sidecar);
+				sidecar.restart(otherProject);
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui"]);
+
+				await sidecar.hibernate();
+				sidecar.wake(sessionPath, gate);
+				ready = waitForReady(sidecar);
+				sidecar.restart(undefined, otherSession);
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", otherSession]);
+				expect(gate).not.toHaveBeenCalled();
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		}, 10_000);
 	});
 });

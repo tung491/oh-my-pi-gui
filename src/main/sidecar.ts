@@ -684,12 +684,18 @@ export class SidecarManager extends EventEmitter {
 	}
 
 	restart(cwd?: string, resumeSessionPath?: string): void {
-		// A tab whose wake was refused keeps its session unless it is re-rooted.
-		const refused = cwd ? null : this.#refusedWakeSessionPath;
+		// A woken tab keeps its session across a restart that does not re-root
+		// it. A refused wake continues without the modes it slept with; a wake
+		// still restoring them (its child died, or the user restarted before
+		// `ready`) keeps its gate, so the respawn re-arms them before `ready`.
+		// Opening another session drops the gate: its modes were not that one's.
+		const woken = cwd ? null : (this.#refusedWakeSessionPath ?? (this.#readyGate ? this.#resumeSessionPath : null));
+		const gate = woken && (resumeSessionPath ?? woken) === woken ? this.#readyGate : null;
 		this.#refusedWakeSessionPath = null;
 		this.kill();
 		if (cwd) this.#options = { ...this.#options, cwd };
-		this.#resumeSessionPath = resumeSessionPath ?? refused;
+		this.#readyGate = gate;
+		this.#resumeSessionPath = resumeSessionPath ?? woken;
 		this.#restartCount = 0;
 		this.start();
 	}
@@ -699,7 +705,7 @@ export class SidecarManager extends EventEmitter {
 			clearTimeout(this.#restartTimer);
 			this.#restartTimer = null;
 		}
-		// An explicit stop or restart drops a wake's pending gate.
+		// A stop drops a wake's pending gate; restart() re-arms it when it continues the wake.
 		this.#readyGate = null;
 		const child = this.#child;
 		this.#cleanup();
