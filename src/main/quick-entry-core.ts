@@ -74,6 +74,8 @@ export function resolveInitialTarget(saved: unknown, offeredCwds: ReadonlySet<st
 export interface MenuChordInput {
 	type: string;
 	key: string;
+	/** The physical key (KeyC), which stays Latin on Cyrillic, Greek or Hebrew layouts. */
+	code: string;
 	meta: boolean;
 }
 
@@ -99,11 +101,15 @@ const MAC_BAR_CHORDS = new Set([
 /**
  * macOS dispatches application-menu key equivalents while the bar is key, and
  * the menu targets the main window: ⌘W from the bar would close it. The bar
- * swallows every other ⌘ chord. Windows and Linux bars have no menu.
+ * swallows every other ⌘ chord. Windows and Linux bars have no menu. A Latin
+ * layout is judged by its character, as the menu matches it (⇧⌘W on AZERTY's
+ * Z key closes the window); a non-Latin letter by its physical key, so ⌘C
+ * copies on a Russian layout (key "с", code KeyC).
  */
 export function isBlockedMenuChord(platform: NodeJS.Platform, input: MenuChordInput): boolean {
 	if (platform !== "darwin" || input.type !== "keyDown" || !input.meta) return false;
-	return !MAC_BAR_CHORDS.has(input.key.toLowerCase());
+	const name = /^[^\x00-\x7f]$/u.test(input.key) ? input.code.replace(/^Key/, "") : input.key;
+	return !MAC_BAR_CHORDS.has(name.toLowerCase());
 }
 
 /** One chat window's prompts: queued for it, then leased to its renderer until acknowledged. */

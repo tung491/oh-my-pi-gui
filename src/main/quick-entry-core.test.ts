@@ -143,7 +143,7 @@ describe("initial target", () => {
 });
 
 describe("macOS menu chord guard", () => {
-	const chord = (key: string, type = "keyDown") => ({ type, key, meta: true });
+	const chord = (key: string, type = "keyDown", code = "") => ({ type, key, code, meta: true });
 
 	it("swallows ⌘W and ⌘N on macOS", () => {
 		expect(isBlockedMenuChord("darwin", chord("w"))).toBe(true);
@@ -157,9 +157,22 @@ describe("macOS menu chord guard", () => {
 		}
 	});
 
+	it("lets editing chords through on non-Latin layouts by their physical key", () => {
+		expect(isBlockedMenuChord("darwin", chord("с", "keyDown", "KeyC"))).toBe(false);
+		expect(isBlockedMenuChord("darwin", chord("м", "keyDown", "KeyV"))).toBe(false);
+		expect(isBlockedMenuChord("darwin", chord("ц", "keyDown", "KeyW"))).toBe(true);
+	});
+
+	it("judges a Latin layout by the character the menu matches", () => {
+		// Dvorak: the C character sits on the I key; AZERTY: W sits on the Z key.
+		expect(isBlockedMenuChord("darwin", chord("c", "keyDown", "KeyI"))).toBe(false);
+		expect(isBlockedMenuChord("darwin", chord("W", "keyDown", "KeyZ"))).toBe(true);
+		expect(isBlockedMenuChord("darwin", chord("w", "keyDown", "KeyZ"))).toBe(true);
+	});
+
 	it("ignores key-up events and keys without ⌘", () => {
 		expect(isBlockedMenuChord("darwin", chord("w", "keyUp"))).toBe(false);
-		expect(isBlockedMenuChord("darwin", { type: "keyDown", key: "w", meta: false })).toBe(false);
+		expect(isBlockedMenuChord("darwin", { type: "keyDown", key: "w", code: "KeyW", meta: false })).toBe(false);
 	});
 
 	it("never blocks on Linux or Windows", () => {
