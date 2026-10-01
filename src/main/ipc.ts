@@ -50,6 +50,7 @@ import { requestQuit } from "./app-quit";
 import { BenchmarkRunner } from "./benchmark-runner";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { openInExternalEditor } from "./editor";
+import { answerHostToolCall, type HostToolAnswer } from "./host-tools";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
@@ -366,16 +367,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// so the pool routes it through this callback (set once at startup). The
 	// boolean tells the pool whether the tool was answered inline; only
 	// renderer-forwarded calls get request-id → origin tracking (F-UI-ORIGIN).
-	sidecarPool.hostToolExecutor = (sidecar, request, win) => {
-		const result = executeGuiHostTool(request.toolName, request.arguments);
-		if (result !== undefined) {
-			sidecar.sendSideChannel({ type: "host_tool_result", id: request.id, result });
-			return true;
-		}
-		// Unknown host tools → forward to the owning renderer.
-		if (!win.isDestroyed()) win.webContents.send(IPC_EVENTS.HOST_TOOL_CALL, { request });
-		return false;
-	};
+	sidecarPool.hostToolExecutor = (sidecar, request, win) =>
+		answerHostToolCall(sidecar, request, executeGuiHostTool, () => {
+			// Unknown host tools → forward to the owning renderer.
+			if (!win.isDestroyed()) win.webContents.send(IPC_EVENTS.HOST_TOOL_CALL, { request });
+		});
 
 	// Session index changes
 	sessionIndex.onChange = () => {
@@ -1206,7 +1202,7 @@ function broadcast(windowManager: WindowManager, channel: string, data: unknown)
 }
 
 /** Execute GUI-registered host tools. Returns undefined for unknown tools. */
-function executeGuiHostTool(name: string, args: Record<string, unknown>): string | undefined {
+function executeGuiHostTool(name: string, args: Record<string, unknown>): HostToolAnswer {
 	switch (name) {
 		case "gui_open_url": {
 			const url = typeof args.url === "string" ? args.url : "";
@@ -1223,7 +1219,8 @@ function executeGuiHostTool(name: string, args: Record<string, unknown>): string
 			return "Notification shown";
 		}
 		case "gui_clipboard_read": {
-			return clipboard.readText();
+			// Asynchronous from Electron 44; resolving also covers the older sync form.
+			return Promise.resolve(clipboard.readText());
 		}
 		default:
 			return undefined;

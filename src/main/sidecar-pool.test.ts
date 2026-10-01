@@ -3,6 +3,7 @@ import type { BrowserWindow } from "electron";
 import { describe, expect, it } from "vitest";
 import { IPC_EVENTS, type IpcTabStatusPayload } from "../shared/ipc-types";
 import type { RpcCommand, RpcResponse, SessionInfoUpdateFrame, SidecarStatus } from "../shared/rpc-types";
+import { answerHostToolCall } from "./host-tools";
 import type { SidecarManager } from "./sidecar";
 import { SidecarPool } from "./sidecar-pool";
 import type { PersistedTabLayout } from "./tab-layout";
@@ -84,8 +85,8 @@ class FakeSidecar extends EventEmitter {
 			prepend: true,
 		});
 	}
-	emitHostToolCall(id: string): void {
-		this.emit("hostToolCall", { type: "host_tool_call", id, name: "gui_tool", args: {} });
+	emitHostToolCall(id: string, toolName = "gui_tool"): void {
+		this.emit("hostToolCall", { type: "host_tool_call", id, toolCallId: `call-${id}`, toolName, arguments: {} });
 	}
 	emitHostUriRequest(id: string): void {
 		this.emit("hostUriRequest", { type: "host_uri_request", id, operation: "read", uri: "https://example.com" });
@@ -972,6 +973,42 @@ describe("SidecarPool request-origin routing (F-UI-ORIGIN)", () => {
 		a?.emitHostToolCall("tool-inline");
 		expect(a?.sentFrames).toEqual([{ type: "host_tool_result", id: "tool-inline", result: "inline" }]);
 		expect(pool.routeSideChannel("tool-inline", { type: "host_tool_result", id: "tool-inline" }, true)).toBe(false);
+	});
+
+	it("routes a forwarded tool to its own tab while a GUI tool is still answering", async () => {
+		const { pool, sidecars } = fakePool();
+		const fw = fakeWindow(1);
+		pool.acquire("/a", fw.win, "tab-a");
+		pool.acquire("/b", fw.win, "tab-b");
+		const [a, b] = sidecars;
+		let readClipboard: (text: string) => void = () => {};
+		const clipboardText = new Promise<string>(resolve => (readClipboard = resolve));
+		pool.hostToolExecutor = (sidecar, request, win) =>
+			answerHostToolCall(
+				sidecar,
+				request,
+				name => (name === "gui_clipboard_read" ? clipboardText : undefined),
+				() => win.webContents.send(IPC_EVENTS.HOST_TOOL_CALL, { request }),
+			);
+
+		a?.emitHostToolCall("tool-clipboard", "gui_clipboard_read");
+		a?.emitHostToolCall("tool-extension", "extension_tool");
+		expect(fw.sentTo(IPC_EVENTS.HOST_TOOL_CALL)).toHaveLength(1);
+		pool.setActiveTab(fw.win, "tab-b");
+
+		const forwarded = { type: "host_tool_result", id: "tool-extension", result: "from the renderer" };
+		expect(pool.routeSideChannel("tool-extension", forwarded, true)).toBe(true);
+		readClipboard("copied text");
+		await clipboardText;
+		expect(a?.sentFrames).toEqual([
+			forwarded,
+			{ type: "host_tool_result", id: "tool-clipboard", result: "copied text" },
+		]);
+		expect(b?.sentFrames).toEqual([]);
+		// Answered in main, so no owner was recorded that a late frame could use.
+		expect(pool.routeSideChannel("tool-clipboard", { type: "host_tool_result", id: "tool-clipboard" }, true)).toBe(
+			false,
+		);
 	});
 
 	it("drops pending routes when the owning tab is released", () => {
