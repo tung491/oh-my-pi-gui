@@ -21,6 +21,7 @@ import {
 } from "./renderer-recovery";
 import { writeRuntimeLog } from "./runtime-log";
 import { type Rect, restoreWithinDisplays } from "./window-bounds";
+import { showWhenReady } from "./window-show";
 
 interface WindowState {
 	x?: number;
@@ -151,9 +152,7 @@ export class WindowManager {
 
 		this.#loadRenderer(win);
 
-		win.once("ready-to-show", () => {
-			win.show();
-		});
+		showWhenReady(win);
 
 		// Open external links in browser. Scheme-checked: renderer surfaces
 		// (OSC 8 anchors, target=_blank) must not be able to launch arbitrary
