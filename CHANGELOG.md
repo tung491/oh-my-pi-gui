@@ -6,6 +6,7 @@
 
 - **Linux x64 packages**: an AppImage and a `.deb` for Ubuntu 24.04+, with the bundled sidecar, `omp://` links, the tray and window icon, and `latest-linux.yml` update metadata.
 - **Linux CI**: type checks, unit tests and the GUI build run on Ubuntu for every push and pull request.
+- **Tab hibernation** (off by default): Settings → Agent advanced → Tab hibernation stops the agent of a background tab once it has been idle for the chosen time (30 minutes by default, 5 to 240), freeing about 220 MB per tab. Showing the tab resumes its session, usually within a few seconds, and turns plan and loop mode back on. Tabs that are working, waiting for an answer, or running a goal or vibe session stay awake.
 
 ### Changed
 
@@ -13,12 +14,14 @@
 - **Icon generation**: `bun run gen:icons` no longer writes `resources/icon.icns`; the mac bundles take `resources/icon.png`, which electron-builder converts on any build host. The tray mark is generated from the Sai ATLAS artwork into `src/main/tray-mark.ts`.
 - **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged. On Windows, `Ctrl+T` now opens a tab and `Ctrl+W` closes one; thinking has no default key there and can be bound in Hotkeys.
 - **VIF redesign**: the interface moves to the VIF design system. VIF Light and VIF Navy replace Porcelain and Graphite as the default light and dark themes, with a navy sidebar, Poppins headings, a five-step first-run wizard, and a refreshed palette, model picker, workspace panel, settings, statistics, and Agent Hub. Other named themes remain available.
+- **Idle memory**: the stats server stops after five minutes without a dashboard read, giving back about 100 MB, and starts again when the dashboard opens. Content search drops its cached session text two minutes after the last search.
 
 ### Fixed
 
 - **Launch arguments on a cold start**: a workspace path or `omp://` link passed to a packaged Linux or Windows build is honored when the app was not running.
 - **Deb updates**: a deb install runs only when you choose Restart & install, and a cancelled or failed install shows in the update banner.
-- **AppImage updates**: Restart & install asks about working tabs before replacing the file, then starts the new version once the old one has quit.
+- **AppImage updates**: Restart & install asks about working tabs before replacing the file, then starts the new version once the old one has quit, also when the AppImage runs extracted (`--appimage-extract-and-run` or `APPIMAGE_EXTRACT_AND_RUN=1`) on a host without FUSE.
+- **Stats server after a crash**: the stats server no longer keeps running after the app crashes or is killed.
 
 ## [0.9.10] - 2026-09-24
 
