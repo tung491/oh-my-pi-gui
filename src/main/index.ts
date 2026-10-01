@@ -31,6 +31,7 @@ import { StatsServerManager } from "./stats-server";
 import { type PersistedTabLayout, sanitizePersistedTabLayouts } from "./tab-layout";
 import { createTray, destroyTray } from "./tray";
 import { setupUpdater } from "./updater";
+import { mergeEnableFeatures, PORTAL_SHORTCUT_FEATURES, usesShortcutPortal } from "./wayland-portal";
 import { WindowManager } from "./window";
 import { resolveWindowSpawnTarget } from "./window-spawn-target";
 
@@ -38,6 +39,17 @@ import { resolveWindowSpawnTarget } from "./window-spawn-target";
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
 	app.quit();
+}
+
+// Native-Wayland global shortcuts go through the GlobalShortcuts portal, which
+// Chromium reaches only with these features on. Chromium keeps one
+// --enable-features value, so a user's own list is merged rather than replaced.
+// Inert on X11; Chromium reads the list after this script runs.
+if (process.platform === "linux") {
+	app.commandLine.appendSwitch(
+		"enable-features",
+		mergeEnableFeatures(app.commandLine.getSwitchValue("enable-features"), PORTAL_SHORTCUT_FEATURES),
+	);
 }
 
 // App identity: the dev run shows "Electron" + the default atom icon in the
@@ -433,6 +445,15 @@ app.whenReady().then(() => {
 			details: { accelerator: toggleAccelerator },
 		});
 	}
+	const portal = usesShortcutPortal(process.platform, process.env, {
+		platform: app.commandLine.getSwitchValue("ozone-platform"),
+		hint: app.commandLine.getSwitchValue("ozone-platform-hint"),
+	});
+	writeRuntimeLog({
+		source: "global-shortcut",
+		message: "global shortcut mode",
+		details: { portal, enableFeatures: app.commandLine.getSwitchValue("enable-features") },
+	});
 	sessionIndex.start();
 	logWatcher.start();
 	// Read before the first window restores: every tab change rewrites the store,

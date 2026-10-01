@@ -185,7 +185,7 @@ profile sai-atlas-appimage "@{HOME}/Applications/Sai-ATLAS.AppImage" flags=(unco
 }
 ```
 
-The profile grants user namespaces to whatever file sits at that path, and `~/Applications` is writable by any program running as you. Keep that directory for the Sai ATLAS AppImage only. When you stop using it, unload the profile and then delete it: `sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage` (reloading AppArmor alone does not unload a deleted profile). Remove an older `omp-appimage` profile the same way. Without the profile, the AppImage runtime falls back to `--no-sandbox` on Ubuntu 24.04+, which leaves the renderer unsandboxed, so prefer the `.deb`. `omp://` links reach the AppImage only with desktop integration such as AppImageLauncher. On Wayland sessions, Electron 35 runs through XWayland.
+The profile grants user namespaces to whatever file sits at that path, and `~/Applications` is writable by any program running as you. Keep that directory for the Sai ATLAS AppImage only. When you stop using it, unload the profile and then delete it: `sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage` (reloading AppArmor alone does not unload a deleted profile). Remove an older `omp-appimage` profile the same way. Without the profile, the AppImage runtime falls back to `--no-sandbox` on Ubuntu 24.04+, which leaves the renderer unsandboxed, so prefer the `.deb`. `omp://` links reach the AppImage only with desktop integration such as AppImageLauncher. Sai ATLAS runs natively on Wayland; start it with `--ozone-platform=x11` to use XWayland.
 
 Open the DMG and drag **Sai ATLAS** into **Applications**. The build is ad-hoc signed but not notarized. If macOS blocks the first launch, use **right-click → Open**, or **System Settings → Privacy & Security → Open Anyway**, after confirming the download's source.
 
@@ -214,7 +214,7 @@ Windows packages are currently unsigned. Windows SmartScreen may require **More 
 | `⌘B` / `⌘J` | Toggle sidebars |
 | `Esc` | Context-dependent close or abort; not an unconditional abort shortcut |
 
-On Linux and Windows, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+Shift+T`, `Ctrl+K`). The thinking toggle has no default chord there, because Ctrl+T opens a tab; assign one in Keyboard Shortcuts. On GNOME Wayland, `Ctrl+Shift+O` works only while a Sai ATLAS window is focused.
+On Linux and Windows, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+Shift+T`, `Ctrl+K`). The thinking toggle has no default chord there, because Ctrl+T opens a tab; assign one in Keyboard Shortcuts. On GNOME Wayland with the `.deb`, the first launch asks you to allow Sai ATLAS's global shortcuts.
 
 <a id="en-development"></a>
 ### Development
@@ -331,7 +331,7 @@ Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light th
 | `bun run dev` exits with `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ restricts unprivileged user namespaces. Install a `userns` profile for the dev Electron binary: use the AppImage profile above, named `omp-dev-electron`, with the path printed by `node -p "require('electron')"`. Do not make `chrome-sandbox` setuid root. |
 | No tray icon on Ubuntu | Enable the Ubuntu AppIndicators extension. |
 | A `.deb` update asks for the password twice, or the window freezes | Cancelling pkexec triggers electron-updater's `apt-get -f` retry, and the window waits while the prompt is open. |
-| `Ctrl+Shift+O` does nothing while another app is focused | GNOME delivers it only to focused XWayland windows. A refused registration is logged to `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`. |
+| `Ctrl+Shift+O` does nothing while another app is focused | On GNOME Wayland with the `.deb`, the first launch asks you to allow Sai ATLAS's global shortcuts; if you declined, allow them in Settings → Apps → Sai ATLAS. A refused registration is logged to `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`. |
 
 <a id="en-release"></a>
 ### Release process (maintainers)
@@ -520,7 +520,7 @@ profile sai-atlas-appimage "@{HOME}/Applications/Sai-ATLAS.AppImage" flags=(unco
 }
 ```
 
-该配置会把用户命名空间权限授予该路径上的任意文件，而 `~/Applications` 可被以你身份运行的任何程序写入。请只把该目录用于 Sai ATLAS AppImage。不再使用时先卸载配置再删除：`sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`（仅重新加载 AppArmor 不会卸载已删除的配置）。旧的 `omp-appimage` 配置也按同样方式移除。没有该配置时，AppImage 运行时在 Ubuntu 24.04+ 上会退回 `--no-sandbox`，渲染进程将不受沙箱保护，因此推荐使用 `.deb`。`omp://` 链接只有在桌面集成（例如 AppImageLauncher）下才会送达 AppImage。在 Wayland 会话中，Electron 35 通过 XWayland 运行。
+该配置会把用户命名空间权限授予该路径上的任意文件，而 `~/Applications` 可被以你身份运行的任何程序写入。请只把该目录用于 Sai ATLAS AppImage。不再使用时先卸载配置再删除：`sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`（仅重新加载 AppArmor 不会卸载已删除的配置）。旧的 `omp-appimage` 配置也按同样方式移除。没有该配置时，AppImage 运行时在 Ubuntu 24.04+ 上会退回 `--no-sandbox`，渲染进程将不受沙箱保护，因此推荐使用 `.deb`。`omp://` 链接只有在桌面集成（例如 AppImageLauncher）下才会送达 AppImage。Sai ATLAS 在 Wayland 上原生运行；如需使用 XWayland，请以 `--ozone-platform=x11` 启动。
 
 打开 DMG，把 **Sai ATLAS** 拖入**应用程序**。构建采用 ad-hoc 签名，未经 Apple 公证。如果 macOS 拦截首次启动，请先确认下载来源，再使用**右键 → 打开**，或**系统设置 → 隐私与安全性 → 仍要打开**。
 
@@ -549,7 +549,7 @@ Windows 包当前未签名。首次启动前请确认下载来源；Windows Smar
 | `⌘B` / `⌘J` | 切换侧栏 |
 | `Esc` | 按当前上下文关闭界面或中止执行，不是无条件中止快捷键 |
 
-在 Linux 和 Windows 上，⌘ 快捷键改用 Ctrl，并以文字显示（`Ctrl+T`、`Ctrl+Shift+T`、`Ctrl+K`）。思考开关在这些平台上没有默认快捷键，因为 Ctrl+T 用于新建标签页；可在键盘快捷键中自行指定。在 GNOME Wayland 上，`Ctrl+Shift+O` 仅在 Sai ATLAS 窗口获得焦点时生效。
+在 Linux 和 Windows 上，⌘ 快捷键改用 Ctrl，并以文字显示（`Ctrl+T`、`Ctrl+Shift+T`、`Ctrl+K`）。思考开关在这些平台上没有默认快捷键，因为 Ctrl+T 用于新建标签页；可在键盘快捷键中自行指定。在通过 `.deb` 安装的 GNOME Wayland 上，首次启动会请求允许 Sai ATLAS 的全局快捷键。
 
 <a id="zh-development"></a>
 ### 开发
@@ -666,7 +666,7 @@ bun scripts/capture-showcase.ts
 | `bun run dev` 报错 `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ 限制了非特权用户命名空间。为开发用 Electron 二进制安装一个 `userns` 配置：沿用上文的 AppImage 配置，命名为 `omp-dev-electron`，路径改为 `node -p "require('electron')"` 输出的路径。不要把 `chrome-sandbox` 设为 setuid root。 |
 | Ubuntu 上没有托盘图标 | 启用 Ubuntu AppIndicators 扩展。 |
 | `.deb` 更新要求输入两次密码，或窗口卡住 | 取消 pkexec 会触发 electron-updater 的 `apt-get -f` 重试，提示框打开期间窗口会等待。 |
-| 其他应用获得焦点时 `Ctrl+Shift+O` 无效 | GNOME 只把它传给获得焦点的 XWayland 窗口。注册被拒绝时会记录到 `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`。 |
+| 其他应用获得焦点时 `Ctrl+Shift+O` 无效 | 在通过 `.deb` 安装的 GNOME Wayland 上，首次启动会请求允许 Sai ATLAS 的全局快捷键；如果当时拒绝了，可在 设置 → 应用 → Sai ATLAS 中允许。注册被拒绝时会记录到 `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`。 |
 
 <a id="zh-release"></a>
 ### 发布流程（维护者）
