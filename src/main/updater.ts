@@ -21,6 +21,7 @@ import type { UpdateInstallMode, UpdateStatus } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS } from "../shared/ipc-types";
 import { approveQuitBeforeInstall, withdrawQuitApproval } from "./app-quit";
 import { mainT } from "./i18n";
+import { relaunchArgs } from "./relaunch-args";
 import {
 	asksBeforeInstall,
 	captureInstallError,
@@ -362,9 +363,12 @@ export function setupUpdater(): void {
 			return;
 		}
 		// Armed only after a successful install, before electron-updater's
-		// deferred quit: Electron starts it once this process has exited. No
-		// arguments, so a launch link or workspace is not replayed.
-		if (linuxKind === "appimage" && appImageTarget) app.relaunch({ execPath: appImageTarget, args: [] });
+		// deferred quit: Electron starts it once this process has exited. Only
+		// the display backend is passed on, so a launch link or workspace is not
+		// replayed.
+		if (linuxKind === "appimage" && appImageTarget) {
+			app.relaunch({ execPath: appImageTarget, args: relaunchArgs([]) });
+		}
 	});
 	ipcMain.handle(IPC_COMMANDS.UPDATER_GET_STATUS, () => current);
 	ipcMain.handle(IPC_COMMANDS.UPDATER_VERSION, () => appVersion());

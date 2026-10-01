@@ -13,6 +13,7 @@ import { UUID } from "builder-util-runtime";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { APP_ID, PRODUCT_NAME } from "../shared/product";
+import { LINUX_DISPLAY_SWITCH } from "./relaunch-args";
 import { type MacInstallerArchitecture, selectMacInstaller } from "./updater-state";
 
 interface BuilderConfig {
@@ -28,6 +29,7 @@ interface BuilderConfig {
 	electronLanguages?: string[];
 	linux?: {
 		executableName?: string;
+		executableArgs?: string[];
 		maintainer?: string;
 		target?: { target?: string; arch?: string[] }[];
 		desktop?: { entry?: Record<string, string> };
@@ -215,10 +217,13 @@ describe("Linux package config", () => {
 		expect(config.extraMetadata?.homepage).toBe("https://github.com/nornzach/oh-my-pi-gui");
 	});
 
-	it("never writes --no-sandbox into the AppImage launch command", () => {
+	it("launches on XWayland and never writes --no-sandbox into a launch command", () => {
 		const config = read(file);
 		expect(config.toolsets?.appimage).toBe("1.0.3");
-		expect(config.appImage?.executableArgs).toEqual([]);
+		expect(config.linux?.executableArgs).toEqual([LINUX_DISPLAY_SWITCH]);
+		expect(config.appImage?.executableArgs).toEqual([LINUX_DISPLAY_SWITCH]);
+		expect(config.linux?.executableArgs).not.toContain("--no-sandbox");
+		expect(config.appImage?.executableArgs).not.toContain("--no-sandbox");
 	});
 
 	it("keeps a Chromium locale pak and the release owner", () => {

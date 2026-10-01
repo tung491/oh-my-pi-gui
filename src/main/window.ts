@@ -12,6 +12,7 @@ import { linuxWindowIconPath } from "./app-icons";
 import { quitRisk, requestQuit } from "./app-quit";
 import { editableContextMenuTemplate } from "./editable-context-menu";
 import { getMainLanguage, mainT } from "./i18n";
+import { relaunchArgs } from "./relaunch-args";
 import {
 	type ApplicationResourceIdentity,
 	applicationResourcesChanged,
@@ -335,7 +336,7 @@ export class WindowManager {
 		if (answer.response !== 0) return;
 		// `requestQuit` carries the approval, so the guard below the restart
 		// prompt never asks a second time about the same running sessions.
-		app.relaunch();
+		app.relaunch({ args: relaunchArgs(process.argv.slice(1)) });
 		requestQuit();
 	}
 
