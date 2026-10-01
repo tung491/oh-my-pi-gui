@@ -44,7 +44,10 @@ test("idle background tabs hibernate, wake with their transcript and plan mode, 
 		await expect(page.locator("textarea").first()).toBeEditable({ timeout: 60_000 });
 
 		const plain = await sendInFocusedTab(page, "hibernate plain");
-		const plainRows = await rows.count();
+		const plainEntries = await entryIds(page, plain);
+		// One transcript row per message: the prompt and the fixture's reply.
+		expect(plainEntries).toHaveLength(2);
+		await expect(rows).toHaveCount(plainEntries.length);
 
 		await openTab(page, 2);
 		const plan = await sendInFocusedTab(page, "hibernate plan");
@@ -67,7 +70,8 @@ test("idle background tabs hibernate, wake with their transcript and plan mode, 
 		await tabs.nth(0).click();
 		await expect.poll(async () => statusOf(page, plain), { timeout: 30_000 }).toBe("ready");
 		await expect(page.getByText("hibernate plain", { exact: true })).toBeVisible();
-		await expect(rows).toHaveCount(plainRows);
+		expect(await entryIds(page, plain)).toEqual(plainEntries);
+		await expect(rows).toHaveCount(plainEntries.length);
 
 		await tabs.nth(1).click();
 		// `ready` is held back until plan mode is re-armed, so the first state
@@ -86,6 +90,13 @@ test("idle background tabs hibernate, wake with their transcript and plan mode, 
 
 async function listTabs(page: Page): Promise<IpcTabInfo[]> {
 	return page.evaluate(() => window.omp.tabs.list());
+}
+
+/** The entry ids of the messages the tab's sidecar holds, in order. */
+async function entryIds(page: Page, tabId: string): Promise<string[]> {
+	const response = await page.evaluate(id => window.omp.rpc.commandForTab(id, { type: "get_messages" }), tabId);
+	if (!response.success) throw new Error(JSON.stringify(response));
+	return (response.data as { messages: Array<{ entryId?: string }> }).messages.map(message => message.entryId ?? "");
 }
 
 async function statusOf(page: Page, tabId: string): Promise<string | undefined> {
