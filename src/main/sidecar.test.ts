@@ -7,6 +7,14 @@ import { describe, expect, it, vi } from "vitest";
 import type { CommandOutputFrame, PromptResultFrame, SidecarStatus, SidecarStatusPayload } from "../shared/rpc-types";
 import { missingSidecarMessage, type ReadyGate, type SidecarFailureReport, SidecarManager } from "./sidecar";
 
+/**
+ * dispose() SIGTERMs a fake child without waiting for it, so a child still
+ * logging can recreate its file while the directory goes; rm retries that.
+ */
+function removeDir(dir: string): Promise<void> {
+	return fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+}
+
 async function waitForReady(sidecar: SidecarManager): Promise<void> {
 	const ready = Promise.withResolvers<void>();
 	const onStatus = ({ status }: { status: SidecarStatus }) => {
@@ -46,7 +54,7 @@ describe("SidecarManager", () => {
 			expect(launch).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -70,7 +78,7 @@ describe("SidecarManager", () => {
 			expect(launch).toEqual(["--mode", "rpc-ui", "--chat"]);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -100,7 +108,7 @@ describe("SidecarManager", () => {
 			expect(restartLaunch).toEqual(["--mode", "rpc-ui"]);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -126,7 +134,7 @@ describe("SidecarManager", () => {
 			]);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -194,7 +202,7 @@ describe("SidecarManager", () => {
 		} finally {
 			process.env.HOME = originalHome;
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -227,8 +235,8 @@ describe("SidecarManager", () => {
 			expect(spawn.cwd).toBe(adoptedCwd);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
-			await fs.rm(adoptedCwd, { recursive: true, force: true });
+			await removeDir(tempDir);
+			await removeDir(adoptedCwd);
 		}
 	});
 
@@ -262,7 +270,7 @@ describe("SidecarManager", () => {
 			expect(statuses.filter(payload => payload.status === "ready")).toEqual([]);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	}, 15_000);
 
@@ -304,7 +312,7 @@ describe("SidecarManager", () => {
 			expect(await readPids()).toHaveLength(1);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	}, 15_000);
 
@@ -322,7 +330,7 @@ describe("SidecarManager", () => {
 			expect(statuses[0].message).not.toContain("build:omp");
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -337,7 +345,7 @@ describe("SidecarManager", () => {
 			expect(statuses[0].message).toContain("build:omp");
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	});
 
@@ -377,7 +385,7 @@ describe("SidecarManager", () => {
 			expect(report.stderr).toEqual(["dyld: Library not loaded: pi_natives", "  Referenced by: omp"]);
 		} finally {
 			sidecar.dispose();
-			await fs.rm(tempDir, { recursive: true, force: true });
+			await removeDir(tempDir);
 		}
 	}, 15_000);
 
@@ -503,7 +511,7 @@ process.stdin.on("end", () => {
 				expect(spawnedPids(await logLines(logPath))).toHaveLength(1);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -528,7 +536,7 @@ process.stdin.on("end", () => {
 				expect(sidecar.status).toBe("asleep");
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -548,7 +556,7 @@ process.stdin.on("end", () => {
 				expect(sidecar.status).toBe("asleep");
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -578,7 +586,7 @@ process.stdin.on("end", () => {
 				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--no-auto-resume"]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -606,7 +614,7 @@ process.stdin.on("end", () => {
 				]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -639,7 +647,7 @@ process.stdin.on("end", () => {
 				expect(isAlive(spawnedPids(lines)[0])).toBe(false);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -667,7 +675,7 @@ process.stdin.on("end", () => {
 				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui"]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		}, 15_000);
 
@@ -697,7 +705,7 @@ process.stdin.on("end", () => {
 				expect(sidecar.draining).toBe(false);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -727,7 +735,7 @@ process.stdin.on("end", () => {
 				]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		}, 10_000);
 
@@ -747,7 +755,7 @@ process.stdin.on("end", () => {
 				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -764,7 +772,7 @@ process.stdin.on("end", () => {
 				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		});
 
@@ -783,7 +791,7 @@ process.stdin.on("end", () => {
 				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		}, 10_000);
 
@@ -812,7 +820,7 @@ process.stdin.on("end", () => {
 				expect(gate).not.toHaveBeenCalled();
 			} finally {
 				sidecar.dispose();
-				await fs.rm(tempDir, { recursive: true, force: true });
+				await removeDir(tempDir);
 			}
 		}, 10_000);
 	});
