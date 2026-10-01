@@ -214,6 +214,7 @@ export type RuntimeErrorSource =
 	| "main-uncaught"
 	| "main-unhandled-rejection"
 	| "global-shortcut"
+	| "notification"
 	| "unknown";
 
 /** Bounded, serializable renderer/main failure payload written as JSONL. */

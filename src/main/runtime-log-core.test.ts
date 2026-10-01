@@ -73,4 +73,8 @@ describe("runtime crash log", () => {
 			"global-shortcut",
 		);
 	});
+
+	it("keeps a failed notification report under its own source", () => {
+		expect(normalizeRuntimeErrorReport({ source: "notification", message: "failed" }).source).toBe("notification");
+	});
 });
