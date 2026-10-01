@@ -87,6 +87,8 @@ export const IPC_EVENTS = {
 	PROGRESS_SET: "progress:set",
 	/** Auto-update status machine push (idle/checking/available/downloading/downloaded/not-available/error) */
 	UPDATER_STATUS: "updater:status",
+	/** Main → quick-entry bar: the state for this show (QuickEntryBarState) */
+	QUICK_ENTRY_STATE: "quick-entry:state",
 } as const;
 
 // ============================================================================
@@ -196,6 +198,26 @@ export const IPC_COMMANDS = {
 	UPDATER_GET_STATUS: "updater:getStatus",
 	/** Current app version (settings → updates row) */
 	UPDATER_VERSION: "updater:version",
+	/** Bar → main: queue a quick-entry prompt for the main window */
+	QUICK_ENTRY_SUBMIT: "quick-entry:submit",
+	/** Bar → main: a restored prompt was taken into the bar's draft */
+	QUICK_ENTRY_CONSUME_RESTORED: "quick-entry:consume-restored",
+	/** Bar → main: hide the bar (Esc) */
+	QUICK_ENTRY_DISMISS: "quick-entry:dismiss",
+	/** Chat window → main: lease the prompts queued for this window */
+	QUICK_ENTRY_CLAIM: "quick-entry:claim",
+	/** Chat window → main: a leased prompt reached its tab's composer */
+	QUICK_ENTRY_ACK: "quick-entry:ack",
+	/** Chat window → main: give a leased prompt back to the bar's restore list */
+	QUICK_ENTRY_RETURN: "quick-entry:return",
+	/** The quick-entry shortcut's live state */
+	QUICK_ENTRY_SHORTCUT_GET: "quick-entry:shortcut-get",
+	/** Rebind, turn off/on, or reset the quick-entry shortcut */
+	QUICK_ENTRY_SHORTCUT_SET: "quick-entry:shortcut-set",
+	/** Fire-and-forget: pause global shortcut handling while the shortcut recorder captures */
+	QUICK_ENTRY_SHORTCUT_SUSPEND: "quick-entry:shortcut-suspend",
+	/** One-shot: the startup registration refusal, for the first window that asks */
+	QUICK_ENTRY_SHORTCUT_NOTICE: "quick-entry:shortcut-notice",
 } as const;
 
 export type RuntimeErrorSource =
@@ -214,6 +236,8 @@ export type RuntimeErrorSource =
 	| "main-uncaught"
 	| "main-unhandled-rejection"
 	| "global-shortcut"
+	| "notification"
+	| "quick-entry"
 	| "unknown";
 
 /** Bounded, serializable renderer/main failure payload written as JSONL. */
@@ -291,8 +315,103 @@ export type MenuAction =
 	| "toggle-language"
 	| "switch-project";
 
-/** Action forwarded to the renderer for an omp:// deep link. */
-export type DeepLinkPayload = { action: "new-session" } | { action: "switch-session"; sessionId: string };
+/**
+ * Action forwarded to the renderer for an omp:// deep link. `quick-entry` is
+ * main's nudge that prompts are queued for the window (see quickEntry.claimPending).
+ */
+export type DeepLinkPayload =
+	| { action: "new-session" }
+	| { action: "switch-session"; sessionId: string }
+	| { action: "quick-entry" };
+
+// ============================================================================
+// Quick entry (the summoned bar and its handoff to a chat window)
+// ============================================================================
+
+/** Where a quick-entry message starts. */
+export type QuickEntryTarget = { kind: "chat" } | { kind: "work" } | { kind: "workspace"; cwd: string };
+
+export interface QuickEntryWorkspace {
+	cwd: string;
+	name: string;
+}
+
+export type QuickEntryFailure =
+	| "tab-cap"
+	| "no-window"
+	| "workspace-missing"
+	| "tab-failed"
+	| "interrupted"
+	| "invalid";
+
+export interface QuickEntryPrompt {
+	id: string;
+	text: string;
+	target: QuickEntryTarget;
+}
+
+/** A prompt that did not reach a tab, waiting in the bar's restore list. */
+export interface QuickEntryReturned extends QuickEntryPrompt {
+	reason: QuickEntryFailure;
+}
+
+/** Main → bar on every show (IPC_EVENTS.QUICK_ENTRY_STATE). */
+export interface QuickEntryBarState {
+	language: "en" | "zh";
+	target: QuickEntryTarget;
+	/** Recent agent workspaces, most recent first; Work is not listed. */
+	workspaces: QuickEntryWorkspace[];
+	/** Failed handoffs, oldest first; never merged. */
+	restored: QuickEntryReturned[];
+	/** Monotonic per show; the bar refocuses its input when it changes. */
+	showId: number;
+}
+
+export interface QuickEntrySubmitPayload {
+	text: string;
+	target: QuickEntryTarget;
+}
+
+export type QuickEntrySubmitResult = { ok: true } | { ok: false; reason: QuickEntryFailure };
+
+/** The saved quick-entry shortcut (main prefs `quickEntryShortcut`). */
+export interface QuickEntryShortcutPref {
+	/** Canonical chord, e.g. "⇧⌃␣". */
+	chord: string;
+	enabled: boolean;
+}
+
+export interface QuickEntryShortcutState {
+	chord: string;
+	enabled: boolean;
+	/** "portal": native Wayland, where the desktop owns the binding and changes apply after a restart. */
+	mode: "native" | "portal";
+	/** "requested": the portal took the request; whether the desktop bound it is not known. */
+	status: "registered" | "requested" | "refused" | "off";
+	/** Portal only: the saved chord differs from what this session asked the desktop for. */
+	restartRequired: boolean;
+	/** Portal only: no installed vn.io.vif.saiatlas.desktop, which the portal needs. */
+	desktopEntryMissing: boolean;
+	/** Native mode inside a Wayland session (XWayland): the chord fires only while the app is focused. */
+	xwaylandOnly: boolean;
+}
+
+export type QuickEntryShortcutUpdate = { chord: string } | { enabled: boolean } | { reset: true };
+
+export type QuickEntryShortcutResult =
+	| { ok: true; state: QuickEntryShortcutState }
+	| { ok: false; reason: "invalid" | "reserved" | "system" | "refused"; state: QuickEntryShortcutState };
+
+/** window.ompQuickEntry: the only surface the bar page sees. */
+export interface QuickEntryBarApi {
+	readonly platform: string;
+	/** The latest state replays to each new subscriber. */
+	onState(callback: (state: QuickEntryBarState) => void): () => void;
+	submit(payload: QuickEntrySubmitPayload): Promise<QuickEntrySubmitResult>;
+	/** The bar took this restored prompt into its draft; main drops it from the list. */
+	consumeRestored(id: string): void;
+	dismiss(): void;
+}
 
 /** Optional payload carried alongside a MenuAction (approval mode / project cwd). */
 export interface MenuActionPayload {
@@ -1225,5 +1344,20 @@ export interface OmpApi {
 			text: string | null;
 			error?: string;
 		}>;
+	};
+	quickEntry: {
+		/** Lease the prompts main queued for this window (not deleted until ack). */
+		claimPending(): Promise<QuickEntryPrompt[]>;
+		/** The prompt's text was handed to its tab's composer; main drops the lease. */
+		ack(id: string): Promise<void>;
+		/** Give a prompt back to the bar's restore list after a renderer-side failure (never opens the bar). */
+		returnToBar(prompt: QuickEntryPrompt, reason: QuickEntryFailure): Promise<void>;
+		getShortcut(): Promise<QuickEntryShortcutState>;
+		/** Main validates the chord; the dialog's conflict preview is advisory. */
+		setShortcut(update: QuickEntryShortcutUpdate): Promise<QuickEntryShortcutResult>;
+		/** While true, global shortcuts do not fire (the recorder is capturing). */
+		suspendShortcuts(suspended: boolean): void;
+		/** The shortcut's startup refusal, once, to the first window that asks. */
+		takeStartupNotice(): Promise<QuickEntryShortcutState | null>;
 	};
 }

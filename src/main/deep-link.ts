@@ -6,7 +6,7 @@ import { isAbsolute, resolve } from "node:path";
 import { app } from "electron";
 import { type DeepLinkPayload, IPC_EVENTS } from "../shared/ipc-types";
 import { launchArguments, parseLaunchArgv } from "./launch-argv";
-import type { SpawnWindow, WindowManager } from "./window";
+import { type SpawnWindow, sendWhenLoaded, type WindowManager } from "./window";
 
 export const DEEP_LINK_PROTOCOL = "omp";
 
@@ -34,7 +34,11 @@ app.on("open-file", (event, path) => {
 	else filesBeforeSetup.push(path);
 });
 
-export function setupDeepLinks(windowManager: WindowManager, spawnWindow: SpawnWindow): void {
+export function setupDeepLinks(
+	windowManager: WindowManager,
+	spawnWindow: SpawnWindow,
+	openQuickEntry: () => void,
+): void {
 	// Register as default protocol handler (Windows/Linux)
 	if (process.defaultApp && process.argv.length >= 2) {
 		app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL, process.execPath, [process.argv[1]]);
@@ -47,6 +51,7 @@ export function setupDeepLinks(windowManager: WindowManager, spawnWindow: SpawnW
 	const coldStart = parseLaunchArgv(launchArguments(process.argv, Boolean(process.defaultApp)), DEEP_LINK_PROTOCOL);
 	if (coldStart.kind === "url") beforeSetup.push(coldStart.url);
 	for (const url of beforeSetup.splice(0)) handler(url);
+	if (coldStart.kind === "quick-entry") openQuickEntry();
 	fileHandler = path => handleOpenPath(path, windowManager, spawnWindow);
 	for (const path of filesBeforeSetup.splice(0)) fileHandler(path);
 
@@ -58,6 +63,7 @@ export function setupDeepLinks(windowManager: WindowManager, spawnWindow: SpawnW
 		// directories that would otherwise be mistaken for the requested one.
 		const request = parseLaunchArgv(launchArguments(argv, Boolean(process.defaultApp)), DEEP_LINK_PROTOCOL);
 		if (request.kind === "url") handleDeepLink(request.url, windowManager, spawnWindow);
+		else if (request.kind === "quick-entry") openQuickEntry();
 		else if (request.kind === "path") handleOpenPath(request.path, windowManager, spawnWindow);
 		else windowManager.getTargetWindow()?.focus();
 	});
@@ -111,12 +117,5 @@ function handleDeepLink(url: string, windowManager: WindowManager, spawnWindow: 
 
 	// Cold start: the renderer only subscribes after load — hold the link until
 	// then, otherwise it is silently dropped.
-	const link = payload;
-	if (win.webContents.isLoading()) {
-		win.webContents.once("did-finish-load", () => {
-			if (!win.isDestroyed()) win.webContents.send(IPC_EVENTS.DEEP_LINK, link);
-		});
-	} else {
-		win.webContents.send(IPC_EVENTS.DEEP_LINK, link);
-	}
+	sendWhenLoaded(win, IPC_EVENTS.DEEP_LINK, payload);
 }

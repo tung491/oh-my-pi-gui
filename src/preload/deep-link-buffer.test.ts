@@ -29,6 +29,16 @@ describe("DeepLinkBuffer", () => {
 		expect(received).toEqual(["omp://session/a"]);
 	});
 
+	it("drops an unheld link before anyone subscribes, keeping the held one", () => {
+		const buffer = new DeepLinkBuffer<string>();
+		buffer.deliver("omp://session/a");
+		buffer.deliver("nudge", false);
+		const received: string[] = [];
+		buffer.subscribe(link => received.push(link));
+		buffer.deliver("nudge", false);
+		expect(received).toEqual(["omp://session/a", "nudge"]);
+	});
+
 	it("passes later links straight to current subscribers", () => {
 		const buffer = new DeepLinkBuffer<string>();
 		const received: string[] = [];

@@ -1,9 +1,16 @@
 import { parseHTML } from "linkedom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+	QuickEntryShortcutResult,
+	QuickEntryShortcutState,
+	QuickEntryShortcutUpdate,
+} from "../../../shared/ipc-types";
 import { I18nProvider } from "../../lib/i18n";
 import { KEYMAP_ACTIONS, RESERVED_CHORDS } from "../../lib/keymap";
+import { en } from "../../locales/en";
+import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { HotkeysDialog } from "./HotkeysDialog";
 
@@ -47,11 +54,84 @@ function displayedChords(): string[] {
 	return [...document.body.querySelectorAll("kbd")].map(cell => cell.textContent ?? "");
 }
 
+const REGISTERED: QuickEntryShortcutState = {
+	chord: "⇧⌃␣",
+	enabled: true,
+	mode: "native",
+	status: "registered",
+	restartRequired: false,
+	desktopEntryMissing: false,
+	xwaylandOnly: false,
+};
+
+/** A Linux bridge whose quick-entry calls land in `calls`, in order. */
+function stubQuickEntry(initial: QuickEntryShortcutState = REGISTERED) {
+	const calls: string[] = [];
+	let state = initial;
+	const quickEntry = {
+		getShortcut: vi.fn(async () => state),
+		setShortcut: vi.fn(async (update: QuickEntryShortcutUpdate): Promise<QuickEntryShortcutResult> => {
+			calls.push(`set ${JSON.stringify(update)}`);
+			if ("chord" in update) state = { ...state, chord: update.chord, enabled: true, status: "registered" };
+			if ("enabled" in update)
+				state = { ...state, enabled: update.enabled, status: update.enabled ? "registered" : "off" };
+			return { ok: true, state };
+		}),
+		suspendShortcuts: vi.fn((suspended: boolean) => {
+			calls.push(`suspend ${suspended}`);
+		}),
+	};
+	(window as unknown as { omp: unknown }).omp = { platform: "linux", quickEntry };
+	return { quickEntry, calls };
+}
+
+/** The quick-entry row: the element holding its label and its controls. */
+function quickEntryRow(): Element {
+	const label = [...document.body.querySelectorAll("span")].find(
+		span => span.textContent === en["hotkeys.row.quickEntry"],
+	);
+	const row = label?.parentElement?.parentElement;
+	if (!row) throw new Error("quick entry row not rendered");
+	return row as unknown as Element;
+}
+
+function buttonIn(scope: Element, name: string): Element {
+	const button = [...scope.querySelectorAll("button")].find(
+		candidate => candidate.getAttribute("aria-label") === name || candidate.textContent === name,
+	);
+	if (!button) throw new Error(`no "${name}" button`);
+	return button;
+}
+
+async function click(element: Element): Promise<void> {
+	await act(async () => {
+		element.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+	});
+	await flush();
+}
+
+async function pressChord(key: string, code: string, mods: { ctrl?: boolean; alt?: boolean; shift?: boolean }) {
+	const event = new Event("keydown", { bubbles: true, cancelable: true });
+	Object.defineProperties(event, {
+		key: { value: key },
+		code: { value: code },
+		ctrlKey: { value: mods.ctrl ?? false },
+		altKey: { value: mods.alt ?? false },
+		shiftKey: { value: mods.shift ?? false },
+		metaKey: { value: false },
+	});
+	await act(async () => {
+		window.dispatchEvent(event);
+	});
+	await flush();
+}
+
 afterEach(async () => {
 	await act(async () => root?.unmount());
 	container?.remove();
 	document.body.innerHTML = "";
 	useUiStore.setState({ keymapOverrides: {} });
+	useToastStore.setState({ toasts: [] });
 	Reflect.deleteProperty(window, "omp");
 });
 
@@ -97,6 +177,56 @@ describe("HotkeysDialog", () => {
 		expect(chords).toContain("Shift+Enter");
 		expect(chords).toContain("Unbound");
 		expect(chords.filter(chord => /[⌘⌃⌥⇧]/.test(chord))).toEqual([]);
+	});
+
+	it("lists the quick-entry chord main reports, in the platform's spelling", async () => {
+		stubQuickEntry();
+		await mount();
+		expect(quickEntryRow().querySelector("kbd")?.textContent).toBe("Ctrl+Shift+Space");
+	});
+
+	it("releases the shortcut suspension before main rebinds, then saves once", async () => {
+		// Main cannot register a new chord while handling is suspended.
+		const { quickEntry, calls } = stubQuickEntry();
+		await mount();
+		await click(buttonIn(quickEntryRow(), en["hotkeys.remap.rebind"]));
+		expect(calls).toEqual(["suspend true"]);
+		await pressChord("K", "KeyK", { alt: true, shift: true });
+		await click(buttonIn(document.body as unknown as Element, en["common.save"]));
+		expect(calls.slice(0, 3)).toEqual(["suspend true", "suspend false", 'set {"chord":"⌥⇧K"}']);
+		expect(quickEntry.setShortcut).toHaveBeenCalledTimes(1);
+		expect(quickEntryRow().querySelector("kbd")?.textContent).toBe("Alt+Shift+K");
+	});
+
+	it("turns the shortcut off through main", async () => {
+		const { quickEntry } = stubQuickEntry();
+		await mount();
+		await click(buttonIn(quickEntryRow(), en["hotkeys.quickEntry.disable"]));
+		expect(quickEntry.setShortcut).toHaveBeenCalledWith({ enabled: false });
+		expect(quickEntryRow().querySelector("kbd")?.textContent).toBe(en["hotkeys.quickEntry.off"]);
+	});
+
+	it("ends a keymap capture before turning the shortcut off, so it is not left unprotected", async () => {
+		const { calls } = stubQuickEntry();
+		await mount();
+		const actionRebind = [...document.body.querySelectorAll("button")].find(
+			button =>
+				button.getAttribute("aria-label") === en["hotkeys.remap.rebind"] &&
+				!quickEntryRow().contains(button as unknown as Node),
+		);
+		if (!actionRebind) throw new Error("no keymap rebind button");
+		await click(actionRebind as unknown as Element);
+		await click(buttonIn(quickEntryRow(), en["hotkeys.quickEntry.disable"]));
+		expect(document.body.textContent).not.toContain(en["hotkeys.remap.pressChord"]);
+		expect(calls).toEqual(["suspend true", 'set {"enabled":false}', "suspend false"]);
+	});
+
+	it("says the desktop owns a portal binding and that a change waits for a restart", async () => {
+		stubQuickEntry({ ...REGISTERED, mode: "portal", status: "requested", restartRequired: true });
+		await mount();
+		const text = quickEntryRow().textContent ?? "";
+		expect(text).toContain("sai-atlas --quick-entry");
+		expect(text).toContain(en["hotkeys.quickEntry.restart"]);
 	});
 
 	it("names the ⌘ forms after the Windows key on Windows", async () => {

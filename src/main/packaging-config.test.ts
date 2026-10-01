@@ -21,13 +21,14 @@ interface BuilderConfig {
 	afterPack?: string;
 	extraResources?: { from: string; to: string }[];
 	protocols?: { name: string; schemes?: string[] }[];
-	mac?: { icon?: string; artifactName?: string; extendInfo?: Record<string, unknown> };
+	mac?: { icon?: string; artifactName?: string; minimumSystemVersion?: string; extendInfo?: Record<string, unknown> };
 	win?: { target?: { target?: string; arch?: string[] }[] };
 	nsis?: { guid?: string; shortcutName?: string; artifactName?: string };
 	portable?: { artifactName?: string };
 	electronLanguages?: string[];
 	linux?: {
 		executableName?: string;
+		syncDesktopName?: boolean;
 		maintainer?: string;
 		target?: { target?: string; arch?: string[] }[];
 		desktop?: { entry?: Record<string, string> };
@@ -207,12 +208,24 @@ describe("Linux package config", () => {
 			{ target: "deb", arch: ["x64"] },
 		]);
 		expect(config.linux?.executableName).toBe("sai-atlas");
-		expect(config.extraMetadata?.desktopName).toBe("sai-atlas.desktop");
+		// package.json desktopName is the one source: Electron uses it as the Wayland
+		// app_id and X11 WM_CLASS, and syncDesktopName names the entry and
+		// StartupWMClass after it.
+		expect(config.extraMetadata?.desktopName).toBeUndefined();
+		expect(config.linux?.syncDesktopName).toBe(true);
 		expect(config.deb?.packageName).toBe("sai-atlas");
-		// Electron 35 under XWayland names the window class after app.setName(PRODUCT_NAME).
-		expect(config.linux?.desktop?.entry?.StartupWMClass).toBe(PRODUCT_NAME);
+		expect(config.linux?.desktop?.entry?.StartupWMClass).toBeUndefined();
 		expect(config.linux?.maintainer).toBe("nornzach <287694139+nornzach@users.noreply.github.com>");
 		expect(config.extraMetadata?.homepage).toBe("https://github.com/nornzach/oh-my-pi-gui");
+	});
+
+	it("names the Linux desktop identity after the app id", () => {
+		// The GlobalShortcuts portal registers the app by this id, and GNOME needs
+		// a reverse-DNS one that an installed .desktop file of the same name backs.
+		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+			desktopName?: string;
+		};
+		expect(pkg.desktopName).toBe(`${APP_ID}.desktop`);
 	});
 
 	it("never writes --no-sandbox into the AppImage launch command", () => {
@@ -315,6 +328,14 @@ describe("product identity in every builder config", () => {
 		for (const { file, config } of macConfigs()) expect(config.mac?.icon, file).toBe("resources/icon.png");
 	});
 
+	it("declares the macOS 13 floor Electron 44 needs in both mac bundles", () => {
+		const files = macConfigs().map(({ file, config }) => {
+			expect(config.mac?.minimumSystemVersion, file).toBe("13.0");
+			return file;
+		});
+		expect(files).toEqual(expect.arrayContaining(["electron-builder.yml", "electron-builder.x64.yml"]));
+	});
+
 	it("leaves the profile path to package.json name", () => {
 		// Electron derives userData from productName, then name; src/main/pin-user-data.ts
 		// pins the name-derived path, and none of these may start moving it.
@@ -401,5 +422,17 @@ describe("Linux CI workflow", () => {
 			.readdirSync(workflows)
 			.filter(name => fs.readFileSync(path.join(workflows, name), "utf8").includes("actions/deploy-pages"));
 		expect(publishers).toEqual(["pages.yml"]);
+	});
+});
+
+describe("renderer pages", () => {
+	const csp = (page: string) =>
+		fs
+			.readFileSync(path.join(PACKAGE_ROOT, "src", "renderer", page), "utf8")
+			.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];
+
+	it("the quick-entry page ships the same content security policy", () => {
+		expect(csp("index.html")).toBeDefined();
+		expect(csp("quick-entry.html")).toBe(csp("index.html"));
 	});
 });

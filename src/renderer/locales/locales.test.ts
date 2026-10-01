@@ -72,6 +72,7 @@ const TRANSLATED_NAMESPACES = [
 	"pluginDetail.",
 	"settings.launch.",
 	"codeblock.",
+	"quickEntry.",
 ];
 
 /** Proper nouns, acronyms, and symbols legitimately identical across locales. */
@@ -89,6 +90,7 @@ const ALLOW_IDENTICAL: Record<string, true> = {
 	"themePicker.theme.nord.label": true, // Nord — theme name
 	"themePicker.theme.solarized.label": true, // Solarized — theme name
 	"themePicker.theme.latte.label": true, // Latte — theme name
+	"quickEntry.target.agent": true, // Agent — zh keeps the term, as in tabs.new.agent
 };
 
 /** Copy about the bundled coding agent, which keeps the omp name. */

@@ -15,26 +15,15 @@
  * semantics (same chord claimed by 2+ user bindings → error) plus a GUI-only
  * improvement: a user chord shadowing another action's live default → warning.
  *
- * Chord grammar: modifiers ⌃⌥⇧⌘ + a base key, serialized with modifiers in
- * the fixed order ⌥ ⇧ ⌃ ⌘ and the base key canonicalized (letters uppercase,
- * arrows/named keys as glyphs: ↑↓←→ ↵ ⇥ ␣ ⎋ ⌫ ⌦). Parsing additionally
- * accepts textual aliases — ctrl/control, alt/option, shift, cmd/command/
- * meta/super — joined by "+" or "-" ("ctrl+shift+p", "Control-Shift-P").
- * Every chord needs a real modifier (⌃/⌥/⌘): an unmodified key would eat
- * typing app-wide and a shift-only chord would hijack capital letters.
+ * The chord grammar lives in src/shared/chord.ts (main validates the global
+ * quick-entry chord with it too) and is re-exported here.
  */
 
-import { NATIVE_CHORDS } from "../../shared/hotkeys";
+import { type Chord, ctrlTwin, parseChord, serializeChord } from "../../shared/chord";
+import { NATIVE_CHORDS, QUICK_ENTRY_CHORD_ID } from "../../shared/hotkeys";
 import { isImeKeyEvent } from "./ime";
 
-export interface Chord {
-	ctrl: boolean;
-	alt: boolean;
-	shift: boolean;
-	meta: boolean;
-	/** Canonical base key: uppercase letter, digit, literal punctuation, glyph (↑↓←→↵⇥␣⎋⌫⌦), or F-key. */
-	key: string;
-}
+export { type Chord, ctrlTwin, parseChord, serializeChord } from "../../shared/chord";
 
 /** Sections of the hotkeys reference the remappable rows are filed under. */
 export type HotkeyGroupId = "generation" | "view" | "session";
@@ -75,104 +64,6 @@ export interface ReservedChord {
 /** actionId → replacement chord list (canonical or aliased; sanitized on hydration). */
 export type KeymapOverrides = Record<string, string[]>;
 
-const MOD_SYMBOLS: Record<string, "ctrl" | "alt" | "shift" | "meta"> = {
-	"⌃": "ctrl",
-	"⌥": "alt",
-	"⇧": "shift",
-	"⌘": "meta",
-};
-
-const TEXT_MOD_ALIASES: Record<string, "ctrl" | "alt" | "shift" | "meta"> = {
-	ctrl: "ctrl",
-	control: "ctrl",
-	alt: "alt",
-	option: "alt",
-	shift: "shift",
-	cmd: "meta",
-	command: "meta",
-	meta: "meta",
-	super: "meta",
-};
-
-/** Textual aliases for multi-char base keys (single-char glyphs pass through as-is). */
-const NAMED_KEY_ALIASES: Record<string, string> = {
-	up: "↑",
-	arrowup: "↑",
-	down: "↓",
-	arrowdown: "↓",
-	left: "←",
-	arrowleft: "←",
-	right: "→",
-	arrowright: "→",
-	enter: "↵",
-	return: "↵",
-	tab: "⇥",
-	space: "␣",
-	spacebar: "␣",
-	esc: "⎋",
-	escape: "⎋",
-	backspace: "⌫",
-	delete: "⌦",
-	del: "⌦",
-};
-
-function normalizeBaseKey(raw: string): string | null {
-	if (!raw) return null;
-	if (raw.length === 1) {
-		// Letters canonicalize uppercase; digits/punctuation/glyphs stay literal.
-		return /^[a-z]$/i.test(raw) ? raw.toUpperCase() : raw;
-	}
-	const alias = NAMED_KEY_ALIASES[raw.toLowerCase()];
-	if (alias) return alias;
-	const fkey = /^f(\d{1,2})$/i.exec(raw);
-	if (fkey) {
-		const n = Number(fkey[1]);
-		if (n >= 1 && n <= 12) return `F${n}`;
-	}
-	return null;
-}
-
-/**
- * Parse a chord string (canonical unicode form or textual alias form) into a
- * Chord. Returns null for anything without a base key or without at least one
- * of ⌃/⌥/⌘ — unmodified and shift-only "chords" are unbindable by design.
- */
-export function parseChord(input: string): Chord | null {
-	const trimmed = input.trim();
-	if (!trimmed) return null;
-	const flags = { ctrl: false, alt: false, shift: false, meta: false };
-	let base = "";
-	if (/[⌃⌥⇧⌘]/u.test(trimmed)) {
-		// Canonical form: modifier glyphs may appear in any order; the rest is the base key.
-		for (const ch of trimmed) {
-			const mod = MOD_SYMBOLS[ch];
-			if (mod) flags[mod] = true;
-			else base += ch;
-		}
-	} else {
-		// Textual form: consume leading "modifier<sep>" tokens; whatever remains is
-		// the base key, so "ctrl+-" binds "-" and "ctrl++" binds "+".
-		let rest = trimmed;
-		for (;;) {
-			const match = /^([a-z]+)\s*[+-]\s*/i.exec(rest);
-			const mod = match?.[1] ? TEXT_MOD_ALIASES[match[1].toLowerCase()] : undefined;
-			if (!match || !mod) break;
-			flags[mod] = true;
-			rest = rest.slice(match[0].length);
-		}
-		base = rest;
-	}
-	const key = normalizeBaseKey(base.trim());
-	if (!key) return null;
-	if (!flags.ctrl && !flags.alt && !flags.meta) return null;
-	return { ...flags, key };
-}
-
-/** Canonical chord string: modifiers in ⌥⇧⌃⌘ order + the canonical base key. */
-export function serializeChord(chord: Chord): string {
-	return `${chord.alt ? "⌥" : ""}${chord.shift ? "⇧" : ""}${chord.ctrl ? "⌃" : ""}${chord.meta ? "⌘" : ""}${chord.key}`;
-}
-
 /**
  * macOS keeps the glyph table; every other host gets Ctrl twins and text
  * labels. Linux and Windows compile the same chords and differ only in the
@@ -188,13 +79,6 @@ export function keyboardPlatformOf(hostPlatform: string | undefined): KeyboardPl
 /** The running window's layout, from the preload bridge (absent in unit tests → mac). */
 export function currentKeyboardPlatform(): KeyboardPlatform {
 	return keyboardPlatformOf(globalThis.window?.omp?.platform);
-}
-
-/** ⌘ → ⌃, re-serialized so the modifier order stays canonical; chords without ⌘ pass through. */
-export function ctrlTwin(chord: string): string {
-	const parsed = parseChord(chord);
-	if (!parsed?.meta) return chord;
-	return serializeChord({ ...parsed, meta: false, ctrl: true });
 }
 
 function textModifiers(platform: KeyboardPlatform): readonly (readonly [glyph: string, name: string])[] {
@@ -516,6 +400,8 @@ export interface ChordOwner {
 export function chordOwner(id: string): ChordOwner | undefined {
 	const action: KeymapAction | undefined = KEYMAP_ACTIONS.find(candidate => candidate.id === id);
 	if (action) return { labelKey: action.labelKey, holds: "action" };
+	// Main registers the quick-entry chord with globalShortcut, like window.toggle.
+	if (id === QUICK_ENTRY_CHORD_ID) return { labelKey: "hotkeys.row.quickEntry", holds: "native" };
 	const reserved: ReservedChord | undefined = RESERVED_CHORDS.find(candidate => candidate.id === id);
 	if (!reserved) return undefined;
 	return { labelKey: reserved.labelKey, holds: reserved.hotkeyGroup };
@@ -578,13 +464,16 @@ export interface KeymapConflict {
  * shadow. (c) reserved: a user chord taken by a focused control → warning (it
  * still fires elsewhere), or by the native menu / global shortcut → error
  * (Electron resolves it before the renderer ever sees the keydown).
+ * `extraReserved` adds chords held elsewhere, already in this platform's
+ * spelling (the quick-entry chord is literal Control, never a Cmd twin).
  */
 export function detectConflicts(
 	actions: readonly KeymapAction[],
 	overrides: KeymapOverrides,
 	platform: KeyboardPlatform = "mac",
+	extraReserved: readonly ReservedChord[] = [],
 ): KeymapConflict[] {
-	const reserved = reservedChordsFor(platform);
+	const reserved = [...reservedChordsFor(platform), ...extraReserved];
 	const defaultChords = new Map<string, Set<string>>();
 	for (const action of actions) {
 		const chords = new Set<string>();
@@ -634,6 +523,37 @@ export function detectConflicts(
 		}
 	}
 	return conflicts;
+}
+
+export interface QuickEntryConflict {
+	/** "error": a native chord, which main refuses; "warning": quick entry takes it from its owner. */
+	kind: "error" | "warning";
+	ownerId: string;
+}
+
+/**
+ * What a quick-entry chord collides with. The system-wide grab fires before any
+ * window sees the keydown, so a keymap or composer chord it takes over is a
+ * warning, and a native chord is an error. Main re-validates on save.
+ */
+export function quickEntryConflicts(
+	chord: string,
+	overrides: KeymapOverrides,
+	platform: KeyboardPlatform,
+): QuickEntryConflict | null {
+	const parsed = parseChord(chord);
+	if (!parsed) return null;
+	const canonical = serializeChord(parsed);
+	const holders = reservedChordsFor(platform).filter(entry => {
+		const held = parseChord(entry.chord);
+		return held !== null && serializeChord(held) === canonical;
+	});
+	const native = holders.find(entry => entry.hotkeyGroup === "native");
+	if (native) return { kind: "error", ownerId: native.id };
+	const action = compileKeymap(KEYMAP_ACTIONS, overrides, platform).get(canonical);
+	if (action) return { kind: "warning", ownerId: action };
+	const composer = holders[0];
+	return composer ? { kind: "warning", ownerId: composer.id } : null;
 }
 
 /**

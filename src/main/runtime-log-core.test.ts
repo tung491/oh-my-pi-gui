@@ -73,4 +73,9 @@ describe("runtime crash log", () => {
 			"global-shortcut",
 		);
 	});
+
+	it("keeps notification and quick-entry failures under their own sources", () => {
+		expect(normalizeRuntimeErrorReport({ source: "notification", message: "failed" }).source).toBe("notification");
+		expect(normalizeRuntimeErrorReport({ source: "quick-entry", message: "failed" }).source).toBe("quick-entry");
+	});
 });

@@ -11,6 +11,7 @@ let approved = false;
 let asking = false;
 let cleanedUp = false;
 let inventory: () => WindowTabFact[] = () => [];
+let dialogOwner: () => BrowserWindow | null = () => BrowserWindow.getFocusedWindow();
 
 /** True after the user (or a restart prompt) approved the quit. */
 export function isQuitting(): boolean {
@@ -29,10 +30,17 @@ export function quitRisk(): QuitRisk {
 
 /**
  * Register the `before-quit` gate. `tabInventory` reports what the sidecars are
- * doing, `teardown` runs exactly once per approved quit.
+ * doing, `teardown` runs exactly once per approved quit, and `owner` picks the
+ * chat window the confirmation attaches to (the focused window may be the
+ * quick-entry bar).
  */
-export function installQuitGuard(tabInventory: () => WindowTabFact[], teardown: () => void): void {
+export function installQuitGuard(
+	tabInventory: () => WindowTabFact[],
+	teardown: () => void,
+	owner: () => BrowserWindow | null = () => BrowserWindow.getFocusedWindow(),
+): void {
 	inventory = tabInventory;
+	dialogOwner = owner;
 	app.on("before-quit", event => {
 		if (approved) {
 			if (cleanedUp) return;
@@ -64,7 +72,7 @@ export function installQuitGuard(tabInventory: () => WindowTabFact[], teardown: 
 /** The working-tabs warning; true when the user picks "Quit anyway". */
 async function confirmRiskyQuit(risk: QuitRisk): Promise<boolean> {
 	const language = getMainLanguage();
-	const owner = BrowserWindow.getFocusedWindow();
+	const owner = dialogOwner();
 	const options: MessageBoxOptions = {
 		type: "warning",
 		buttons: [mainT("quit.quitAnyway", language), mainT("quit.keepWorking", language)],

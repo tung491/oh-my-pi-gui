@@ -11,9 +11,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { NATIVE_CHORDS } from "../../shared/hotkeys";
+import { NATIVE_CHORDS, QUICK_ENTRY_CHORD_ID, QUICK_ENTRY_DEFAULT_CHORD } from "../../shared/hotkeys";
 import {
 	chordFromEvent,
+	chordOwner,
 	compileKeymap,
 	ctrlTwin,
 	detectConflicts,
@@ -24,6 +25,7 @@ import {
 	keymapActionsForGroup,
 	parseChord,
 	platformDefaults,
+	quickEntryConflicts,
 	RESERVED_CHORDS,
 	reservedChordsFor,
 	reservedChordsForGroup,
@@ -186,6 +188,43 @@ describe("detectConflicts", () => {
 		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃R"] })).toEqual([
 			{ kind: "warning", chord: "⌃R", actionIds: ["retry", "composer.history"] },
 		]);
+	});
+
+	it("blocks a binding on the live quick-entry chord, spelled as given on every platform", () => {
+		const quickEntry = {
+			id: QUICK_ENTRY_CHORD_ID,
+			labelKey: "hotkeys.row.quickEntry",
+			chord: QUICK_ENTRY_DEFAULT_CHORD,
+			hotkeyGroup: "native" as const,
+		};
+		for (const platform of ["mac", "linux"] as const) {
+			expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["ctrl+shift+space"] }, platform, [quickEntry])).toEqual([
+				{ kind: "error", chord: "⇧⌃␣", actionIds: ["retry", QUICK_ENTRY_CHORD_ID] },
+			]);
+		}
+		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⇧⌘␣"] }, "mac", [quickEntry])).toEqual([]);
+		expect(chordOwner(QUICK_ENTRY_CHORD_ID)).toEqual({ labelKey: "hotkeys.row.quickEntry", holds: "native" });
+	});
+});
+
+describe("quickEntryConflicts", () => {
+	it("refuses a native chord in this platform's spelling", () => {
+		expect(quickEntryConflicts("⇧⌃O", {}, "linux")).toEqual({ kind: "error", ownerId: "window.toggle" });
+		expect(quickEntryConflicts("⇧⌘O", {}, "mac")).toEqual({ kind: "error", ownerId: "window.toggle" });
+		expect(quickEntryConflicts("⇧⌃O", {}, "mac")).toBeNull();
+	});
+
+	it("warns when it takes a composer chord or a live keymap chord", () => {
+		expect(quickEntryConflicts("⌃R", {}, "linux")).toEqual({ kind: "warning", ownerId: "composer.history" });
+		expect(quickEntryConflicts("⌥⇧K", { retry: ["alt+shift+k"] }, "linux")).toEqual({
+			kind: "warning",
+			ownerId: "retry",
+		});
+	});
+
+	it("has nothing to say about a free chord or one that does not parse", () => {
+		expect(quickEntryConflicts(QUICK_ENTRY_DEFAULT_CHORD, {}, "linux")).toBeNull();
+		expect(quickEntryConflicts("nope", {}, "linux")).toBeNull();
 	});
 });
 

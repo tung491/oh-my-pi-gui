@@ -209,6 +209,9 @@ function tabKindOf(state: Pick<TabsStore, "tabs" | "activeTabId">, tabId: string
 	return state.tabs.find(tab => tab.id === (tabId ?? state.activeTabId))?.kind ?? "agent";
 }
 
+/** Why openTab returned null without a tab to show. */
+export type OpenTabFailure = "cap" | "error" | "kind-mismatch";
+
 export interface TabsStore {
 	tabs: SessionTab[];
 	activeTabId: string | null;
@@ -219,19 +222,26 @@ export interface TabsStore {
 	 * sidecar arrives as tab 0 and must never be duplicated — entries merge by
 	 * id, preserving local flags (unreadDone, pendingSessionPath). */
 	reconcileTabs: () => Promise<boolean>;
+	/** The first reconciliation has settled (converged or failed). A tab opened
+	 * earlier could be overruled by GET_TABS re-selecting the old active tab. */
+	reconciled: boolean;
 	/** Spawn a new background tab (same cwd unless given) and switch to it.
 	 * Returns the tabId, or null at the pool cap. `kind` is immutable once
 	 * the tab's sidecar is spawned ("agent" default; "chat" = tool-free).
 	 * `worktree` binds the tab to a git worktree created by a prior
-	 * worktree_create RPC (cwd must be the worktree path). */
-	openTab: (args?: {
-		cwd?: string;
-		sessionPath?: string;
-		kind?: SessionKind;
-		/** Full agent in the GUI-owned default Work workspace. */
-		work?: boolean;
-		worktree?: IpcTabWorktree;
-	}) => Promise<string | null>;
+	 * worktree_create RPC (cwd must be the worktree path). `onFailure` learns
+	 * why a null return happened, next to the toast the user sees. */
+	openTab: (
+		args?: {
+			cwd?: string;
+			sessionPath?: string;
+			kind?: SessionKind;
+			/** Full agent in the GUI-owned default Work workspace. */
+			work?: boolean;
+			worktree?: IpcTabWorktree;
+		},
+		options?: { onFailure?: (reason: OpenTabFailure) => void },
+	) => Promise<string | null>;
 	/** Focus this tab. In split mode, a non-visible tab replaces the focused pane. */
 	switchTab: (id: string) => Promise<void>;
 	splitTab: (id: string, placement: SplitPlacement) => Promise<void>;
@@ -245,99 +255,112 @@ export interface TabsStore {
 	reset: () => void;
 }
 
+/** One GET_TABS round: merge main's tab list into the store and route the active tab. */
+async function reconcileWithMain(
+	set: StoreApi<TabsStore>["setState"],
+	get: StoreApi<TabsStore>["getState"],
+): Promise<boolean> {
+	const list = await window.omp.tabs.list().catch(() => null);
+	if (!list) {
+		// Pre-tabs main (dev mismatch) or bridge down — the tab strip simply
+		// stays empty and TAB_STATUS pushes rebuild it.
+		return false;
+	}
+	set(state => {
+		const leftovers = new Map(state.tabs.map(tab => [tab.id, tab]));
+		const merged: SessionTab[] = list.map(info => {
+			const existing = leftovers.get(info.tabId);
+			leftovers.delete(info.tabId);
+			const sessionChanged =
+				(existing?.sessionId !== undefined &&
+					info.sessionId !== undefined &&
+					existing.sessionId !== info.sessionId) ||
+				(existing?.sessionPath !== undefined &&
+					info.sessionPath !== undefined &&
+					existing.sessionPath !== info.sessionPath);
+			if (sessionChanged) {
+				replaceTabRuntime(info.tabId);
+			}
+			ensureTabRuntime(info.tabId);
+			return {
+				id: info.tabId,
+				cwd: info.cwd || existing?.cwd || "",
+				status: info.status,
+				compacting: info.compacting ?? existing?.compacting ?? false,
+				kind: info.kind ?? existing?.kind ?? "agent",
+				placeholder: info.placeholder ?? existing?.placeholder,
+				worktree: info.worktree ?? existing?.worktree,
+				title:
+					info.title === undefined ? (sessionChanged ? undefined : existing?.title) : (info.title ?? undefined),
+				sessionPath: info.sessionPath === undefined ? existing?.sessionPath : (info.sessionPath ?? undefined),
+				sessionId: info.sessionId ?? existing?.sessionId,
+				unreadDone: sessionChanged ? false : (existing?.unreadDone ?? false),
+				pendingSessionPath: existing?.pendingSessionPath,
+			};
+		});
+		// Entries the reply doesn't know (a spawn reply raced this reconcile)
+		// survive appended at the end.
+		const tabs = [...merged, ...leftovers.values()];
+		const mainActiveTabId = list.find(info => info.active)?.tabId;
+		const activeTabId =
+			state.activeTabId && tabs.some(tab => tab.id === state.activeTabId)
+				? state.activeTabId
+				: mainActiveTabId && tabs.some(tab => tab.id === mainActiveTabId)
+					? mainActiveTabId
+					: (tabs[0]?.id ?? null);
+		const mainVisible = list.filter(info => info.visible).map(info => info.tabId);
+		const mainSplitFirst = list.find(info => info.split?.index === 0);
+		const mainSplitSecond = list.find(info => info.split?.index === 1);
+		const restoredSplit =
+			mainSplitFirst?.split && mainSplitSecond?.split && mainSplitFirst.split.axis === mainSplitSecond.split.axis
+				? {
+						axis: mainSplitFirst.split.axis,
+						firstTabId: mainSplitFirst.tabId,
+						secondTabId: mainSplitSecond.tabId,
+						ratio: clampRatio(mainSplitFirst.split.ratio),
+					}
+				: null;
+		const split =
+			restoredSplit ??
+			(state.split &&
+			mainVisible.length === 2 &&
+			mainVisible.includes(state.split.firstTabId) &&
+			mainVisible.includes(state.split.secondTabId)
+				? state.split
+				: null);
+		return { tabs, activeTabId, split };
+	});
+	const activeTabId = get().activeTabId;
+	setFocusedSessionRuntime(activeTabId);
+	if (activeTabId) {
+		try {
+			const routed = await routeTabView(activeTabId, visibleTabIds(get()), get().split);
+			reconcileTabRoute(activeTabId, routed);
+			return routed;
+		} catch {
+			reconcileTabRoute(activeTabId, false);
+			return false;
+		}
+	}
+	return true;
+}
+
 export const useTabsStore = create<TabsStore>()((set, get) => ({
 	tabs: [],
 	activeTabId: null,
 	bundles: new Map(),
 	split: null,
+	reconciled: false,
 
 	reconcileTabs: async () => {
-		const list = await window.omp.tabs.list().catch(() => null);
-		if (!list) {
-			// Pre-tabs main (dev mismatch) or bridge down — the tab strip simply
-			// stays empty and TAB_STATUS pushes rebuild it.
-			return false;
+		try {
+			return await reconcileWithMain(set, get);
+		} finally {
+			if (!get().reconciled) set({ reconciled: true });
 		}
-		set(state => {
-			const leftovers = new Map(state.tabs.map(tab => [tab.id, tab]));
-			const merged: SessionTab[] = list.map(info => {
-				const existing = leftovers.get(info.tabId);
-				leftovers.delete(info.tabId);
-				const sessionChanged =
-					(existing?.sessionId !== undefined &&
-						info.sessionId !== undefined &&
-						existing.sessionId !== info.sessionId) ||
-					(existing?.sessionPath !== undefined &&
-						info.sessionPath !== undefined &&
-						existing.sessionPath !== info.sessionPath);
-				if (sessionChanged) {
-					replaceTabRuntime(info.tabId);
-				}
-				ensureTabRuntime(info.tabId);
-				return {
-					id: info.tabId,
-					cwd: info.cwd || existing?.cwd || "",
-					status: info.status,
-					compacting: info.compacting ?? existing?.compacting ?? false,
-					kind: info.kind ?? existing?.kind ?? "agent",
-					placeholder: info.placeholder ?? existing?.placeholder,
-					worktree: info.worktree ?? existing?.worktree,
-					title:
-						info.title === undefined ? (sessionChanged ? undefined : existing?.title) : (info.title ?? undefined),
-					sessionPath: info.sessionPath === undefined ? existing?.sessionPath : (info.sessionPath ?? undefined),
-					sessionId: info.sessionId ?? existing?.sessionId,
-					unreadDone: sessionChanged ? false : (existing?.unreadDone ?? false),
-					pendingSessionPath: existing?.pendingSessionPath,
-				};
-			});
-			// Entries the reply doesn't know (a spawn reply raced this reconcile)
-			// survive appended at the end.
-			const tabs = [...merged, ...leftovers.values()];
-			const mainActiveTabId = list.find(info => info.active)?.tabId;
-			const activeTabId =
-				state.activeTabId && tabs.some(tab => tab.id === state.activeTabId)
-					? state.activeTabId
-					: mainActiveTabId && tabs.some(tab => tab.id === mainActiveTabId)
-						? mainActiveTabId
-						: (tabs[0]?.id ?? null);
-			const mainVisible = list.filter(info => info.visible).map(info => info.tabId);
-			const mainSplitFirst = list.find(info => info.split?.index === 0);
-			const mainSplitSecond = list.find(info => info.split?.index === 1);
-			const restoredSplit =
-				mainSplitFirst?.split && mainSplitSecond?.split && mainSplitFirst.split.axis === mainSplitSecond.split.axis
-					? {
-							axis: mainSplitFirst.split.axis,
-							firstTabId: mainSplitFirst.tabId,
-							secondTabId: mainSplitSecond.tabId,
-							ratio: clampRatio(mainSplitFirst.split.ratio),
-						}
-					: null;
-			const split =
-				restoredSplit ??
-				(state.split &&
-				mainVisible.length === 2 &&
-				mainVisible.includes(state.split.firstTabId) &&
-				mainVisible.includes(state.split.secondTabId)
-					? state.split
-					: null);
-			return { tabs, activeTabId, split };
-		});
-		const activeTabId = get().activeTabId;
-		setFocusedSessionRuntime(activeTabId);
-		if (activeTabId) {
-			try {
-				const routed = await routeTabView(activeTabId, visibleTabIds(get()), get().split);
-				reconcileTabRoute(activeTabId, routed);
-				return routed;
-			} catch {
-				reconcileTabRoute(activeTabId, false);
-				return false;
-			}
-		}
-		return true;
 	},
 
-	openTab: async args => {
+	openTab: async (args, options) => {
 		const runtimeCwd = sessionRuntimeStore<SessionStore>(get().activeTabId, "session")?.getState().cwd;
 		const cwd =
 			args?.cwd ??
@@ -354,16 +377,19 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 			});
 		} catch (error) {
 			toast({ variant: "error", title: translate("tabs.newFailed"), message: String(error) });
+			options?.onFailure?.("error");
 			return null;
 		}
 		if (!result) {
 			toast({ variant: "warning", message: translate("tabs.parallelCap") });
+			options?.onFailure?.("cap");
 			return null;
 		}
 		// Cross-kind refusal: the target session file carries a different kind —
 		// no conversion path exists (I2), so surface it and stay put.
 		if (result.tabId === null && result.refusal === "kind-mismatch") {
 			toast({ variant: "error", title: translate("tabs.newFailed"), message: translate("tabs.kindMismatch") });
+			options?.onFailure?.("kind-mismatch");
 			return null;
 		}
 		// F-OWN belt guard: the session file is already attached to a tab, so
@@ -678,7 +704,7 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		closedTabIds.clear();
 		setFocusedSessionRuntime(null);
 		resetTabRoute();
-		set({ tabs: [], activeTabId: null, bundles: new Map(), split: null });
+		set({ tabs: [], activeTabId: null, bundles: new Map(), split: null, reconciled: false });
 	},
 }));
 

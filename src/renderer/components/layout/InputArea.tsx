@@ -105,6 +105,9 @@ export function InputArea() {
 	const setSending = useComposerStore(state => state.setSending);
 	const submissionUncertain = useComposerStore(state => state.submissionUncertain);
 	const setSubmissionUncertain = useComposerStore(state => state.setSubmissionUncertain);
+	const autoSubmit = useComposerStore(state => state.autoSubmit);
+	const clearAutoSubmit = useComposerStore(state => state.clearAutoSubmit);
+	const handledAutoSubmit = useRef<string | null>(null);
 	const [filePaths, setFilePaths] = useState<string[]>([]);
 	const [historySearchOpen, setHistorySearchOpen] = useState(false);
 	const [recording, setRecording] = useState(false);
@@ -521,6 +524,18 @@ export function InputArea() {
 		setMenu,
 		setSending,
 	});
+
+	// A quick-entry prompt arrives in a fresh tab's draft and goes out once the
+	// tab is ready, through the same pipeline as Enter. Shell-mode text is only
+	// shown, never run: a pasted `!cmd` must not execute unseen.
+	useEffect(() => {
+		if (!autoSubmit || status !== "ready" || !routeReady || sending || submissionUncertain) return;
+		if (handledAutoSubmit.current === autoSubmit.id) return;
+		handledAutoSubmit.current = autoSubmit.id;
+		clearAutoSubmit();
+		if (!parseComposerMode(text)) send(text);
+		void window.omp.quickEntry.ack(autoSubmit.id);
+	}, [autoSubmit, status, routeReady, sending, submissionUncertain, text, send, clearAutoSubmit]);
 
 	// Mic dictation (stt.enabled): click starts capture, click again stops and
 	// transcribes; the transcript inserts at the textarea caret. The

@@ -2394,6 +2394,7 @@ export const en: Record<string, string> = {
 	"hotkeys.row.modelPicker": "Model picker",
 	"hotkeys.row.agentHub": "Agent hub",
 	"hotkeys.row.windowToggle": "Show / hide the app window (works system-wide)",
+	"hotkeys.row.quickEntry": "Open quick entry (works system-wide)",
 	"hotkeys.row.newSession": "New session",
 	"hotkeys.row.exportHtml": "Export session as HTML",
 	"hotkeys.row.newWindow": "New window",
@@ -2412,6 +2413,21 @@ export const en: Record<string, string> = {
 	"hotkeys.remap.saved": "“{action}” rebound to {chord}",
 	"hotkeys.remap.resetDone": "“{action}” reset to default",
 	"hotkeys.remap.resetAllDone": "All keybindings reset to defaults",
+	"hotkeys.quickEntry.off": "Off",
+	"hotkeys.quickEntry.disable": "Turn off",
+	"hotkeys.quickEntry.enable": "Turn on",
+	"hotkeys.quickEntry.refused": "The system refused {chord}. Another app may be using it.",
+	"hotkeys.quickEntry.portal":
+		"Your desktop owns this shortcut (GNOME: Settings → Apps → Sai ATLAS → Global Shortcuts). {chord} is only the suggested key. If it never works, bind “sai-atlas --quick-entry” in your desktop's keyboard settings.",
+	"hotkeys.quickEntry.xwayland":
+		"On Wayland through XWayland, this shortcut works only while Sai ATLAS is focused. To open quick entry from any app, bind “sai-atlas --quick-entry” in your desktop's keyboard settings.",
+	"hotkeys.quickEntry.systemChord": "Other apps and the system use this chord. Add Shift or Alt, or pick another key.",
+	"hotkeys.quickEntry.restart": "Restart Sai ATLAS to apply this change.",
+	"hotkeys.quickEntry.desktopEntryMissing":
+		"Wayland global shortcuts need the installed .deb. Bind “sai-atlas --quick-entry” in your desktop's keyboard settings instead.",
+	"hotkeys.quickEntry.invalid": "Use a key with Ctrl, Alt or Cmd/Super.",
+	"hotkeys.quickEntry.conflictGlobal": "“{action}” already uses this chord system-wide",
+	"hotkeys.quickEntry.takesOver": "Quick entry will take this chord everywhere, including from “{action}”",
 
 	// Tool renderers
 	"tools.ask.questionFallback": "Question",
@@ -3350,4 +3366,22 @@ export const en: Record<string, string> = {
 	"agentHub.hub.col.agent": "Agent",
 	"agentHub.hub.col.elapsed": "Elapsed",
 	"agentHub.hub.col.actions": "Actions",
+	"quickEntry.title": "Quick entry",
+	"quickEntry.placeholder": "Ask Sai ATLAS…",
+	"quickEntry.target.aria": "Send to",
+	"quickEntry.target.chat": "Chat",
+	"quickEntry.target.agent": "Agent",
+	"quickEntry.workspace.aria": "Agent workspace",
+	"quickEntry.hint": "Enter to send · Shift+Enter for a new line · Esc to close",
+	"quickEntry.error.noWindow": "Sai ATLAS could not open a window. Your text is kept; press Enter to try again.",
+	"quickEntry.error.workspaceMissing": "That workspace is no longer available. Pick another one.",
+	"quickEntry.error.tabFailed": "Sai ATLAS could not open a new tab. Your text is kept; press Enter to try again.",
+	"quickEntry.error.interrupted": "The window closed before your message was sent. Press Enter to send it again.",
+	"quickEntry.error.invalid": "This message cannot be sent. Shorten it or pick another target.",
+	"quickEntry.restore": "Restore unsent message ({count})",
+	"quickEntry.toast.returned": "Your quick entry message was not sent. Open quick entry to send it again.",
+	"quickEntry.toast.leftInTab": "The new tab is not ready yet. Your message is waiting in its composer.",
+	"quickEntry.toast.refusedTitle": "Quick entry shortcut unavailable",
+	"quickEntry.toast.refusedBody":
+		"{chord} could not be registered. Choose another chord in Settings → Keyboard Shortcuts.",
 };

@@ -25,6 +25,8 @@ const RUNTIME_ERROR_SOURCES = new Set<RuntimeErrorSource>([
 	"main-uncaught",
 	"main-unhandled-rejection",
 	"global-shortcut",
+	"notification",
+	"quick-entry",
 	"unknown",
 ]);
 

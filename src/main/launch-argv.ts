@@ -4,7 +4,14 @@
  */
 import * as fs from "node:fs";
 
-export type LaunchRequest = { kind: "url"; url: string } | { kind: "path"; path: string } | { kind: "focus" };
+export type LaunchRequest =
+	| { kind: "url"; url: string }
+	| { kind: "quick-entry" }
+	| { kind: "path"; path: string }
+	| { kind: "focus" };
+
+/** Opens the quick-entry bar instead of raising a window. */
+export const QUICK_ENTRY_FLAG = "--quick-entry";
 
 export function isExistingDirectory(path: string): boolean {
 	try {
@@ -15,9 +22,10 @@ export function isExistingDirectory(path: string): boolean {
 }
 
 /**
- * A deep link wins over everything; otherwise the first argument naming a real
- * directory is the workspace to open, and anything left means "just raise the
- * app". Flags are skipped so Electron's own switches never look like a path.
+ * A deep link wins over everything, then the quick-entry flag; otherwise the
+ * first argument naming a real directory is the workspace to open, and
+ * anything left means "just raise the app". Flags are skipped so Electron's own
+ * switches never look like a path.
  */
 export function parseLaunchArgv(
 	argv: readonly string[],
@@ -27,6 +35,7 @@ export function parseLaunchArgv(
 	for (const arg of argv) {
 		if (arg.startsWith(`${protocol}://`)) return { kind: "url", url: arg };
 	}
+	if (argv.includes(QUICK_ENTRY_FLAG)) return { kind: "quick-entry" };
 	for (const arg of argv) {
 		if (arg.startsWith("-")) continue;
 		if (directoryExists(arg)) return { kind: "path", path: arg };

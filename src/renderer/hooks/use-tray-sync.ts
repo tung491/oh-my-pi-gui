@@ -10,6 +10,7 @@
 import { useEffect } from "react";
 import type { TrayState } from "../../shared/ipc-types";
 import { PRODUCT_NAME } from "../../shared/product";
+import { recentWorkspaceCwds } from "../../shared/recent-workspaces";
 import { contextUsageView } from "../lib/context-usage";
 import { basename } from "../lib/format";
 import { useLang } from "../lib/i18n";
@@ -38,16 +39,11 @@ export function useTraySync(): void {
 
 	useEffect(() => {
 		// Unique workspaces by cwd, most-recently-active first, current flagged.
-		const byCwd = new Map<string, number>();
-		for (const session of sessions) {
-			const modified = Date.parse(session.modified) || 0;
-			if (modified > (byCwd.get(session.cwd) ?? -1)) byCwd.set(session.cwd, modified);
-		}
-		if (cwd && !byCwd.has(cwd)) byCwd.set(cwd, 0);
-		const workspaces = [...byCwd.keys()]
-			.sort((a, b) => (byCwd.get(b) ?? 0) - (byCwd.get(a) ?? 0))
-			.slice(0, 9)
-			.map(wsCwd => ({ cwd: wsCwd, name: basename(wsCwd) || wsCwd, current: wsCwd === cwd }));
+		const workspaces = recentWorkspaceCwds(sessions, cwd || null, 9).map(wsCwd => ({
+			cwd: wsCwd,
+			name: basename(wsCwd) || wsCwd,
+			current: wsCwd === cwd,
+		}));
 
 		const trayStatus: TrayState["status"] =
 			status === "error" ? "error" : awaitingConfirmation ? "waiting" : isStreaming ? "streaming" : "idle";

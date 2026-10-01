@@ -5,7 +5,9 @@
   "type": "module",
   "description": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
   "main": "./out/main/index.js",
+  "desktopName": "vn.io.vif.saiatlas.desktop",
   "scripts": {
+    "postinstall": "install-electron",
     "dev": "electron-vite dev",
     "build": "electron-vite build && bun scripts/check-main-bundle.ts && bun scripts/check-renderer-chunks.ts",
     "preview": "electron-vite preview",
@@ -22,6 +24,7 @@
     "check": "node scripts/lint-surfaces.mjs && biome check . && tsc --noEmit",
     "check:types": "tsc --noEmit",
     "check:protocol": "bun scripts/check-protocol.ts",
+    "check:mac-update-floor": "bun scripts/check-mac-update-floor.ts",
     "lint": "biome lint .",
     "fix": "biome check --write --unsafe .",
     "fmt": "biome format --write .",
@@ -80,7 +83,7 @@
     "@types/bun": "1.3.14",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "electron": "35.7.5",
+    "electron": "44.4.5",
     "electron-builder": "^26.0.0",
     "electron-vite": "^3.0.0",
     "linkedom": "0.18.13",
@@ -93,8 +96,5 @@
     "unified": "11.0.5",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
-  },
-  "trustedDependencies": [
-    "electron"
-  ]
+  }
 }

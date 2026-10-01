@@ -94,7 +94,10 @@ export default defineConfig({
 		},
 		build: {
 			rollupOptions: {
-				input: { index: resolve(__dirname, "src/renderer/index.html") },
+				input: {
+					index: resolve(__dirname, "src/renderer/index.html"),
+					"quick-entry": resolve(__dirname, "src/renderer/quick-entry.html"),
+				},
 				output: { manualChunks },
 			},
 		},

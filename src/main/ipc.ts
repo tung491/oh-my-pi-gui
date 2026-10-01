@@ -4,7 +4,15 @@
 import { type Dirent, existsSync, promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } from "electron";
+import {
+	BrowserWindow,
+	clipboard,
+	dialog,
+	ipcMain,
+	Notification,
+	type NotificationConstructorOptions,
+	shell,
+} from "electron";
 import Store from "electron-store";
 import type {
 	CustomProviderInput,
@@ -48,12 +56,14 @@ import type { RpcCommand, RpcSessionState } from "../shared/rpc-types";
 import { requestQuit } from "./app-quit";
 import { BenchmarkRunner } from "./benchmark-runner";
 import { ensureDefaultWorkspace } from "./default-workspace";
+import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { deleteModelsProvider, listModelsProviders, modelsPath, upsertModelsProvider } from "./models-config";
 import { openPathTarget } from "./open-path-target";
+import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
 import type { SessionIndex } from "./session-index";
 import { resolveEditorCommand } from "./shell-env";
@@ -347,12 +357,17 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	const benchmarkRunners = new Map<number, BenchmarkRunner>();
 	const { sidecarPool, sessionIndex, statsClient, logWatcher, windowManager } = deps;
 	const prefsStore = new Store<PrefsSchema>({ name: "prefs" });
+	// Last folder each window's file dialog used this session (Electron 43+
+	// dialogs no longer remember it). Per window, so one window's export never
+	// defaults into another window's project folder.
+	const lastDialogDirs = new Map<number, string>();
 
 	// Drop a closed window's tray/progress snapshot so the aggregate reflects
 	// only live windows (and re-render the tray with the new aggregate).
 	windowManager.subscribeWindowClosed(record => {
 		trayStates.delete(record.id);
 		progressStates.delete(record.id);
+		lastDialogDirs.delete(record.id);
 		benchmarkRunners.get(record.id)?.abort();
 		benchmarkRunners.delete(record.id);
 	});
@@ -366,7 +381,17 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	sidecarPool.hostToolExecutor = (sidecar, request, win) => {
 		const result = executeGuiHostTool(request.toolName, request.arguments);
 		if (result !== undefined) {
-			sidecar.sendSideChannel({ type: "host_tool_result", id: request.id, result });
+			// Electron 44's clipboard.readText() is async; the pool still needs the
+			// synchronous "answered inline" boolean, so the reply follows later.
+			void Promise.resolve(result).then(
+				value => sidecar.sendSideChannel({ type: "host_tool_result", id: request.id, result: value }),
+				error =>
+					sidecar.sendSideChannel({
+						type: "host_tool_result",
+						id: request.id,
+						result: `Clipboard read failed: ${error instanceof Error ? error.message : String(error)}`,
+					}),
+			);
 			return true;
 		}
 		// Unknown host tools → forward to the owning renderer.
@@ -806,10 +831,12 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			const win = BrowserWindow.fromWebContents(event.sender);
 			if (!win) return null;
 			const result = await dialog.showSaveDialog(win, {
-				defaultPath: defaultPath ?? "session.html",
+				defaultPath: dialogStartPath(lastDialogDirs.get(win.webContents.id), defaultPath ?? "session.html"),
 				filters: filters ?? [{ name: "HTML", extensions: ["html"] }],
 			});
-			return result.canceled ? null : (result.filePath ?? null);
+			if (result.canceled || !result.filePath) return null;
+			lastDialogDirs.set(win.webContents.id, dialogDirOf(result.filePath));
+			return result.filePath;
 		},
 	);
 
@@ -819,10 +846,14 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			const win = BrowserWindow.fromWebContents(event.sender);
 			if (!win) return null;
 			const result = await dialog.showOpenDialog(win, {
+				defaultPath: dialogStartPath(lastDialogDirs.get(win.webContents.id), undefined),
 				properties: options?.directory ? ["openDirectory", "createDirectory"] : ["openFile", "multiSelections"],
 				filters: filters ?? [],
 			});
-			return result.canceled ? null : result.filePaths;
+			if (result.canceled) return null;
+			const [first] = result.filePaths;
+			if (first) lastDialogDirs.set(win.webContents.id, options?.directory ? first : dialogDirOf(first));
+			return result.filePaths;
 		},
 	);
 
@@ -841,7 +872,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			if (key === lastNotifyKey && now - lastNotifyAt < 1500) return;
 			lastNotifyKey = key;
 			lastNotifyAt = now;
-			new Notification({ title: payload.title, body: payload.body ?? "" }).show();
+			showNotification({ title: payload.title, body: payload.body ?? "" });
 		}
 	});
 
@@ -857,6 +888,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		if (typeof payload.key !== "string") {
 			throw new Error("Invalid preference key");
 		}
+		if (isMainOwnedPrefKey(payload.key)) throw new Error("Preference is managed by the app");
 		prefsStore.set(payload.key, payload.value);
 		if (payload.key === "language" && (payload.value === "en" || payload.value === "zh")) {
 			createMenu(windowManager, deps.spawnWindow);
@@ -1192,8 +1224,21 @@ function broadcast(windowManager: WindowManager, channel: string, data: unknown)
 	}
 }
 
+/**
+ * Show a desktop notification, logging when the OS refuses it. Electron 42+
+ * shows macOS notifications through UNNotification, which fails on ad-hoc
+ * signed builds; without the log the notification would vanish silently.
+ */
+function showNotification(options: NotificationConstructorOptions): void {
+	const notification = new Notification(options);
+	notification.on("failed", (_event, error) => {
+		writeRuntimeLog({ source: "notification", message: `Notification failed: ${error}` });
+	});
+	notification.show();
+}
+
 /** Execute GUI-registered host tools. Returns undefined for unknown tools. */
-function executeGuiHostTool(name: string, args: Record<string, unknown>): string | undefined {
+function executeGuiHostTool(name: string, args: Record<string, unknown>): string | Promise<string> | undefined {
 	switch (name) {
 		case "gui_open_url": {
 			const url = typeof args.url === "string" ? args.url : "";
@@ -1206,7 +1251,7 @@ function executeGuiHostTool(name: string, args: Record<string, unknown>): string
 		case "gui_notify": {
 			const title = typeof args.title === "string" ? args.title : "Notification";
 			const body = typeof args.body === "string" ? args.body : "";
-			new Notification({ title, body }).show();
+			showNotification({ title, body });
 			return "Notification shown";
 		}
 		case "gui_clipboard_read": {

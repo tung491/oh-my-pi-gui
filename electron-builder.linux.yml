@@ -22,12 +22,9 @@ protocols:
       - omp
 asar: true
 compression: maximum
-# Electron reads desktopName from the packaged package.json; the deb names
-# its entry after linux.executableName, so both are sai-atlas.desktop. The deb
-# target requires homepage, which would otherwise come from the git remote
-# of whichever fork runs the build.
+# The deb target requires homepage, which would otherwise come from the git
+# remote of whichever fork runs the build.
 extraMetadata:
-  desktopName: sai-atlas.desktop
   homepage: https://github.com/nornzach/oh-my-pi-gui
 # The static AppImage runtime needs no libfuse2 and writes no --no-sandbox
 # into Exec; see README → Linux for the AppArmor profile it relies on.
@@ -36,6 +33,8 @@ toolsets:
 
 linux:
   executableName: sai-atlas
+  # Names the .desktop file and StartupWMClass after package.json desktopName (the Wayland app_id).
+  syncDesktopName: true
   icon: resources/icons
   category: Development
   # Matches the git authorship of the release commits (user-confirmed 2026-09-29).
@@ -45,11 +44,6 @@ linux:
       arch: [x64]
     - target: deb
       arch: [x64]
-  desktop:
-    entry:
-      # Electron 35 runs under XWayland and names its X11 window class after
-      # app.setName(PRODUCT_NAME) in src/main/index.ts.
-      StartupWMClass: Sai ATLAS
 
 appImage:
   executableArgs: []

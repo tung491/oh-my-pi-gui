@@ -69,6 +69,49 @@ export interface WindowRecord {
  */
 export type SpawnWindow = (cwd?: string, pendingSessionPath?: string, kind?: SessionKind) => BrowserWindow | null;
 
+/**
+ * The guards every app page gets: the editable context menu, external links
+ * opened in the browser, and no in-place navigation.
+ */
+export function applyWebContentsGuards(win: BrowserWindow): void {
+	win.webContents.on("context-menu", (_event, params) => {
+		const template = editableContextMenuTemplate(params, mainT("menu.addToDictionary", getMainLanguage()), {
+			replaceMisspelling: suggestion => win.webContents.replaceMisspelling(suggestion),
+			addToDictionary: word => win.webContents.session.addWordToSpellCheckerDictionary(word),
+		});
+		if (template.length > 0) Menu.buildFromTemplate(template).popup({ window: win });
+	});
+	// Open external links in browser. Scheme-checked: renderer surfaces
+	// (OSC 8 anchors, target=_blank) must not be able to launch arbitrary
+	// protocols via middle-click / new-window activation.
+	win.webContents.setWindowOpenHandler(({ url }) => {
+		if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+		return { action: "deny" };
+	});
+	// Keep the privileged preload attached only to the desktop shell. Links
+	// and dropped documents must not replace it with arbitrary page content.
+	win.webContents.on("will-navigate", event => event.preventDefault());
+}
+
+/** Load one of the renderer's pages: the dev server's in development, the built file otherwise. */
+export function loadRendererPage(win: BrowserWindow, page: "index" | "quick-entry"): void {
+	const devUrl = process.env.ELECTRON_RENDERER_URL;
+	if (devUrl) {
+		void win.loadURL(page === "index" ? devUrl : `${devUrl.replace(/\/$/, "")}/${page}.html`);
+	} else {
+		void win.loadFile(join(__dirname, `../renderer/${page}.html`));
+	}
+}
+
+/** Send once the page has loaded, so a message to a booting renderer is not dropped. */
+export function sendWhenLoaded<T>(win: BrowserWindow, channel: string, payload: T): void {
+	const send = () => {
+		if (!win.isDestroyed()) win.webContents.send(channel, payload);
+	};
+	if (win.webContents.isLoading()) win.webContents.once("did-finish-load", send);
+	else send();
+}
+
 export class WindowManager {
 	#records = new Map<number, WindowRecord>();
 	#store: Store<StoreSchema>;
@@ -133,13 +176,7 @@ export class WindowManager {
 			},
 		});
 
-		win.webContents.on("context-menu", (_event, params) => {
-			const template = editableContextMenuTemplate(params, mainT("menu.addToDictionary", getMainLanguage()), {
-				replaceMisspelling: suggestion => win.webContents.replaceMisspelling(suggestion),
-				addToDictionary: word => win.webContents.session.addWordToSpellCheckerDictionary(word),
-			});
-			if (template.length > 0) Menu.buildFromTemplate(template).popup({ window: win });
-		});
+		applyWebContentsGuards(win);
 
 		if (saved.isMaximized) {
 			win.maximize();
@@ -149,22 +186,11 @@ export class WindowManager {
 		this.#records.set(record.id, record);
 		this.#observeRuntimeFailures(record);
 
-		this.#loadRenderer(win);
+		loadRendererPage(win, "index");
 
 		win.once("ready-to-show", () => {
 			win.show();
 		});
-
-		// Open external links in browser. Scheme-checked: renderer surfaces
-		// (OSC 8 anchors, target=_blank) must not be able to launch arbitrary
-		// protocols via middle-click / new-window activation.
-		win.webContents.setWindowOpenHandler(({ url }) => {
-			if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
-			return { action: "deny" };
-		});
-		// Keep the privileged preload attached only to the desktop shell. Links
-		// and dropped documents must not replace it with arbitrary page content.
-		win.webContents.on("will-navigate", event => event.preventDefault());
 
 		// Persist state on close
 		win.on("close", () => {
@@ -236,7 +262,7 @@ export class WindowManager {
 			if (this.#restartForChangedResources(record, { kind: "process-gone", reloadable: shouldReload })) return;
 			if (shouldReload) {
 				queueMicrotask(() => {
-					if (!win.isDestroyed() && !win.webContents.isDestroyed()) this.#loadRenderer(win);
+					if (!win.isDestroyed() && !win.webContents.isDestroyed()) loadRendererPage(win, "index");
 				});
 			}
 		});
@@ -264,14 +290,6 @@ export class WindowManager {
 				context(),
 			);
 		});
-	}
-
-	#loadRenderer(win: BrowserWindow): void {
-		if (process.env.ELECTRON_RENDERER_URL) {
-			void win.loadURL(process.env.ELECTRON_RENDERER_URL);
-		} else {
-			void win.loadFile(join(__dirname, "../renderer/index.html"));
-		}
 	}
 
 	#readResourceIdentity(): ApplicationResourceIdentity | null {
