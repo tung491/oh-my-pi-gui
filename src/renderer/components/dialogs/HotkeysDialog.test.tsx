@@ -206,6 +206,21 @@ describe("HotkeysDialog", () => {
 		expect(quickEntryRow().querySelector("kbd")?.textContent).toBe(en["hotkeys.quickEntry.off"]);
 	});
 
+	it("ends a keymap capture before turning the shortcut off, so it is not left unprotected", async () => {
+		const { calls } = stubQuickEntry();
+		await mount();
+		const actionRebind = [...document.body.querySelectorAll("button")].find(
+			button =>
+				button.getAttribute("aria-label") === en["hotkeys.remap.rebind"] &&
+				!quickEntryRow().contains(button as unknown as Node),
+		);
+		if (!actionRebind) throw new Error("no keymap rebind button");
+		await click(actionRebind as unknown as Element);
+		await click(buttonIn(quickEntryRow(), en["hotkeys.quickEntry.disable"]));
+		expect(document.body.textContent).not.toContain(en["hotkeys.remap.pressChord"]);
+		expect(calls).toEqual(["suspend true", 'set {"enabled":false}', "suspend false"]);
+	});
+
 	it("says the desktop owns a portal binding and that a change waits for a restart", async () => {
 		stubQuickEntry({ ...REGISTERED, mode: "portal", status: "requested", restartRequired: true });
 		await mount();

@@ -339,6 +339,13 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 		}
 	};
 
+	// Main ends this window's shortcut suspension on any change, so a capture
+	// still open here would go on unprotected: end it first.
+	const changeQuickEntry = (update: QuickEntryShortcutUpdate) => {
+		setCapture(null);
+		void updateQuickEntry(update);
+	};
+
 	const saveCapture = () => {
 		if (!capture?.chord || !captureLabel || captureConflict?.kind === "error") return;
 		const { target, chord } = capture;
@@ -464,8 +471,8 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 										platform={keyboardPlatform}
 										busy={quickEntryBusy}
 										onRebind={() => setCapture({ target: { kind: "quickEntry" }, chord: null })}
-										onToggle={() => void updateQuickEntry({ enabled: !quickEntry.enabled })}
-										onReset={() => void updateQuickEntry({ reset: true })}
+										onToggle={() => changeQuickEntry({ enabled: !quickEntry.enabled })}
+										onReset={() => changeQuickEntry({ reset: true })}
 									/>
 								);
 							}
