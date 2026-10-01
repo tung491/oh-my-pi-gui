@@ -1,12 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { DISPLAY_RESTART_ENV, displayRestart, LINUX_DISPLAY_SWITCH, relaunchArgs } from "./relaunch-args";
+import {
+	appImageRuntimeArgs,
+	DISPLAY_RESTART_ENV,
+	displayRestart,
+	LINUX_DISPLAY_SWITCH,
+	relaunchArgs,
+} from "./relaunch-args";
 
 describe("relaunchArgs", () => {
 	it("adds XWayland to a Linux relaunch that would otherwise lose it", () => {
 		expect(relaunchArgs([], "linux", ["/opt/Sai ATLAS/sai-atlas"])).toEqual([LINUX_DISPLAY_SWITCH]);
 		expect(relaunchArgs(["/workspace/app"], "linux", ["/opt/Sai ATLAS/sai-atlas"])).toEqual([
-			"/workspace/app",
 			"--ozone-platform=x11",
+			"/workspace/app",
+		]);
+	});
+
+	it("puts the switch before a -- that ends Chromium's switches", () => {
+		expect(relaunchArgs(["--", "/workspace/app"], "linux", ["exe"])).toEqual([
+			LINUX_DISPLAY_SWITCH,
+			"--",
+			"/workspace/app",
 		]);
 	});
 
@@ -22,8 +36,8 @@ describe("relaunchArgs", () => {
 
 	it("ignores the platform hint and other look-alike switches", () => {
 		expect(relaunchArgs(["--ozone-platform-hint=auto"], "linux", ["exe"])).toEqual([
-			"--ozone-platform-hint=auto",
 			LINUX_DISPLAY_SWITCH,
+			"--ozone-platform-hint=auto",
 		]);
 	});
 
@@ -52,8 +66,16 @@ describe("displayRestart", () => {
 	it("restarts a terminal launch once with XWayland, keeping its arguments", () => {
 		expect(displayRestart(deb)).toEqual({
 			execPath: "/opt/Sai ATLAS/sai-atlas",
-			args: ["/workspace/app", LINUX_DISPLAY_SWITCH],
+			args: [LINUX_DISPLAY_SWITCH, "/workspace/app"],
 		});
+	});
+
+	it("keeps the switch ahead of a -- in the replayed arguments", () => {
+		expect(displayRestart({ ...deb, argv: [deb.execPath, "--", "/workspace/app"] })?.args).toEqual([
+			LINUX_DISPLAY_SWITCH,
+			"--",
+			"/workspace/app",
+		]);
 	});
 
 	it("restarts an AppImage opened directly through the AppImage file", () => {
@@ -66,6 +88,20 @@ describe("displayRestart", () => {
 		expect(displayRestart(appImage)).toEqual({
 			execPath: "/home/me/Applications/Sai-ATLAS.AppImage",
 			args: [LINUX_DISPLAY_SWITCH],
+		});
+	});
+
+	it("restarts an extracted AppImage extracted again, the runtime flag first", () => {
+		const appDir = "/tmp/appimage_extracted_0123abcd";
+		const extracted = {
+			...deb,
+			argv: [`${appDir}/sai-atlas`, "/workspace/app"],
+			execPath: `${appDir}/sai-atlas`,
+			env: { APPIMAGE: "/home/me/Applications/Sai-ATLAS.AppImage", APPDIR: appDir },
+		};
+		expect(displayRestart(extracted)).toEqual({
+			execPath: "/home/me/Applications/Sai-ATLAS.AppImage",
+			args: ["--appimage-extract-and-run", LINUX_DISPLAY_SWITCH, "/workspace/app"],
 		});
 	});
 
@@ -87,5 +123,21 @@ describe("displayRestart", () => {
 		expect(displayRestart({ ...deb, packaged: false })).toBeNull();
 		expect(displayRestart({ ...deb, platform: "darwin" })).toBeNull();
 		expect(displayRestart({ ...deb, platform: "win32" })).toBeNull();
+	});
+});
+
+describe("appImageRuntimeArgs", () => {
+	it("asks the runtime to extract again when this launch runs extracted", () => {
+		expect(appImageRuntimeArgs({ APPDIR: "/tmp/appimage_extracted_0123abcd" })).toEqual([
+			"--appimage-extract-and-run",
+		]);
+		expect(appImageRuntimeArgs({ APPDIR: "/tmp/appimage_extracted_0123abcd/" })).toEqual([
+			"--appimage-extract-and-run",
+		]);
+	});
+
+	it("adds nothing for a mounted AppImage or a launch outside one", () => {
+		expect(appImageRuntimeArgs({ APPDIR: "/tmp/.mount_SaiATL1" })).toEqual([]);
+		expect(appImageRuntimeArgs({})).toEqual([]);
 	});
 });
