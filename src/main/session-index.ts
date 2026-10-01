@@ -30,6 +30,11 @@ const SEARCH_READ_BYTES = 8 * 1024 * 1024;
 const SEARCH_CACHE_BYTES = 64 * 1024 * 1024;
 /** Files read concurrently during a content search (bounds FD pressure). */
 const SEARCH_BATCH = 16;
+/**
+ * Searches this far apart are not one search session any more: the cached
+ * text goes back to the heap. Debounced keystrokes land well inside it.
+ */
+const SEARCH_CACHE_IDLE_MS = 2 * 60_000;
 
 type SessionStatus = SessionInfo["status"];
 
@@ -37,6 +42,7 @@ export class SessionIndex {
 	#watcher: FSWatcher | null = null;
 	#parseCache = new StampedLru<SessionInfo>(MAX_PARSE_CACHE_ENTRIES);
 	#textCache = new StampedLru<string>(SEARCH_CACHE_BYTES, text => text.length);
+	#textCacheIdleTimer: NodeJS.Timeout | null = null;
 	#sessionsDir: string;
 	#cwd: string;
 
@@ -71,6 +77,17 @@ export class SessionIndex {
 		this.#watcher?.close();
 		this.#watcher = null;
 		this.#parseCache.clear();
+		this.#clearSearchCache();
+	}
+
+	/** Cached search texts; zero once searches have gone quiet. */
+	get searchCacheSize(): number {
+		return this.#textCache.size;
+	}
+
+	#clearSearchCache(): void {
+		if (this.#textCacheIdleTimer) clearTimeout(this.#textCacheIdleTimer);
+		this.#textCacheIdleTimer = null;
 		this.#textCache.clear();
 	}
 
@@ -135,11 +152,23 @@ export class SessionIndex {
 	 * text contains every query token (case-insensitive). Deliberately a raw
 	 * grep — no JSON parsing — because tokens are matched individually, so
 	 * JSON escaping rarely breaks them. Lowercased file text is cached by
-	 * mtime:size so debounced keystrokes only re-read files that changed.
+	 * mtime:size so debounced keystrokes only re-read files that changed, and
+	 * dropped once searches have been quiet for SEARCH_CACHE_IDLE_MS.
 	 */
 	async searchContent(query: string, candidatePaths: string[]): Promise<string[]> {
 		const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
 		if (tokens.length === 0 || candidatePaths.length === 0) return [];
+		try {
+			return await this.#searchFiles(tokens, candidatePaths);
+		} finally {
+			// Every search restarts the quiet window that releases the cache.
+			if (this.#textCacheIdleTimer) clearTimeout(this.#textCacheIdleTimer);
+			this.#textCacheIdleTimer = setTimeout(() => this.#clearSearchCache(), SEARCH_CACHE_IDLE_MS);
+			this.#textCacheIdleTimer.unref();
+		}
+	}
+
+	async #searchFiles(tokens: string[], candidatePaths: string[]): Promise<string[]> {
 		const matches: string[] = [];
 		for (let i = 0; i < candidatePaths.length; i += SEARCH_BATCH) {
 			const batch = await Promise.all(

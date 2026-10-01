@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionInfo } from "../shared/ipc-types";
 import { SessionIndex } from "./session-index";
 
@@ -84,5 +84,57 @@ describe("SessionIndex cache scope", () => {
 		// was never re-stat'ed or re-parsed. One append used to invalidate every
 		// entry whose key merely contained a path.
 		expect(row(second, "quiet")).toBe(quietBefore);
+	});
+});
+
+describe("SessionIndex search cache", () => {
+	const IDLE_MS = 2 * 60_000;
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	async function searchable(): Promise<{ index: SessionIndex; file: string }> {
+		// Only timers are faked; file reads stay real.
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		const { index, dir } = await makeIndex();
+		const file = await writeSession(dir, "needle-session");
+		await fs.appendFile(
+			file,
+			`${JSON.stringify({ type: "message", message: { role: "user", content: "Haystack" } })}\n`,
+		);
+		return { index, file };
+	}
+
+	it("keeps the text while searches keep coming", async () => {
+		const { index, file } = await searchable();
+		expect(await index.searchContent("haystack", [file])).toEqual([file]);
+		expect(index.searchCacheSize).toBe(1);
+		vi.advanceTimersByTime(IDLE_MS - 1_000);
+		expect(index.searchCacheSize).toBe(1);
+		// A search inside the window restarts it.
+		expect(await index.searchContent("haystack", [file])).toEqual([file]);
+		vi.advanceTimersByTime(IDLE_MS - 1_000);
+		expect(index.searchCacheSize).toBe(1);
+		index.stop();
+	});
+
+	it("drops the text once searches stop, and the next search finds the same", async () => {
+		const { index, file } = await searchable();
+		const before = await index.searchContent("haystack", [file]);
+		vi.advanceTimersByTime(IDLE_MS);
+		expect(index.searchCacheSize).toBe(0);
+		expect(await index.searchContent("haystack", [file])).toEqual(before);
+		expect(index.searchCacheSize).toBe(1);
+		index.stop();
+	});
+
+	it("clears the idle timer on stop()", async () => {
+		const { index, file } = await searchable();
+		await index.searchContent("haystack", [file]);
+		expect(vi.getTimerCount()).toBe(1);
+		index.stop();
+		expect(vi.getTimerCount()).toBe(0);
+		expect(index.searchCacheSize).toBe(0);
 	});
 });
