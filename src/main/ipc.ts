@@ -48,6 +48,7 @@ import type { RpcCommand, RpcSessionState } from "../shared/rpc-types";
 import { requestQuit } from "./app-quit";
 import { BenchmarkRunner } from "./benchmark-runner";
 import { ensureDefaultWorkspace } from "./default-workspace";
+import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
@@ -347,12 +348,17 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	const benchmarkRunners = new Map<number, BenchmarkRunner>();
 	const { sidecarPool, sessionIndex, statsClient, logWatcher, windowManager } = deps;
 	const prefsStore = new Store<PrefsSchema>({ name: "prefs" });
+	// Last folder each window's file dialog used this session (Electron 43+
+	// dialogs no longer remember it). Per window, so one window's export never
+	// defaults into another window's project folder.
+	const lastDialogDirs = new Map<number, string>();
 
 	// Drop a closed window's tray/progress snapshot so the aggregate reflects
 	// only live windows (and re-render the tray with the new aggregate).
 	windowManager.subscribeWindowClosed(record => {
 		trayStates.delete(record.id);
 		progressStates.delete(record.id);
+		lastDialogDirs.delete(record.id);
 		benchmarkRunners.get(record.id)?.abort();
 		benchmarkRunners.delete(record.id);
 	});
@@ -816,10 +822,12 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			const win = BrowserWindow.fromWebContents(event.sender);
 			if (!win) return null;
 			const result = await dialog.showSaveDialog(win, {
-				defaultPath: defaultPath ?? "session.html",
+				defaultPath: dialogStartPath(lastDialogDirs.get(win.webContents.id), defaultPath ?? "session.html"),
 				filters: filters ?? [{ name: "HTML", extensions: ["html"] }],
 			});
-			return result.canceled ? null : (result.filePath ?? null);
+			if (result.canceled || !result.filePath) return null;
+			lastDialogDirs.set(win.webContents.id, dialogDirOf(result.filePath));
+			return result.filePath;
 		},
 	);
 
@@ -829,10 +837,14 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			const win = BrowserWindow.fromWebContents(event.sender);
 			if (!win) return null;
 			const result = await dialog.showOpenDialog(win, {
+				defaultPath: dialogStartPath(lastDialogDirs.get(win.webContents.id), undefined),
 				properties: options?.directory ? ["openDirectory", "createDirectory"] : ["openFile", "multiSelections"],
 				filters: filters ?? [],
 			});
-			return result.canceled ? null : result.filePaths;
+			if (result.canceled) return null;
+			const [first] = result.filePaths;
+			if (first) lastDialogDirs.set(win.webContents.id, options?.directory ? first : dialogDirOf(first));
+			return result.filePaths;
 		},
 	);
 
