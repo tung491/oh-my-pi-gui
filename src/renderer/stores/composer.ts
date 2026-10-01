@@ -27,6 +27,11 @@ export interface ComposerStore {
 	 * (React setState parity — InputArea's updater-form call sites unchanged). */
 	setDraft: (next: string | ((current: string) => string)) => void;
 	setImages: (next: ComposerImage[] | ((current: ComposerImage[]) => ComposerImage[])) => void;
+	/** A quick-entry prompt waiting for its tab to be ready; InputArea sends it once. */
+	autoSubmit: { id: string } | null;
+	/** Put a quick-entry prompt in the draft and mark it for sending. */
+	queueAutoSubmit: (prompt: { id: string; text: string }) => void;
+	clearAutoSubmit: () => void;
 	reset: () => void;
 }
 
@@ -40,7 +45,10 @@ export const createComposerStore = () =>
 		images: [],
 		setDraft: next => set(state => ({ draft: typeof next === "function" ? next(state.draft) : next })),
 		setImages: next => set(state => ({ images: typeof next === "function" ? next(state.images) : next })),
-		reset: () => set({ draft: "", images: [], sending: false, submissionUncertain: false }),
+		autoSubmit: null,
+		queueAutoSubmit: ({ id, text }) => set({ draft: text, autoSubmit: { id } }),
+		clearAutoSubmit: () => set({ autoSubmit: null }),
+		reset: () => set({ draft: "", images: [], sending: false, submissionUncertain: false, autoSubmit: null }),
 	}));
 
 const defaultComposerStore = createComposerStore();

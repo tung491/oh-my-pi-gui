@@ -3363,4 +3363,6 @@ export const en: Record<string, string> = {
 	"quickEntry.error.interrupted": "The window closed before your message was sent. Press Enter to send it again.",
 	"quickEntry.error.invalid": "This message cannot be sent. Shorten it or pick another target.",
 	"quickEntry.restore": "Restore unsent message ({count})",
+	"quickEntry.toast.returned": "Your quick entry message was not sent. Open quick entry to send it again.",
+	"quickEntry.toast.leftInTab": "The new tab is not ready yet. Your message is waiting in its composer.",
 };

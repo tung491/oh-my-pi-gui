@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo } from "react";
-import type { MenuAction, MenuActionPayload, RunProgressState } from "../shared/ipc-types";
+import type { DeepLinkPayload, MenuAction, MenuActionPayload, RunProgressState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 import { ToastStack } from "./components/common";
 import { ActiveToolsDialog } from "./components/dialogs/ActiveToolsDialog";
@@ -64,6 +64,7 @@ import {
 } from "./lib/keymap";
 import { abortActiveTurn, restoreQueuedMessages } from "./lib/messages";
 import { watchPluginActivation } from "./lib/plugin-activation";
+import { drainQuickEntry } from "./lib/quick-entry-delivery";
 import { whenSidecarReady } from "./lib/sidecar-ready";
 import { closeActiveTab } from "./lib/tab-close";
 import { acceptsActiveTabEvents, onActiveTabRouteSettled, onActiveTabRouteState } from "./lib/tab-routing";
@@ -175,6 +176,10 @@ export function App() {
 	useExtensionUi();
 	// Session tabs: GET_TABS boot reconciliation + TAB_STATUS subscription.
 	useSessionTabs();
+	// Quick-entry prompts queued before this renderer loaded (cold start, reload).
+	useEffect(() => {
+		void drainQuickEntry();
+	}, []);
 	const sidebarVisible = useUiStore(s => s.sidebarVisible);
 	const panelVisible = useUiStore(s => s.panelVisible);
 	const theme = useUiStore(s => s.theme);
@@ -334,9 +339,14 @@ export function App() {
 		return () => compact.removeEventListener("change", hideInspector);
 	}, []);
 
-	// Handle omp:// deep links (omp://new → new session; omp://session/<id> → switch).
+	// Handle omp:// deep links (omp://new → new session; omp://session/<id> → switch)
+	// and main's quick-entry nudge, which needs no ready sidecar: it opens a new tab.
 	useEffect(() => {
-		const handle = async (link: { action: "new-session" } | { action: "switch-session"; sessionId: string }) => {
+		const handle = async (link: DeepLinkPayload) => {
+			if (link.action === "quick-entry") {
+				void drainQuickEntry();
+				return;
+			}
 			await whenSidecarReady(window.omp.sidecar.getStatus, window.omp.events.onSidecarStatus);
 			if (link.action === "new-session") {
 				if (useSessionStore.getState().isStreaming) {

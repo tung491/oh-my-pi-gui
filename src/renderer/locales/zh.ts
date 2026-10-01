@@ -3308,4 +3308,6 @@ export const zh: Record<string, string> = {
 	"quickEntry.error.interrupted": "消息发送前窗口已关闭。按 Enter 重新发送。",
 	"quickEntry.error.invalid": "无法发送此消息。请缩短内容或选择其他目标。",
 	"quickEntry.restore": "恢复未发送的消息（{count}）",
+	"quickEntry.toast.returned": "快速输入的消息未发送。请再次打开快速输入重新发送。",
+	"quickEntry.toast.leftInTab": "新标签页尚未就绪，消息已保留在其输入框中。",
 };

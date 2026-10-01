@@ -307,8 +307,14 @@ export type MenuAction =
 	| "toggle-language"
 	| "switch-project";
 
-/** Action forwarded to the renderer for an omp:// deep link. */
-export type DeepLinkPayload = { action: "new-session" } | { action: "switch-session"; sessionId: string };
+/**
+ * Action forwarded to the renderer for an omp:// deep link. `quick-entry` is
+ * main's nudge that prompts are queued for the window (see quickEntry.claimPending).
+ */
+export type DeepLinkPayload =
+	| { action: "new-session" }
+	| { action: "switch-session"; sessionId: string }
+	| { action: "quick-entry" };
 
 // ============================================================================
 // Quick entry (the summoned bar and its handoff to a chat window)
