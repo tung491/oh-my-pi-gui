@@ -182,6 +182,13 @@ test("quick entry leaves shell commands unsent", async () => {
 	await send(bar, "!echo hi");
 
 	await expect.poll(async () => (await tabs()).length).toBe(before.length + 1);
+	const known = new Set(before.map(tab => tab.tabId));
+	// The composer hands off once its tab is ready, so a shell command that slipped
+	// through would reach the fixture within moments of that.
+	await expect
+		.poll(async () => (await tabs()).find(tab => !known.has(tab.tabId))?.status, { timeout: 30_000 })
+		.toBe("ready");
+	await mainPage().waitForTimeout(1_500);
 	await expect(mainPage().locator("textarea").first()).toHaveValue("!echo hi");
 	expect(await counts()).toEqual(sent);
 });
