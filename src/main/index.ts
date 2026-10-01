@@ -547,5 +547,12 @@ installQuitGuard(
 		logWatcher?.stop();
 		destroyTray();
 	},
-	() => windowManager?.getTargetWindow() ?? null,
+	// The focused chat window, else a visible one (the bar may be focused). A
+	// sheet on a hidden or minimized window would never be seen, so with none
+	// visible the dialog is app-modal.
+	() => {
+		const focused = BrowserWindow.getFocusedWindow();
+		if (focused && windowManager?.recordFor(focused)) return focused;
+		return windowManager?.getAllWindows().find(win => win.isVisible() && !win.isMinimized()) ?? null;
+	},
 );
