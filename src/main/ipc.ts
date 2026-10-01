@@ -63,6 +63,7 @@ import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { deleteModelsProvider, listModelsProviders, modelsPath, upsertModelsProvider } from "./models-config";
 import { openPathTarget } from "./open-path-target";
+import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
 import type { SessionIndex } from "./session-index";
 import { resolveEditorCommand } from "./shell-env";
@@ -887,6 +888,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		if (typeof payload.key !== "string") {
 			throw new Error("Invalid preference key");
 		}
+		if (isMainOwnedPrefKey(payload.key)) throw new Error("Preference is managed by the app");
 		prefsStore.set(payload.key, payload.value);
 		if (payload.key === "language" && (payload.value === "en" || payload.value === "zh")) {
 			createMenu(windowManager, deps.spawnWindow);

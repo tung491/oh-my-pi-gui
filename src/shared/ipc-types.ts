@@ -210,6 +210,14 @@ export const IPC_COMMANDS = {
 	QUICK_ENTRY_ACK: "quick-entry:ack",
 	/** Chat window → main: give a leased prompt back to the bar's restore list */
 	QUICK_ENTRY_RETURN: "quick-entry:return",
+	/** The quick-entry shortcut's live state */
+	QUICK_ENTRY_SHORTCUT_GET: "quick-entry:shortcut-get",
+	/** Rebind, turn off/on, or reset the quick-entry shortcut */
+	QUICK_ENTRY_SHORTCUT_SET: "quick-entry:shortcut-set",
+	/** Fire-and-forget: pause global shortcut handling while the shortcut recorder captures */
+	QUICK_ENTRY_SHORTCUT_SUSPEND: "quick-entry:shortcut-suspend",
+	/** One-shot: the startup registration refusal, for the first window that asks */
+	QUICK_ENTRY_SHORTCUT_NOTICE: "quick-entry:shortcut-notice",
 } as const;
 
 export type RuntimeErrorSource =
@@ -365,6 +373,34 @@ export interface QuickEntrySubmitPayload {
 }
 
 export type QuickEntrySubmitResult = { ok: true } | { ok: false; reason: QuickEntryFailure };
+
+/** The saved quick-entry shortcut (main prefs `quickEntryShortcut`). */
+export interface QuickEntryShortcutPref {
+	/** Canonical chord, e.g. "⇧⌃␣". */
+	chord: string;
+	enabled: boolean;
+}
+
+export interface QuickEntryShortcutState {
+	chord: string;
+	enabled: boolean;
+	/** "portal": native Wayland, where the desktop owns the binding and changes apply after a restart. */
+	mode: "native" | "portal";
+	/** "requested": the portal took the request; whether the desktop bound it is not known. */
+	status: "registered" | "requested" | "refused" | "off";
+	/** Portal only: the saved chord differs from what this session asked the desktop for. */
+	restartRequired: boolean;
+	/** Portal only: no installed vn.io.vif.saiatlas.desktop, which the portal needs. */
+	desktopEntryMissing: boolean;
+	/** Native mode inside a Wayland session (XWayland): the chord fires only while the app is focused. */
+	xwaylandOnly: boolean;
+}
+
+export type QuickEntryShortcutUpdate = { chord: string } | { enabled: boolean } | { reset: true };
+
+export type QuickEntryShortcutResult =
+	| { ok: true; state: QuickEntryShortcutState }
+	| { ok: false; reason: "invalid" | "reserved" | "system" | "refused"; state: QuickEntryShortcutState };
 
 /** window.ompQuickEntry: the only surface the bar page sees. */
 export interface QuickEntryBarApi {
@@ -1316,5 +1352,12 @@ export interface OmpApi {
 		ack(id: string): Promise<void>;
 		/** Give a prompt back to the bar's restore list after a renderer-side failure (never opens the bar). */
 		returnToBar(prompt: QuickEntryPrompt, reason: QuickEntryFailure): Promise<void>;
+		getShortcut(): Promise<QuickEntryShortcutState>;
+		/** Main validates the chord; the dialog's conflict preview is advisory. */
+		setShortcut(update: QuickEntryShortcutUpdate): Promise<QuickEntryShortcutResult>;
+		/** While true, global shortcuts do not fire (the recorder is capturing). */
+		suspendShortcuts(suspended: boolean): void;
+		/** The shortcut's startup refusal, once, to the first window that asks. */
+		takeStartupNotice(): Promise<QuickEntryShortcutState | null>;
 	};
 }

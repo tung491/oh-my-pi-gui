@@ -33,6 +33,9 @@ import type {
 	OmpApi,
 	QuickEntryFailure,
 	QuickEntryPrompt,
+	QuickEntryShortcutResult,
+	QuickEntryShortcutState,
+	QuickEntryShortcutUpdate,
 	RunProgressState,
 	RuntimeErrorReport,
 	SessionInfo,
@@ -351,6 +354,12 @@ const api: OmpApi = {
 		ack: (id: string) => ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_ACK, id) as Promise<void>,
 		returnToBar: (prompt: QuickEntryPrompt, reason: QuickEntryFailure) =>
 			ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_RETURN, { prompt, reason }) as Promise<void>,
+		getShortcut: () => ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_SHORTCUT_GET) as Promise<QuickEntryShortcutState>,
+		setShortcut: (update: QuickEntryShortcutUpdate) =>
+			ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_SHORTCUT_SET, update) as Promise<QuickEntryShortcutResult>,
+		suspendShortcuts: (suspended: boolean) => ipcRenderer.send(IPC_COMMANDS.QUICK_ENTRY_SHORTCUT_SUSPEND, suspended),
+		takeStartupNotice: () =>
+			ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_SHORTCUT_NOTICE) as Promise<QuickEntryShortcutState | null>,
 	},
 };
 

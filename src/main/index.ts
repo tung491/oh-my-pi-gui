@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { app, BrowserWindow, globalShortcut, nativeImage, session } from "electron";
 import Store from "electron-store";
 import { nativeAccelerator } from "../shared/hotkeys";
-import type { QuickEntryTarget, SessionKind } from "../shared/ipc-types";
+import type { QuickEntryShortcutPref, QuickEntryTarget, SessionKind } from "../shared/ipc-types";
 import { APP_ID, PRODUCT_NAME } from "../shared/product";
 import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
@@ -22,6 +22,7 @@ import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { QuickEntryController } from "./quick-entry";
+import { QuickEntryShortcut } from "./quick-entry-shortcut";
 import { writeRuntimeLog } from "./runtime-log";
 import { SessionIndex } from "./session-index";
 import { shellSpawnEnv } from "./shell-env";
@@ -32,7 +33,12 @@ import { StatsServerManager } from "./stats-server";
 import { type PersistedTabLayout, sanitizePersistedTabLayouts } from "./tab-layout";
 import { createTray, destroyTray } from "./tray";
 import { setupUpdater } from "./updater";
-import { mergeEnableFeatures, PORTAL_SHORTCUT_FEATURES, usesShortcutPortal } from "./wayland-portal";
+import {
+	desktopEntryCandidates,
+	mergeEnableFeatures,
+	PORTAL_SHORTCUT_FEATURES,
+	usesShortcutPortal,
+} from "./wayland-portal";
 import { WindowManager } from "./window";
 import { resolveWindowSpawnTarget } from "./window-spawn-target";
 
@@ -132,6 +138,8 @@ interface MainPrefs {
 	tabLayout?: PersistedTabLayout;
 	/** The quick-entry bar's last target. */
 	quickEntryTarget?: QuickEntryTarget;
+	/** The quick-entry chord; main validates it on every read and write. */
+	quickEntryShortcut?: QuickEntryShortcutPref;
 	[key: string]: unknown;
 }
 
@@ -226,6 +234,7 @@ let sessionIndex: SessionIndex;
 let statsClient: StatsClient;
 let logWatcher: LogWatcher;
 let quickEntry: QuickEntryController | null = null;
+let quickEntryShortcut: QuickEntryShortcut | null = null;
 
 function errorMessage(value: unknown): { message: string; stack?: string } {
 	if (value instanceof Error) return { message: value.message, stack: value.stack };
@@ -445,6 +454,7 @@ app.whenReady().then(() => {
 		if (process.platform !== "darwin" && windowManager.getAllWindows().length === 0) quickEntry?.destroyWindow();
 	});
 
+	// Both global shortcuts register in this one tick: a portal session binds once.
 	// Global shortcut: Cmd+Shift+O — toggle focused window, else show the most
 	// recent, else spawn one (multi-window decision tree).
 	const toggleAccelerator = nativeAccelerator("window.toggle");
@@ -475,6 +485,17 @@ app.whenReady().then(() => {
 			details: { accelerator: toggleAccelerator },
 		});
 	}
+	quickEntryShortcut = new QuickEntryShortcut({
+		readPref: () => prefsStore().get("quickEntryShortcut"),
+		savePref: pref => prefsStore().set("quickEntryShortcut", pref),
+		mode: portal ? "portal" : "native",
+		desktopEntryMissing:
+			portal && !desktopEntryCandidates(`${APP_ID}.desktop`, process.env, homedir()).some(existsSync),
+		xwaylandOnly: process.platform === "linux" && !portal && process.env.XDG_SESSION_TYPE === "wayland",
+		onActivate: () => quickEntry?.toggle(),
+	});
+	quickEntryShortcut.registerAtStartup();
+	quickEntryShortcut.registerIpc(windowManager);
 	sessionIndex.start();
 	logWatcher.start();
 	// Read before the first window restores: every tab change rewrites the store,

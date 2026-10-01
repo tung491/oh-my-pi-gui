@@ -43,3 +43,8 @@ for (const entry of NATIVE_CHORDS) nativeChordById[entry.id] = entry;
 export function nativeAccelerator(id: NativeChordId): string {
 	return nativeChordById[id].accelerator;
 }
+
+/** The quick-entry bar's system-wide chord: main registers it, the shortcuts dialog rebinds it. */
+export const QUICK_ENTRY_CHORD_ID = "quickEntry.summon";
+/** Literal Control on every platform: unlike NATIVE_CHORDS it is never a CommandOrControl twin. */
+export const QUICK_ENTRY_DEFAULT_CHORD = "⇧⌃␣";

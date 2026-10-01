@@ -3310,4 +3310,6 @@ export const zh: Record<string, string> = {
 	"quickEntry.restore": "恢复未发送的消息（{count}）",
 	"quickEntry.toast.returned": "快速输入的消息未发送。请再次打开快速输入重新发送。",
 	"quickEntry.toast.leftInTab": "新标签页尚未就绪，消息已保留在其输入框中。",
+	"quickEntry.toast.refusedTitle": "快速输入快捷键不可用",
+	"quickEntry.toast.refusedBody": "无法注册 {chord}。请在 设置 → 键盘快捷键 中选择其他组合键。",
 };

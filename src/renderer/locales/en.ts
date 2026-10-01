@@ -3365,4 +3365,7 @@ export const en: Record<string, string> = {
 	"quickEntry.restore": "Restore unsent message ({count})",
 	"quickEntry.toast.returned": "Your quick entry message was not sent. Open quick entry to send it again.",
 	"quickEntry.toast.leftInTab": "The new tab is not ready yet. Your message is waiting in its composer.",
+	"quickEntry.toast.refusedTitle": "Quick entry shortcut unavailable",
+	"quickEntry.toast.refusedBody":
+		"{chord} could not be registered. Choose another chord in Settings → Keyboard Shortcuts.",
 };

@@ -58,6 +58,7 @@ import {
 	chordFromEvent,
 	compileKeymap,
 	currentKeyboardPlatform,
+	formatChord,
 	KEYMAP_ACTION_BY_ID,
 	KEYMAP_ACTIONS,
 	type KeymapActionId,
@@ -214,6 +215,19 @@ export function App() {
 	const themeSidecarReady = activeTabStatus === "ready" || activeTabStatus === "running";
 	const { lang, setLang } = useLang();
 	const t = useT();
+
+	// Main refused the quick-entry chord at startup: say so once, in the first
+	// window that asks (later calls and other windows get null).
+	useEffect(() => {
+		void window.omp.quickEntry.takeStartupNotice().then(notice => {
+			if (!notice) return;
+			toast({
+				variant: "warning",
+				title: t("quickEntry.toast.refusedTitle"),
+				message: t("quickEntry.toast.refusedBody", { chord: formatChord(notice.chord, currentKeyboardPlatform()) }),
+			});
+		});
+	}, [t]);
 
 	// Seed theme/fontSize from persisted prefs once at boot.
 	useEffect(() => {
