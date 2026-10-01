@@ -159,11 +159,13 @@ export class QuickEntryController {
 
 	/**
 	 * The windows the app opens at startup each show and take focus once their
-	 * page is ready. A summon before then would be blurred away, so the bar
-	 * waits for all of them (or the ceiling).
+	 * page is ready (WindowManager's ready-to-show listener, which runs before
+	 * this one). A summon before then would be blurred away, so the bar waits for
+	 * all of them (or the ceiling). Visibility is no guide: maximize() shows a
+	 * restored window before its page has painted.
 	 */
 	markStartupWindows(windows: readonly BrowserWindow[]): void {
-		const waiting = windows.filter(win => !win.isDestroyed() && !win.isVisible());
+		const waiting = windows.filter(win => !win.isDestroyed());
 		if (waiting.length === 0) {
 			this.#markSettled();
 			return;
@@ -177,7 +179,7 @@ export class QuickEntryController {
 				left -= 1;
 				if (left === 0) this.#markSettled();
 			};
-			win.once("show", settleOne);
+			win.once("ready-to-show", settleOne);
 			win.once("closed", settleOne);
 		}
 	}

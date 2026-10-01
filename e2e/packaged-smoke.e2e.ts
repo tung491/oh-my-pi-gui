@@ -61,6 +61,28 @@ async function waitForSidecar(page: Page): Promise<void> {
 		.toBe("ready");
 }
 
+/** The first chat window: the quick-entry bar is a window too, without the app API. */
+async function chatWindow(app: ElectronApplication): Promise<Page> {
+	await app.firstWindow();
+	let chat: Page | undefined;
+	await expect
+		.poll(
+			async () => {
+				for (const page of app.windows()) {
+					if (await page.evaluate(() => window.omp?.rpc != null).catch(() => false)) {
+						chat = page;
+						return true;
+					}
+				}
+				return false;
+			},
+			{ timeout: 30_000 },
+		)
+		.toBe(true);
+	if (!chat) throw new Error("chat window not found");
+	return chat;
+}
+
 /** cwd is the profile root, never a project: a launch that ignores its argv lands somewhere else. */
 async function launch(profile: Profile, args: string[] = []): Promise<{ app: ElectronApplication; page: Page }> {
 	const app = await electron.launch({
@@ -71,7 +93,7 @@ async function launch(profile: Profile, args: string[] = []): Promise<{ app: Ele
 		env: profile.env,
 		cwd: profile.root,
 	});
-	const page = await app.firstWindow();
+	const page = await chatWindow(app);
 	await waitForSidecar(page);
 	return { app, page };
 }
@@ -196,7 +218,12 @@ test.describe("installed package", () => {
 			await warm.app.close();
 		}
 		// Cold: the bar waits for the restored window, and that window's first
-		// focus must not blur it away.
+		// focus must not blur it away. A maximized window is already visible
+		// before its page paints, so it is the case most likely to steal focus late.
+		await fs.writeFile(
+			path.join(profile.desktop, "window-state.json"),
+			JSON.stringify({ windowState: { width: 1400, height: 900, isMaximized: true } }),
+		);
 		const cold = await launch(profile, ["--quick-entry"]);
 		try {
 			await quickEntryBar(cold.app);
