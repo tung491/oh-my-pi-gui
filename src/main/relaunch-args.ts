@@ -19,16 +19,25 @@ const OZONE_PLATFORM_PREFIX = "--ozone-platform=";
 /** The AppImage runtime's flag for hosts without FUSE. */
 const APPIMAGE_EXTRACT_AND_RUN = "--appimage-extract-and-run";
 
+type Env = { readonly [name: string]: string | undefined };
+
+/**
+ * Whether this launch runs from an extracted AppImage (a host without FUSE)
+ * rather than a mounted one. The runtime names the extraction directory it
+ * sets as APPDIR `appimage_extracted_<hash>`.
+ */
+export function runsExtractedAppImage(env: Env): boolean {
+	const appDir = env.APPDIR?.replace(/\/+$/, "");
+	return appDir !== undefined && basename(appDir).startsWith("appimage_extracted_");
+}
+
 /**
  * Arguments that keep a relaunch through the AppImage file in the mode this
- * launch runs in. The runtime consumes `--appimage-extract-and-run` and only
- * reads it as the first argument, so an extracted launch has to put it back
- * first. An extracted launch is recognised by its APPDIR, which the runtime
- * names `appimage_extracted_<hash>`.
+ * launch runs in. The runtime consumes `--appimage-extract-and-run` and acts
+ * only on the first `--` argument, so the flag must come before every switch.
  */
-export function appImageRuntimeArgs(env: { readonly [name: string]: string | undefined }): string[] {
-	const appDir = env.APPDIR?.replace(/\/+$/, "");
-	return appDir && basename(appDir).startsWith("appimage_extracted_") ? [APPIMAGE_EXTRACT_AND_RUN] : [];
+export function appImageRuntimeArgs(env: Env): string[] {
+	return runsExtractedAppImage(env) ? [APPIMAGE_EXTRACT_AND_RUN] : [];
 }
 
 export interface DisplayRestartLaunch {
@@ -36,7 +45,7 @@ export interface DisplayRestartLaunch {
 	packaged: boolean;
 	argv: readonly string[];
 	execPath: string;
-	env: { readonly [name: string]: string | undefined };
+	env: Env;
 }
 
 /**

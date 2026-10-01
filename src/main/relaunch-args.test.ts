@@ -5,6 +5,7 @@ import {
 	displayRestart,
 	LINUX_DISPLAY_SWITCH,
 	relaunchArgs,
+	runsExtractedAppImage,
 } from "./relaunch-args";
 
 describe("relaunchArgs", () => {
@@ -123,6 +124,19 @@ describe("displayRestart", () => {
 		expect(displayRestart({ ...deb, packaged: false })).toBeNull();
 		expect(displayRestart({ ...deb, platform: "darwin" })).toBeNull();
 		expect(displayRestart({ ...deb, platform: "win32" })).toBeNull();
+	});
+});
+
+describe("runsExtractedAppImage", () => {
+	it("recognises the runtime's extraction directory, with or without a trailing slash", () => {
+		expect(runsExtractedAppImage({ APPDIR: "/tmp/appimage_extracted_0123abcd" })).toBe(true);
+		expect(runsExtractedAppImage({ APPDIR: "/var/tmp/appimage_extracted_0123abcd/" })).toBe(true);
+	});
+
+	it("is false for a mounted AppImage and for launches outside one", () => {
+		expect(runsExtractedAppImage({ APPDIR: "/tmp/.mount_SaiATL1" })).toBe(false);
+		expect(runsExtractedAppImage({ APPDIR: "/tmp/appimage_extracted_0123abcd/usr" })).toBe(false);
+		expect(runsExtractedAppImage({})).toBe(false);
 	});
 });
 

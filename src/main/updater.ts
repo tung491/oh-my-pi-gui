@@ -21,7 +21,7 @@ import type { UpdateInstallMode, UpdateStatus } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS } from "../shared/ipc-types";
 import { approveQuitBeforeInstall, withdrawQuitApproval } from "./app-quit";
 import { mainT } from "./i18n";
-import { appImageRuntimeArgs, relaunchArgs } from "./relaunch-args";
+import { relaunchArgs, runsExtractedAppImage } from "./relaunch-args";
 import {
 	asksBeforeInstall,
 	captureInstallError,
@@ -343,6 +343,13 @@ export function setupUpdater(): void {
 		// a quit cancelled afterwards would keep the old process running on top
 		// of the new install.
 		if (asksBeforeInstall(linuxKind) && !(await approveQuitBeforeInstall())) return;
+		// electron-updater runs the new AppImage once before it returns, and on a
+		// host that needs extract mode that run cannot mount it. The runtime reads
+		// the same switch from the environment, which that run and the relaunch
+		// below inherit.
+		const extractForInstall =
+			linuxKind === "appimage" && runsExtractedAppImage(process.env) && !process.env.APPIMAGE_EXTRACT_AND_RUN;
+		if (extractForInstall) process.env.APPIMAGE_EXTRACT_AND_RUN = "1";
 		// Both install synchronously and report a cancelled prompt or failed
 		// install only as an "error" event, which the passive handler keeps out
 		// of the banner.
@@ -354,6 +361,8 @@ export function setupUpdater(): void {
 			() => autoUpdater.quitAndInstall(),
 		);
 		if (failure) {
+			// This process keeps running, and its sidecars must not inherit the switch.
+			if (extractForInstall) delete process.env.APPIMAGE_EXTRACT_AND_RUN;
 			if (asksBeforeInstall(linuxKind)) withdrawQuitApproval();
 			broadcast({
 				state: "error",
@@ -364,10 +373,10 @@ export function setupUpdater(): void {
 		}
 		// Armed only after a successful install, before electron-updater's
 		// deferred quit: Electron starts it once this process has exited. Only
-		// the AppImage mode and the display backend are passed on, so a launch
-		// link or workspace is not replayed.
+		// the display backend is passed on, so a launch link or workspace is not
+		// replayed; extract mode rides the environment set above.
 		if (linuxKind === "appimage" && appImageTarget) {
-			app.relaunch({ execPath: appImageTarget, args: [...appImageRuntimeArgs(process.env), ...relaunchArgs([])] });
+			app.relaunch({ execPath: appImageTarget, args: relaunchArgs([]) });
 		}
 	});
 	ipcMain.handle(IPC_COMMANDS.UPDATER_GET_STATUS, () => current);
