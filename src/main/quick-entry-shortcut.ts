@@ -109,20 +109,16 @@ export class QuickEntryShortcut {
 				plan.kind === "rebind" && plan.from === plan.to && (plan.to === null || this.#registered === true);
 			if (plan.kind === "rebind" && !unchanged) {
 				if (plan.from) globalShortcut.unregister(plan.from);
-				if (plan.to) {
-					if (!globalShortcut.register(plan.to, this.#activate)) {
-						this.#registered = plan.from ? globalShortcut.register(plan.from, this.#activate) : null;
-						writeRuntimeLog({
-							source: "global-shortcut",
-							message: `globalShortcut.register refused ${plan.to}`,
-							details: { accelerator: plan.to, portal: false },
-						});
-						return { ok: false, reason: "refused", state: this.state() };
-					}
-					this.#registered = true;
-				} else {
-					this.#registered = null;
+				if (plan.to && !globalShortcut.register(plan.to, this.#activate)) {
+					this.#registered = plan.from ? globalShortcut.register(plan.from, this.#activate) : null;
+					writeRuntimeLog({
+						source: "global-shortcut",
+						message: `globalShortcut.register refused ${plan.to}`,
+						details: { accelerator: plan.to, portal: false },
+					});
+					return { ok: false, reason: "refused", state: this.state() };
 				}
+				this.#registered = plan.to ? true : null;
 				this.#bound = plan.next.enabled ? plan.next : null;
 			}
 			this.#pref = plan.next;

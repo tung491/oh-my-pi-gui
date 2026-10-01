@@ -164,24 +164,21 @@ export class QuickEntryController {
 	 */
 	markStartupWindows(windows: readonly BrowserWindow[]): void {
 		const waiting = windows.filter(win => !win.isDestroyed() && !win.isVisible());
-		let left = waiting.length;
-		const settleOne = () => {
-			left -= 1;
-			if (left === 0) this.#markSettled();
-		};
-		if (left === 0) {
+		if (waiting.length === 0) {
 			this.#markSettled();
 			return;
 		}
+		let left = waiting.length;
 		for (const win of waiting) {
 			let counted = false;
-			const once = () => {
+			const settleOne = () => {
 				if (counted) return;
 				counted = true;
-				settleOne();
+				left -= 1;
+				if (left === 0) this.#markSettled();
 			};
-			win.once("show", once);
-			win.once("closed", once);
+			win.once("show", settleOne);
+			win.once("closed", settleOne);
 		}
 	}
 
@@ -206,7 +203,8 @@ export class QuickEntryController {
 
 	hide(): void {
 		this.#revealOnReady = false;
-		if (this.#win && !this.#win.isDestroyed() && this.#win.isVisible()) this.#win.hide();
+		const win = this.#liveWindow();
+		if (win?.isVisible()) win.hide();
 	}
 
 	toggle(): void {
@@ -216,9 +214,14 @@ export class QuickEntryController {
 
 	/** Win/Linux: a hidden bar would keep the app alive after its last chat window closed. */
 	destroyWindow(): void {
-		if (this.#win && !this.#win.isDestroyed()) this.#win.destroy();
+		this.#liveWindow()?.destroy();
 		this.#win = null;
 		this.#ready = false;
+	}
+
+	/** The bar's window, or null before it is built and once it is destroyed. */
+	#liveWindow(): BrowserWindow | null {
+		return this.#win && !this.#win.isDestroyed() ? this.#win : null;
 	}
 
 	#markSettled(): void {
@@ -233,7 +236,8 @@ export class QuickEntryController {
 	}
 
 	#ensureWindow(): BrowserWindow {
-		if (this.#win && !this.#win.isDestroyed()) return this.#win;
+		const existing = this.#liveWindow();
+		if (existing) return existing;
 		const darwin = process.platform === "darwin";
 		const win = new BrowserWindow({
 			...QUICK_ENTRY_SIZE,
@@ -327,7 +331,8 @@ export class QuickEntryController {
 	}
 
 	#isBar(sender: WebContents): boolean {
-		return this.#win !== null && !this.#win.isDestroyed() && sender.id === this.#win.webContents.id;
+		const win = this.#liveWindow();
+		return win !== null && sender.id === win.webContents.id;
 	}
 
 	/** The chat window behind an IPC call, or null for any other sender (the bar included). */
@@ -382,7 +387,8 @@ export class QuickEntryController {
 
 	/** Visible, or about to be once its page has painted. */
 	#isShowing(): boolean {
-		return this.#win !== null && !this.#win.isDestroyed() && (this.#win.isVisible() || this.#revealOnReady);
+		const win = this.#liveWindow();
+		return win !== null && (win.isVisible() || this.#revealOnReady);
 	}
 
 	#state(): QuickEntryBarState {
@@ -396,9 +402,8 @@ export class QuickEntryController {
 	}
 
 	#pushState(): void {
-		const win = this.#win;
-		if (!win || win.isDestroyed()) return;
-		sendWhenLoaded(win, IPC_EVENTS.QUICK_ENTRY_STATE, this.#state());
+		const win = this.#liveWindow();
+		if (win) sendWhenLoaded(win, IPC_EVENTS.QUICK_ENTRY_STATE, this.#state());
 	}
 
 	async #refreshWorkspaces(): Promise<void> {

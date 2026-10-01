@@ -101,12 +101,14 @@ async function deliver(prompt: QuickEntryPrompt): Promise<void> {
 	}
 }
 
+type HandoffOutcome = "handed-off" | "closed" | "timeout";
+
 /** The composer cleared the flag (InputArea sent or kept the text and acknowledged), the tab closed, or time ran out. */
-function handoff(tabId: string, composer: StoreApi<ComposerStore>): Promise<"handed-off" | "closed" | "timeout"> {
+function handoff(tabId: string, composer: StoreApi<ComposerStore>): Promise<HandoffOutcome> {
 	const tabOpen = () => useTabsStore.getState().tabs.some(tab => tab.id === tabId);
 	return new Promise(resolve => {
 		let settled = false;
-		const finish = (outcome: "handed-off" | "closed" | "timeout") => {
+		const finish = (outcome: HandoffOutcome) => {
 			if (settled) return;
 			settled = true;
 			clearTimeout(timer);

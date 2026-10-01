@@ -323,12 +323,13 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 				return;
 			}
 			const chord = savedChord ?? result.state.chord;
+			const chordLabel = formatChord(chord, keyboardPlatform);
 			const owner = quickEntryConflicts(chord, overrides, keyboardPlatform);
 			toast({
 				variant: "error",
 				message: t(QUICK_ENTRY_REFUSAL_KEYS[result.reason], {
-					chord: formatChord(chord, keyboardPlatform),
-					action: owner ? ownerLabel(owner.ownerId, t) : formatChord(chord, keyboardPlatform),
+					chord: chordLabel,
+					action: owner ? ownerLabel(owner.ownerId, t) : chordLabel,
 				}),
 			});
 		} catch (error) {
