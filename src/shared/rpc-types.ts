@@ -2007,4 +2007,6 @@ export interface SidecarStatusPayload {
 	message?: string;
 	cwd: string;
 	restart?: SidecarRestartProgress;
+	/** On the `ready` after a hibernated tab wakes: modes that were armed before and could not be re-applied. */
+	modesNotRestored?: string[];
 }

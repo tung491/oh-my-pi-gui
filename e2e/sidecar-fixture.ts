@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /// <reference types="bun" />
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { createInterface } from "node:readline";
 import type {
 	AgentMessage,
@@ -84,6 +85,24 @@ if (process.argv.includes("stats")) {
 	}
 } else {
 	const messages: AgentMessage[] = [];
+	// OMP_GUI_TEST_SESSION_DIR gives the fixture a session file the way omp has
+	// one: the path is known from boot, the file is written only once the first
+	// assistant reply exists, and `--session <file>` resumes it.
+	const sessionDir = process.env.OMP_GUI_TEST_SESSION_DIR;
+	const resumeIndex = process.argv.indexOf("--session");
+	const resumePath = resumeIndex >= 0 ? process.argv[resumeIndex + 1] : undefined;
+	const sessionPath = sessionDir ? (resumePath ?? path.join(sessionDir, `fixture-${process.pid}.jsonl`)) : null;
+	if (sessionPath && resumePath && fs.existsSync(sessionPath)) {
+		for (const line of fs.readFileSync(sessionPath, "utf8").split("\n")) {
+			if (line) messages.push(JSON.parse(line) as AgentMessage);
+		}
+	}
+	const persistSession = () => {
+		if (!sessionPath || !messages.some(message => message.role === "assistant")) return;
+		fs.writeFileSync(sessionPath, `${messages.map(message => JSON.stringify(message)).join("\n")}\n`);
+	};
+	/** Set by the "fixture background job" prompt: a job that outlives its turn. */
+	let backgroundJobRunning = false;
 	const count = Math.min(50_000, Number(process.env.OMP_GUI_TEST_HISTORY ?? 0));
 	for (let index = 0; index < count; index++) {
 		const common = { timestamp: 1700000000000 + index * 1000, entryId: `history-${index}` };
@@ -157,7 +176,7 @@ if (process.argv.includes("stats")) {
 		steeringMode: "all",
 		followUpMode: "all",
 		interruptMode: "immediate",
-		sessionFile: null,
+		sessionFile: sessionPath,
 		cwd: process.cwd(),
 		sessionId: `fixture-${process.pid}`,
 		sessionName: "Audit session",
@@ -203,6 +222,8 @@ if (process.argv.includes("stats")) {
 	};
 	write({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] });
 	const lines = createInterface({ input: process.stdin });
+	// stdin EOF is how a GUI hibernates a sidecar; omp disposes and exits 0.
+	lines.on("close", () => process.exit(0));
 	lines.on("line", line => {
 		const command = JSON.parse(line) as RpcCommand | ExtensionUIResponse;
 		if (process.env.OMP_GUI_TEST_RECORD)
@@ -345,6 +366,9 @@ if (process.argv.includes("stats")) {
 			case "get_jobs":
 				ok({
 					jobs: [
+						...(backgroundJobRunning
+							? [{ id: "background", type: "bash", label: "Background job", status: "running", startTime: 1000 }]
+							: []),
 						{
 							id: "done",
 							type: "bash",
@@ -520,7 +544,10 @@ if (process.argv.includes("stats")) {
 				break;
 			case "set_plan_mode":
 				state.planModeEnabled = command.enabled;
-				ok({ enabled: command.enabled });
+				ok({ enabled: command.enabled, planFilePath: command.enabled ? "local://PLAN.md" : undefined });
+				break;
+			case "get_plan_mode":
+				ok({ enabled: state.planModeEnabled, planFilePath: state.planModeEnabled ? "local://PLAN.md" : undefined });
 				break;
 			case "steer":
 			case "follow_up":
@@ -647,6 +674,8 @@ T_{\\text{请求}} = T_{\\text{排队等待}} + T_{\\text{网络传输}} + T_{\\
 						stopReason: "stop",
 					};
 					messages.push(answer);
+					persistSession();
+					if (command.message === "fixture background job") backgroundJobRunning = true;
 					write({ type: "message_end", message: answer });
 					state.isStreaming = false;
 					write({ type: "agent_end", messages: [answer], isTerminal: true });

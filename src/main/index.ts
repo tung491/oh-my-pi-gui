@@ -12,6 +12,7 @@ import Store from "electron-store";
 import { nativeAccelerator } from "../shared/hotkeys";
 import type { SessionKind } from "../shared/ipc-types";
 import { APP_ID, PRODUCT_NAME } from "../shared/product";
+import { parseTabHibernationPref, TAB_HIBERNATION_PREF_KEY } from "../shared/tab-hibernation";
 import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
 import { DEEP_LINK_PROTOCOL, setupDeepLinks } from "./deep-link";
@@ -369,6 +370,8 @@ app.whenReady().then(() => {
 		return sc;
 	}, 10);
 	sidecarPool.onWindowTabsChanged = () => persistTabLayouts();
+	// Opt-in; later changes from Settings arrive through PREFS_SET (ipc.ts).
+	sidecarPool.setHibernation(parseTabHibernationPref(prefsStore().get(TAB_HIBERNATION_PREF_KEY)));
 	// A closed window's tabs have to leave the saved session with it, or the next
 	// launch resurrects a window the user deliberately shut.
 	windowManager.subscribeWindowClosed(() => persistTabLayouts());

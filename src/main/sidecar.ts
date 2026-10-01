@@ -25,7 +25,6 @@ import type {
 	RpcReadyFrame,
 	RpcResponse,
 	SessionInfoUpdateFrame,
-	SidecarRestartProgress,
 	SidecarStatus,
 	SidecarStatusPayload,
 	SubagentFrame,
@@ -36,6 +35,11 @@ import { RpcClient } from "./rpc-client";
 
 const MAX_RESTART_ATTEMPTS = 3;
 const RESTART_DELAYS = [1000, 2000, 4000];
+
+/** How long a hibernating sidecar gets to run its own teardown after stdin closes. */
+export const HIBERNATE_DRAIN_MS = 5000;
+/** Grace between SIGTERM and SIGKILL when that teardown overruns. */
+export const HIBERNATE_TERM_MS = 2000;
 
 /** stderr lines kept per spawn for the crash report. */
 const STDERR_TAIL_LINES = 20;
@@ -188,6 +192,30 @@ export function missingSidecarMessage(packaged: boolean, resourcesPath?: string)
 	return `omp is missing from this installation (${target}). Reinstall ${PRODUCT_NAME}, then relaunch.`;
 }
 
+/**
+ * What a ready gate decided. `error` keeps the sidecar from ever reporting
+ * `ready` (its status goes to `error` with that message); `modesNotRestored`
+ * rides on the `ready` status so the renderer can warn about each.
+ */
+export interface ReadyGateOutcome {
+	error?: string;
+	modesNotRestored?: string[];
+}
+
+/** Work that must finish on a fresh spawn before anything may send it a prompt. */
+export type ReadyGate = (client: RpcClient) => Promise<ReadyGateOutcome>;
+
+/** Resolves true when `promise` settles within `ms`. */
+function settlesWithin(promise: Promise<unknown>, ms: number): Promise<boolean> {
+	return new Promise(resolve => {
+		const timer = setTimeout(() => resolve(false), ms);
+		void promise.then(() => {
+			clearTimeout(timer);
+			resolve(true);
+		});
+	});
+}
+
 export interface SidecarEvents {
 	status: (payload: SidecarStatusPayload) => void;
 	events: (events: AgentSessionEvent[]) => void;
@@ -230,6 +258,8 @@ export class SidecarManager extends EventEmitter {
 	#shellEnvVars: Record<string, string> = {};
 	#resumeSessionPath: string | null = null;
 	#freshLaunchPending: boolean;
+	/** Set by wake(); runs on the first `ready` of whichever spawn gets there, then clears. */
+	#readyGate: ReadyGate | null = null;
 	#disposed = false;
 
 	constructor(options: SidecarOptions) {
@@ -503,8 +533,26 @@ export class SidecarManager extends EventEmitter {
 		const generation = this.#generation;
 		const announceReady = (): void => {
 			if (!this.#isLive(generation)) return;
-			this.#setStatus("ready");
-			this.#restartCount = 0;
+			const gate = this.#readyGate;
+			const client = this.#rpcClient;
+			if (!gate || !client) {
+				this.#setStatus("ready");
+				this.#restartCount = 0;
+				return;
+			}
+			// The gate stays armed until a live spawn finishes it: a child that
+			// dies mid-gate respawns into the same gate.
+			const settle = (outcome: ReadyGateOutcome): void => {
+				if (!this.#isLive(generation)) return;
+				this.#readyGate = null;
+				this.#restartCount = 0;
+				const extra = { modesNotRestored: outcome.modesNotRestored };
+				if (outcome.error) this.#setStatus("error", outcome.error, extra);
+				else this.#setStatus("ready", undefined, extra);
+			};
+			void gate(client).then(settle, (err: unknown) =>
+				settle({ error: err instanceof Error ? err.message : String(err) }),
+			);
 		};
 		// Stay on v1 when an older/malformed sidecar omits the negotiation fields
 		// or advertises limits this decoder cannot safely honor.
@@ -537,13 +585,13 @@ export class SidecarManager extends EventEmitter {
 			cwd: this.#options.cwd,
 		});
 		if (exhausted) {
-			this.#setStatus("error", detail, { attempt, maxAttempts: MAX_RESTART_ATTEMPTS });
+			this.#setStatus("error", detail, { restart: { attempt, maxAttempts: MAX_RESTART_ATTEMPTS } });
 			return;
 		}
 
 		const delay = RESTART_DELAYS[attempt - 1] ?? 4000;
 		this.#restartCount = attempt;
-		this.#setStatus("restarting", detail, { attempt, maxAttempts: MAX_RESTART_ATTEMPTS });
+		this.#setStatus("restarting", detail, { restart: { attempt, maxAttempts: MAX_RESTART_ATTEMPTS } });
 
 		this.#restartTimer = setTimeout(() => {
 			this.#restartTimer = null;
@@ -553,9 +601,15 @@ export class SidecarManager extends EventEmitter {
 		}, delay);
 	}
 
-	#setStatus(status: SidecarStatus, message?: string, restart?: SidecarRestartProgress): void {
+	#setStatus(
+		status: SidecarStatus,
+		message?: string,
+		extra: Pick<SidecarStatusPayload, "restart" | "modesNotRestored"> = {},
+	): void {
 		this.#status = status;
-		this.emit("status", { status, message, cwd: this.#options.cwd, restart });
+		const payload: SidecarStatusPayload = { status, message, cwd: this.#options.cwd, restart: extra.restart };
+		if (extra.modesNotRestored?.length) payload.modesNotRestored = extra.modesNotRestored;
+		this.emit("status", payload);
 	}
 
 	#cleanup(): void {
@@ -613,9 +667,54 @@ export class SidecarManager extends EventEmitter {
 			clearTimeout(this.#restartTimer);
 			this.#restartTimer = null;
 		}
+		// An explicit stop or restart drops a wake's pending gate.
+		this.#readyGate = null;
 		const child = this.#child;
 		this.#cleanup();
 		child?.kill("SIGTERM");
+	}
+
+	/**
+	 * Stop the child the way stdin EOF does, so the agent runs its own teardown
+	 * (session dispose reaps the browser tool and disconnects MCP servers, which
+	 * a signal would leave running), and go back to `asleep` at once. Signals are
+	 * only the fallback for a teardown that overruns. Resolves once the process
+	 * is gone; wake() respawns it.
+	 */
+	async hibernate({ drainMs = HIBERNATE_DRAIN_MS, termMs = HIBERNATE_TERM_MS } = {}): Promise<void> {
+		if (this.#restartTimer) {
+			clearTimeout(this.#restartTimer);
+			this.#restartTimer = null;
+		}
+		// A start() still resolving its env must not spawn behind the hibernation.
+		this.#startSeq++;
+		this.#readyGate = null;
+		const child = this.#child;
+		this.#cleanup();
+		this.#setStatus("asleep", "Hibernated");
+		if (!child || child.exitCode !== null || child.signalCode !== null) return;
+		const exited = new Promise<void>(resolve => child.once("exit", () => resolve()));
+		child.stdin?.end();
+		if (await settlesWithin(exited, drainMs)) return;
+		console.warn(`[sidecar] still running ${drainMs}ms after stdin closed; sending SIGTERM`);
+		child.kill("SIGTERM");
+		if (await settlesWithin(exited, termMs)) return;
+		console.warn(`[sidecar] still running ${termMs}ms after SIGTERM; sending SIGKILL`);
+		child.kill("SIGKILL");
+		await settlesWithin(exited, termMs);
+	}
+
+	/**
+	 * Respawn a hibernated sidecar: resume `sessionPath`, or — when the session
+	 * was deleted while it slept — launch a fresh one that cannot auto-resume a
+	 * session another tab may own. `gate` runs before `ready` is announced.
+	 */
+	wake(sessionPath: string | null, gate: ReadyGate | null = null): void {
+		this.#readyGate = gate;
+		this.#resumeSessionPath = sessionPath;
+		if (!sessionPath) this.#freshLaunchPending = true;
+		this.#restartCount = 0;
+		this.start();
 	}
 
 	dispose(): void {

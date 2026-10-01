@@ -1596,6 +1596,12 @@ export const en: Record<string, string> = {
 		"Routes the agent's provider requests (OAuth, streaming, usage) through this proxy. Leave empty to follow the macOS system proxy. Applies on agent restart — restarted for you when idle.",
 	"settings.gui.proxyApplied": "Proxy saved — restarting the agent to apply…",
 	"settings.gui.proxySavedPending": "Proxy saved — takes effect on the next agent restart.",
+	"settings.gui.hibernation": "Tab hibernation",
+	"settings.gui.hibernationToggle": "Hibernate idle background tabs",
+	"settings.gui.hibernationDesc":
+		"Stops the agent of a background tab that has been idle for a while, freeing about 220 MB per tab. Viewing the tab resumes its session, usually within a few seconds. Warm LSP and MCP server connections and extension widget state are not kept. Tabs with a running job, an unanswered question or an active goal or vibe session stay awake.",
+	"settings.gui.hibernationMinutes": "Idle minutes before a tab hibernates",
+	"settings.gui.hibernationMinutesRange": "Idle time must be between {min} and {max} minutes",
 	"settings.restartRequired.badge": "Restart",
 	"settings.restartRequired.hint":
 		"Cached at session startup — edits take effect after restarting the session (in every client).",
@@ -3150,6 +3156,11 @@ export const en: Record<string, string> = {
 	"events.sidecarHealthFailed": "Sidecar health check failed — agent process may be stuck",
 	"events.sidecarNoResponse": "Sidecar ready but not responding to commands",
 	"events.sidecarProcessFailed": "Sidecar process failed",
+	"events.hibernation.planNotRestored":
+		"This tab woke from hibernation, but plan mode could not be turned back on, so the agent is paused. Restart it to continue without plan mode.",
+	"events.hibernation.modesNotRestored": "This tab woke from hibernation, but {modes} could not be turned back on.",
+	"events.hibernation.mode.loop": "loop mode",
+	"events.hibernation.mode.plan": "plan mode",
 	"events.ttsrInjected": "Time-traveling rules injected",
 	"events.turnFailed": "Turn failed",
 	"export.sessionExported": "Session exported",

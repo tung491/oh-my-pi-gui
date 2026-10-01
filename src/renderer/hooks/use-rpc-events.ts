@@ -117,6 +117,13 @@ type NotifyKind = keyof typeof NOTIFY_DEFAULTS;
  */
 const retryPendingTabs = new Set<string>();
 
+/** A hibernation snapshot's mode id, as the user knows it. Unknown ids show as-is. */
+function hibernationModeName(mode: string): string {
+	if (mode === "loop") return translate("events.hibernation.mode.loop");
+	if (mode === "plan") return translate("events.hibernation.mode.plan");
+	return mode;
+}
+
 /**
  * Late frames for a tab the user already closed must be dropped: its runtime
  * is gone, and withSessionRuntime would otherwise fall back to the FOCUSED
@@ -586,6 +593,15 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 
 			if (payload.status === "ready") {
 				if (isFocused()) startHeartbeat();
+				// A tab woke from hibernation but could not re-arm every mode it slept with.
+				if (payload.modesNotRestored?.length) {
+					useToastStore.getState().push({
+						variant: "warning",
+						message: translate("events.hibernation.modesNotRestored", {
+							modes: payload.modesNotRestored.map(hibernationModeName).join(", "),
+						}),
+					});
+				}
 				// One-shot boot health check: verify the command loop is live.
 				void (async () => {
 					try {
@@ -639,12 +655,10 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 					// The command queue died with the process, so a probe would fail and
 					// overwrite the crash reason with a generic "not responding".
 					stopHeartbeat();
-					useUiStore
-						.getState()
-						.setSidecarError(
-							payload.message ?? translate("events.sidecarProcessFailed"),
-							payload.restart ?? null,
-						);
+					const message = payload.modesNotRestored?.includes("plan")
+						? translate("events.hibernation.planNotRestored")
+						: (payload.message ?? translate("events.sidecarProcessFailed"));
+					useUiStore.getState().setSidecarError(message, payload.restart ?? null);
 				}
 			}
 		};

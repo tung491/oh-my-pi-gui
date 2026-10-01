@@ -380,4 +380,297 @@ describe("SidecarManager", () => {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	}, 15_000);
+
+	describe("hibernation", () => {
+		interface FakeOptions {
+			/** Exit 0 when stdin closes, as RPC mode does after its teardown. */
+			exitOnEof?: boolean;
+			exitOnTerm?: boolean;
+			/** Command types answered with success: false. */
+			fail?: string[];
+			/** Exit on this command, but only in the first spawn. */
+			crashOnceOn?: string;
+		}
+
+		/** A fake sidecar that logs its spawns, stdin EOF, SIGTERM and every command. */
+		async function fakeSidecar(
+			dir: string,
+			options: FakeOptions = {},
+		): Promise<{ binaryPath: string; logPath: string }> {
+			const logPath = path.join(dir, "log.txt");
+			const crashMarker = path.join(dir, "crashed");
+			const binaryPath = path.join(dir, "fake-sidecar.ts");
+			const config = JSON.stringify({
+				logPath,
+				crashMarker,
+				exitOnEof: options.exitOnEof ?? true,
+				exitOnTerm: options.exitOnTerm ?? true,
+				fail: options.fail ?? [],
+				crashOnceOn: options.crashOnceOn ?? null,
+			});
+			await fs.writeFile(
+				binaryPath,
+				`#!/usr/bin/env bun
+import * as fs from "node:fs";
+const config = ${config};
+// Teardown may remove the directory before a late SIGTERM is logged.
+const log = line => {
+	try {
+		fs.appendFileSync(config.logPath, line + "\\n");
+	} catch {}
+};
+log("spawn " + process.pid + " " + JSON.stringify(process.argv.slice(2)));
+process.on("SIGTERM", () => {
+	log("term");
+	if (config.exitOnTerm) process.exit(0);
+});
+if (!config.exitOnEof) setInterval(() => {}, 1000);
+const send = frame => process.stdout.write(JSON.stringify(frame) + "\\n");
+send({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] });
+let buffer = "";
+process.stdin.on("data", chunk => {
+	buffer += chunk;
+	for (let index = buffer.indexOf("\\n"); index >= 0; index = buffer.indexOf("\\n")) {
+		const command = JSON.parse(buffer.slice(0, index));
+		buffer = buffer.slice(index + 1);
+		log("cmd " + command.type);
+		if (command.type === config.crashOnceOn && !fs.existsSync(config.crashMarker)) {
+			fs.writeFileSync(config.crashMarker, "");
+			process.exit(3);
+		}
+		const success = !config.fail.includes(command.type);
+		send({ type: "response", id: command.id, command: command.type, success, ...(success ? {} : { error: "refused" }) });
+	}
+});
+process.stdin.on("end", () => {
+	log("eof");
+	if (config.exitOnEof) process.exit(0);
+});
+`,
+			);
+			await fs.chmod(binaryPath, 0o755);
+			return { binaryPath, logPath };
+		}
+
+		async function logLines(logPath: string): Promise<string[]> {
+			return (await fs.readFile(logPath, "utf8").catch(() => "")).split("\n").filter(Boolean);
+		}
+
+		function spawnedPids(lines: string[]): number[] {
+			return lines.filter(line => line.startsWith("spawn ")).map(line => Number(line.split(" ")[1]));
+		}
+
+		function isAlive(pid: number): boolean {
+			try {
+				process.kill(pid, 0);
+				return true;
+			} catch {
+				return false;
+			}
+		}
+
+		function lastArgv(lines: string[]): unknown {
+			const spawns = lines.filter(line => line.startsWith("spawn "));
+			const last = spawns[spawns.length - 1] ?? "";
+			return JSON.parse(last.slice(last.indexOf("[")));
+		}
+
+		it("stops through stdin EOF, reports asleep at once, and never restarts", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-hibernate-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const statuses: SidecarStatusPayload[] = [];
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			sidecar.on("status", payload => statuses.push(payload));
+			try {
+				const ready = waitForReady(sidecar);
+				sidecar.start();
+				await ready;
+
+				const stopped = sidecar.hibernate();
+				expect(sidecar.status).toBe("asleep");
+				expect(statuses[statuses.length - 1]).toMatchObject({ status: "asleep", message: "Hibernated" });
+				expect(sidecar.rpcClient).toBeNull();
+				await stopped;
+
+				const lines = await logLines(logPath);
+				expect(lines).toContain("eof");
+				expect(lines).not.toContain("term");
+				const [pid] = spawnedPids(lines);
+				expect(isAlive(pid)).toBe(false);
+
+				await delay(400);
+				expect(sidecar.status).toBe("asleep");
+				expect(spawnedPids(await logLines(logPath))).toHaveLength(1);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("closes stdin first, then escalates to SIGTERM and SIGKILL when teardown overruns", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-hibernate-stuck-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { exitOnEof: false, exitOnTerm: false });
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			try {
+				const ready = waitForReady(sidecar);
+				sidecar.start();
+				await ready;
+
+				const started = performance.now();
+				await sidecar.hibernate({ drainMs: 300, termMs: 300 });
+				expect(performance.now() - started).toBeGreaterThanOrEqual(550);
+
+				const lines = await logLines(logPath);
+				expect(lines.indexOf("eof")).toBeGreaterThan(-1);
+				expect(lines.indexOf("term")).toBeGreaterThan(lines.indexOf("eof"));
+				const [pid] = spawnedPids(lines);
+				expect(isAlive(pid)).toBe(false);
+				expect(sidecar.status).toBe("asleep");
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("does not spawn behind a hibernation that lands while the env resolves", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-hibernate-env-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const sidecar = new SidecarManager({
+				binaryPath,
+				cwd: tempDir,
+				proxyEnv: () => delay(200).then(() => ({})),
+			});
+			try {
+				sidecar.start();
+				await sidecar.hibernate();
+				await delay(500);
+				expect(await logLines(logPath)).toEqual([]);
+				expect(sidecar.status).toBe("asleep");
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("wakes into the session it slept on, or fresh when that session was deleted", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-wake-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const sessionPath = path.join(tempDir, "session.jsonl");
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir, fresh: true });
+			try {
+				let ready = waitForReady(sidecar);
+				sidecar.start();
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--no-auto-resume"]);
+
+				await sidecar.hibernate();
+				ready = waitForReady(sidecar);
+				sidecar.wake(sessionPath);
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
+
+				// The first ready cleared the creation-time freshness; a wake with no
+				// session must still refuse to auto-resume someone else's.
+				await sidecar.hibernate();
+				ready = waitForReady(sidecar);
+				sidecar.wake(null);
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--no-auto-resume"]);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("holds ready back until the wake's gate has finished", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const statuses: SidecarStatusPayload[] = [];
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			sidecar.on("status", payload => statuses.push(payload));
+			let readyDuringGate = -1;
+			try {
+				sidecar.wake(path.join(tempDir, "session.jsonl"), async client => {
+					const response = await client.command({ type: "set_plan_mode", enabled: true });
+					expect(response.success).toBe(true);
+					await delay(200);
+					readyDuringGate = statuses.filter(payload => payload.status === "ready").length;
+					return { modesNotRestored: ["loop"] };
+				});
+				await waitForReady(sidecar);
+
+				expect(readyDuringGate).toBe(0);
+				expect(await logLines(logPath)).toContain("cmd set_plan_mode");
+				expect(statuses.filter(payload => payload.status === "ready")).toEqual([
+					{ status: "ready", cwd: tempDir, message: undefined, restart: undefined, modesNotRestored: ["loop"] },
+				]);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("goes to error instead of ready when the gate refuses", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-refused-"));
+			const { binaryPath } = await fakeSidecar(tempDir, { fail: ["set_plan_mode"] });
+			const statuses: SidecarStatusPayload[] = [];
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			sidecar.on("status", payload => statuses.push(payload));
+			try {
+				sidecar.wake(path.join(tempDir, "session.jsonl"), async client => {
+					const response = await client.command({ type: "set_plan_mode", enabled: true });
+					return response.success ? {} : { error: "Plan mode could not be restored" };
+				});
+				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
+				expect(statuses[statuses.length - 1]).toMatchObject({
+					status: "error",
+					message: "Plan mode could not be restored",
+				});
+				expect(statuses.some(payload => payload.status === "ready")).toBe(false);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("re-runs the gate on the respawn when the child dies mid-gate", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-crash-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { crashOnceOn: "set_plan_mode" });
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			let gateRuns = 0;
+			try {
+				const ready = waitForReady(sidecar);
+				sidecar.wake(path.join(tempDir, "session.jsonl"), async client => {
+					gateRuns++;
+					const response = await client.command({ type: "set_plan_mode", enabled: true });
+					return response.success ? {} : { error: "Plan mode could not be restored" };
+				});
+				await ready;
+				expect(gateRuns).toBe(2);
+				const commands = (await logLines(logPath)).filter(line => line === "cmd set_plan_mode");
+				expect(commands).toHaveLength(2);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		}, 10_000);
+
+		it("drops a pending gate on an explicit restart", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-dropped-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			const gate = vi.fn(async () => ({}));
+			try {
+				sidecar.wake(path.join(tempDir, "session.jsonl"), gate);
+				const ready = waitForReady(sidecar);
+				sidecar.restart();
+				await ready;
+				expect(gate).not.toHaveBeenCalled();
+				expect(await logLines(logPath)).not.toContain("cmd set_plan_mode");
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+	});
 });

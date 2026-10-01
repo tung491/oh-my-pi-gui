@@ -45,6 +45,7 @@ import { IPC_COMMANDS, IPC_EVENTS, type RunProgressState, type TrayState } from 
 import { parseLaunchProfile } from "../shared/launch-profile";
 import { launchPlatformOf } from "../shared/launchable-path";
 import type { RpcCommand, RpcSessionState } from "../shared/rpc-types";
+import { isTabHibernationPrefKey, parseTabHibernationPref, TAB_HIBERNATION_PREF_KEY } from "../shared/tab-hibernation";
 import { requestQuit } from "./app-quit";
 import { BenchmarkRunner } from "./benchmark-runner";
 import { ensureDefaultWorkspace } from "./default-workspace";
@@ -465,6 +466,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		}
 		try {
 			const response = await client.command({ ...cmd, id: _id } as RpcCommand, payload.timeoutMs);
+			// The sidecar drops a waiting plan proposal on either of these; main
+			// sees no other sign of it, and hibernation must not lose one.
+			if (response.success && (cmd.type === "plan_approval" || (cmd.type === "set_plan_mode" && !cmd.enabled))) {
+				sidecarPool.notePlanProposalSettled(sidecar);
+			}
 			// F-OWN registration points carried by this passthrough: a successful
 			// switch_session attaches the issuer to that file; get_state is how
 			// the renderer's attach/hydrate reports the file (session_info_update
@@ -863,6 +869,10 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		prefsStore.set(payload.key, payload.value);
 		if (payload.key === "language" && (payload.value === "en" || payload.value === "zh")) {
 			createMenu(windowManager, deps.spawnWindow);
+		}
+		// Re-parse the whole stored value: a dotted write changes one field of it.
+		if (isTabHibernationPrefKey(payload.key)) {
+			sidecarPool.setHibernation(parseTabHibernationPref(prefsStore.get(TAB_HIBERNATION_PREF_KEY)));
 		}
 	});
 

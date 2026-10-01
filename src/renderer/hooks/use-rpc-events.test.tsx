@@ -39,6 +39,7 @@ import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import { useTodoStore } from "../stores/todo";
 import { useToolsStore } from "../stores/tools";
+import { useUiStore } from "../stores/ui";
 import { hydrateSession, useRpcEvents } from "./use-rpc-events";
 
 const { document, window, Event, HTMLElement, Node } = parseHTML("<html><body></body></html>");
@@ -1006,6 +1007,52 @@ describe("useRpcEvents mode-state sync", () => {
 			emitBatch([{ type: "loop_mode_update", state: { enabled: false, state: "off" } }]);
 		});
 		expect(useSessionStore.getState().loopMode).toEqual({ enabled: false, state: "off" });
+	});
+});
+
+describe("useRpcEvents hibernation wake", () => {
+	async function mountFocusedTab(): Promise<ReturnType<typeof installTabRoutedMockOmp>> {
+		const omp = installTabRoutedMockOmp();
+		useTabsStore.setState({
+			tabs: [{ id: "t0", kind: "agent", cwd: "/alpha", status: "asleep", unreadDone: false }],
+			activeTabId: "t0",
+		});
+		ensureTabRuntime("t0");
+		setFocusedSessionRuntime("t0");
+		await mount(<RpcEventsProbe />);
+		return omp;
+	}
+
+	afterEach(() => {
+		useUiStore.getState().clearSidecarError();
+	});
+
+	it("warns, naming the mode, when a woken tab could not re-arm its loop", async () => {
+		const { emitTabStatus } = await mountFocusedTab();
+		emitTabStatus({ status: "ready", cwd: "/alpha", modesNotRestored: ["loop"] }, "t0");
+		await flush();
+		const toast = useToastStore.getState().toasts.at(-1);
+		expect(toast).toMatchObject({
+			variant: "warning",
+			message: "This tab woke from hibernation, but loop mode could not be turned back on.",
+		});
+	});
+
+	it("explains a plan mode that could not be re-armed instead of the raw status text", async () => {
+		const { emitTabStatus } = await mountFocusedTab();
+		emitTabStatus(
+			{ status: "error", cwd: "/alpha", message: "Plan mode could not be restored", modesNotRestored: ["plan"] },
+			"t0",
+		);
+		await flush();
+		expect(useUiStore.getState().sidecarError).toContain("plan mode could not be turned back on");
+	});
+
+	it("shows no warning for an ordinary ready", async () => {
+		const { emitTabStatus } = await mountFocusedTab();
+		emitTabStatus({ status: "ready", cwd: "/alpha" }, "t0");
+		await flush();
+		expect(useToastStore.getState().toasts.some(toast => toast.message?.includes("hibernation"))).toBe(false);
 	});
 });
 

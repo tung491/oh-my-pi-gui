@@ -159,6 +159,12 @@ export const GUI_SETTING_SEARCH_ITEMS = [
 	{ id: "lineNumbers", labelKey: "codeblock.lineNumbers", aliases: "codeLineNumbers code lines 代码 行号" },
 	{ id: "proxy", labelKey: "settings.gui.proxy", aliases: "proxyUrl proxy network 代理 网络", tabId: ADVANCED_TAB_ID },
 	{
+		id: "hibernation",
+		tabId: ADVANCED_TAB_ID,
+		labelKey: "settings.gui.hibernation",
+		aliases: "tabHibernation hibernate sleep idle memory background tabs 休眠 空闲 内存 后台 标签页",
+	},
+	{
 		id: "launch",
 		tabId: ADVANCED_TAB_ID,
 		labelKey: "settings.launch.title",

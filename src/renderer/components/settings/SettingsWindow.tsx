@@ -102,6 +102,7 @@ import {
 	SSH_TAB_ID,
 	UPDATES_TAB_ID,
 } from "./settings-window-model";
+import { TabHibernationSection } from "./TabHibernationSection";
 import { ThemeCards } from "./ThemeCards";
 import { UpdatesSettingsPage } from "./UpdatesSettingsPage";
 
@@ -1238,6 +1239,7 @@ export function SettingsWindow() {
 											/>
 											<p className="mt-1.5 text-omp-sm text-(--omp-muted)">{t("settings.gui.proxyDesc")}</p>
 										</Section>
+										<TabHibernationSection open={open} />
 										<Section id="setting-gui-launch" title={t("settings.launch.title")}>
 											<fieldset className="space-y-3" disabled={launchSaving || launchRestarting}>
 												<div>

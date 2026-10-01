@@ -27,7 +27,14 @@
  * renderer response routes back to the sidecar that RAISED the request even
  * after the user switched to another tab (sidecarForWindow would misroute
  * it to the newly active sidecar, which never saw the request).
+ *
+ * Hibernation (opt-in, `setHibernation`): a background tab whose sidecar has
+ * been silent for the configured idle time, and that the sidecar itself
+ * reports as having nothing in flight, is stopped back to `asleep` without
+ * releasing its entry — F-OWN, title and worktree binding stay. Viewing it
+ * respawns the session, re-arming the modes it slept with before `ready`.
  */
+import { existsSync } from "node:fs";
 import type { BrowserWindow } from "electron";
 import {
 	IPC_EVENTS,
@@ -50,19 +57,47 @@ import {
 	type ModelCatalogUpdateFrame,
 	type PromptResultFrame,
 	type RpcCommand,
+	type RpcGoalState,
+	type RpcJobsResult,
 	type RpcLiveUpdateFrame,
+	type RpcLoopModeState,
 	type RpcResponse,
+	type RpcSessionState,
+	type RpcVibeModeState,
 	type SessionInfoUpdateFrame,
 	type SidecarStatus,
 	type SidecarStatusPayload,
 	type SubagentFrame,
 } from "../shared/rpc-types";
+import { DEFAULT_TAB_HIBERNATION, type TabHibernationPref } from "../shared/tab-hibernation";
 import type { WindowTabFact } from "./quit-guard";
-import type { SidecarManager } from "./sidecar";
+import type { RpcClient } from "./rpc-client";
+import type { ReadyGate, SidecarManager } from "./sidecar";
 import { nextSnowflake } from "./snowflake";
 import { type PersistedTabDescriptor, type PersistedTabLayout, TAB_LAYOUT_VERSION } from "./tab-layout";
 
 export type SidecarFactory = (cwd: string, kind: "agent" | "chat", fresh: boolean) => SidecarManager;
+
+/** How often the hibernation sweep looks for idle background tabs. */
+const HIBERNATION_SWEEP_MS = 60_000;
+/** Each pre-hibernation sidecar check, and each mode re-applied on wake, gets this long. */
+const HIBERNATION_RPC_TIMEOUT_MS = 5_000;
+/** The plan file `set_plan_mode` arms; plan mode on any other path cannot be re-armed as it was. */
+const DEFAULT_PLAN_FILE = "local://PLAN.md";
+
+export interface SidecarPoolOptions {
+	/** Test seams; production sweeps every minute and idles for the preference's minutes. */
+	hibernation?: { sweepMs?: number; minIdleMs?: number };
+}
+
+/** Modes armed when a tab hibernated, re-applied when it wakes. */
+interface HibernationSnapshot {
+	planMode: boolean;
+	loopMode: boolean;
+}
+
+/** Statuses that mean the process that raised a request or proposal is gone. */
+const PROCESS_GONE_STATUSES: ReadonlySet<SidecarStatus> = new Set(["starting", "restarting", "exited", "asleep"]);
 
 function forwardToWindow(win: BrowserWindow, channel: string, data: unknown): void {
 	if (!win.isDestroyed()) win.webContents.send(channel, data);
@@ -110,6 +145,20 @@ interface PoolEntry {
 	 * listeners without duplicating them.
 	 */
 	detachFull: (() => void) | null;
+	/** Last frame from the sidecar, or the last time the tab was shown or hidden (ms epoch). */
+	lastActivityAt: number;
+	/** Blocking extension-UI request ids the sidecar raised and nobody has answered or cancelled. */
+	pendingUi: Set<string>;
+	/** A plan proposal is waiting for the host's approval. The sidecar holds it in memory only. */
+	planProposalPending: boolean;
+	/** A sweep is running this tab's sidecar checks. */
+	checking: boolean;
+	/** The hibernated process is still running its teardown. */
+	draining: Promise<void> | null;
+	/** A wake is queued behind the drain. */
+	wakeQueued: boolean;
+	/** Set while the tab is hibernated: the modes to re-apply when it wakes. */
+	hibernated: HibernationSnapshot | null;
 }
 
 type WindowSplitView = NonNullable<IpcSetTabViewPayload["split"]>;
@@ -155,10 +204,17 @@ export class SidecarPool {
 		null;
 	/** Main-process persistence hook. The primary window installs this at startup. */
 	onWindowTabsChanged: ((win: BrowserWindow, layout: PersistedTabLayout | null) => void) | null = null;
+	#hibernation: TabHibernationPref = { ...DEFAULT_TAB_HIBERNATION };
+	/** Exists only while hibernation is enabled. */
+	#sweepTimer: NodeJS.Timeout | null = null;
+	readonly #sweepMs: number;
+	readonly #minIdleMs: number | undefined;
 
-	constructor(factory: SidecarFactory, max = 10) {
+	constructor(factory: SidecarFactory, max = 10, options: SidecarPoolOptions = {}) {
 		this.#factory = factory;
 		this.#max = max;
+		this.#sweepMs = options.hibernation?.sweepMs ?? HIBERNATION_SWEEP_MS;
+		this.#minIdleMs = options.hibernation?.minIdleMs;
 	}
 
 	get size(): number {
@@ -213,6 +269,13 @@ export class SidecarPool {
 				status: sidecar.status,
 				running: false,
 				detachFull: null,
+				lastActivityAt: Date.now(),
+				pendingUi: new Set(),
+				planProposalPending: false,
+				checking: false,
+				draining: null,
+				wakeQueued: false,
+				hibernated: null,
 			};
 			if (title) entry.title = title;
 			this.#wireLight(entry);
@@ -254,7 +317,28 @@ export class SidecarPool {
 	 * can never double-spawn.
 	 */
 	#ensureStarted(entry: PoolEntry): void {
+		const draining = entry.draining;
+		if (draining) {
+			// One respawn once the old process is gone, and only if the tab is
+			// still on screen by then.
+			if (entry.wakeQueued) return;
+			entry.wakeQueued = true;
+			void draining.then(() => {
+				entry.wakeQueued = false;
+				if (this.#entries.has(entry) && this.#isVisible(entry)) this.#ensureStarted(entry);
+			});
+			return;
+		}
 		if (entry.sidecar.status !== "asleep") return;
+		const snapshot = entry.hibernated;
+		if (snapshot) {
+			entry.hibernated = null;
+			entry.lastActivityAt = Date.now();
+			// A session deleted while the tab slept cleared sessionFile: wake
+			// fresh rather than auto-resume a session another tab may own.
+			entry.sidecar.wake(entry.sessionFile ?? null, restoreModesGate(snapshot));
+			return;
+		}
 		const sessionPath = entry.sessionFile;
 		if (sessionPath) entry.sidecar.restart(undefined, sessionPath);
 		else entry.sidecar.start();
@@ -270,7 +354,25 @@ export class SidecarPool {
 				entry.running = false;
 				entry.compacting = undefined;
 			}
+			// Requests and proposals die with the process that raised them.
+			if (PROCESS_GONE_STATUSES.has(payload.status)) {
+				entry.pendingUi.clear();
+				entry.planProposalPending = false;
+			}
+			// Anything but our own wake respawning a hibernated tab (a manual
+			// restart, say) drops the modes it slept with, as a restart does.
+			if (payload.status !== "asleep") entry.hibernated = null;
 			forwardToWindow(win, IPC_EVENTS.TAB_STATUS, tabStatusPayload(entry));
+		});
+		// Every routed frame is activity; RPC responses main itself awaited are not.
+		sidecar.on("frame", () => {
+			entry.lastActivityAt = Date.now();
+		});
+		// Background tabs never forward these, so the light channel is the only
+		// place that sees an unanswered blocking request.
+		sidecar.on("extensionUi", (request: ExtensionUIRequest) => {
+			if (BLOCKING_UI_METHODS[request.method]) entry.pendingUi.add(request.id);
+			else if (request.method === "cancel") entry.pendingUi.delete(request.targetId);
 		});
 		sidecar.on("sessionInfoUpdate", (frame: SessionInfoUpdateFrame) => {
 			if (frame.title !== undefined) entry.title = frame.title;
@@ -300,6 +402,7 @@ export class SidecarPool {
 				} else if (event.type === "agent_end") entry.running = false;
 				else if (event.type === "auto_compaction_start") entry.compacting = true;
 				else if (event.type === "auto_compaction_end") entry.compacting = false;
+				else if (event.type === "plan_proposal") entry.planProposalPending = true;
 			}
 			const busy = entry.running || entry.compacting === true;
 			if (busy !== wasBusy || entry.placeholder !== wasPlaceholder) {
@@ -390,9 +493,19 @@ export class SidecarPool {
 		const visible = this.#visibleByWindow.get(winId) ?? new Set<string>();
 		for (const entry of this.#entries) {
 			if (entry.winId !== winId) continue;
-			if (visible.has(entry.tabId)) this.#wireFull(entry);
-			else entry.detachFull?.();
+			if (visible.has(entry.tabId)) {
+				if (!entry.detachFull) entry.lastActivityAt = Date.now();
+				this.#wireFull(entry);
+			} else if (entry.detachFull) {
+				// A tab just moved to the background gets a full idle window.
+				entry.lastActivityAt = Date.now();
+				entry.detachFull();
+			}
 		}
+	}
+
+	#isVisible(entry: PoolEntry): boolean {
+		return this.#visibleByWindow.get(entry.winId)?.has(entry.tabId) === true;
 	}
 
 	/**
@@ -468,9 +581,117 @@ export class SidecarPool {
 	async commandForIdleSession(sessionPath: string, command: RpcCommand): Promise<RpcResponse | null> {
 		const owner = this.#sessionOwners.get(sessionPath);
 		const entry = owner ? this.#byTabId.get(owner.tabId) : undefined;
-		if (!entry || entry.running || entry.compacting === true || entry.status !== "ready") return null;
+		return entry ? this.#commandIfIdle(entry, command) : null;
+	}
+
+	async #commandIfIdle(entry: PoolEntry, command: RpcCommand, timeoutMs?: number): Promise<RpcResponse | null> {
+		if (entry.running || entry.compacting === true || entry.status !== "ready") return null;
 		const client = entry.sidecar.rpcClient;
-		return client ? await client.command(command) : null;
+		return client ? await client.command(command, timeoutMs) : null;
+	}
+
+	/**
+	 * Turn tab hibernation on or off, or change its idle time. Off stops the
+	 * sweep; tabs already hibernated stay asleep until they are viewed.
+	 */
+	setHibernation(pref: TabHibernationPref): void {
+		this.#hibernation = { ...pref };
+		if (pref.enabled && !this.#sweepTimer) {
+			this.#sweepTimer = setInterval(() => this.#sweepIdleTabs(), this.#sweepMs);
+			this.#sweepTimer.unref();
+		} else if (!pref.enabled && this.#sweepTimer) {
+			clearInterval(this.#sweepTimer);
+			this.#sweepTimer = null;
+		}
+	}
+
+	/** A plan proposal was answered (approved, rejected, or plan mode turned off). */
+	notePlanProposalSettled(sidecar: SidecarManager): void {
+		for (const entry of this.#entries) {
+			if (entry.sidecar === sidecar) entry.planProposalPending = false;
+		}
+	}
+
+	#sweepIdleTabs(): void {
+		const now = Date.now();
+		for (const entry of this.#entries) {
+			if (!entry.checking && this.#mayHibernate(entry, now)) void this.#hibernate(entry);
+		}
+	}
+
+	/** The checks that cost nothing: run on every sweep before any RPC goes out. */
+	#mayHibernate(entry: PoolEntry, now: number): boolean {
+		const idleMs = this.#minIdleMs ?? this.#hibernation.idleMinutes * 60_000;
+		return (
+			this.#hibernation.enabled &&
+			!entry.hibernated &&
+			!entry.draining &&
+			!entry.placeholder &&
+			!this.#isVisible(entry) &&
+			entry.status === "ready" &&
+			!entry.running &&
+			entry.compacting !== true &&
+			entry.sidecar.rpcClient?.pendingCount === 0 &&
+			entry.pendingUi.size === 0 &&
+			!entry.planProposalPending &&
+			// omp writes the session file only after the first assistant message;
+			// before that, resuming the path would open an empty session.
+			entry.sessionFile !== undefined &&
+			existsSync(entry.sessionFile) &&
+			now - entry.lastActivityAt >= idleMs
+		);
+	}
+
+	async #hibernate(entry: PoolEntry): Promise<void> {
+		entry.checking = true;
+		const activityBefore = entry.lastActivityAt;
+		try {
+			const snapshot = await this.#idleSnapshot(entry);
+			// Anything that moved while the checks ran (a frame, a view change, a
+			// command of main's own) cancels this attempt; the next sweep retries.
+			if (
+				!snapshot ||
+				entry.lastActivityAt !== activityBefore ||
+				!this.#entries.has(entry) ||
+				!this.#mayHibernate(entry, Date.now())
+			)
+				return;
+			entry.hibernated = snapshot;
+			console.log(`[sidecar-pool] hibernating idle tab ${entry.tabId}`);
+			const drain = entry.sidecar.hibernate();
+			entry.draining = drain;
+			entry.checking = false;
+			await drain;
+			if (entry.draining === drain) entry.draining = null;
+		} finally {
+			entry.checking = false;
+		}
+	}
+
+	/**
+	 * Ask the sidecar whether it is really idle and which modes it has armed.
+	 * Null means skip this tab for now: a check failed or timed out, work is in
+	 * flight, or a mode is armed that a respawn cannot recreate exactly.
+	 */
+	async #idleSnapshot(entry: PoolEntry): Promise<HibernationSnapshot | null> {
+		const ask = async <T>(command: RpcCommand): Promise<T> => {
+			const response = await this.#commandIfIdle(entry, command, HIBERNATION_RPC_TIMEOUT_MS);
+			if (!response?.success) throw new Error(`${command.type} unavailable`);
+			return response.data as T;
+		};
+		try {
+			const checks = await Promise.all([
+				ask<RpcSessionState>({ type: "get_state" }),
+				ask<RpcJobsResult>({ type: "get_jobs" }),
+				ask<PlanModeReport>({ type: "get_plan_mode" }),
+				ask<RpcGoalState>({ type: "get_goal" }),
+				ask<RpcLoopModeState>({ type: "get_loop_mode" }),
+				ask<RpcVibeModeState>({ type: "get_vibe_mode" }),
+			]);
+			return hibernationSnapshot(entry.sessionFile, ...checks);
+		} catch {
+			return null;
+		}
 	}
 
 	/** Make `tabId` the window's active tab (moves full event forwarding). False when unknown/foreign. */
@@ -542,6 +763,8 @@ export class SidecarPool {
 		const owner = this.#sessionOwners.get(sessionPath);
 		const entry = owner ? this.#byTabId.get(owner.tabId) : undefined;
 		if (!entry) return false;
+		// A hibernating process may still write the file during its teardown.
+		if (entry.draining) return true;
 		return entry.status !== "asleep" && entry.status !== "exited" && entry.status !== "error";
 	}
 
@@ -602,6 +825,8 @@ export class SidecarPool {
 	 * the id is unknown — the caller falls back to the active tab's sidecar.
 	 */
 	routeSideChannel(id: string, frame: object, final: boolean): boolean {
+		// Answered, whichever sidecar the caller's fallback ends up writing to.
+		if (final) for (const candidate of this.#entries) candidate.pendingUi.delete(id);
 		const entry = this.#requestOwners.get(id);
 		if (!entry) return false;
 		if (final) this.#requestOwners.delete(id);
@@ -752,6 +977,10 @@ export class SidecarPool {
 	}
 
 	disposeAll(): void {
+		if (this.#sweepTimer) {
+			clearInterval(this.#sweepTimer);
+			this.#sweepTimer = null;
+		}
 		for (const entry of this.#entries) {
 			entry.sidecar.removeAllListeners();
 			entry.sidecar.dispose();
@@ -765,6 +994,65 @@ export class SidecarPool {
 		this.#requestOwners.clear();
 		this.#restoringWindows.clear();
 	}
+}
+
+/** `get_plan_mode` result. */
+interface PlanModeReport {
+	enabled: boolean;
+	planFilePath?: string;
+}
+
+/**
+ * Decide from the sidecar's own reports whether a tab may hibernate, and what
+ * to re-arm when it wakes. Goal and vibe mode carry state a respawn cannot
+ * recreate over RPC (goal usage counters, the vibe worker roster), so either
+ * one keeps the tab awake, as do a looping prompt and a loop limit.
+ */
+function hibernationSnapshot(
+	sessionFile: string | undefined,
+	state: RpcSessionState,
+	jobs: RpcJobsResult,
+	plan: PlanModeReport,
+	goal: RpcGoalState,
+	loop: RpcLoopModeState,
+	vibe: RpcVibeModeState,
+): HibernationSnapshot | null {
+	if (state.isStreaming || state.isCompacting || state.queuedMessageCount > 0) return null;
+	if (state.collab?.role || state.agentsPaused || state.prewalkArmed) return null;
+	// The registration may be stale; resume only the file the sidecar is on.
+	if (!sessionFile || state.sessionFile !== sessionFile) return null;
+	if (jobs.jobs.some(job => job.status === "running")) return null;
+	const goalLive =
+		goal.enabled || (goal.status !== undefined && goal.status !== "complete" && goal.status !== "dropped");
+	if (goalLive || vibe.enabled) return null;
+	if (loop.enabled && (loop.state === "running" || loop.limit !== undefined)) return null;
+	const planMode = state.planModeEnabled || plan.enabled;
+	if (planMode && plan.planFilePath !== undefined && plan.planFilePath !== DEFAULT_PLAN_FILE) return null;
+	return { planMode, loopMode: loop.enabled };
+}
+
+/**
+ * The wake's ready gate: plan mode first, because a woken tab must never take
+ * a prompt without its read-only guard — failing that leaves the tab in error.
+ * A loop that cannot be re-armed only warns.
+ */
+function restoreModesGate(snapshot: HibernationSnapshot): ReadyGate | null {
+	if (!snapshot.planMode && !snapshot.loopMode) return null;
+	const apply = (client: RpcClient, command: RpcCommand): Promise<RpcResponse | null> =>
+		client.command(command, HIBERNATION_RPC_TIMEOUT_MS).catch(() => null);
+	return async client => {
+		if (snapshot.planMode) {
+			const response = await apply(client, { type: "set_plan_mode", enabled: true });
+			const armed = response?.success === true && (response.data as PlanModeReport | undefined)?.enabled === true;
+			if (!armed) return { error: "Plan mode could not be restored", modesNotRestored: ["plan"] };
+		}
+		const modesNotRestored: string[] = [];
+		if (snapshot.loopMode) {
+			const response = await apply(client, { type: "set_loop_mode", enabled: true });
+			if (!response?.success) modesNotRestored.push("loop");
+		}
+		return { modesNotRestored };
+	};
 }
 
 /** TAB_STATUS push / GET_TABS item: full tab snapshot incl. cached session meta. */
