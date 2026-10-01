@@ -1,8 +1,9 @@
 /**
  * Launch-argument decoding for a refused second instance (`omp <dir>`,
  * `open -n omp --args …`) and Windows/Linux protocol handoff. Contract: a deep
- * link always wins, the first real directory is the workspace to open, flags
- * never masquerade as one, and anything else only raises the running app.
+ * link always wins, then --quick-entry, the first real directory is the
+ * workspace to open, flags never masquerade as one, and anything else only
+ * raises the running app.
  */
 
 import { describe, expect, it } from "vitest";
@@ -36,6 +37,18 @@ describe("parseLaunchArgv", () => {
 
 	it("only asks for focus when nothing names a link or a workspace", () => {
 		expect(parseLaunchArgv(["/tmp/not-a-directory"], "omp", () => false)).toEqual({ kind: "focus" });
+	});
+
+	it("opens quick entry for the --quick-entry flag", () => {
+		expect(parseLaunchArgv(["--quick-entry"], "omp", exists)).toEqual({ kind: "quick-entry" });
+	});
+
+	it("prefers quick entry over a directory in the same argv", () => {
+		expect(parseLaunchArgv(["/workspace/app", "--quick-entry"], "omp", exists)).toEqual({ kind: "quick-entry" });
+	});
+
+	it("still prefers a deep link over quick entry", () => {
+		expect(parseLaunchArgv(["--quick-entry", "omp://new"], "omp", exists)).toEqual({ kind: "url", url: "omp://new" });
 	});
 });
 

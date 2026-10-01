@@ -492,7 +492,7 @@ app.whenReady().then(() => {
 	// Tray, menu, deep links, updater
 	createTray(windowManager, spawnWindow);
 	createMenu(windowManager, spawnWindow);
-	setupDeepLinks(windowManager, spawnWindow);
+	setupDeepLinks(windowManager, spawnWindow, () => quickEntry?.showWhenSettled());
 	setupUpdater();
 
 	// Probe stats server (non-blocking)
