@@ -92,3 +92,33 @@ process.exit(1);
 		await fs.rm(directory, { recursive: true, force: true });
 	}
 });
+
+async function fakeStats(name: string, body: string): Promise<{ directory: string; binary: string }> {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), `omp-stats-${name}-`));
+	const binary = path.join(directory, "stats.ts");
+	await fs.writeFile(binary, `#!/usr/bin/env bun\nconst dir = ${JSON.stringify(directory)};\n${body}`);
+	await fs.chmod(binary, 0o755);
+	return { directory, binary };
+}
+
+const readOr = (file: string) => fs.readFile(file, "utf8").catch(() => "");
+
+test("the stats child carries the flag that ties its life to the GUI", async () => {
+	const { directory, binary } = await fakeStats(
+		"orphans",
+		`await Bun.write(dir + "/env", process.env.BUN_FEATURE_FLAG_NO_ORPHANS ?? "unset");
+await Bun.sleep(5000);
+`,
+	);
+	const inherited = process.env.BUN_FEATURE_FLAG_NO_ORPHANS;
+	const server = new StatsServerManager(binary);
+	try {
+		server.start();
+		await expect.poll(() => readOr(path.join(directory, "env")), { timeout: 5000 }).toBe("1");
+		// Set on the child alone: anything this process spawns later must not inherit it.
+		expect(process.env.BUN_FEATURE_FLAG_NO_ORPHANS).toBe(inherited);
+	} finally {
+		server.kill();
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});

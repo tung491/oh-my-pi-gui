@@ -60,7 +60,12 @@ export class StatsServerManager extends EventEmitter {
 		try {
 			child = spawn(this.#binaryPath, args, {
 				stdio: ["ignore", "pipe", "pipe"],
-				env: { ...process.env, PI_NOTIFICATIONS: "off" },
+				// Bun's NO_ORPHANS flag makes this child die with the GUI however the
+				// GUI ends (crash, SIGKILL, app.exit), which the quit teardown alone
+				// cannot cover. Only this child gets it, never process.env: a flagged
+				// Bun process also SIGKILLs its descendants on exit, which would take
+				// a sidecar's LSP and MCP servers down with it.
+				env: { ...process.env, PI_NOTIFICATIONS: "off", BUN_FEATURE_FLAG_NO_ORPHANS: "1" },
 			});
 		} catch (err) {
 			// spawn() throws synchronously (e.g. EBADF/ENOENT) — treat like a
