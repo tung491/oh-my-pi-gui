@@ -9,9 +9,10 @@ export class DeepLinkBuffer<T> {
 	#pending: T | undefined;
 	readonly #listeners = new Set<(link: T) => void>();
 
-	deliver(link: T): void {
+	/** `hold: false` drops a link nobody listens for yet instead of replacing the held one. */
+	deliver(link: T, hold = true): void {
 		if (this.#listeners.size === 0) {
-			this.#pending = link;
+			if (hold) this.#pending = link;
 			return;
 		}
 		for (const listener of this.#listeners) listener(link);

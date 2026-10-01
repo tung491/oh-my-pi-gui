@@ -111,7 +111,13 @@ let activeTabId: string | null = null;
 
 // Listening from the start: a cold-start link can land before the renderer subscribes.
 const deepLinks = new DeepLinkBuffer<DeepLinkPayload>();
-if (!isQuickEntry) ipcRenderer.on(IPC_EVENTS.DEEP_LINK, (_event, link: DeepLinkPayload) => deepLinks.deliver(link));
+// A quick-entry nudge is not held for a late subscriber: the renderer drains
+// quick entry when it boots, and holding the nudge would replace a pending link.
+if (!isQuickEntry) {
+	ipcRenderer.on(IPC_EVENTS.DEEP_LINK, (_event, link: DeepLinkPayload) =>
+		deepLinks.deliver(link, link.action !== "quick-entry"),
+	);
+}
 
 function subscribeActiveTab<T>(channel: string, callback: (data: T) => void): () => void {
 	return subscribe<IpcActiveTabEnvelope<T>>(channel, envelope => {
