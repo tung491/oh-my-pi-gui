@@ -300,7 +300,9 @@ if (process.argv.includes("stats")) {
 				});
 				break;
 			case "get_goal":
-				ok({ enabled: false, status: "none" });
+				// omp's answer when the session has no goal: no status at all. Any
+				// status but complete or dropped is a live goal and keeps a tab awake.
+				ok({ enabled: false });
 				break;
 			case "get_loop_mode":
 				ok({ enabled: false, state: "off" });
