@@ -13,6 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron, type Page } from "playwright";
+import { LINUX_DISPLAY_SWITCH } from "../src/main/relaunch-args";
 import type { RpcSessionState } from "../src/shared/rpc-types";
 
 const executablePath = process.env.OMP_GUI_TEST_APP;
@@ -63,7 +64,13 @@ async function waitForSidecar(page: Page): Promise<void> {
 async function launch(profile: Profile, args: string[] = []): Promise<{ app: ElectronApplication; page: Page }> {
 	const app = await electron.launch({
 		executablePath,
-		args: [...args, `--user-data-dir=${profile.desktop}`],
+		// The desktop entry passes the display switch. Without it the app
+		// restarts itself once to add it, and Playwright would lose the process.
+		args: [
+			...args,
+			...(process.platform === "linux" ? [LINUX_DISPLAY_SWITCH] : []),
+			`--user-data-dir=${profile.desktop}`,
+		],
 		// Playwright prepends --no-sandbox on Linux unless told the sandbox is wanted.
 		chromiumSandbox: true,
 		env: profile.env,
@@ -72,6 +79,22 @@ async function launch(profile: Profile, args: string[] = []): Promise<{ app: Ele
 	const page = await app.firstWindow();
 	await waitForSidecar(page);
 	return { app, page };
+}
+
+/** argv of each main process (no `--type=`) launched with this profile's user-data dir. */
+async function mainProcesses(profile: Profile): Promise<Array<{ pid: number; argv: string[] }>> {
+	const found: Array<{ pid: number; argv: string[] }> = [];
+	for (const entry of await fs.readdir("/proc")) {
+		if (!/^\d+$/.test(entry)) continue;
+		const argv = await fs
+			.readFile(`/proc/${entry}/cmdline`, "utf8")
+			.then(text => text.split("\0").filter(Boolean))
+			.catch((): string[] => []);
+		if (!argv.includes(`--user-data-dir=${profile.desktop}`)) continue;
+		if (argv.some(arg => arg.startsWith("--type="))) continue;
+		found.push({ pid: Number(entry), argv });
+	}
+	return found;
 }
 
 async function sessionState(page: Page): Promise<RpcSessionState> {
@@ -193,6 +216,29 @@ test.describe("installed package", () => {
 			expect(platform).toBe(process.platform);
 		} finally {
 			await app.close();
+		}
+	});
+
+	test("restarts a terminal launch once onto XWayland", async () => {
+		test.skip(process.platform !== "linux", "Linux display backend only");
+		test.setTimeout(120_000);
+		if (!executablePath) throw new Error("OMP_GUI_TEST_APP is not set");
+		const profile = await createProfile();
+		const child = spawn(executablePath, [profile.project, `--user-data-dir=${profile.desktop}`], {
+			env: profile.env,
+			cwd: profile.root,
+			stdio: "ignore",
+		});
+		const [code] = await once(child, "exit");
+		expect(code).toBe(0);
+		try {
+			await expect
+				.poll(async () => (await mainProcesses(profile)).map(entry => entry.argv.slice(1)), { timeout: 30_000 })
+				.toEqual([[profile.project, `--user-data-dir=${profile.desktop}`, LINUX_DISPLAY_SWITCH]]);
+		} finally {
+			// Only the process this test started, found by its throwaway profile.
+			for (const { pid } of await mainProcesses(profile)) process.kill(pid, "SIGTERM");
+			await expect.poll(async () => (await mainProcesses(profile)).length, { timeout: 30_000 }).toBe(0);
 		}
 	});
 

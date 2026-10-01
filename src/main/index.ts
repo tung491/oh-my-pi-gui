@@ -22,6 +22,7 @@ import { registerIpcHandlers } from "./ipc";
 import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
+import { DISPLAY_RESTART_ENV, displayRestart } from "./relaunch-args";
 import { writeRuntimeLog } from "./runtime-log";
 import { SessionIndex } from "./session-index";
 import { shellSpawnEnv } from "./shell-env";
@@ -39,6 +40,25 @@ import { resolveWindowSpawnTarget } from "./window-spawn-target";
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
 	app.quit();
+}
+
+// Linux builds run on XWayland, but only the desktop entries pass the switch:
+// a terminal or direct AppImage launch restarts once with it. The marker is
+// cleared at once so the sidecar and anything it starts never inherit it.
+const restartForDisplay = gotLock
+	? displayRestart({
+			platform: process.platform,
+			packaged: app.isPackaged,
+			argv: process.argv,
+			execPath: process.execPath,
+			env: process.env,
+		})
+	: null;
+delete process.env[DISPLAY_RESTART_ENV];
+if (restartForDisplay) {
+	process.env[DISPLAY_RESTART_ENV] = "1";
+	app.relaunch(restartForDisplay);
+	app.exit(0);
 }
 
 // App identity: the dev run shows "Electron" + the default atom icon in the
