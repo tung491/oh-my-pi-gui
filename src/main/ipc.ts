@@ -810,8 +810,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		async (event, defaultPath?: string, filters?: { name: string; extensions: string[] }[]) => {
 			const win = BrowserWindow.fromWebContents(event.sender);
 			if (!win) return null;
+			// Without a folder in defaultPath the dialog opens in Downloads.
+			const name = defaultPath ?? "session.html";
+			const cwd = cwdFor(deps, event);
 			const result = await dialog.showSaveDialog(win, {
-				defaultPath: defaultPath ?? "session.html",
+				defaultPath: path.isAbsolute(name) || !cwd ? name : path.join(cwd, name),
 				filters: filters ?? [{ name: "HTML", extensions: ["html"] }],
 			});
 			return result.canceled ? null : (result.filePath ?? null);
@@ -824,6 +827,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			const win = BrowserWindow.fromWebContents(event.sender);
 			if (!win) return null;
 			const result = await dialog.showOpenDialog(win, {
+				defaultPath: cwdFor(deps, event) ?? undefined,
 				properties: options?.directory ? ["openDirectory", "createDirectory"] : ["openFile", "multiSelections"],
 				filters: filters ?? [],
 			});
@@ -846,7 +850,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			if (key === lastNotifyKey && now - lastNotifyAt < 1500) return;
 			lastNotifyKey = key;
 			lastNotifyAt = now;
-			new Notification({ title: payload.title, body: payload.body ?? "" }).show();
+			showNotification(payload.title, payload.body ?? "");
 		}
 	});
 
@@ -1201,6 +1205,15 @@ function broadcast(windowManager: WindowManager, channel: string, data: unknown)
 	}
 }
 
+/** Show a native notification, logging a platform refusal instead of dropping it silently. */
+function showNotification(title: string, body: string): void {
+	const notification = new Notification({ title, body });
+	notification.on("failed", (_event, error) => {
+		writeRuntimeLog({ source: "notification", message: `Notification failed: ${error}` });
+	});
+	notification.show();
+}
+
 /** Execute GUI-registered host tools. Returns undefined for unknown tools. */
 function executeGuiHostTool(name: string, args: Record<string, unknown>): HostToolAnswer {
 	switch (name) {
@@ -1215,7 +1228,7 @@ function executeGuiHostTool(name: string, args: Record<string, unknown>): HostTo
 		case "gui_notify": {
 			const title = typeof args.title === "string" ? args.title : "Notification";
 			const body = typeof args.body === "string" ? args.body : "";
-			new Notification({ title, body }).show();
+			showNotification(title, body);
 			return "Notification shown";
 		}
 		case "gui_clipboard_read": {
