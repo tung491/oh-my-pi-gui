@@ -72,6 +72,8 @@ export interface IpcDeps {
 	statsClient: StatsClient;
 	/** Demand-driven start/revive for the bundled stats server (no server → "exhausted"). */
 	statsRestart: () => Revive;
+	/** A dashboard read happened: postpones the stats server's idle stop. */
+	statsTouch: () => void;
 	logWatcher: LogWatcher;
 	windowManager: WindowManager;
 	benchmarkBinaryPath: string | null;
@@ -710,6 +712,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 
 	// Stats
 	ipcMain.handle(IPC_COMMANDS.STATS_FETCH, async (_event, payload: IpcStatsFetchPayload) => {
+		deps.statsTouch();
 		if (typeof payload.path !== "string") {
 			throw new Error("Invalid stats path");
 		}

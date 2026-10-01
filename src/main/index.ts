@@ -395,6 +395,7 @@ app.whenReady().then(() => {
 		sessionIndex,
 		statsClient,
 		statsRestart: () => statsServer?.ensureRunning() ?? "exhausted",
+		statsTouch: () => statsServer?.noteActivity(),
 		logWatcher,
 		windowManager,
 		benchmarkBinaryPath: bundledOmp,

@@ -122,3 +122,112 @@ await Bun.sleep(5000);
 		await fs.rm(directory, { recursive: true, force: true });
 	}
 });
+
+test("stop() ends the child with SIGINT and never schedules a restart", async () => {
+	const { directory, binary } = await fakeStats(
+		"stop",
+		`import { appendFileSync, writeFileSync } from "node:fs";
+appendFileSync(dir + "/spawns", "x");
+process.on("SIGINT", () => {
+	writeFileSync(dir + "/signal", "SIGINT");
+	process.exit(130);
+});
+process.stdout.write("Dashboard available at: http://127.0.0.1:55125\\n");
+await Bun.sleep(5000);
+`,
+	);
+	const server = new StatsServerManager(binary);
+	const exits: Array<number | null> = [];
+	server.on("exit", code => exits.push(code));
+	try {
+		server.start();
+		await expect.poll(() => server.port, { timeout: 5000 }).toBe(55125);
+		server.stop();
+		expect(server.port).toBe(0);
+		expect(exits).toEqual([null]);
+		await expect.poll(() => readOr(path.join(directory, "signal")), { timeout: 5000 }).toBe("SIGINT");
+		// A non-zero exit from a stopped child must not enter the crash ladder.
+		await new Promise(resolve => setTimeout(resolve, 500));
+		expect(await readOr(path.join(directory, "spawns"))).toBe("x");
+		expect(exits).toEqual([null]);
+	} finally {
+		server.kill();
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a read after stop() revives the server", async () => {
+	const { directory, binary } = await fakeStats(
+		"revive-after-stop",
+		`process.on("SIGINT", () => process.exit(0));
+process.stdout.write("Dashboard available at: http://127.0.0.1:55126\\n");
+await Bun.sleep(5000);
+`,
+	);
+	const server = new StatsServerManager(binary);
+	try {
+		server.start();
+		await expect.poll(() => server.port, { timeout: 5000 }).toBe(55126);
+		server.stop();
+		expect(server.ensureRunning()).toBe("scheduled");
+		await expect.poll(() => server.port, { timeout: 5000 }).toBe(55126);
+	} finally {
+		server.kill();
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("reads keep the server up and their absence stops it", async () => {
+	const { directory, binary } = await fakeStats(
+		"idle",
+		`process.on("SIGINT", () => process.exit(0));
+process.stdout.write("Dashboard available at: http://127.0.0.1:55127\\n");
+await Bun.sleep(5000);
+`,
+	);
+	const server = new StatsServerManager(binary, { idleStopMs: 200 });
+	try {
+		server.start();
+		await expect.poll(() => server.port, { timeout: 5000 }).toBe(55127);
+		const touch = setInterval(() => server.noteActivity(), 100);
+		await new Promise(resolve => setTimeout(resolve, 600));
+		clearInterval(touch);
+		expect(server.port).toBe(55127);
+		await expect.poll(() => server.port, { timeout: 1000 }).toBe(0);
+		expect(server.ensureRunning()).toBe("scheduled");
+	} finally {
+		server.kill();
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});
+
+test("a server stopped while booting never announces its port", async () => {
+	// Ignores SIGINT so the stopped child still prints its URL, as a slow
+	// shutdown would; that late line must not reach the manager.
+	const { directory, binary } = await fakeStats(
+		"stop-booting",
+		`import { writeFileSync } from "node:fs";
+process.on("SIGINT", () => {});
+writeFileSync(dir + "/up", "1");
+await Bun.sleep(300);
+process.stdout.write("Dashboard available at: http://127.0.0.1:55128\\n");
+writeFileSync(dir + "/printed", "1");
+await Bun.sleep(800);
+`,
+	);
+	const server = new StatsServerManager(binary);
+	const ready: number[] = [];
+	server.on("ready", port => ready.push(port));
+	try {
+		server.start();
+		await expect.poll(() => readOr(path.join(directory, "up")), { timeout: 5000 }).toBe("1");
+		server.stop();
+		await expect.poll(() => readOr(path.join(directory, "printed")), { timeout: 5000 }).toBe("1");
+		await new Promise(resolve => setTimeout(resolve, 100));
+		expect(ready).toEqual([]);
+		expect(server.port).toBe(0);
+	} finally {
+		server.kill();
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});

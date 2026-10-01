@@ -2,8 +2,8 @@
  * The GUI's built-in stats dashboard server, spawned from the SAME bundled
  * omp binary as the agent sidecar (`omp stats --no-open`).
  *
- * Internal to the GUI's closed loop: spawned by the first dashboard read, killed on quit,
- * localhost-only. No external `omp stats` process is required and none is
+ * Internal to the GUI's closed loop: spawned by the first dashboard read, stopped
+ * after a quiet spell without reads, killed on quit, localhost-only. No external `omp stats` process is required and none is
  * consulted — if an external process already owns the port, this reports the
  * conflict rather than silently using it.
  */
@@ -14,18 +14,27 @@ import { MAX_RESTART_ATTEMPTS, RestartBudget, type Revive } from "./stats-restar
 
 // Bind a private ephemeral port; separate GUI instances must not share an index or listener.
 const DEFAULT_PORT = 0;
+/** An open dashboard reads every 30 s; this long without a read means nobody is looking. */
+export const STATS_IDLE_STOP_MS = 5 * 60_000;
+
+export interface StatsServerOptions {
+	idleStopMs?: number;
+}
 
 export class StatsServerManager extends EventEmitter {
 	#child: ChildProcess | null = null;
 	#budget = new RestartBudget();
 	#restartTimer: NodeJS.Timeout | null = null;
+	#idleTimer: NodeJS.Timeout | null = null;
 	#disposed = false;
 	#port = DEFAULT_PORT;
 	readonly #binaryPath: string;
+	readonly #idleStopMs: number;
 
-	constructor(binaryPath: string) {
+	constructor(binaryPath: string, { idleStopMs = STATS_IDLE_STOP_MS }: StatsServerOptions = {}) {
 		super();
 		this.#binaryPath = binaryPath;
+		this.#idleStopMs = idleStopMs;
 	}
 
 	get port(): number {
@@ -48,6 +57,48 @@ export class StatsServerManager extends EventEmitter {
 		const verdict = this.#budget.revive(Date.now());
 		if (verdict === "scheduled") this.#spawn();
 		return verdict;
+	}
+
+	/** A dashboard read: keep a running (or restarting) server up for another idle window. */
+	noteActivity(): void {
+		if (this.#disposed || (!this.#child && !this.#restartTimer)) return;
+		this.#armIdleTimer();
+	}
+
+	/**
+	 * Stop the server without disposing the manager: the next read revives it
+	 * through `ensureRunning()`. SIGINT is the signal `omp stats` handles, so its
+	 * database closes cleanly; the stopped child's late output and exit are
+	 * ignored, so it can neither publish a dead port nor enter the restart ladder.
+	 */
+	stop(): void {
+		this.#clearIdleTimer();
+		const child = this.#child;
+		if (!child && !this.#restartTimer) return;
+		if (this.#restartTimer) {
+			clearTimeout(this.#restartTimer);
+			this.#restartTimer = null;
+		}
+		this.#child = null;
+		this.#port = 0;
+		this.emit("exit", null);
+		child?.kill("SIGINT");
+	}
+
+	#armIdleTimer(): void {
+		this.#clearIdleTimer();
+		this.#idleTimer = setTimeout(() => {
+			this.#idleTimer = null;
+			console.log(`[stats-server] no dashboard reads for ${this.#idleStopMs}ms; stopping`);
+			this.stop();
+		}, this.#idleStopMs);
+		this.#idleTimer.unref();
+	}
+
+	#clearIdleTimer(): void {
+		if (!this.#idleTimer) return;
+		clearTimeout(this.#idleTimer);
+		this.#idleTimer = null;
 	}
 
 	#spawn(): void {
@@ -75,9 +126,11 @@ export class StatsServerManager extends EventEmitter {
 			return;
 		}
 		this.#child = child;
+		this.#armIdleTimer();
 
 		let stdout = "";
 		child.stdout?.on("data", (chunk: Buffer) => {
+			if (this.#child !== child) return;
 			stdout = (stdout + chunk.toString("utf-8")).slice(-4096);
 			const text = stripVTControlCharacters(stdout);
 			const match = /http:\/\/(?:localhost|127\.0\.0\.1):([0-9]+)(?=[\s/])/.exec(text);
@@ -90,6 +143,7 @@ export class StatsServerManager extends EventEmitter {
 			}
 		});
 		child.stderr?.on("data", (chunk: Buffer) => {
+			if (this.#child !== child) return;
 			const text = chunk.toString("utf-8").trim();
 			if (text) console.error(`[stats-server stderr] ${text}`);
 		});
@@ -128,6 +182,7 @@ export class StatsServerManager extends EventEmitter {
 
 	kill(): void {
 		this.#disposed = true;
+		this.#clearIdleTimer();
 		if (this.#restartTimer) {
 			clearTimeout(this.#restartTimer);
 			this.#restartTimer = null;
