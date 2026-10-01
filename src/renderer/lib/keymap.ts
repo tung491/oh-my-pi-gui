@@ -20,7 +20,7 @@
  */
 
 import { type Chord, ctrlTwin, parseChord, serializeChord } from "../../shared/chord";
-import { NATIVE_CHORDS } from "../../shared/hotkeys";
+import { NATIVE_CHORDS, QUICK_ENTRY_CHORD_ID } from "../../shared/hotkeys";
 import { isImeKeyEvent } from "./ime";
 
 export { type Chord, ctrlTwin, parseChord, serializeChord } from "../../shared/chord";
@@ -400,6 +400,8 @@ export interface ChordOwner {
 export function chordOwner(id: string): ChordOwner | undefined {
 	const action: KeymapAction | undefined = KEYMAP_ACTIONS.find(candidate => candidate.id === id);
 	if (action) return { labelKey: action.labelKey, holds: "action" };
+	// Main registers the quick-entry chord with globalShortcut, like window.toggle.
+	if (id === QUICK_ENTRY_CHORD_ID) return { labelKey: "hotkeys.row.quickEntry", holds: "native" };
 	const reserved: ReservedChord | undefined = RESERVED_CHORDS.find(candidate => candidate.id === id);
 	if (!reserved) return undefined;
 	return { labelKey: reserved.labelKey, holds: reserved.hotkeyGroup };
@@ -462,13 +464,16 @@ export interface KeymapConflict {
  * shadow. (c) reserved: a user chord taken by a focused control → warning (it
  * still fires elsewhere), or by the native menu / global shortcut → error
  * (Electron resolves it before the renderer ever sees the keydown).
+ * `extraReserved` adds chords held elsewhere, already in this platform's
+ * spelling (the quick-entry chord is literal Control, never a Cmd twin).
  */
 export function detectConflicts(
 	actions: readonly KeymapAction[],
 	overrides: KeymapOverrides,
 	platform: KeyboardPlatform = "mac",
+	extraReserved: readonly ReservedChord[] = [],
 ): KeymapConflict[] {
-	const reserved = reservedChordsFor(platform);
+	const reserved = [...reservedChordsFor(platform), ...extraReserved];
 	const defaultChords = new Map<string, Set<string>>();
 	for (const action of actions) {
 		const chords = new Set<string>();
@@ -518,6 +523,37 @@ export function detectConflicts(
 		}
 	}
 	return conflicts;
+}
+
+export interface QuickEntryConflict {
+	/** "error": a native chord, which main refuses; "warning": quick entry takes it from its owner. */
+	kind: "error" | "warning";
+	ownerId: string;
+}
+
+/**
+ * What a quick-entry chord collides with. The system-wide grab fires before any
+ * window sees the keydown, so a keymap or composer chord it takes over is a
+ * warning, and a native chord is an error. Main re-validates on save.
+ */
+export function quickEntryConflicts(
+	chord: string,
+	overrides: KeymapOverrides,
+	platform: KeyboardPlatform,
+): QuickEntryConflict | null {
+	const parsed = parseChord(chord);
+	if (!parsed) return null;
+	const canonical = serializeChord(parsed);
+	const holders = reservedChordsFor(platform).filter(entry => {
+		const held = parseChord(entry.chord);
+		return held !== null && serializeChord(held) === canonical;
+	});
+	const native = holders.find(entry => entry.hotkeyGroup === "native");
+	if (native) return { kind: "error", ownerId: native.id };
+	const action = compileKeymap(KEYMAP_ACTIONS, overrides, platform).get(canonical);
+	if (action) return { kind: "warning", ownerId: action };
+	const composer = holders[0];
+	return composer ? { kind: "warning", ownerId: composer.id } : null;
 }
 
 /**

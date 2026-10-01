@@ -2347,6 +2347,7 @@ export const zh: Record<string, string> = {
 	"hotkeys.row.modelPicker": "模型选择器",
 	"hotkeys.row.agentHub": "Agent 中枢",
 	"hotkeys.row.windowToggle": "显示 / 隐藏应用窗口（全局生效）",
+	"hotkeys.row.quickEntry": "打开快速输入（全局生效）",
 	"hotkeys.row.newSession": "新建会话",
 	"hotkeys.row.exportHtml": "将会话导出为 HTML",
 	"hotkeys.row.newWindow": "新建窗口",
@@ -2365,6 +2366,21 @@ export const zh: Record<string, string> = {
 	"hotkeys.remap.saved": "「{action}」已重绑为 {chord}",
 	"hotkeys.remap.resetDone": "「{action}」已重置为默认",
 	"hotkeys.remap.resetAllDone": "全部键位已重置为默认",
+	"hotkeys.quickEntry.off": "已关闭",
+	"hotkeys.quickEntry.disable": "关闭",
+	"hotkeys.quickEntry.enable": "开启",
+	"hotkeys.quickEntry.refused": "系统拒绝了 {chord}，可能已被其他应用占用。",
+	"hotkeys.quickEntry.portal":
+		"该快捷键由桌面环境管理（GNOME：设置 → 应用 → Sai ATLAS → 全局快捷键）。{chord} 仅为建议按键。如果一直无效，请在桌面的键盘设置中绑定 “sai-atlas --quick-entry”。",
+	"hotkeys.quickEntry.xwayland":
+		"在通过 XWayland 运行的 Wayland 会话中，此快捷键仅在 Sai ATLAS 获得焦点时有效。要在任意应用中打开快速输入，请在桌面的键盘设置中绑定 “sai-atlas --quick-entry”。",
+	"hotkeys.quickEntry.systemChord": "其他应用或系统正在使用此组合键。请加上 Shift 或 Alt，或换一个按键。",
+	"hotkeys.quickEntry.restart": "重启 Sai ATLAS 后生效。",
+	"hotkeys.quickEntry.desktopEntryMissing":
+		"Wayland 全局快捷键需要安装 .deb 版本。也可以在桌面的键盘设置中绑定 “sai-atlas --quick-entry”。",
+	"hotkeys.quickEntry.invalid": "请使用 Ctrl、Alt 或 Cmd/Super 组合键。",
+	"hotkeys.quickEntry.conflictGlobal": "“{action}” 已在全局使用此组合键",
+	"hotkeys.quickEntry.takesOver": "快速输入将在所有位置占用此组合键，包括「{action}」",
 
 	// Tool renderers
 	"tools.ask.questionFallback": "问题",

@@ -1,5 +1,11 @@
 import { Check, Pencil, RotateCcw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { QUICK_ENTRY_CHORD_ID } from "../../../shared/hotkeys";
+import type {
+	QuickEntryShortcutResult,
+	QuickEntryShortcutState,
+	QuickEntryShortcutUpdate,
+} from "../../../shared/ipc-types";
 import { useT } from "../../lib/i18n";
 import {
 	chordFromEvent,
@@ -12,15 +18,17 @@ import {
 	KEYMAP_ACTIONS,
 	type KeyboardPlatform,
 	type KeymapActionId,
-	type KeymapConflict,
 	keymapActionsForGroup,
 	platformDefaults,
+	quickEntryConflicts,
+	type ReservedChord,
 	type ReservedChordGroup,
 	reservedChordsForGroup,
 } from "../../lib/keymap";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { Button, Input, Modal } from "../common";
+import { QuickEntryShortcutRow } from "./QuickEntryShortcutRow";
 
 interface StaticHotkeyRow {
 	keys: string;
@@ -32,10 +40,19 @@ interface RemapHotkeyRow {
 	actionId: KeymapActionId;
 }
 
-type HotkeyRow = StaticHotkeyRow | RemapHotkeyRow;
+/** The system-wide quick-entry chord, which main owns and the dialog rebinds over IPC. */
+interface QuickEntryHotkeyRow {
+	quickEntry: true;
+}
+
+type HotkeyRow = StaticHotkeyRow | RemapHotkeyRow | QuickEntryHotkeyRow;
 
 function isRemapRow(row: HotkeyRow): row is RemapHotkeyRow {
 	return "actionId" in row;
+}
+
+function isQuickEntryRow(row: HotkeyRow): row is QuickEntryHotkeyRow {
+	return "quickEntry" in row;
 }
 
 interface HotkeyGroup {
@@ -60,7 +77,7 @@ function reservedRows(group: ReservedChordGroup, platform: KeyboardPlatform): Ho
 // conflict-checks against are the ones on display. Unmodified keys (Enter, @,
 // /) and the shift-only ⇧Tab / Escape globals stay static; terminal-only TUI
 // rows (suspend, display reset, $EDITOR) are deliberately absent.
-function hotkeyGroups(platform: KeyboardPlatform): HotkeyGroup[] {
+function hotkeyGroups(platform: KeyboardPlatform, withQuickEntry: boolean): HotkeyGroup[] {
 	return [
 		{
 			titleKey: "hotkeys.group.input",
@@ -87,7 +104,10 @@ function hotkeyGroups(platform: KeyboardPlatform): HotkeyGroup[] {
 		},
 		{ titleKey: "hotkeys.group.view", rows: remapRows("view") },
 		{ titleKey: "hotkeys.group.session", rows: remapRows("session") },
-		{ titleKey: "hotkeys.group.native", rows: reservedRows("native", platform) },
+		{
+			titleKey: "hotkeys.group.native",
+			rows: [...(withQuickEntry ? [{ quickEntry: true as const }] : []), ...reservedRows("native", platform)],
+		},
 	];
 }
 
@@ -95,11 +115,33 @@ interface ResolvedRow {
 	label: string;
 	keys: string;
 	actionId: KeymapActionId | null;
+	quickEntry: boolean;
 }
 
+type CaptureTarget = { kind: "action"; actionId: KeymapActionId } | { kind: "quickEntry" };
+
 interface CaptureState {
-	actionId: KeymapActionId;
+	target: CaptureTarget;
 	chord: string | null;
+}
+
+interface CaptureConflict {
+	/** "error" blocks the save. */
+	kind: "error" | "warning";
+	label: string;
+}
+
+const QUICK_ENTRY_REFUSAL_KEYS: Record<Extract<QuickEntryShortcutResult, { ok: false }>["reason"], string> = {
+	invalid: "hotkeys.quickEntry.invalid",
+	system: "hotkeys.quickEntry.systemChord",
+	reserved: "hotkeys.quickEntry.conflictGlobal",
+	refused: "hotkeys.quickEntry.refused",
+};
+
+/** The display name of whoever holds a chord id. */
+function ownerLabel(id: string, t: (key: string) => string): string {
+	const owner = chordOwner(id);
+	return owner ? t(owner.labelKey) : id;
 }
 
 /** Searchable shortcut reference panel with per-row keybinding remap (B3). */
@@ -113,6 +155,9 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 	const [query, setQuery] = useState("");
 	const [capture, setCapture] = useState<CaptureState | null>(null);
 	const [confirmingResetAll, setConfirmingResetAll] = useState(false);
+	// Null until main answers, and for good where the bridge has no quick entry.
+	const [quickEntry, setQuickEntry] = useState<QuickEntryShortcutState | null>(null);
+	const [quickEntryBusy, setQuickEntryBusy] = useState(false);
 
 	// Stays mounted through its exit animation, so every open starts from a clean
 	// filter rather than the previous visit's search, capture or confirm state.
@@ -121,7 +166,23 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 		setQuery("");
 		setCapture(null);
 		setConfirmingResetAll(false);
+		let live = true;
+		void window.omp?.quickEntry?.getShortcut().then(state => {
+			if (live) setQuickEntry(state);
+		});
+		return () => {
+			live = false;
+		};
 	}, [open]);
+
+	// A native global shortcut would fire on the very chord being recorded, so
+	// main suspends handling while any recorder in this window is capturing.
+	const capturing = capture !== null;
+	useEffect(() => {
+		if (!capturing) return;
+		window.omp?.quickEntry?.suspendShortcuts(true);
+		return () => window.omp?.quickEntry?.suspendShortcuts(false);
+	}, [capturing]);
 
 	// Capture mode: swallow every key at window-capture phase so nothing leaks
 	// to App's global handler (window bubble) or the modal's own Escape-close
@@ -142,35 +203,77 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 		return () => window.removeEventListener("keydown", onCaptureKey, true);
 	}, [capture]);
 
-	const captureAction = capture ? KEYMAP_ACTION_BY_ID[capture.actionId] : null;
+	const captureLabel = capture
+		? capture.target.kind === "action"
+			? t(KEYMAP_ACTION_BY_ID[capture.target.actionId].labelKey)
+			: t("hotkeys.row.quickEntry")
+		: null;
 
 	// Live conflict display for the captured chord: a native owner or a second
 	// user binding blocks the save, a shadowed default or the composer's own key
-	// only warns (the user binding wins the slot outside those contexts).
-	const captureConflict: KeymapConflict | null = useMemo(() => {
+	// only warns (the user binding wins the slot outside those contexts). The
+	// quick-entry chord is held system-wide, so a keymap binding on it is an
+	// error, and quick entry itself warns about each chord it would take over.
+	const captureConflict: CaptureConflict | null = useMemo(() => {
 		if (!capture?.chord) return null;
-		const candidate = { ...overrides, [capture.actionId]: [capture.chord] };
-		return (
-			detectConflicts(KEYMAP_ACTIONS, candidate, keyboardPlatform).find(
-				conflict => conflict.chord === capture.chord,
-			) ?? null
+		if (capture.target.kind === "quickEntry") {
+			const conflict = quickEntryConflicts(capture.chord, overrides, keyboardPlatform);
+			if (!conflict) return null;
+			const params = { action: ownerLabel(conflict.ownerId, t) };
+			return {
+				kind: conflict.kind,
+				label:
+					conflict.kind === "error"
+						? t("hotkeys.quickEntry.conflictGlobal", params)
+						: t("hotkeys.quickEntry.takesOver", params),
+			};
+		}
+		const actionId = capture.target.actionId;
+		const candidate = { ...overrides, [actionId]: [capture.chord] };
+		const heldByQuickEntry: ReservedChord[] = quickEntry?.enabled
+			? [
+					{
+						id: QUICK_ENTRY_CHORD_ID,
+						labelKey: "hotkeys.row.quickEntry",
+						chord: quickEntry.chord,
+						hotkeyGroup: "native",
+					},
+				]
+			: [];
+		const conflict = detectConflicts(KEYMAP_ACTIONS, candidate, keyboardPlatform, heldByQuickEntry).find(
+			entry => entry.chord === capture.chord,
 		);
-	}, [capture, overrides, keyboardPlatform]);
-
-	const captureConflictLabel = useMemo(() => {
-		if (!capture || !captureConflict) return null;
-		const otherId = captureConflict.actionIds.find(id => id !== capture.actionId);
+		if (!conflict) return null;
+		const otherId = conflict.actionIds.find(id => id !== actionId);
 		const other = otherId ? chordOwner(otherId) : undefined;
-		const params = { action: other ? t(other.labelKey) : (otherId ?? "") };
-		if (other && other.holds !== "action")
-			return t(other.holds === "native" ? "hotkeys.remap.conflictNative" : "hotkeys.remap.conflictInput", params);
-		return captureConflict.kind === "error"
-			? t("hotkeys.remap.conflictUser", params)
-			: t("hotkeys.remap.conflictShadow", params);
-	}, [capture, captureConflict, t]);
+		const params = { action: otherId ? ownerLabel(otherId, t) : "" };
+		if (other && other.holds !== "action") {
+			return {
+				kind: conflict.kind,
+				label: t(other.holds === "native" ? "hotkeys.remap.conflictNative" : "hotkeys.remap.conflictInput", params),
+			};
+		}
+		return {
+			kind: conflict.kind,
+			label:
+				conflict.kind === "error"
+					? t("hotkeys.remap.conflictUser", params)
+					: t("hotkeys.remap.conflictShadow", params),
+		};
+	}, [capture, overrides, keyboardPlatform, quickEntry, t]);
 
 	const groups = useMemo(() => {
 		const resolve = (row: HotkeyRow): ResolvedRow => {
+			if (isQuickEntryRow(row)) {
+				return {
+					label: t("hotkeys.row.quickEntry"),
+					keys: quickEntry?.enabled
+						? formatChord(quickEntry.chord, keyboardPlatform)
+						: t("hotkeys.quickEntry.off"),
+					actionId: null,
+					quickEntry: true,
+				};
+			}
 			if (isRemapRow(row)) {
 				const action = KEYMAP_ACTION_BY_ID[row.actionId];
 				const chords = overrides[action.id] ?? platformDefaults(action, keyboardPlatform);
@@ -178,12 +281,18 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 					label: t(action.labelKey),
 					keys: chords.length > 0 ? formatChord(chords.join(" / "), keyboardPlatform) : t("hotkeys.unbound"),
 					actionId: row.actionId,
+					quickEntry: false,
 				};
 			}
-			return { label: t(row.labelKey), keys: formatChord(row.keys, keyboardPlatform), actionId: null };
+			return {
+				label: t(row.labelKey),
+				keys: formatChord(row.keys, keyboardPlatform),
+				actionId: null,
+				quickEntry: false,
+			};
 		};
 		const q = query.trim().toLowerCase();
-		return hotkeyGroups(keyboardPlatform)
+		return hotkeyGroups(keyboardPlatform, quickEntry !== null)
 			.map(group => ({
 				...group,
 				rows: group.rows
@@ -191,19 +300,60 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 					.filter(row => !q || row.label.toLowerCase().includes(q) || row.keys.toLowerCase().includes(q)),
 			}))
 			.filter(group => group.rows.length > 0);
-	}, [query, t, overrides, keyboardPlatform]);
+	}, [query, t, overrides, keyboardPlatform, quickEntry]);
+
+	/** Main validates and applies the change; the row shows whatever state it answers with. */
+	const updateQuickEntry = async (update: QuickEntryShortcutUpdate, savedChord?: string) => {
+		const api = window.omp?.quickEntry;
+		if (!api) return;
+		setQuickEntryBusy(true);
+		try {
+			const result = await api.setShortcut(update);
+			setQuickEntry(result.state);
+			if (result.ok) {
+				if (savedChord) {
+					toast({
+						variant: "success",
+						message: t("hotkeys.remap.saved", {
+							action: t("hotkeys.row.quickEntry"),
+							chord: formatChord(result.state.chord, keyboardPlatform),
+						}),
+					});
+				}
+				return;
+			}
+			const chord = savedChord ?? result.state.chord;
+			const owner = quickEntryConflicts(chord, overrides, keyboardPlatform);
+			toast({
+				variant: "error",
+				message: t(QUICK_ENTRY_REFUSAL_KEYS[result.reason], {
+					chord: formatChord(chord, keyboardPlatform),
+					action: owner ? ownerLabel(owner.ownerId, t) : formatChord(chord, keyboardPlatform),
+				}),
+			});
+		} catch (error) {
+			toast({ variant: "error", message: error instanceof Error ? error.message : String(error) });
+		} finally {
+			setQuickEntryBusy(false);
+		}
+	};
 
 	const saveCapture = () => {
-		if (!capture?.chord || !captureAction || captureConflict?.kind === "error") return;
-		setKeymapOverride(capture.actionId, [capture.chord]);
+		if (!capture?.chord || !captureLabel || captureConflict?.kind === "error") return;
+		const { target, chord } = capture;
+		setCapture(null);
+		if (target.kind === "quickEntry") {
+			// Main cannot register while handling is suspended, so release it now
+			// rather than when the capture effect cleans up after the next render.
+			window.omp?.quickEntry?.suspendShortcuts(false);
+			void updateQuickEntry({ chord }, chord);
+			return;
+		}
+		setKeymapOverride(target.actionId, [chord]);
 		toast({
 			variant: "success",
-			message: t("hotkeys.remap.saved", {
-				action: t(captureAction.labelKey),
-				chord: formatChord(capture.chord, keyboardPlatform),
-			}),
+			message: t("hotkeys.remap.saved", { action: captureLabel, chord: formatChord(chord, keyboardPlatform) }),
 		});
-		setCapture(null);
 	};
 
 	const resetRow = (actionId: KeymapActionId) => {
@@ -261,11 +411,11 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 				)}
 			</div>
 
-			{capture && captureAction && (
+			{capture && captureLabel && (
 				<div className="mb-3 rounded-lg border border-[var(--omp-border)] px-3 py-2">
 					<div className="flex items-center gap-2">
 						<span className="min-w-0 flex-1 truncate text-omp-md text-[var(--omp-text)]">
-							{t("hotkeys.remap.rebinding", { action: t(captureAction.labelKey) })}
+							{t("hotkeys.remap.rebinding", { action: captureLabel })}
 						</span>
 						<kbd className="shrink-0 rounded-md border border-[var(--omp-border)] bg-[var(--omp-bg-elevated)] px-2 py-0.5 font-mono text-omp-sm text-[var(--omp-muted)]">
 							{capture.chord ? formatChord(capture.chord, keyboardPlatform) : t("hotkeys.remap.pressChord")}
@@ -283,13 +433,13 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 						</Button>
 					</div>
 					<div className="mt-1 text-omp-sm text-[var(--omp-dim)]">{t("hotkeys.remap.captureHint")}</div>
-					{captureConflictLabel && (
+					{captureConflict && (
 						<div
 							className={`mt-1 text-omp-sm ${
-								captureConflict?.kind === "error" ? "text-[var(--omp-error)]" : "text-[var(--omp-warning)]"
+								captureConflict.kind === "error" ? "text-[var(--omp-error)]" : "text-[var(--omp-warning)]"
 							}`}
 						>
-							{captureConflictLabel}
+							{captureConflict.label}
 						</div>
 					)}
 				</div>
@@ -305,6 +455,19 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 					</div>
 					<div className="overflow-hidden rounded-lg border border-[var(--omp-border-muted)]">
 						{group.rows.map(row => {
+							if (row.quickEntry && quickEntry) {
+								return (
+									<QuickEntryShortcutRow
+										key="quickEntry"
+										state={quickEntry}
+										platform={keyboardPlatform}
+										busy={quickEntryBusy}
+										onRebind={() => setCapture({ target: { kind: "quickEntry" }, chord: null })}
+										onToggle={() => void updateQuickEntry({ enabled: !quickEntry.enabled })}
+										onReset={() => void updateQuickEntry({ reset: true })}
+									/>
+								);
+							}
 							const actionId = row.actionId;
 							const hasOverride = actionId ? overrides[actionId] !== undefined : false;
 							return (
@@ -320,7 +483,7 @@ export function HotkeysDialog({ open }: { open: boolean }) {
 													type="button"
 													title={t("hotkeys.remap.rebind")}
 													aria-label={t("hotkeys.remap.rebind")}
-													onClick={() => setCapture({ actionId, chord: null })}
+													onClick={() => setCapture({ target: { kind: "action", actionId }, chord: null })}
 													className="hidden h-5 w-5 items-center justify-center rounded text-[var(--omp-dim)] hover:bg-[var(--omp-bg-tertiary)] hover:text-[var(--omp-text)] group-hover:flex"
 												>
 													<Pencil size={11} />
