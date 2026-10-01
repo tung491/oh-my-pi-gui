@@ -100,6 +100,8 @@ export class QuickEntryController {
 	#workspaces: QuickEntryWorkspace[] = [];
 	/** Workspaces offered during the current show: the cached list plus the refreshed one. */
 	#offered = new Set<string>();
+	/** Workspaces of prompts that came back to the bar; still offered once the bar took them. */
+	readonly #restoredCwds = new Set<string>();
 	/** Chat windows whose reloads release their leases. */
 	readonly #watched = new Set<number>();
 	/** Every startup window has shown or closed. */
@@ -196,7 +198,7 @@ export class QuickEntryController {
 	show(): void {
 		const win = this.#ensureWindow();
 		this.#showId += 1;
-		this.#offered = new Set(this.#workspaces.map(workspace => workspace.cwd));
+		this.#offered = new Set([...this.#workspaces.map(workspace => workspace.cwd), ...this.#restoredCwds]);
 		this.#pushState();
 		void this.#refreshWorkspaces();
 		if (this.#ready) this.#reveal(win);
@@ -383,8 +385,22 @@ export class QuickEntryController {
 
 	#restore(returned: readonly QuickEntryReturned[]): void {
 		this.#restored = [...this.#restored, ...returned];
+		this.#offerRestoredWorkspaces(returned);
 		// An open bar picks them up now; otherwise the next summon shows them.
 		if (this.#isShowing()) this.#pushState();
+	}
+
+	/**
+	 * A restored prompt's workspace was offered when it was first sent, and the
+	 * bar lists it again; it may have dropped out of the recent list since.
+	 * Submit still checks that it exists.
+	 */
+	#offerRestoredWorkspaces(entries: readonly QuickEntryReturned[]): void {
+		for (const entry of entries) {
+			if (entry.target.kind !== "workspace") continue;
+			this.#restoredCwds.add(entry.target.cwd);
+			this.#offered.add(entry.target.cwd);
+		}
 	}
 
 	/** Visible, or about to be once its page has painted. */
