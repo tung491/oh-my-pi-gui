@@ -6,14 +6,7 @@
  * restart. The rules live in ./quick-entry-shortcut-core.
  */
 
-import {
-	BrowserWindow,
-	globalShortcut,
-	type IpcMainEvent,
-	type IpcMainInvokeEvent,
-	ipcMain,
-	type WebContents,
-} from "electron";
+import { BrowserWindow, type IpcMainEvent, type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
 import { chordToAccelerator } from "../shared/chord";
 import {
 	IPC_COMMANDS,
@@ -29,10 +22,19 @@ import {
 	savedChordReplaced,
 	shortcutState,
 } from "./quick-entry-shortcut-core";
-import { writeRuntimeLog } from "./runtime-log";
 import type { WindowManager } from "./window";
 
+/** The globalShortcut calls this class makes: Electron's module in the app, a fake in tests. */
+export interface ShortcutRegistry {
+	register(accelerator: string, callback: () => void): boolean;
+	unregister(accelerator: string): void;
+	setSuspended(suspended: boolean): void;
+}
+
 export interface QuickEntryShortcutDeps {
+	registry: ShortcutRegistry;
+	/** A "global-shortcut" runtime log line. */
+	log: (message: string, details: Record<string, unknown>) => void;
 	readPref: () => unknown;
 	savePref: (pref: QuickEntryShortcutPref) => void;
 	mode: ShortcutMode;
@@ -66,21 +68,16 @@ export class QuickEntryShortcut {
 	registerAtStartup(): void {
 		const raw = this.#deps.readPref();
 		if (savedChordReplaced(raw, this.#pref)) {
-			writeRuntimeLog({
-				source: "global-shortcut",
-				message: "saved quick entry shortcut is not allowed; using the default",
-				details: { chord: this.#pref.chord },
-			});
+			this.#deps.log("saved quick entry shortcut is not allowed; using the default", { chord: this.#pref.chord });
 		}
 		if (!this.#pref.enabled) return;
 		const accelerator = chordToAccelerator(this.#pref.chord, process.platform);
 		if (!accelerator) return;
-		this.#registered = globalShortcut.register(accelerator, this.#activate);
+		this.#registered = this.#register(accelerator);
 		this.#bound = this.#pref;
-		writeRuntimeLog({
-			source: "global-shortcut",
-			message: this.#registered ? "quick entry registered" : `globalShortcut.register refused ${accelerator}`,
-			details: { accelerator, portal: this.#deps.mode === "portal" },
+		this.#deps.log(this.#registered ? "quick entry registered" : `globalShortcut.register refused ${accelerator}`, {
+			accelerator,
+			portal: this.#deps.mode === "portal",
 		});
 		if (!this.#registered) this.#notice = this.state();
 	}
@@ -101,21 +98,17 @@ export class QuickEntryShortcut {
 		const native = this.#deps.mode === "native";
 		this.#suspendedBy.delete(senderId);
 		// New registrations fail while handling is suspended.
-		if (native) globalShortcut.setSuspended(false);
+		if (native) this.#deps.registry.setSuspended(false);
 		try {
 			const plan = planShortcutUpdate(this.#pref, update, this.#deps.mode, process.platform);
 			if (plan.kind === "reject") return { ok: false, reason: plan.reason, state: this.state() };
 			const unchanged =
 				plan.kind === "rebind" && plan.from === plan.to && (plan.to === null || this.#registered === true);
 			if (plan.kind === "rebind" && !unchanged) {
-				if (plan.from) globalShortcut.unregister(plan.from);
-				if (plan.to && !globalShortcut.register(plan.to, this.#activate)) {
-					this.#registered = plan.from ? globalShortcut.register(plan.from, this.#activate) : null;
-					writeRuntimeLog({
-						source: "global-shortcut",
-						message: `globalShortcut.register refused ${plan.to}`,
-						details: { accelerator: plan.to, portal: false },
-					});
+				if (plan.from) this.#unregister(plan.from);
+				if (plan.to && !this.#register(plan.to)) {
+					this.#registered = plan.from ? this.#register(plan.from) : null;
+					this.#deps.log(`globalShortcut.register refused ${plan.to}`, { accelerator: plan.to, portal: false });
 					return { ok: false, reason: "refused", state: this.state() };
 				}
 				this.#registered = plan.to ? true : null;
@@ -125,7 +118,7 @@ export class QuickEntryShortcut {
 			this.#deps.savePref(plan.next);
 			return { ok: true, state: this.state() };
 		} finally {
-			if (native) globalShortcut.setSuspended(this.#suspendedBy.size > 0);
+			if (native) this.#deps.registry.setSuspended(this.#suspendedBy.size > 0);
 		}
 	}
 
@@ -134,7 +127,7 @@ export class QuickEntryShortcut {
 		if (this.#deps.mode !== "native") return;
 		if (suspended) this.#suspendedBy.add(senderId);
 		else this.#suspendedBy.delete(senderId);
-		globalShortcut.setSuspended(this.#suspendedBy.size > 0);
+		this.#deps.registry.setSuspended(this.#suspendedBy.size > 0);
 	}
 
 	/** The startup refusal, once, for the first window that asks. */
@@ -165,6 +158,27 @@ export class QuickEntryShortcut {
 		ipcMain.handle(IPC_COMMANDS.QUICK_ENTRY_SHORTCUT_NOTICE, event =>
 			isChatWindow(event) ? this.takeStartupNotice() : null,
 		);
+	}
+
+	/**
+	 * Electron throws, rather than returning false, for an accelerator it cannot
+	 * parse. Either way the chord is not registered, and startup must go on.
+	 */
+	#register(accelerator: string): boolean {
+		try {
+			return this.#deps.registry.register(accelerator, this.#activate);
+		} catch (error) {
+			this.#deps.log(`globalShortcut.register threw for ${accelerator}`, { accelerator, error: String(error) });
+			return false;
+		}
+	}
+
+	#unregister(accelerator: string): void {
+		try {
+			this.#deps.registry.unregister(accelerator);
+		} catch {
+			// Never registered: the same parse failure made its register throw.
+		}
 	}
 
 	/** A window that reloads, crashes or closes mid-capture must not leave shortcuts suspended. */

@@ -139,6 +139,17 @@ const ACCELERATOR_KEYS: Record<string, string> = {
 };
 
 /**
+ * Electron's accelerator parser knows the named keys above, printable ASCII and
+ * F-keys. Any other base key (§, é, ¥ from an ISO or national layout) makes
+ * globalShortcut.register throw instead of returning false.
+ */
+function acceleratorKey(key: string): string | null {
+	const named = ACCELERATOR_KEYS[key];
+	if (named) return named;
+	return /^[\x21-\x7e]$/.test(key) || /^F\d{1,2}$/.test(key) ? key : null;
+}
+
+/**
  * Electron accelerator for a chord: "⇧⌃␣" → "Control+Shift+Space". ⌘ is
  * Command on macOS and Super elsewhere; it is never widened to
  * CommandOrControl. Null when the chord does not parse.
@@ -151,6 +162,8 @@ export function chordToAccelerator(chord: string, platform: NodeJS.Platform): st
 	if (parsed.ctrl) parts.push("Control");
 	if (parsed.alt) parts.push("Alt");
 	if (parsed.shift) parts.push("Shift");
-	parts.push(ACCELERATOR_KEYS[parsed.key] ?? parsed.key);
+	const key = acceleratorKey(parsed.key);
+	if (!key) return null;
+	parts.push(key);
 	return parts.join("+");
 }

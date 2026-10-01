@@ -37,6 +37,12 @@ describe("global chord policy", () => {
 		expect(validateGlobalChord("hello", "linux")).toBe("invalid");
 	});
 
+	it("refuses a key Electron cannot register, which would throw rather than fail", () => {
+		expect(validateGlobalChord("⇧⌃§", "darwin")).toBe("invalid");
+		expect(validateGlobalChord("⌥⇧\u0001", "linux")).toBe("invalid");
+		expect(sanitizeShortcutPref({ chord: "⇧⌃§", enabled: true }, "darwin")).toEqual(DEFAULT);
+	});
+
 	it("refuses the app's own native chords in their platform spelling", () => {
 		expect(reservedGlobalChord("⇧⌘O", "darwin")).toBe("window.toggle");
 		expect(reservedGlobalChord("⇧⌃O", "linux")).toBe("window.toggle");

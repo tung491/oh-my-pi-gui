@@ -486,6 +486,8 @@ app.whenReady().then(() => {
 		});
 	}
 	quickEntryShortcut = new QuickEntryShortcut({
+		registry: globalShortcut,
+		log: (message, details) => writeRuntimeLog({ source: "global-shortcut", message, details }),
 		readPref: () => prefsStore().get("quickEntryShortcut"),
 		savePref: pref => prefsStore().set("quickEntryShortcut", pref),
 		mode: portal ? "portal" : "native",

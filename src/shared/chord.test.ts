@@ -28,6 +28,13 @@ describe("chord to accelerator", () => {
 		expect(chordToAccelerator("ctrl+shift+space", "linux")).toBe("Control+Shift+Space");
 	});
 
+	it("refuses a base key Electron cannot spell", () => {
+		for (const chord of ["⇧⌃§", "⌥⌃¥", "⇧⌃é", "⌥⇧\u0001"]) {
+			expect(chordToAccelerator(chord, "darwin"), chord).toBeNull();
+		}
+		expect(chordToAccelerator("⇧⌃;", "linux")).toBe("Control+Shift+;");
+	});
+
 	it("refuses chords the grammar refuses", () => {
 		expect(chordToAccelerator("⇧A", "linux")).toBeNull();
 		expect(chordToAccelerator("", "linux")).toBeNull();

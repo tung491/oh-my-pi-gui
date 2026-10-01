@@ -38,16 +38,17 @@ export function reservedGlobalChord(chord: string, platform: NodeJS.Platform): s
 }
 
 /**
- * The one global-chord policy. "system": Ctrl and/or Cmd alone (editing chords
- * like ⌃V and ⌘C, OS chords like ⌃⌘Q) or a window-manager chord; "reserved":
- * one of the app's own native chords.
+ * The one global-chord policy. "invalid": unparsable, or a key Electron cannot
+ * register; "system": Ctrl and/or Cmd alone (editing chords like ⌃V and ⌘C, OS
+ * chords like ⌃⌘Q) or a window-manager chord; "reserved": one of the app's own
+ * native chords.
  */
 export function validateGlobalChord(
 	chord: string,
 	platform: NodeJS.Platform,
 ): null | "invalid" | "system" | "reserved" {
 	const parsed = parseChord(chord);
-	if (!parsed) return "invalid";
+	if (!parsed || !chordToAccelerator(chord, platform)) return "invalid";
 	if (!parsed.alt && !parsed.shift) return "system";
 	if (OS_CHORDS.has(serializeChord(parsed))) return "system";
 	if (reservedGlobalChord(chord, platform)) return "reserved";
