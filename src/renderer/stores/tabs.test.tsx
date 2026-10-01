@@ -36,7 +36,7 @@ import { useModelStore } from "./model";
 import { usePlanApprovalStore } from "./plan-approval";
 import { useQueueStore } from "./queue";
 import { useSessionStore } from "./session";
-import { sessionRuntime, setFocusedSessionRuntime } from "./session-runtime-context";
+import { sessionRuntime, setFocusedSessionRuntime, withSessionRuntime } from "./session-runtime-context";
 import { useSubagentsStore } from "./subagents";
 import { ensureTabRuntime } from "./tab-runtime";
 import {
@@ -348,6 +348,46 @@ describe("tabs store boot reconciliation", () => {
 			sending: false,
 			submissionUncertain: true,
 		});
+	});
+});
+
+describe("tabs store hibernation", () => {
+	it("drops a hibernated background tab's stores but keeps its unsent draft", () => {
+		seedTabs("t0");
+		withSessionRuntime("t1", () => {
+			useMessagesStore.setState({ messages: [msg("hello-t1")], totalMessages: 1 });
+			useComposerStore.getState().setDraft("draft-t1");
+		});
+		const before = sessionRuntime("t1");
+		useTabsStore.getState().applyTabStatus({ kind: "agent", tabId: "t1", cwd: "/beta", status: "asleep" });
+		expect(sessionRuntime("t1")).not.toBe(before);
+		withSessionRuntime("t1", () => {
+			expect(useMessagesStore.getState().messages).toEqual([]);
+			expect(useComposerStore.getState().draft).toBe("draft-t1");
+		});
+		// The focused tab is untouched.
+		expect(sessionRuntime("t0")).toBeDefined();
+		expect(useTabsStore.getState().tabs.find(tab => tab.id === "t1")?.status).toBe("asleep");
+	});
+
+	it("leaves a tab that was restored asleep alone", () => {
+		useTabsStore.setState({
+			tabs: [
+				{ kind: "agent", id: "t0", cwd: "/alpha", status: "ready", unreadDone: false },
+				{ kind: "agent", id: "t1", cwd: "/beta", status: "asleep", unreadDone: false },
+			],
+			activeTabId: "t0",
+			bundles: new Map(),
+		});
+		for (const tabId of ["t0", "t1"]) ensureTabRuntime(tabId);
+		setFocusedSessionRuntime("t0");
+		const restored = sessionRuntime("t1");
+		useTabsStore.getState().applyTabStatus({ kind: "agent", tabId: "t1", cwd: "/beta", status: "asleep" });
+		expect(sessionRuntime("t1")).toBe(restored);
+		// A tab first heard of while asleep has nothing to drop either.
+		expect(() =>
+			useTabsStore.getState().applyTabStatus({ kind: "agent", tabId: "t9", cwd: "/new", status: "asleep" }),
+		).not.toThrow();
 	});
 });
 

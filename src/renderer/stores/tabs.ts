@@ -613,12 +613,17 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 			(previous?.sessionPath !== undefined &&
 				payload.sessionPath !== undefined &&
 				previous.sessionPath !== payload.sessionPath);
+		// A tab that was live goes back to asleep only when main hibernated its
+		// idle process. Its transcript reloads from the session file on wake, so
+		// its stores can go now; an unsent draft stays. A tab restored asleep
+		// was never live and has nothing to drop.
+		const hibernated = payload.status === "asleep" && previous !== undefined && previous.status !== "asleep";
 		// Rebuild the runtime OUTSIDE the set() updater (deleteSessionRuntime
 		// synchronously fires focus listeners), and immediately re-point focus at
 		// the fresh runtime — otherwise static store access falls through to the
 		// module-level default stores until the next switch/reconcile.
-		if (sessionChanged) {
-			replaceTabRuntime(payload.tabId);
+		if (sessionChanged || hibernated) {
+			replaceTabRuntime(payload.tabId, { keepComposer: hibernated });
 			if (active) setFocusedSessionRuntime(payload.tabId);
 		}
 		set(current => {

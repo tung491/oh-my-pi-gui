@@ -95,10 +95,13 @@ export function ensureTabRuntime(tabId: string): SessionRuntime {
 	return sessionRuntime(tabId) ?? createTabRuntime(tabId);
 }
 
-/** Replace stale session state, retaining unsent input only across a process restart. */
-export function replaceTabRuntime(tabId: string): SessionRuntime {
+/**
+ * Replace stale session state. Unsent input survives a process restart, and
+ * with `keepComposer` any replacement (a hibernating tab keeps its draft).
+ */
+export function replaceTabRuntime(tabId: string, { keepComposer = false } = {}): SessionRuntime {
 	const recovering = sessionRuntime(tabId)?.recovering;
-	const composer = recovering ? sessionRuntimeStore<ComposerStore>(tabId, "composer") : null;
+	const composer = recovering || keepComposer ? sessionRuntimeStore<ComposerStore>(tabId, "composer") : null;
 	deleteSessionRuntime(tabId);
 	const runtime = createTabRuntime(tabId);
 	runtime.recovering = recovering;

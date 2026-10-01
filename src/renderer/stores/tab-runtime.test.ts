@@ -182,3 +182,21 @@ it("preserves a committed session change acknowledgement when its metadata arriv
 	expect(await runtime.command({ type: "new_session" })).toMatchObject({ success: true, data: { cancelled: false } });
 	expect(sessionRuntimeStore<SessionStore>("tab-a", "session")?.getState().sessionId).toBe("committed-session");
 });
+
+it("keeps the composer across a replacement only when asked to", () => {
+	createTabRuntime("tab-k");
+	const composer = sessionRuntimeStore<ComposerStore>("tab-k", "composer");
+	const messages = sessionRuntimeStore<MessagesStore>("tab-k", "messages");
+	composer?.getState().setDraft("unsent draft");
+	messages?.getState().appendMessage({ role: "user", content: "old", timestamp: 1 });
+
+	replaceTabRuntime("tab-k", { keepComposer: true });
+	expect(sessionRuntimeStore<ComposerStore>("tab-k", "composer")).toBe(composer);
+	expect(sessionRuntimeStore<ComposerStore>("tab-k", "composer")?.getState().draft).toBe("unsent draft");
+	expect(sessionRuntimeStore<MessagesStore>("tab-k", "messages")).not.toBe(messages);
+	expect(sessionRuntimeStore<MessagesStore>("tab-k", "messages")?.getState().messages).toEqual([]);
+
+	replaceTabRuntime("tab-k");
+	expect(sessionRuntimeStore<ComposerStore>("tab-k", "composer")?.getState().draft).toBe("");
+	deleteSessionRuntime("tab-k");
+});
