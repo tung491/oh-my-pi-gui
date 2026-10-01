@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
   "main": "./out/main/index.js",
+  "desktopName": "vn.io.vif.saiatlas.desktop",
   "scripts": {
     "postinstall": "install-electron",
     "dev": "electron-vite dev",

@@ -28,6 +28,7 @@ interface BuilderConfig {
 	electronLanguages?: string[];
 	linux?: {
 		executableName?: string;
+		syncDesktopName?: boolean;
 		maintainer?: string;
 		target?: { target?: string; arch?: string[] }[];
 		desktop?: { entry?: Record<string, string> };
@@ -207,12 +208,24 @@ describe("Linux package config", () => {
 			{ target: "deb", arch: ["x64"] },
 		]);
 		expect(config.linux?.executableName).toBe("sai-atlas");
-		expect(config.extraMetadata?.desktopName).toBe("sai-atlas.desktop");
+		// package.json desktopName is the one source: Electron uses it as the Wayland
+		// app_id and X11 WM_CLASS, and syncDesktopName names the entry and
+		// StartupWMClass after it.
+		expect(config.extraMetadata?.desktopName).toBeUndefined();
+		expect(config.linux?.syncDesktopName).toBe(true);
 		expect(config.deb?.packageName).toBe("sai-atlas");
-		// Electron 35 under XWayland names the window class after app.setName(PRODUCT_NAME).
-		expect(config.linux?.desktop?.entry?.StartupWMClass).toBe(PRODUCT_NAME);
+		expect(config.linux?.desktop?.entry?.StartupWMClass).toBeUndefined();
 		expect(config.linux?.maintainer).toBe("nornzach <287694139+nornzach@users.noreply.github.com>");
 		expect(config.extraMetadata?.homepage).toBe("https://github.com/nornzach/oh-my-pi-gui");
+	});
+
+	it("names the Linux desktop identity after the app id", () => {
+		// The GlobalShortcuts portal registers the app by this id, and GNOME needs
+		// a reverse-DNS one that an installed .desktop file of the same name backs.
+		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+			desktopName?: string;
+		};
+		expect(pkg.desktopName).toBe(`${APP_ID}.desktop`);
 	});
 
 	it("never writes --no-sandbox into the AppImage launch command", () => {
