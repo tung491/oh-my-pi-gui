@@ -4,7 +4,15 @@
 import { type Dirent, existsSync, promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { BrowserWindow, clipboard, dialog, ipcMain, Notification, shell } from "electron";
+import {
+	BrowserWindow,
+	clipboard,
+	dialog,
+	ipcMain,
+	Notification,
+	type NotificationConstructorOptions,
+	shell,
+} from "electron";
 import Store from "electron-store";
 import type {
 	CustomProviderInput,
@@ -863,7 +871,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			if (key === lastNotifyKey && now - lastNotifyAt < 1500) return;
 			lastNotifyKey = key;
 			lastNotifyAt = now;
-			new Notification({ title: payload.title, body: payload.body ?? "" }).show();
+			showNotification({ title: payload.title, body: payload.body ?? "" });
 		}
 	});
 
@@ -1214,6 +1222,19 @@ function broadcast(windowManager: WindowManager, channel: string, data: unknown)
 	}
 }
 
+/**
+ * Show a desktop notification, logging when the OS refuses it. Electron 42+
+ * shows macOS notifications through UNNotification, which fails on ad-hoc
+ * signed builds; without the log the notification would vanish silently.
+ */
+function showNotification(options: NotificationConstructorOptions): void {
+	const notification = new Notification(options);
+	notification.on("failed", (_event, error) => {
+		writeRuntimeLog({ source: "notification", message: `Notification failed: ${error}` });
+	});
+	notification.show();
+}
+
 /** Execute GUI-registered host tools. Returns undefined for unknown tools. */
 function executeGuiHostTool(name: string, args: Record<string, unknown>): string | Promise<string> | undefined {
 	switch (name) {
@@ -1228,7 +1249,7 @@ function executeGuiHostTool(name: string, args: Record<string, unknown>): string
 		case "gui_notify": {
 			const title = typeof args.title === "string" ? args.title : "Notification";
 			const body = typeof args.body === "string" ? args.body : "";
-			new Notification({ title, body }).show();
+			showNotification({ title, body });
 			return "Notification shown";
 		}
 		case "gui_clipboard_read": {
