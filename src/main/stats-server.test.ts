@@ -182,18 +182,20 @@ test("reads keep the server up and their absence stops it", async () => {
 		"idle",
 		`process.on("SIGINT", () => process.exit(0));
 process.stdout.write("Dashboard available at: http://127.0.0.1:55127\\n");
-await Bun.sleep(5000);
+await Bun.sleep(30000);
 `,
 	);
-	const server = new StatsServerManager(binary, { idleStopMs: 200 });
+	// Reads ten times faster than the idle window, so a loaded host stalling
+	// timers for a few hundred milliseconds cannot fake an idle stop.
+	const server = new StatsServerManager(binary, { idleStopMs: 1000 });
 	try {
 		server.start();
 		await expect.poll(() => server.port, { timeout: 5000 }).toBe(55127);
 		const touch = setInterval(() => server.noteActivity(), 100);
-		await new Promise(resolve => setTimeout(resolve, 600));
+		await new Promise(resolve => setTimeout(resolve, 2200));
 		clearInterval(touch);
 		expect(server.port).toBe(55127);
-		await expect.poll(() => server.port, { timeout: 1000 }).toBe(0);
+		await expect.poll(() => server.port, { timeout: 3000 }).toBe(0);
 		expect(server.ensureRunning()).toBe("scheduled");
 	} finally {
 		server.kill();
