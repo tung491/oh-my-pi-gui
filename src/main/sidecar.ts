@@ -772,6 +772,18 @@ export class SidecarManager extends EventEmitter {
 		this.start();
 	}
 
+	/**
+	 * `sessionPath` was deleted while this spawn had not booted (it crashed at
+	 * boot, say) and still held it to open. The next start launches a fresh
+	 * session instead: omp would write a new, empty file at that path. A gate
+	 * stays, as it does for a wake whose session was deleted while it slept.
+	 */
+	forgetSession(sessionPath: string): void {
+		if (this.#resumeSessionPath !== sessionPath) return;
+		this.#resumeSessionPath = null;
+		this.#freshLaunchPending = true;
+	}
+
 	dispose(): void {
 		this.#disposed = true;
 		this.kill();

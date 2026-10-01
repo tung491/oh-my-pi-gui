@@ -127,6 +127,10 @@ class HibernationFake extends EventEmitter {
 		this.wakes.push({ sessionPath, gate });
 		this.emitStatus("starting");
 	}
+	forgotten: string[] = [];
+	forgetSession(sessionPath: string): void {
+		this.forgotten.push(sessionPath);
+	}
 	/** The respawned child is up: run the wake's gate, then report what it decided. */
 	async becomeReady(): Promise<ReadyGateOutcome> {
 		const gate = this.wakes[this.wakes.length - 1]?.gate;
@@ -663,9 +667,11 @@ describe("tab hibernation: waking", () => {
 	});
 
 	it("launches fresh when the session was deleted while the tab slept", async () => {
-		const { pool, window, back } = harness();
+		const { pool, window, back, backFile } = harness();
 		await idlePast();
-		pool.noteSessionFile("back", null);
+		pool.releaseDeletedSession("back", backFile);
+		expect(back.forgotten).toEqual([backFile]);
+		expect(pool.sessionOwner(backFile)).toBeNull();
 		pool.setActiveTab(window.win, "back");
 		expect(back.wakes.map(wake => wake.sessionPath)).toEqual([null]);
 		pool.disposeAll();

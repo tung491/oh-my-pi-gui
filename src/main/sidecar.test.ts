@@ -795,6 +795,34 @@ process.stdin.on("end", () => {
 			}
 		}, 10_000);
 
+		it("restarts an unbooted spawn fresh once the session it held is deleted", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-forget-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { fail: ["set_plan_mode"] });
+			const sessionPath = path.join(tempDir, "session.jsonl");
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			try {
+				sidecar.wake(sessionPath, refusePlanMode);
+				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
+				sidecar.forgetSession(path.join(tempDir, "other.jsonl"));
+				let ready = waitForReady(sidecar);
+				sidecar.restart();
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
+
+				await sidecar.hibernate();
+				sidecar.wake(sessionPath, refusePlanMode);
+				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
+				sidecar.forgetSession(sessionPath);
+				ready = waitForReady(sidecar);
+				sidecar.restart();
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--no-auto-resume"]);
+			} finally {
+				sidecar.dispose();
+				await removeDir(tempDir);
+			}
+		}, 15_000);
+
 		it("drops a pending gate when a restart re-roots the tab or opens another session", async () => {
 			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-dropped-"));
 			const { binaryPath, logPath } = await fakeSidecar(tempDir);

@@ -571,10 +571,10 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			return;
 		}
 		// Either no tab claims the file, or the claiming tab has no process (a
-		// restored tab that was never shown). Nothing is loaded anywhere, so the
-		// file IS the session — drop the tab's claim first so it cannot wake into
-		// a path that no longer exists.
-		if (owner) sidecarPool.noteSessionFile(owner.tabId, null);
+		// restored tab that was never shown, or one whose boot crashed). Nothing
+		// is loaded anywhere, so the file IS the session — release it from the
+		// tab first so it cannot wake or restart into a path that no longer exists.
+		if (owner) sidecarPool.releaseDeletedSession(owner.tabId, payload.sessionPath);
 		return sessionIndex.deleteSession(payload.sessionPath);
 	});
 

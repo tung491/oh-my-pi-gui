@@ -820,6 +820,19 @@ export class SidecarPool {
 	}
 
 	/**
+	 * The session file claimed by `tabId`, a tab with no process, is being
+	 * deleted. Drop the claim and the session its sidecar would open on its
+	 * next start, so neither a wake nor a restart opens a path that no longer
+	 * exists.
+	 */
+	releaseDeletedSession(tabId: string, sessionPath: string): void {
+		const entry = this.#byTabId.get(tabId);
+		if (!entry) return;
+		entry.sidecar.forgetSession(sessionPath);
+		this.noteSessionFile(tabId, null);
+	}
+
+	/**
 	 * Re-root a tab to its live session's cwd. `switch_session` re-roots the
 	 * agent with no main-observable event, so the chip and every `sidecar.cwd`
 	 * consumer stay frozen at the spawn cwd until this is called — the RPC
