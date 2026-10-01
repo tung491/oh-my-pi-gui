@@ -22,7 +22,7 @@ import { useNowTick } from "../../../lib/now-tick";
 import { useMessagesStore } from "../../../stores/messages";
 import { useSessionStore } from "../../../stores/session";
 import { useSubagentsStore } from "../../../stores/subagents";
-import { Badge } from "../../common";
+import { Badge, SegmentedControl } from "../../common";
 import { SubagentDag } from "../../panels/SubagentDag";
 import { SubagentTranscript } from "../../panels/SubagentTranscript";
 import {
@@ -139,30 +139,25 @@ const SubagentRow = memo(function SubagentRow({
 function ViewToggle({ view, onChange }: { view: PanelView; onChange: (view: PanelView) => void }) {
 	const t = useT();
 	return (
-		<div
-			aria-label={t("subagentPanel.viewAria")}
-			className="flex items-center gap-0.5 rounded-md border border-(--omp-border-muted) p-0.5"
-			role="group"
-		>
-			{(["list", "graph"] as const).map(option => (
-				<button
-					aria-pressed={view === option}
-					className={cx(
-						"flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-omp-xs transition-colors",
-						view === option
-							? "bg-(--omp-bg-tertiary) text-(--omp-text)" // surface-ok: aria-pressed selected-view fill
-							: "text-(--omp-dim) hover:text-(--omp-text)",
-					)}
-					key={option}
-					onClick={() => onChange(option)}
-					title={option === "list" ? t("subagentPanel.listView") : t("subagentPanel.graphView")}
-					type="button"
-				>
-					{option === "list" ? <List size={11} /> : <Network size={11} />}
-					{option === "list" ? t("subagentPanel.list") : t("subagentPanel.graph")}
-				</button>
-			))}
-		</div>
+		<SegmentedControl
+			ariaLabel={t("subagentPanel.viewAria")}
+			onChange={onChange}
+			options={[
+				{
+					value: "list",
+					label: t("subagentPanel.list"),
+					title: t("subagentPanel.listView"),
+					icon: <List size={14} />,
+				},
+				{
+					value: "graph",
+					label: t("subagentPanel.graph"),
+					title: t("subagentPanel.graphView"),
+					icon: <Network size={14} />,
+				},
+			]}
+			value={view}
+		/>
 	);
 }
 
@@ -240,9 +235,9 @@ export function AgentsDockCard({ pollMs = STREAM_POLL_MS }: { pollMs?: number })
 		<DockCard
 			actions={<ViewToggle onChange={changeView} view={view} />}
 			badge={
-				<span className="shrink-0 text-omp-xs tabular-nums text-[var(--omp-dim)]">
+				<Badge className="tabular-nums" variant="default">
 					{runningCount > 0 ? `${runningCount}/${agents.length}` : agents.length}
-				</span>
+				</Badge>
 			}
 			icon={Bot}
 			id="agents"

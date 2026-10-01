@@ -388,6 +388,20 @@
 	width: min(clamp(36rem, 40vw, 64rem), calc(100vw - 2rem));
 }
 
+/* First-run wizard: a navy stage behind a fixed two-column panel. Unlayered
+ * and after the size rules on purpose, so it overrides the default Modal size
+ * width and the overlay's backdrop utility. */
+.omp-onboarding-backdrop {
+	background:
+		radial-gradient(60% 50% at 50% 40%, rgba(45, 140, 255, 0.18), transparent 70%),
+		var(--omp-sidebar-bg);
+}
+
+.omp-onboarding-panel {
+	width: min(1000px, calc(100vw - 32px));
+	height: min(620px, calc(100dvh - 32px));
+}
+
 /* ---------------------------------------------------------------------------
  * Editorial transcript — an open reading rail for long agent sessions.
  * The existing component chrome remains available outside this scope; this
@@ -430,6 +444,12 @@
 	--omp-column-pad: clamp(16px, 3vw, 40px);
 	--omp-column-reading: 60rem;
 	--omp-column-workspace: 104rem;
+}
+
+/* The conversation reads at 820px; the transcript rows and the composer shell
+ * both derive from this, so they narrow together. Settings keeps 60rem. */
+.omp-workspace-main {
+	--omp-column-reading: 51.25rem;
 }
 
 .omp-column {
@@ -645,12 +665,11 @@
 }
 
 .omp-transcript-editorial .omp-user-bubble {
-	border: 0;
-	border-left: 2px solid var(--omp-transcript-user-border);
-	border-radius: 0;
-	background: color-mix(in srgb, var(--omp-transcript-user-bg) 28%, transparent);
-	box-shadow: none !important;
-	padding: 8px 0 8px 12px;
+	border: 1px solid var(--omp-user-msg-border);
+	border-radius: 12px;
+	background: var(--omp-user-msg-bg);
+	box-shadow: var(--omp-shadow-sm);
+	padding: 12px 16px 14px;
 }
 
 .omp-transcript-editorial .omp-user-bubble-layout {
@@ -704,15 +723,16 @@
 }
 
 .omp-execution-group {
-	overflow: visible;
-	border: 0;
-	background: transparent;
+	overflow: hidden;
+	border: 1px solid var(--omp-border-muted);
+	border-radius: 12px;
 }
 
 .omp-execution-group-header {
-	min-height: 24px;
-	border-radius: 7px;
-	padding: 2px 0;
+	min-height: 40px;
+	border-radius: 0;
+	padding: 0 12px;
+	background: var(--omp-bg-secondary); /* surface-ok: execution header */
 	transition: color var(--omp-motion-fast) var(--omp-ease), background-color var(--omp-motion-fast) var(--omp-ease);
 }
 
@@ -720,13 +740,15 @@
 	background: color-mix(in srgb, var(--omp-selected-bg) 22%, transparent);
 }
 
+/* The group clips to its rounded border, and the header fills it edge to
+   edge, so an outside focus ring would be cut away: draw it inset. */
+.omp-execution-group-header:focus-visible {
+	outline-offset: -2px;
+}
+
 .omp-execution-group-body {
 	margin-top: 0;
 	padding: 0 0 2px 10px;
-}
-
-.omp-transcript-editorial .omp-execution-group-title {
-	display: none;
 }
 
 .omp-transcript-editorial .omp-execution-group-summary {
@@ -770,13 +792,23 @@
 	display: none;
 }
 
-.omp-transcript-editorial .omp-tool-status-icon {
+.omp-transcript-editorial :not(.omp-tool-icon-tile) > .omp-tool-status-icon {
 	display: none;
+}
+
+.omp-transcript-editorial .omp-tool-icon-tile {
+	display: inline-grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	background: var(--omp-selected-bg);
+	color: var(--omp-accent);
 }
 
 .omp-transcript-editorial .omp-tool-header {
 	min-height: 24px;
-	padding: 2px 0;
+	padding: 0 8px;
 	font-size: calc(var(--gui-font-size, 15px) * 11 / 15);
 }
 
@@ -787,7 +819,7 @@
 .omp-transcript-editorial .omp-tool-name {
 	min-width: 34px;
 	font-size: calc(var(--gui-font-size, 15px) * 11 / 15);
-	font-weight: 700;
+	font-weight: 600;
 	letter-spacing: 0;
 }
 
@@ -982,11 +1014,13 @@
 .omp-transcript-editorial .markdown-body code {
 	border: 0;
 	border-radius: 4px;
-	background: color-mix(in srgb, var(--omp-transcript-code-bg) 85%, var(--omp-text) 15%);
+	color: var(--omp-md-code);
+	background: var(--omp-selected-bg);
 }
 
 .omp-transcript-editorial .markdown-body pre code {
 	background: transparent;
+	color: var(--omp-md-code-block);
 }
 
 .omp-transcript-editorial .markdown-body a {
@@ -1160,5 +1194,36 @@
 	.omp-transcript-editorial .omp-user-bubble-actions {
 		opacity: 1;
 		pointer-events: auto;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Sai ATLAS logo tone (SaiAtlasLogo)
+ *
+ * Each logo renders both tones; the surface underneath picks one. Page
+ * surfaces follow data-theme, sidebar surfaces follow data-sidebar-scheme.
+ * Layered so utilities can still style the images, which is why the images
+ * must carry no display utility of their own.
+ * ------------------------------------------------------------------------- */
+@layer components {
+	[data-logo-surface] > img {
+		display: block;
+	}
+	[data-logo-surface] > [data-logo-tone="light"] {
+		display: none;
+	}
+	:root[data-theme="light"] [data-logo-surface="page"] > [data-logo-tone="dark"],
+	:root[data-sidebar-scheme="light"] [data-logo-surface="sidebar"] > [data-logo-tone="dark"] {
+		display: none;
+	}
+	:root[data-theme="light"] [data-logo-surface="page"] > [data-logo-tone="light"],
+	:root[data-sidebar-scheme="light"] [data-logo-surface="sidebar"] > [data-logo-tone="light"] {
+		display: block;
+	}
+	[data-assistant-avatar] > [data-logo-tone="light"] {
+		box-shadow: var(--omp-shadow-sm);
+	}
+	[data-assistant-avatar] > [data-logo-tone="dark"] {
+		box-shadow: 0 0 24px var(--omp-accent-glow);
 	}
 }

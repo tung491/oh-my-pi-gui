@@ -225,8 +225,8 @@ export function createShowcaseData(
 	};
 
 	const summary = text(
-		"## Accessible settings, ready\n\n- Added a named settings region and visible labels.\n- Kept native checkboxes for keyboard navigation.\n- Added coverage for labels and heading associations.\n\n**Demo test result:** 3/3 passed. Synthetic data; no external requests.",
-		"## 无障碍设置页已就绪\n\n- 为设置区域添加名称与可见标签。\n- 保留原生复选框，支持键盘操作。\n- 补充标签关联与标题语义的测试。\n\n**演示测试结果：** 3/3 通过。数据均为合成，无外部请求。",
+		"## Accessible settings, ready\n\n- Added a named settings region and visible labels.\n- Kept native checkboxes for keyboard navigation.\n- Added coverage for labels and heading associations in `Preferences.test.tsx`.\n\n**Demo test result:** 3/3 passed. Synthetic data; no external requests.",
+		"## 无障碍设置页已就绪\n\n- 为设置区域添加名称与可见标签。\n- 保留原生复选框，支持键盘操作。\n- 在 `Preferences.test.tsx` 中补充标签关联与标题语义的测试。\n\n**演示测试结果：** 3/3 通过。数据均为合成，无外部请求。",
 	);
 	const editIntent = text("Add accessible labels and regression coverage", "补充无障碍标签与回归测试");
 	const messages: AgentMessage[] = [
@@ -861,6 +861,20 @@ export function createShowcaseData(
 		cost: requests * 0.02,
 	}));
 	const totalRequests = dailyRequests.reduce((sum, requests) => sum + requests, 0);
+	// Overview top lists; the model requests add up to the agent-type totals above.
+	const byModel = [
+		{ model: "claude-sonnet-4-5", provider: "anthropic", totalRequests: 290 },
+		{ model: "gemini-3-flash-preview", provider: "google", totalRequests: 110 },
+		{ model: "gpt-5.2-codex", provider: "openai", totalRequests: 64 },
+		{ model: "gpt-5.2", provider: "openai", totalRequests: 44 },
+	];
+	const byTool = [
+		{ tool: "read", calls: 412 },
+		{ tool: "edit", calls: 168 },
+		{ tool: "bash", calls: 121 },
+		{ tool: "grep", calls: 96 },
+		{ tool: "find", calls: 38 },
+	];
 	const failedRequests = dailyErrors.reduce((sum, errors) => sum + errors, 0);
 	const overall: AggregatedStats = {
 		totalRequests,
@@ -884,6 +898,10 @@ export function createShowcaseData(
 	};
 	return {
 		replies,
-		stats: { "/api/stats/overview": { overall, byAgentType, timeSeries, source: notice } },
+		stats: {
+			"/api/stats/overview": { overall, byAgentType, timeSeries, source: notice },
+			"/api/stats/model-dashboard": { byModel },
+			"/api/stats/tools": { byTool },
+		},
 	};
 }

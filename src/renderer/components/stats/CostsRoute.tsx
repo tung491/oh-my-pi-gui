@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Line } from "react-chartjs-2";
-import { baseChartOptions, bucketLabels, CHART_COLORS, formatUsd } from "../../lib/chart";
+import { baseChartOptions, bucketLabels, chartColors, formatUsd } from "../../lib/chart";
 import "../../lib/chart";
 import { useStats } from "../../hooks/use-stats";
 import { useT } from "../../lib/i18n";
@@ -39,6 +39,7 @@ export function CostsRoute({ range, refreshKey }: { range: StatsRange; refreshKe
 	const stats = data;
 	const series = stats?.costSeries ?? [];
 	const { total, chart } = useMemo(() => {
+		const colors = chartColors();
 		const sum = series.reduce((acc, point) => acc + point.cost, 0);
 		const providers = [...new Set(series.map(point => point.provider))].sort();
 		const timestamps = [...new Set(series.map(point => point.timestamp))].sort((a, b) => a - b);
@@ -53,8 +54,8 @@ export function CostsRoute({ range, refreshKey }: { range: StatsRange; refreshKe
 							.filter(point => point.timestamp === ts && point.provider === provider)
 							.reduce((acc, point) => acc + point.cost, 0),
 					),
-					borderColor: CHART_COLORS[index % CHART_COLORS.length],
-					backgroundColor: `${CHART_COLORS[index % CHART_COLORS.length]}26`,
+					borderColor: colors[index % colors.length],
+					backgroundColor: `${colors[index % colors.length]}26`,
 					fill: true,
 					stacked: true,
 					tension: 0.3,

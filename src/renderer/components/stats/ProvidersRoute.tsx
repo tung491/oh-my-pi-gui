@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Bar, Pie } from "react-chartjs-2";
-import { baseChartOptions, CHART_COLORS, compact, formatUsd } from "../../lib/chart";
+import { baseChartOptions, chartColors, compact, formatUsd } from "../../lib/chart";
 import "../../lib/chart";
 import { useStats } from "../../hooks/use-stats";
 import { useT } from "../../lib/i18n";
@@ -125,20 +125,20 @@ export function ProvidersRoute({ range, refreshKey }: { range: StatsRange; refre
 		() => [...(stats?.providers ?? [])].sort((a, b) => b.totalTokens - a.totalTokens),
 		[stats],
 	);
-	const pie = useMemo(
-		() => ({
+	const pie = useMemo(() => {
+		const colors = chartColors();
+		return {
 			labels: providers.map(row => row.provider),
 			datasets: [
 				{
 					data: providers.map(row => row.totalTokens),
-					backgroundColor: providers.map((_, index) => `${CHART_COLORS[index % CHART_COLORS.length]}cc`),
+					backgroundColor: providers.map((_, index) => `${colors[index % colors.length]}cc`),
 					borderColor: "transparent",
 					hoverOffset: 6,
 				},
 			],
-		}),
-		[providers],
-	);
+		};
+	}, [providers]);
 
 	const pieOptions = useMemo(() => {
 		const base = baseChartOptions();
@@ -153,6 +153,7 @@ export function ProvidersRoute({ range, refreshKey }: { range: StatsRange; refre
 	}, []);
 
 	const hourly = useMemo(() => {
+		const colors = chartColors();
 		const hours = Array.from({ length: 24 }, (_, hour) => hour);
 		const byProvider = new Map<string, number[]>();
 		for (const point of stats?.hourly ?? []) {
@@ -168,8 +169,8 @@ export function ProvidersRoute({ range, refreshKey }: { range: StatsRange; refre
 			datasets: top.map(([provider, series], index) => ({
 				label: provider,
 				data: series,
-				backgroundColor: `${CHART_COLORS[index % CHART_COLORS.length]}88`,
-				borderColor: CHART_COLORS[index % CHART_COLORS.length],
+				backgroundColor: `${colors[index % colors.length]}88`,
+				borderColor: colors[index % colors.length],
 				borderWidth: 1,
 			})),
 		};

@@ -1,12 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { parseHTML } from "linkedom";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it } from "vitest";
 import type { AgentMessage } from "../../../shared/rpc-types";
+import { I18nProvider } from "../../lib/i18n";
+import { useMessagesStore } from "../../stores/messages";
+import { useSessionStore } from "../../stores/session";
 import type { TodoSnapshot } from "../../stores/todo";
+import { useToolsStore } from "../../stores/tools";
+import { useUiStore } from "../../stores/ui";
 import {
 	buildConversationAnchors,
 	buildHistoryRowKeys,
 	buildHistoryRows,
 	buildTimelineMarkers,
 	buildTranscriptRowKeys,
+	ChatStream,
 	claimRowEntrances,
 	createRowEntranceState,
 	findConversationAnchorIndex,
@@ -17,6 +26,25 @@ import {
 	ROW_ENTRANCE_TAIL_ROWS,
 	shouldRePinTranscript,
 } from "./ChatStream";
+
+const { document, window, Event, HTMLElement, Element, Node } = parseHTML("<html><body></body></html>");
+const globals = globalThis as Record<string, unknown>;
+Object.assign(globals, { document, window, Event, HTMLElement, Element, Node, IS_REACT_ACT_ENVIRONMENT: true });
+globals.requestAnimationFrame = (callback: () => void) => setTimeout(callback, 0);
+globals.cancelAnimationFrame = (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle);
+// linkedom has no layout. Give every element one fixed, non-overflowing box
+// so the virtualizer sees a real viewport (a zero-height one renders no rows)
+// and treats the transcript scroller as an element, not a window.
+const box = (size: number) => ({ get: () => size, configurable: true });
+Object.defineProperties(HTMLElement.prototype, {
+	clientHeight: box(800),
+	clientWidth: box(1000),
+	offsetHeight: box(800),
+	offsetWidth: box(1000),
+	scrollHeight: box(800),
+	scrollWidth: box(1000),
+	scrollTop: { get: () => 0, set: () => {}, configurable: true },
+});
 
 const at = "2026-08-05T04:00:00.000Z";
 
@@ -522,5 +550,74 @@ describe("transcript row entrances", () => {
 		const other = history(30);
 		expect(claim(latch, "session-b", true, other)).toEqual([]);
 		expect(claim(latch, "session-b", true, [...other, "a30"])).toEqual(["a30"]);
+	});
+});
+
+describe("transcript Retry placement", () => {
+	const RETRY = 'button[aria-label="Retry this turn"]';
+	let container: Element | null = null;
+	let root: Root | null = null;
+
+	function user(text: string): AgentMessage {
+		return { role: "user", content: [{ type: "text", text }], timestamp: at };
+	}
+
+	async function mountTranscript(messages: AgentMessage[]): Promise<Element> {
+		useUiStore.getState().setTranscriptDetail("compact");
+		useMessagesStore.setState({ messages });
+		const host = document.createElement("div") as unknown as Element;
+		document.body.appendChild(host as never);
+		container = host;
+		root = createRoot(host);
+		const mounted = root;
+		await act(async () => {
+			mounted.render(
+				<I18nProvider>
+					<ChatStream />
+				</I18nProvider>,
+			);
+		});
+		return host;
+	}
+
+	afterEach(async () => {
+		const mounted = root;
+		if (mounted) await act(async () => mounted.unmount());
+		container?.remove();
+		container = null;
+		root = null;
+		useMessagesStore.getState().reset();
+		useSessionStore.getState().reset();
+		useToolsStore.getState().reset();
+		useUiStore.getState().setTranscriptDetail("compact");
+	});
+
+	it("offers Retry on the answer of the trailing turn", async () => {
+		const host = await mountTranscript([user("first question"), assistant([{ type: "text", text: "first answer" }])]);
+		expect(host.textContent).toContain("first answer");
+		expect(host.querySelectorAll(RETRY)).toHaveLength(1);
+	});
+
+	it("offers no Retry when a later turn ended in tool work folded into a process row", async () => {
+		const host = await mountTranscript([
+			user("first question"),
+			assistant([{ type: "text", text: "first answer" }]),
+			user("second question"),
+			assistant([{ type: "toolCall", id: "call-late", name: "read", arguments: { path: "src/b.ts" } }]),
+			toolResult("call-late"),
+		]);
+		expect(host.textContent).toContain("first answer");
+		expect(host.textContent).toContain("second question");
+		expect(host.querySelector(RETRY)).toBeNull();
+	});
+
+	it("offers no Retry while the latest user turn has no reply", async () => {
+		const host = await mountTranscript([
+			user("first question"),
+			assistant([{ type: "text", text: "first answer" }]),
+			user("second question"),
+		]);
+		expect(host.textContent).toContain("second question");
+		expect(host.querySelector(RETRY)).toBeNull();
 	});
 });

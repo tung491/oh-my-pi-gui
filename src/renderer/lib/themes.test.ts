@@ -4,8 +4,38 @@
  * key silently falls back to whatever the previous theme left on <html>.
  */
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { resolveTokenColor, THEME_TOKEN_KEYS, THEMES, type ThemeTokenKey, TRANSCRIPT_OVERLAY_VARS } from "./themes";
+import { CHART_COLOR_TOKENS } from "./chart-tokens";
+import { MERMAID_THEME_TOKENS } from "./mermaid-theme";
+import {
+	resolveTokenColor,
+	sidebarSchemeOf,
+	THEME_TOKEN_KEYS,
+	THEMES,
+	type ThemeName,
+	type ThemeTokenKey,
+	TRANSCRIPT_OVERLAY_VARS,
+} from "./themes";
+
+/** Brand fill plus the always-navy sidebar group, defined by every theme. */
+const VIF_LAYOUT_TOKENS = [
+	"--omp-brand",
+	"--omp-sidebar-text",
+	"--omp-sidebar-muted",
+	"--omp-sidebar-border",
+	"--omp-sidebar-accent",
+	"--omp-sidebar-success",
+	"--omp-sidebar-warning",
+	"--omp-sidebar-error",
+] as const;
+
+const TEXT_TOKENS = ["--omp-text", "--omp-text-secondary", "--omp-muted", "--omp-dim", "--omp-accent"] as const;
+
+const VIF_THEMES = [
+	["light", THEMES.light],
+	["dark", THEMES.dark],
+] as const;
 
 describe("theme registry", () => {
 	it("defines every canonical token on every theme", () => {
@@ -51,19 +81,8 @@ describe("theme registry", () => {
 				const ratio = contrast(color(foreground), composite(color(background), base));
 				expect(ratio, `${name}: ${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
 			};
-			for (const background of [
-				"--omp-bg-primary",
-				"--omp-sidebar-bg",
-				"--omp-bg-elevated",
-				"--omp-bg-tertiary",
-			] as const) {
-				for (const foreground of [
-					"--omp-text",
-					"--omp-text-secondary",
-					"--omp-muted",
-					"--omp-dim",
-					"--omp-accent",
-				] as const) {
+			for (const background of ["--omp-bg-primary", "--omp-bg-elevated", "--omp-bg-tertiary"] as const) {
+				for (const foreground of TEXT_TOKENS) {
 					assertReadable(foreground, background);
 				}
 			}
@@ -90,7 +109,153 @@ describe("theme registry", () => {
 			}
 		}
 	});
+
+	it("defines the VIF layout tokens", () => {
+		for (const key of VIF_LAYOUT_TOKENS) {
+			expect(THEME_TOKEN_KEYS, key).toContain(key);
+		}
+		expect(THEME_TOKEN_KEYS).toHaveLength(127);
+	});
+
+	it("keeps the stylesheets in sync with THEMES.light and THEMES.dark", () => {
+		expect(readStylesheetTokens("theme-light.css")).toEqual(THEMES.light.tokens);
+		expect(readStylesheetTokens("theme-dark.css")).toEqual(THEMES.dark.tokens);
+	});
+
+	it("names the VIF defaults", () => {
+		expect(THEMES.light.label).toBe("VIF Light");
+		expect(THEMES.dark.label).toBe("VIF Navy");
+		expect(THEMES.light.tokens["--omp-sidebar-bg"]).toBe("#0a1a33");
+		expect(THEMES.dark.tokens["--omp-bg-primary"]).toBe("#0a1a33");
+	});
+
+	it("defines every sidebar surface as an opaque hex color", () => {
+		for (const [name, theme] of Object.entries(THEMES)) {
+			expect(resolveTokenColor(theme, "--omp-sidebar-bg"), name).toMatch(/^#[0-9a-f]{6}$/i);
+		}
+	});
+
+	it("derives which logo tone each sidebar needs", () => {
+		const expected: Record<ThemeName, "dark" | "light"> = {
+			dark: "dark",
+			light: "dark",
+			titanium: "dark",
+			nord: "dark",
+			latte: "dark",
+			gruvbox: "dark",
+			solarized: "light",
+			paper: "light",
+			dawn: "light",
+			frost: "light",
+			matcha: "light",
+		};
+		const actual = Object.fromEntries(Object.entries(THEMES).map(([name, theme]) => [name, sidebarSchemeOf(theme)]));
+		expect(actual).toEqual(expected);
+	});
+
+	it("keeps sidebar text readable on the sidebar surface", () => {
+		for (const [name, theme] of Object.entries(THEMES)) {
+			const color = (key: ThemeTokenKey) => resolveTokenColor(theme, key);
+			const sidebar = composite(color("--omp-sidebar-bg"), "#ffffff");
+			const isVif = name === "light" || name === "dark";
+			const surfaces: Array<[string, string]> = [["--omp-sidebar-bg", sidebar]];
+			if (isVif) {
+				surfaces.push(
+					["--omp-sidebar-item-active", composite(color("--omp-sidebar-item-active"), sidebar)],
+					["--omp-sidebar-item-hover", composite(color("--omp-sidebar-item-hover"), sidebar)],
+				);
+			}
+			for (const [surfaceName, surface] of surfaces) {
+				for (const foreground of ["--omp-sidebar-text", "--omp-sidebar-muted", "--omp-sidebar-accent"] as const) {
+					expect(
+						contrast(color(foreground), surface),
+						`${name}: ${foreground} on ${surfaceName}`,
+					).toBeGreaterThanOrEqual(4.5);
+				}
+			}
+			if (!isVif) continue;
+			for (const status of ["--omp-sidebar-success", "--omp-sidebar-warning", "--omp-sidebar-error"] as const) {
+				expect(contrast(color(status), sidebar), `${name}: ${status} on --omp-sidebar-bg`).toBeGreaterThanOrEqual(
+					3,
+				);
+			}
+		}
+	});
+
+	it("keeps VIF text readable on sunken, modal, and input surfaces", () => {
+		for (const [name, theme] of VIF_THEMES) {
+			const color = (key: ThemeTokenKey) => resolveTokenColor(theme, key);
+			for (const background of ["--omp-bg-secondary", "--omp-modal-bg", "--omp-input-bg"] as const) {
+				const surface = composite(color(background), "#ffffff");
+				for (const foreground of TEXT_TOKENS) {
+					expect(
+						contrast(color(foreground), surface),
+						`${name}: ${foreground} on ${background}`,
+					).toBeGreaterThanOrEqual(4.5);
+				}
+			}
+		}
+	});
+
+	it("keeps info badges readable", () => {
+		for (const [name, theme] of Object.entries(THEMES)) {
+			const color = (key: ThemeTokenKey) => resolveTokenColor(theme, key);
+			const badge = composite(color("--omp-info-dim"), composite(color("--omp-bg-elevated"), "#ffffff"));
+			expect(contrast(color("--omp-info"), badge), `${name}: --omp-info on --omp-info-dim`).toBeGreaterThanOrEqual(
+				4.5,
+			);
+		}
+	});
+
+	it("orders VIF text lightness and separates success from error", () => {
+		for (const [name, theme] of VIF_THEMES) {
+			const color = (key: ThemeTokenKey) => resolveTokenColor(theme, key);
+			const page = composite(color("--omp-bg-primary"), "#ffffff");
+			const ratios = (["--omp-text", "--omp-text-secondary", "--omp-muted", "--omp-dim"] as const).map(key =>
+				contrast(color(key), page),
+			);
+			for (let i = 1; i < ratios.length; i++) {
+				expect(ratios[i], `${name}: text step ${i} is dimmer than step ${i - 1}`).toBeLessThan(ratios[i - 1]);
+			}
+			expect(
+				contrast(color("--omp-success"), color("--omp-error")),
+				`${name}: success vs error`,
+			).toBeGreaterThanOrEqual(1.15);
+		}
+	});
+
+	it("keeps chart tokens plain hex", () => {
+		for (const [name, theme] of Object.entries(THEMES)) {
+			for (const key of CHART_COLOR_TOKENS) {
+				expect(resolveTokenColor(theme, key), `${name}: ${key}`).toMatch(/^#[0-9a-f]{6}$/i);
+			}
+		}
+	});
+
+	it("keeps mermaid tokens plain hex", () => {
+		for (const [name, theme] of Object.entries(THEMES)) {
+			for (const key of MERMAID_THEME_TOKENS) {
+				expect(resolveTokenColor(theme, key), `${name}: ${key}`).toMatch(/^#[0-9a-f]{6}$/i);
+			}
+		}
+	});
+
+	it("paints the first frame with the default page colors", () => {
+		const prePaint = readFileSync(new URL("../public/pre-paint.js", import.meta.url), "utf8");
+		const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+		expect(prePaint).toContain(THEMES.dark.tokens["--omp-bg-primary"]);
+		expect(prePaint).toContain(THEMES.light.tokens["--omp-bg-primary"]);
+		expect(indexHtml).toContain(THEMES.light.tokens["--omp-bg-primary"]);
+	});
 });
+
+/** Parses one theme stylesheet's `--omp-*` declarations into a token map. */
+function readStylesheetTokens(file: string): Record<string, string> {
+	const css = readFileSync(new URL(`../styles/${file}`, import.meta.url), "utf8");
+	return Object.fromEntries(
+		Array.from(css.matchAll(/(--omp-[a-z0-9-]+):\s*([^;]+);/g), match => [match[1], match[2]]),
+	);
+}
 
 function composite(color: string, background: string): string {
 	if (color.startsWith("#")) return color;

@@ -11,7 +11,7 @@ import { act, type ReactElement } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { AgentProgress, SubagentSnapshot } from "../../../../shared/rpc-types";
-import { I18nProvider } from "../../../lib/i18n";
+import { I18nProvider, translate } from "../../../lib/i18n";
 import { resetTabRoute } from "../../../lib/tab-routing";
 import { useSessionStore } from "../../../stores/session";
 import { useSubagentsStore } from "../../../stores/subagents";
@@ -203,6 +203,27 @@ describe("AgentsDockCard", () => {
 		expect(container.querySelector('[role="tree"]')).toBeNull();
 		expect(useUiStore.getState().dockCollapsed.agents).toBe(true);
 		expect(container.querySelector('[data-testid="other-card-body"]')).not.toBeNull();
+	});
+
+	it("switches between list and graph through a labelled segmented view control", async () => {
+		useSubagentsStore.getState().setSnapshots([snap({ id: "a1", status: "running" })]);
+		await mount(<AgentsDockCard />);
+
+		const group = container.querySelector(`[role="group"][aria-label="${translate("subagentPanel.viewAria")}"]`);
+		expect(group).not.toBeNull();
+		const options = () => [...(group?.querySelectorAll("button") ?? [])];
+		expect(options().map(button => button.getAttribute("title"))).toEqual([
+			translate("subagentPanel.listView"),
+			translate("subagentPanel.graphView"),
+		]);
+		expect(options().map(button => button.getAttribute("aria-pressed"))).toEqual(["true", "false"]);
+		expect(container.querySelector('[role="tree"]')).not.toBeNull();
+
+		await act(async () => {
+			(options()[1] as unknown as { click: () => void }).click();
+		});
+		expect(options().map(button => button.getAttribute("aria-pressed"))).toEqual(["false", "true"]);
+		expect(container.querySelector('[role="tree"]')).toBeNull();
 	});
 
 	it("collapses to the header via the ui store and re-expands on focusDockCard", async () => {

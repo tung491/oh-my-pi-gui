@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { Check, ChevronRight, CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
@@ -43,6 +43,15 @@ export function ExecutionGroup({
 		}
 		return `${running}:${failed}`;
 	});
+	// Primitive selector as well: the distinct tool names, joined, in call order.
+	const toolNames = useToolsStore(s => {
+		const names: string[] = [];
+		for (const id of toolCallIds) {
+			const name = s.activeTools.get(id)?.toolName;
+			if (name && !names.includes(name)) names.push(name);
+		}
+		return names.join(" · ");
+	});
 	const [running, toolFailures] = encoded.split(":").map(Number);
 	const failed = toolFailures + failureCount;
 
@@ -65,20 +74,28 @@ export function ExecutionGroup({
 				type="button"
 				aria-label={`${t("chat.process.title")}: ${summary}`}
 			>
-				{active && (
-					<span
-						aria-hidden="true"
-						className="omp-execution-group-live-dot h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[var(--omp-accent)]"
-					/>
+				{state === "running" ? (
+					<span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center">
+						<span className="omp-execution-group-live-dot h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--omp-accent)]" />
+					</span>
+				) : state === "failed" ? (
+					<CircleAlert aria-hidden="true" className="shrink-0 text-(--omp-error)" size={16} />
+				) : (
+					<Check aria-hidden="true" className="shrink-0 text-(--omp-success)" size={16} />
 				)}
-				<span className="omp-execution-group-title shrink-0 text-omp-sm font-medium text-[var(--omp-text)]">
-					{t("chat.process.title")}
+				<span className="omp-execution-group-title flex min-w-0 items-baseline gap-2">
+					<span className="shrink-0 text-omp-md font-semibold text-(--omp-text)">
+						{t("chat.process.steps", { count: stepCount, plural: stepCount === 1 ? "" : "s" })}
+					</span>
+					{toolNames && (
+						<span className="min-w-0 truncate font-mono text-omp-sm text-(--omp-muted)">{toolNames}</span>
+					)}
 				</span>
 				<span
 					aria-atomic="true"
 					aria-live="polite"
 					className={cx(
-						"omp-execution-group-summary min-w-0 flex-1 truncate text-omp-xs",
+						"omp-execution-group-summary min-w-0 flex-1 truncate text-right text-omp-xs",
 						state === "running" && "text-[var(--omp-accent)]",
 						state === "failed" && "text-[var(--omp-error)]",
 						state === "complete" && "text-[var(--omp-muted)]",

@@ -9,6 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import Store from "electron-store";
 import { parseLaunchProfile, profileToFlags, stripDenylistedFlags } from "../shared/launch-profile";
+import { PRODUCT_NAME } from "../shared/product";
 import type {
 	AgentSessionEvent,
 	CommandOutputFrame,
@@ -184,7 +185,7 @@ export function missingSidecarMessage(packaged: boolean, resourcesPath?: string)
 		return "Built-in omp not found. Build it with `bun --cwd=packages/gui run build:omp`, then relaunch.";
 	}
 	const target = resourcesPath ? join(resourcesPath, "omp") : "the bundled omp binary";
-	return `omp is missing from this installation (${target}). Reinstall omp GUI, then relaunch.`;
+	return `omp is missing from this installation (${target}). Reinstall ${PRODUCT_NAME}, then relaunch.`;
 }
 
 export interface SidecarEvents {

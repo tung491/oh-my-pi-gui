@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo } from "react";
 import type { MenuAction, MenuActionPayload, RunProgressState } from "../shared/ipc-types";
+import { PRODUCT_NAME } from "../shared/product";
 import { ToastStack } from "./components/common";
 import { ActiveToolsDialog } from "./components/dialogs/ActiveToolsDialog";
 import { BranchPickerDialog } from "./components/dialogs/BranchPickerDialog";
@@ -7,7 +8,6 @@ import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
 import { CollabDialog } from "./components/dialogs/CollabDialog";
 import { CommandPalette } from "./components/dialogs/CommandPalette";
-import { ComposerEditorDialog } from "./components/dialogs/ComposerEditorDialog";
 import { ContextReportDialog } from "./components/dialogs/ContextReportDialog";
 import { CopySelectorDialog } from "./components/dialogs/CopySelectorDialog";
 import { DebugConsoleDialog } from "./components/dialogs/DebugConsoleDialog";
@@ -54,9 +54,17 @@ import {
 import { exportSessionHtml } from "./lib/export-session";
 import { useLang, useT } from "./lib/i18n";
 import { isImeKeyEvent } from "./lib/ime";
-import { chordFromEvent, compileKeymap, KEYMAP_ACTION_BY_ID, KEYMAP_ACTIONS, type KeymapActionId } from "./lib/keymap";
+import {
+	chordFromEvent,
+	compileKeymap,
+	currentKeyboardPlatform,
+	KEYMAP_ACTION_BY_ID,
+	KEYMAP_ACTIONS,
+	type KeymapActionId,
+} from "./lib/keymap";
 import { abortActiveTurn, restoreQueuedMessages } from "./lib/messages";
 import { watchPluginActivation } from "./lib/plugin-activation";
+import { whenSidecarReady } from "./lib/sidecar-ready";
 import { closeActiveTab } from "./lib/tab-close";
 import { acceptsActiveTabEvents, onActiveTabRouteSettled, onActiveTabRouteState } from "./lib/tab-routing";
 import { focusedTabRpc } from "./lib/tab-rpc";
@@ -84,6 +92,9 @@ import { subscribeUpdaterStatus } from "./stores/updater";
 
 // Heavy overlays code-split: they render null while closed, so they download
 // only on first open instead of bloating the eager bundle.
+const ComposerEditorDialog = lazy(() =>
+	import("./components/dialogs/ComposerEditorDialog").then(m => ({ default: m.ComposerEditorDialog })),
+);
 const SettingsWindow = lazy(() =>
 	import("./components/settings/SettingsWindow").then(m => ({ default: m.SettingsWindow })),
 );
@@ -132,7 +143,7 @@ function FocusedSessionEffects() {
 	const colorBlindMode = useUiStore(s => s.colorBlindMode);
 
 	useEffect(() => {
-		const name = titleSessionName ?? "omp";
+		const name = titleSessionName ?? PRODUCT_NAME;
 		document.title = !titleRunState ? name : titleAwaiting ? `! ${name}` : titleStreaming ? `● ${name}` : `› ${name}`;
 	}, [titleRunState, titleAwaiting, titleStreaming, titleSessionName]);
 	useEffect(() => startVoiceAutoSpeak(), []);
@@ -326,6 +337,7 @@ export function App() {
 	// Handle omp:// deep links (omp://new → new session; omp://session/<id> → switch).
 	useEffect(() => {
 		const handle = async (link: { action: "new-session" } | { action: "switch-session"; sessionId: string }) => {
+			await whenSidecarReady(window.omp.sidecar.getStatus, window.omp.events.onSidecarStatus);
 			if (link.action === "new-session") {
 				if (useSessionStore.getState().isStreaming) {
 					toast({ variant: "warning", title: t("deepLink.streaming"), message: t("deepLink.streamingDesc") });
@@ -358,7 +370,11 @@ export function App() {
 	// plan/15 §3.5): keydown dispatch is an O(1) map hit, never a config walk.
 	// The memo recomputes only when the overrides object identity changes.
 	const keymapOverrides = useUiStore(s => s.keymapOverrides);
-	const keymap = useMemo(() => compileKeymap(KEYMAP_ACTIONS, keymapOverrides), [keymapOverrides]);
+	const keyboardPlatform = currentKeyboardPlatform();
+	const keymap = useMemo(
+		() => compileKeymap(KEYMAP_ACTIONS, keymapOverrides, keyboardPlatform),
+		[keymapOverrides, keyboardPlatform],
+	);
 
 	// Boot hydration of user keybinding overrides (prefs key "keymapOverrides").
 	useEffect(() => {
@@ -778,7 +794,11 @@ export function App() {
 			<PlanApprovalDialog />
 			<HotkeysDialog open={hotkeysOpen} />
 			{importDialogOpen && <ImportForeignDialog />}
-			{composerEditorOpen && <ComposerEditorDialog />}
+			{composerEditorOpen && (
+				<Suspense fallback={null}>
+					<ComposerEditorDialog />
+				</Suspense>
+			)}
 			<Suspense fallback={null}>
 				<StatsDashboard open={statsDashboardOpen} onClose={closeStatsDashboard} />
 			</Suspense>

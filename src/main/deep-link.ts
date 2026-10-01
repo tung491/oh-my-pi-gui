@@ -5,10 +5,10 @@
 import { isAbsolute, resolve } from "node:path";
 import { app } from "electron";
 import { type DeepLinkPayload, IPC_EVENTS } from "../shared/ipc-types";
-import { parseLaunchArgv } from "./launch-argv";
+import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import type { SpawnWindow, WindowManager } from "./window";
 
-const PROTOCOL = "omp";
+export const DEEP_LINK_PROTOCOL = "omp";
 
 /**
  * macOS delivers the launch URL while the app is still starting, and `setupDeepLinks`
@@ -37,12 +37,15 @@ app.on("open-file", (event, path) => {
 export function setupDeepLinks(windowManager: WindowManager, spawnWindow: SpawnWindow): void {
 	// Register as default protocol handler (Windows/Linux)
 	if (process.defaultApp && process.argv.length >= 2) {
-		app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [process.argv[1]]);
+		app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL, process.execPath, [process.argv[1]]);
 	} else {
-		app.setAsDefaultProtocolClient(PROTOCOL);
+		app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
 	}
 
 	handler = url => handleDeepLink(url, windowManager, spawnWindow);
+	// Windows/Linux cold start: the launching URL arrives in argv, not open-url.
+	const coldStart = parseLaunchArgv(launchArguments(process.argv, Boolean(process.defaultApp)), DEEP_LINK_PROTOCOL);
+	if (coldStart.kind === "url") beforeSetup.push(coldStart.url);
 	for (const url of beforeSetup.splice(0)) handler(url);
 	fileHandler = path => handleOpenPath(path, windowManager, spawnWindow);
 	for (const path of filesBeforeSetup.splice(0)) fileHandler(path);
@@ -53,7 +56,7 @@ export function setupDeepLinks(windowManager: WindowManager, spawnWindow: SpawnW
 	app.on("second-instance", (_event, argv) => {
 		// In dev, argv[0] is Electron and argv[1] the app directory — both real
 		// directories that would otherwise be mistaken for the requested one.
-		const request = parseLaunchArgv(argv.slice(process.defaultApp ? 2 : 1), PROTOCOL);
+		const request = parseLaunchArgv(launchArguments(argv, Boolean(process.defaultApp)), DEEP_LINK_PROTOCOL);
 		if (request.kind === "url") handleDeepLink(request.url, windowManager, spawnWindow);
 		else if (request.kind === "path") handleOpenPath(request.path, windowManager, spawnWindow);
 		else windowManager.getTargetWindow()?.focus();

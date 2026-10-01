@@ -158,6 +158,38 @@ describe("ContextUsagePopover", () => {
 		expect(dialog?.querySelector('[role="progressbar"]')).not.toBeNull();
 	});
 
+	it("draws the used share of a known window as a decorative meter inside the trigger", async () => {
+		useSessionStore.setState({
+			contextUsage: { contextWindow: 200_000, percent: 25, tokens: 50_000 },
+			sessionId: "session-meter",
+			status: "ready",
+		});
+		await mount();
+
+		const trigger = container.querySelector("button") as unknown as HTMLButtonElement;
+		// The showcase capture locates this control by the label prefix.
+		expect(trigger.getAttribute("aria-label")?.startsWith("Show context usage, ")).toBe(true);
+		const meter = trigger.querySelector("[data-context-meter]");
+		expect(meter).not.toBeNull();
+		expect(meter?.getAttribute("aria-hidden")).toBe("true");
+		const fill = meter?.querySelector("span") as unknown as HTMLElement | null;
+		expect(fill?.style.width).toBe("25%");
+		// The meter repeats the reading visually; it adds no text of its own.
+		expect(trigger.textContent).toBe("50.0k/200.0k");
+	});
+
+	it("withholds the meter when the model's window is unknown", async () => {
+		useSessionStore.setState({
+			contextUsage: { contextWindow: 0, percent: 0, tokens: 16_000 },
+			sessionId: "session-meter-unknown",
+			status: "ready",
+		});
+		await mount();
+
+		const trigger = container.querySelector("button") as unknown as HTMLButtonElement;
+		expect(trigger.querySelector("[data-context-meter]")).toBeNull();
+	});
+
 	it("renders nothing until the session reports context usage", async () => {
 		await mount();
 		expect(container.childElementCount).toBe(0);

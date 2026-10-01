@@ -5,7 +5,7 @@
  */
 
 import { parseHTML } from "linkedom";
-import { act } from "react";
+import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "../../lib/i18n";
@@ -38,16 +38,12 @@ async function flush(): Promise<void> {
 	});
 }
 
-async function mountSwitcher(): Promise<void> {
+async function mountSwitcher(switcher: ReactElement = <LangSwitcher />): Promise<void> {
 	container = document.createElement("div") as unknown as TestElement;
 	document.body.appendChild(container as never);
 	root = createRoot(container as unknown as Element);
 	await act(async () => {
-		root?.render(
-			<I18nProvider>
-				<LangSwitcher />
-			</I18nProvider>,
-		);
+		root?.render(<I18nProvider>{switcher}</I18nProvider>);
 	});
 	await flush();
 }
@@ -81,6 +77,11 @@ describe("LangSwitcher", () => {
 		});
 		await flush();
 		expect(button.textContent).toContain("EN");
+	});
+
+	it("exposes its tone so the sidebar variant is distinguishable", async () => {
+		await mountSwitcher(<LangSwitcher tone="onDark" />);
+		expect(document.querySelector("button")?.getAttribute("data-tone")).toBe("onDark");
 	});
 
 	it("rehydrates the persisted language (omp.lang=zh → 中文)", async () => {

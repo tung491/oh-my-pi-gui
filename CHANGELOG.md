@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Linux x64 packages**: an AppImage and a `.deb` for Ubuntu 24.04+, with the bundled sidecar, `omp://` links, the tray and window icon, and `latest-linux.yml` update metadata.
+- **Linux CI**: type checks, unit tests and the GUI build run on Ubuntu for every push and pull request.
+
+### Changed
+
+- **Sai ATLAS**: the GUI is now Sai ATLAS, the AI assistant for SAI OS; the bundled agent is still omp, and settings and sessions carry over. Installers are named `Sai-ATLAS-…`, and the Linux package and launcher are `sai-atlas`. The app id is now `vn.io.vif.saiatlas`, so macOS asks for microphone and notification access again, while the Windows installer upgrades an existing omp install in place (pin Sai ATLAS to the taskbar again if you had pinned omp). On macOS, quit omp before installing, then move `omp.app` to the Trash. Source-built Linux installs remove the old `omp` package first.
+- **Icon generation**: `bun run gen:icons` no longer writes `resources/icon.icns`; the mac bundles take `resources/icon.png`, which electron-builder converts on any build host. The tray mark is generated from the Sai ATLAS artwork into `src/main/tray-mark.ts`.
+- **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged. On Windows, `Ctrl+T` now opens a tab and `Ctrl+W` closes one; thinking has no default key there and can be bound in Hotkeys.
+- **VIF redesign**: the interface moves to the VIF design system. VIF Light and VIF Navy replace Porcelain and Graphite as the default light and dark themes, with a navy sidebar, Poppins headings, a five-step first-run wizard, and a refreshed palette, model picker, workspace panel, settings, statistics, and Agent Hub. Other named themes remain available.
+
+### Fixed
+
+- **Launch arguments on a cold start**: a workspace path or `omp://` link passed to a packaged Linux or Windows build is honored when the app was not running.
+- **Deb updates**: a deb install runs only when you choose Restart & install, and a cancelled or failed install shows in the update banner.
+- **AppImage updates**: Restart & install asks about working tabs before replacing the file, then starts the new version once the old one has quit.
+
 ## [0.9.10] - 2026-09-24
 
 ### Added

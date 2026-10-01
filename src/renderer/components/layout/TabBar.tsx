@@ -31,6 +31,7 @@ import {
 import { useSessionList } from "../../hooks/use-session-list";
 import { basename, cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
+import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { sessionHasContent } from "../../lib/session-title";
 import { type LiveTabRuntime, performTabClose, tabNeedsCloseConfirm } from "../../lib/tab-close";
 import { tabSignalPresentation } from "../../lib/tab-signal";
@@ -46,6 +47,7 @@ import { sessionRuntimeStore } from "../../stores/session-runtime-context";
 import { useSidebarPrefs } from "../../stores/sidebar-prefs";
 import { type SessionTab, tabDisplayTitle, useTabsStore, visibleTabIds } from "../../stores/tabs";
 import { useUiStore } from "../../stores/ui";
+import { IconButton } from "../common";
 import { anchorFromEvent, ContextMenu, type ContextMenuAnchor } from "../common/ContextMenu";
 
 /** Auto-cancel window for the armed close confirm (injectable for tests). */
@@ -121,10 +123,10 @@ function TabChip({
 			className={cx(
 				"no-drag group relative flex h-9 w-44 shrink-0 cursor-pointer items-center gap-2 overflow-hidden px-2.5 text-omp-md select-none",
 				active
-					? "bg-[var(--omp-selected-bg)] font-medium text-[var(--omp-text)]"
+					? "font-semibold text-(--omp-accent) shadow-[inset_0_-2px_0_0_var(--omp-accent)]"
 					: visible
 						? "bg-[var(--omp-selected-bg)]/55 text-[var(--omp-text)] ring-1 ring-inset ring-[var(--omp-border-accent)]"
-						: "text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
+						: "text-(--omp-muted) hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]",
 			)}
 		>
 			<span
@@ -366,7 +368,7 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
 			<div
 				role="tablist"
 				aria-label={t("tabs.strip")}
-				className="drag-region flex h-12 shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--omp-border-muted)] bg-[var(--omp-titlebar-bg)] px-2"
+				className="drag-region flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--omp-border-muted)] bg-[var(--omp-titlebar-bg)] px-2"
 			>
 				{tabs.map(tab => {
 					const visible = visibleTabIds({ activeTabId, split }).includes(tab.id);
@@ -408,10 +410,10 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
 					);
 				})}
 				{actionTabId && (
-					<button
-						type="button"
-						aria-label={t("tabs.actions")}
-						title={t("tabs.actions")}
+					<IconButton
+						className="no-drag"
+						icon={<MoreHorizontal aria-hidden="true" size={14} />}
+						label={t("tabs.actions")}
 						onClick={event => {
 							const rect = event.currentTarget.getBoundingClientRect();
 							setTabMenu({
@@ -422,10 +424,9 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
 								tabId: actionTabId,
 							});
 						}}
-						className="no-drag omp-pressable flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
-					>
-						<MoreHorizontal aria-hidden="true" size={14} />
-					</button>
+						size="sm"
+						variant="ghost"
+					/>
 				)}
 				<NewTabMenu />
 			</div>
@@ -545,40 +546,39 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
  * New-tab affordance: agent, tool-free chat, and worktree.
  */
 function NewTabMenu() {
+	const keyboardPlatform = currentKeyboardPlatform();
 	const t = useT();
 	const openTab = useTabsStore(s => s.openTab);
 	const openWorktreeDialog = useUiStore(s => s.openWorktreeDialog);
-	const buttonClass =
-		"no-drag omp-pressable flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]";
 	return (
 		<>
-			<button
-				type="button"
-				aria-label={t("tabs.new.agent")}
-				title={t("tabs.new.agentHint")}
+			<IconButton
+				className="no-drag"
+				icon={<Plus size={14} />}
+				label={t("tabs.new.agent")}
 				onClick={() => void openTab()}
-				className={buttonClass}
-			>
-				<Plus size={14} />
-			</button>
-			<button
-				type="button"
-				aria-label={t("tabs.new.chat")}
-				title={t("tabs.new.chatHint")}
+				size="sm"
+				title={t("tabs.new.agentHint", { chord: displayShortcut("⌘T", keyboardPlatform) })}
+				variant="ghost"
+			/>
+			<IconButton
+				className="no-drag"
+				icon={<MessageCirclePlus size={14} />}
+				label={t("tabs.new.chat")}
 				onClick={() => void openTab({ kind: "chat" })}
-				className={buttonClass}
-			>
-				<MessageCirclePlus size={14} />
-			</button>
-			<button
-				type="button"
-				aria-label={t("tabs.new.worktree")}
-				title={t("tabs.new.worktreeHint")}
+				size="sm"
+				title={t("tabs.new.chatHint", { chord: displayShortcut("⇧⌘T", keyboardPlatform) })}
+				variant="ghost"
+			/>
+			<IconButton
+				className="no-drag"
+				icon={<GitBranchPlus size={14} />}
+				label={t("tabs.new.worktree")}
 				onClick={() => openWorktreeDialog()}
-				className={buttonClass}
-			>
-				<GitBranchPlus size={14} />
-			</button>
+				size="sm"
+				title={t("tabs.new.worktreeHint", { chord: displayShortcut("⌥T", keyboardPlatform) })}
+				variant="ghost"
+			/>
 		</>
 	);
 }

@@ -33,3 +33,11 @@ export function parseLaunchArgv(
 	}
 	return { kind: "focus" };
 }
+
+/**
+ * The user's part of an Electron argv: a packaged app is `[exe, …args]`, a
+ * dev run (`electron .`) is `[electron, appDir, …args]`.
+ */
+export function launchArguments(argv: readonly string[], defaultApp: boolean): readonly string[] {
+	return argv.slice(defaultApp ? 2 : 1);
+}

@@ -1,10 +1,24 @@
-import { RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ExternalLink, RefreshCw, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { opensAsProgram } from "../../../shared/launchable-path";
 import type { RpcGitChanges, RpcGitDiff } from "../../../shared/rpc-types";
-import { DiffView } from "../../lib/diff";
+import { DiffView, diffLineCounts } from "../../lib/diff";
+import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
+import { currentKeyboardPlatform } from "../../lib/keymap";
 import type { TabRpc } from "../../lib/tab-rpc";
 import { useTabRpc } from "../../lib/tab-rpc";
+import { Button, buttonClasses, IconButton, Input } from "../common";
+import { PathLink } from "../tools/PathLink";
+
+/** Status tile colors: additions and untracked files read as added, deletions as removed, the rest as accent. */
+function statusTileClasses(status: string, selected: boolean): string {
+	if (status.includes("A") || status.includes("?")) return "bg-(--omp-diff-added-bg) text-(--omp-diff-added)";
+	if (status.includes("D")) return "bg-(--omp-diff-removed-bg) text-(--omp-diff-removed)";
+	return selected
+		? "border border-(--omp-accent)/30 bg-(--omp-bg-elevated) text-(--omp-accent)"
+		: "bg-(--omp-selected-bg) text-(--omp-accent)";
+}
 
 export function RepositoryChanges() {
 	const t = useT();
@@ -66,76 +80,154 @@ export function RepositoryChanges() {
 		};
 	}, [rpc, selected, t]);
 	const files = changes?.files.filter(file => file.path.toLocaleLowerCase().includes(query.toLocaleLowerCase())) ?? [];
+	const counts = useMemo(() => (preview?.kind === "text" ? diffLineCounts(preview.diff) : null), [preview]);
+	const listed = Boolean(changes?.isRepo && changes.files.length > 0);
+	const entry = changes?.files.find(file => file.path === selected);
+	// Only a text preview of the selected path proves a regular file inside the
+	// checkout: the sidecar reports symlinks, directories, and binaries by kind.
+	// A deleted row has nothing on disk, and a row a refresh dropped is stale.
+	const previewedText = Boolean(
+		changes?.root && entry && !entry.status.includes("D") && preview?.path === selected && preview.kind === "text",
+	);
+	const runsWhenOpened = previewedText && opensAsProgram(selected, currentKeyboardPlatform());
+	const canOpen = previewedText && !runsWhenOpened;
 	return (
-		<div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
-			<div className="flex items-start gap-2 text-omp-xs text-(--omp-muted)">
-				<p className="flex-1">{t("diffPanel.repositoryScope")}</p>
-				<button
-					type="button"
-					className="flex size-7 items-center justify-center rounded hover:bg-(--omp-hover-bg) disabled:opacity-50"
-					title={t("common.refresh")}
-					aria-label={t("common.refresh")}
-					disabled={loading}
-					onClick={() => setRefresh(value => value + 1)}
-				>
-					<RefreshCw size={14} />
-				</button>
-			</div>
-			{error && (
-				<p role="alert" className="break-words text-omp-sm text-(--omp-error)">
-					{error}
-				</p>
-			)}
-			{loading && !changes ? (
-				<p>{t("common.loading")}</p>
-			) : changes && !changes.isRepo ? (
-				<p>{t("diffPanel.notRepo")}</p>
-			) : changes?.files.length === 0 ? (
-				<p>{t("diffPanel.clean")}</p>
-			) : (
-				changes && (
-					<>
-						<input
-							aria-label={t("diffPanel.search")}
-							placeholder={t("diffPanel.search")}
-							className="w-full rounded border border-(--omp-input-border) bg-(--omp-input-bg) px-2 py-1.5 text-omp-sm"
-							value={query}
-							onChange={event => setQuery(event.target.value)}
-						/>
-						{changes.truncated && <p role="status">{t("diffPanel.listLimited")}</p>}
-						<div className="max-h-48 shrink-0 overflow-y-auto">
-							{files.map(file => (
-								<button
-									type="button"
-									key={file.path}
-									aria-pressed={selected === file.path}
-									className={`flex w-full gap-2 rounded px-2 py-1.5 text-left text-omp-sm ${selected === file.path ? "bg-(--omp-selected-bg)" : "hover:bg-(--omp-hover-bg)"}`}
-									onClick={() => setSelected(file.path)}
-								>
-									<code className="shrink-0 text-(--omp-muted)">{file.status}</code>
-									<span className="break-all">
-										{file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
-									</span>
-								</button>
-							))}
-							{files.length === 0 && <p>{t("diffPanel.noMatch")}</p>}
-						</div>
-						{selected && !preview && !error && <p>{t("common.loading")}</p>}
-						{preview && (
-							<div className="min-w-0">
-								<p className="mb-2 break-all font-mono text-omp-sm">{preview.path}</p>
-								{preview.kind === "text" ? (
-									<DiffView diff={preview.diff} filePath={preview.path} />
-								) : (
-									<p>{t(`diffPanel.kind.${preview.kind}`)}</p>
-								)}
-								{preview.truncated && (
-									<p className="text-omp-xs text-(--omp-warning)">{t("diffPanel.previewLimited")}</p>
+		<div className="flex min-h-0 flex-1 flex-col">
+			<div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
+				<div className="flex items-start gap-2 text-omp-xs text-(--omp-muted)">
+					<p className="flex-1">{t("diffPanel.repositoryScope")}</p>
+					<IconButton
+						disabled={loading}
+						icon={<RefreshCw size={14} />}
+						label={t("common.refresh")}
+						onClick={() => setRefresh(value => value + 1)}
+						size="sm"
+					/>
+				</div>
+				{error && (
+					<p role="alert" className="break-words text-omp-sm text-(--omp-error)">
+						{error}
+					</p>
+				)}
+				{loading && !changes ? (
+					<p>{t("common.loading")}</p>
+				) : changes && !changes.isRepo ? (
+					<p>{t("diffPanel.notRepo")}</p>
+				) : changes?.files.length === 0 ? (
+					<p>{t("diffPanel.clean")}</p>
+				) : (
+					changes && (
+						<>
+							<div className="relative">
+								<Search
+									className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-(--omp-dim)"
+									size={15}
+								/>
+								<Input
+									aria-label={t("diffPanel.search")}
+									className="pl-9"
+									onChange={event => setQuery(event.target.value)}
+									placeholder={t("diffPanel.search")}
+									value={query}
+								/>
+							</div>
+							{changes.truncated && <p role="status">{t("diffPanel.listLimited")}</p>}
+							<div className="max-h-48 shrink-0 divide-y divide-(--omp-border-muted) overflow-y-auto rounded-md border border-(--omp-border-muted)">
+								{files.map(file => {
+									const active = selected === file.path;
+									return (
+										<button
+											type="button"
+											key={file.path}
+											aria-pressed={active}
+											className={cx(
+												"flex h-[34px] w-full items-center gap-2.5 px-3 text-left font-mono text-omp-sm",
+												active
+													? "bg-(--omp-selected-bg) font-medium text-(--omp-text) shadow-[inset_2px_0_0_0_var(--omp-accent)]"
+													: "text-(--omp-muted) hover:bg-(--omp-bg-secondary)",
+											)}
+											onClick={() => setSelected(file.path)}
+										>
+											<code
+												className={cx(
+													"flex h-5 min-w-5 shrink-0 items-center justify-center rounded px-1 text-omp-xs font-semibold",
+													statusTileClasses(file.status, active),
+												)}
+											>
+												{file.status}
+											</code>
+											<span className="min-w-0 flex-1 truncate">
+												{file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
+											</span>
+										</button>
+									);
+								})}
+								{files.length === 0 && (
+									<p className="px-3 py-2 text-omp-sm text-(--omp-muted)">{t("diffPanel.noMatch")}</p>
 								)}
 							</div>
-						)}
-					</>
-				)
+							{selected && !preview && !error && <p>{t("common.loading")}</p>}
+							{preview && (
+								<div className="min-w-0 overflow-hidden rounded-md border border-(--omp-border-muted)">
+									<div
+										className="flex min-h-[34px] items-center gap-2.5 border-b border-(--omp-border-muted) bg-(--omp-bg-secondary) px-3 py-1.5" // surface-ok: sunken diff box header
+									>
+										<p className="min-w-0 flex-1 break-all font-mono text-omp-sm font-semibold text-(--omp-text)">
+											{preview.path}
+										</p>
+										{counts && (
+											<span className="flex shrink-0 gap-2 font-mono text-omp-sm font-semibold">
+												<span className="text-(--omp-diff-added)">+{counts.added}</span>
+												<span className="text-(--omp-diff-removed)">−{counts.removed}</span>
+											</span>
+										)}
+									</div>
+									<div className="py-1.5">
+										{preview.kind === "text" ? (
+											<DiffView diff={preview.diff} filePath={preview.path} />
+										) : (
+											<p className="px-3">{t(`diffPanel.kind.${preview.kind}`)}</p>
+										)}
+									</div>
+									{preview.truncated && (
+										<p className="px-3 pb-2 text-omp-xs text-(--omp-warning)">
+											{t("diffPanel.previewLimited")}
+										</p>
+									)}
+								</div>
+							)}
+						</>
+					)
+				)}
+			</div>
+			{listed && changes && (
+				<footer className="flex shrink-0 items-center gap-2 border-t border-(--omp-border-muted) px-3 py-2.5">
+					<span className="min-w-0 flex-1 text-omp-xs text-(--omp-muted)">
+						{t("diffPanel.filesChanged", {
+							count: changes.truncated ? `${changes.files.length}+` : changes.files.length,
+							plural: changes.truncated || changes.files.length !== 1 ? "s" : "",
+						})}
+					</span>
+					{canOpen && changes.root ? (
+						<PathLink
+							className={buttonClasses("secondary", "sm")}
+							path={`${changes.root.replace(/[\\/]+$/, "")}/${selected}`}
+						>
+							<ExternalLink size={14} />
+							{t("diffPanel.openInEditor")}
+						</PathLink>
+					) : (
+						<Button
+							disabled
+							icon={<ExternalLink size={14} />}
+							size="sm"
+							title={runsWhenOpened ? t("diffPanel.openInEditorScript") : undefined}
+							variant="secondary"
+						>
+							{t("diffPanel.openInEditor")}
+						</Button>
+					)}
+				</footer>
 			)}
 		</div>
 	);

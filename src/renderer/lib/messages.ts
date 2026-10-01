@@ -61,9 +61,14 @@ function messagePreview(message: AgentMessage): string {
  * Retry the last turn: re-send the most recent user message, interrupting the
  * active turn when streaming (TUI app.retry parity). `onEmpty` fires when the
  * session has no user message to retry; RPC failures throw for the caller to
- * surface.
+ * surface. `rpc` is the client of the session whose stores are read; the
+ * store reads happen before the first await so a `withSessionRuntime` scope
+ * around the call still applies to them.
  */
-export async function retryLastTurn(onEmpty: () => void): Promise<void> {
+export async function retryLastTurn(
+	onEmpty: () => void,
+	rpc: Pick<TabRpc, "prompt" | "abortAndPrompt"> = window.omp.rpc,
+): Promise<void> {
 	const { messages } = useMessagesStore.getState();
 	const lastUser = [...messages].reverse().find(message => message.role === "user");
 	const text = lastUser ? messageText(lastUser) : "";
@@ -72,7 +77,7 @@ export async function retryLastTurn(onEmpty: () => void): Promise<void> {
 		return;
 	}
 	const streaming = useSessionStore.getState().isStreaming;
-	const response = streaming ? await window.omp.rpc.abortAndPrompt(text) : await window.omp.rpc.prompt(text);
+	const response = streaming ? await rpc.abortAndPrompt(text) : await rpc.prompt(text);
 	if (!response.success) throw new Error(response.error);
 }
 

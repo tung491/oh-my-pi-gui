@@ -7,7 +7,7 @@ import { useT } from "../../lib/i18n";
 import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
 import type { PanelTab } from "../../stores/ui";
 import { useUiStore } from "../../stores/ui";
-import { PanelErrorBoundary } from "../common";
+import { IconButton, PanelErrorBoundary } from "../common";
 import { DiffPanel } from "../panels/DiffPanel";
 import { FilesPanel } from "../panels/FilesPanel";
 import { LogPanel } from "../panels/LogPanel";
@@ -132,30 +132,21 @@ export function PanelContainer() {
 		<aside
 			aria-busy={!routeReady}
 			className={cx(
-				"omp-inspector relative flex h-full flex-col border-l border-[var(--omp-border-muted)]",
+				"omp-inspector relative flex h-full flex-col border-l border-[var(--omp-border-muted)] bg-(--omp-bg-elevated)",
 				compact || split ? "absolute inset-y-0 right-0 z-30 shadow-[var(--omp-shadow-lg)]" : "shrink-0",
 				!routeReady && "pointer-events-none",
 			)}
 			style={{ width }}
 		>
-			<div className="flex h-[52px] shrink-0 items-center border-b border-[var(--omp-border-muted)] px-4">
-				<div>
-					<div className="text-omp-lg font-semibold text-[var(--omp-text)]">{t("panel.title")}</div>
-					<div className="text-omp-md text-[var(--omp-dim)]">{t("panel.subtitle")}</div>
+			<div className="flex shrink-0 items-start gap-3 px-4 pt-3.5">
+				<div className="min-w-0 flex-1">
+					<h2 className="font-display text-omp-xl font-semibold text-(--omp-text)">{t("panel.title")}</h2>
+					<p className="mt-0.5 text-omp-md text-(--omp-muted)">{t("panel.subtitle")}</p>
 				</div>
-				<button
-					type="button"
-					onClick={togglePanel}
-					title={t("panel.close")}
-					className="omp-pressable ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]"
-				>
-					<X size={17} />
-				</button>
+				<IconButton icon={<X size={15} />} label={t("panel.close")} onClick={togglePanel} size="sm" />
 			</div>
-			<div className="flex h-11 shrink-0 items-center overflow-x-auto border-b border-[var(--omp-border-muted)] px-3">
-				<div
-					className="flex shrink-0 items-center gap-0.5 rounded-lg bg-[var(--omp-bg-secondary)] p-0.5" // surface-ok: segmented tab track is panel chrome
-				>
+			<div className="shrink-0 px-3 pt-1">
+				<div className="flex items-center gap-0.5 overflow-x-auto border-b border-(--omp-border-muted)">
 					{visibleTabs.map(({ id, labelKey, icon: Icon }) => {
 						const active = visiblePanelTab === id;
 						return (
@@ -167,10 +158,10 @@ export function PanelContainer() {
 								type="button"
 								onClick={() => setPanelTab(id)}
 								className={cx(
-									"omp-pressable relative flex h-7 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-2.5 text-omp-md font-medium",
+									"omp-inspector-tab omp-pressable relative flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap px-3.5 pt-2.5 pb-3 text-omp-md",
 									active
-										? "bg-[var(--omp-bg-elevated)] text-[var(--omp-text)] shadow-(--omp-shadow-sm)"
-										: "text-[var(--omp-muted)] hover:text-[var(--omp-text)]",
+										? "font-semibold text-(--omp-accent) shadow-[inset_0_-2px_0_0_var(--omp-accent)]"
+										: "font-medium text-(--omp-muted) hover:text-(--omp-text)",
 								)}
 							>
 								<Icon size={14} />

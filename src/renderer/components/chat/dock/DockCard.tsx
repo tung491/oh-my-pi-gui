@@ -70,26 +70,24 @@ export function DockCard({ id, icon: Icon, title, badge, actions, children }: Do
 		<section
 			aria-label={title}
 			className={cx(
-				"omp-fade-up shrink-0 overflow-clip rounded-[18px] border bg-[color-mix(in_srgb,var(--omp-bg-secondary)_72%,transparent)] transition-shadow duration-300",
+				"omp-fade-up shrink-0 overflow-clip rounded-xl border bg-(--omp-bg-elevated) transition-shadow duration-300",
 				flash
 					? "border-[var(--omp-accent)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--omp-accent)_35%,transparent)]"
-					: "border-[var(--omp-border)]",
+					: "border-(--omp-border-muted) shadow-(--omp-shadow-sm)",
 				hiddenForFocus && "opacity-75",
 			)}
 			data-dock-focused={focused || undefined}
 		>
-			<div
-				className="sticky top-0 z-10 flex min-h-10 items-center gap-2 bg-[var(--omp-bg-secondary)] px-3 py-2" // surface-ok: dock-card sticky navigation chrome
-			>
+			<div className="sticky top-0 z-10 flex min-h-11 items-center gap-2 bg-(--omp-bg-elevated) pr-1.5 pl-3.5">
 				<button
 					aria-expanded={expanded}
 					aria-label={expanded ? t("dock.collapse") : t("dock.expand")}
-					className="omp-pressable flex min-w-0 flex-1 items-center gap-2 rounded-md text-left"
+					className="omp-pressable flex min-w-0 flex-1 items-center gap-3 rounded-md text-left"
 					onClick={toggle}
 					type="button"
 				>
-					<Icon className="shrink-0 text-[var(--omp-muted)]" size={15} />
-					<span className="truncate text-omp-lg font-semibold text-[var(--omp-text)]">{title}</span>
+					<Icon className="shrink-0 text-(--omp-accent)" size={16} />
+					<span className="truncate text-omp-md font-semibold text-[var(--omp-text)]">{title}</span>
 					{badge}
 					<span className="min-w-1 flex-1" />
 					<ChevronRight

@@ -24,6 +24,7 @@ const RUNTIME_ERROR_SOURCES = new Set<RuntimeErrorSource>([
 	"child-process",
 	"main-uncaught",
 	"main-unhandled-rejection",
+	"global-shortcut",
 	"unknown",
 ]);
 

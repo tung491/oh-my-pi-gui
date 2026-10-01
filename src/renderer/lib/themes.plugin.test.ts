@@ -33,6 +33,36 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+describe("sidebar logo scheme", () => {
+	it("follows the sidebar surface, not the page scheme", () => {
+		applyThemeByName("light", { persist: false });
+		expect(document.documentElement.dataset.sidebarScheme).toBe("dark");
+		applyThemeByName("solarized", { persist: false });
+		expect(document.documentElement.dataset.sidebarScheme).toBe("light");
+		applyThemeByName("nord", { persist: false });
+		expect(document.documentElement.dataset.sidebarScheme).toBe("dark");
+	});
+
+	it("treats the system selection as the navy VIF sidebar", () => {
+		vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+		applyThemeByName("solarized", { persist: false });
+		applyThemeByName("system", { persist: false });
+		expect(document.documentElement.dataset.sidebarScheme).toBe("dark");
+	});
+
+	it("derives the system selection's tone from the theme the OS resolves to", () => {
+		vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+		const navy = THEMES.light.tokens["--omp-sidebar-bg"];
+		THEMES.light.tokens["--omp-sidebar-bg"] = "#ffffff";
+		try {
+			applyThemeByName("system", { persist: false });
+			expect(document.documentElement.dataset.sidebarScheme).toBe("light");
+		} finally {
+			THEMES.light.tokens["--omp-sidebar-bg"] = navy;
+		}
+	});
+});
+
 describe("validatePluginThemeTokens", () => {
 	it("accepts transcript-scoped keys with color-shaped values", () => {
 		const { tokens, rejected } = validatePluginThemeTokens({

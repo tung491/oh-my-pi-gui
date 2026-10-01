@@ -61,6 +61,7 @@ type MainTextKey =
 	| "restart.title"
 	| "updates.downloadFailed"
 	| "updates.hashMismatch"
+	| "updates.installFailed"
 	| "updates.installerMissing"
 	| "updates.noResult"
 	| "updates.openInstallerFailed"
@@ -68,7 +69,7 @@ type MainTextKey =
 
 const TEXT: Record<MainTextKey, Record<MainLanguage, string>> = {
 	"dialog.openProject": { en: "Open project", zh: "打开项目" },
-	"menu.about": { en: "About omp", zh: "关于 omp" },
+	"menu.about": { en: "About Sai ATLAS", zh: "关于 Sai ATLAS" },
 	"menu.addToDictionary": { en: "Add to dictionary", zh: "添加到词典" },
 	"menu.closeTab": { en: "Close Tab", zh: "关闭标签页" },
 	"menu.closeWindow": { en: "Close Window", zh: "关闭窗口" },
@@ -122,8 +123,8 @@ const TEXT: Record<MainTextKey, Record<MainLanguage, string>> = {
 	},
 	"quit.workingTitle": { en: "Sessions are still running", zh: "仍有会话在运行" },
 	"restart.body": {
-		en: "omp's installed files were replaced while it was running, so this window can no longer load them reliably. {working} of {total} sessions are still working.",
-		zh: "omp 运行期间安装文件已被替换，窗口无法可靠地加载它们。仍有 {working}/{total} 个会话正在工作。",
+		en: "Sai ATLAS's installed files were replaced while it was running, so this window can no longer load them reliably. {working} of {total} sessions are still working.",
+		zh: "Sai ATLAS 运行期间安装文件已被替换，窗口无法可靠地加载它们。仍有 {working}/{total} 个会话正在工作。",
 	},
 	"restart.later": { en: "Later", zh: "稍后再说" },
 	"restart.now": { en: "Restart now", zh: "立即重启" },
@@ -135,6 +136,10 @@ const TEXT: Record<MainTextKey, Record<MainLanguage, string>> = {
 	"updates.hashMismatch": {
 		en: "The downloaded installer failed SHA-512 verification and was removed.",
 		zh: "下载的安装程序未通过 SHA-512 校验，已被删除。",
+	},
+	"updates.installFailed": {
+		en: "The update could not be installed.",
+		zh: "无法安装更新。",
 	},
 	"updates.installerMissing": {
 		en: "This release does not include the required installer for this Mac.",

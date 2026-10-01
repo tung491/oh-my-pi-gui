@@ -43,6 +43,7 @@ import type {
 } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS, type RunProgressState, type TrayState } from "../shared/ipc-types";
 import { parseLaunchProfile } from "../shared/launch-profile";
+import { launchPlatformOf } from "../shared/launchable-path";
 import type { RpcCommand, RpcSessionState } from "../shared/rpc-types";
 import { requestQuit } from "./app-quit";
 import { BenchmarkRunner } from "./benchmark-runner";
@@ -52,6 +53,7 @@ import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { deleteModelsProvider, listModelsProviders, modelsPath, upsertModelsProvider } from "./models-config";
+import { openPathTarget } from "./open-path-target";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
 import type { SessionIndex } from "./session-index";
 import { resolveEditorCommand } from "./shell-env";
@@ -68,7 +70,7 @@ export interface IpcDeps {
 	sidecarPool: SidecarPool;
 	sessionIndex: SessionIndex;
 	statsClient: StatsClient;
-	/** Demand-driven revive for the bundled stats server (no server → "exhausted"). */
+	/** Demand-driven start/revive for the bundled stats server (no server → "exhausted"). */
 	statsRestart: () => Revive;
 	logWatcher: LogWatcher;
 	windowManager: WindowManager;
@@ -771,7 +773,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// relative paths resolve inside the calling window's workspace (escapes
 	// refused), absolute paths pass through: the agent can legitimately touch
 	// files outside the workspace. When no editor association exists, reveal
-	// the file in the file manager instead of failing.
+	// the file in the file manager instead of failing. A path the default
+	// handler would run (a script, launcher, or program, or on macOS an app
+	// bundle or any executable file), judged by its requested and its resolved
+	// name, is revealed, never opened: one click on an agent-written link must
+	// not execute it.
 	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_PATH, async (event, target: string): Promise<IpcOpenPathResult> => {
 		if (typeof target !== "string" || !target.trim()) return { ok: false, error: "Empty path" };
 		let resolved = target.startsWith("~/") ? path.join(os.homedir(), target.slice(2)) : target;
@@ -785,14 +791,12 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		// A stale tool card can reference a file that no longer exists (or never
 		// did outside the workspace). Both openPath and showItemInFolder fail
 		// silently on missing paths, so detect it here and let the link toast.
-		try {
-			await fsp.access(resolved);
-		} catch {
-			return { ok: false, error: "File not found" };
+		const decision = await openPathTarget(resolved, launchPlatformOf(process.platform));
+		if (!decision) return { ok: false, error: "File not found" };
+		if (decision.action === "open" && !(await shell.openPath(decision.path))) {
+			return { ok: true, resolvedPath: resolved };
 		}
-		const openError = await shell.openPath(resolved);
-		if (!openError) return { ok: true, resolvedPath: resolved };
-		shell.showItemInFolder(resolved);
+		shell.showItemInFolder(decision.path);
 		return { ok: true, resolvedPath: resolved };
 	});
 

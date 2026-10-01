@@ -31,7 +31,7 @@ import { toast } from "../../stores/toast";
 import { type TodoSnapshot, useTodoStore } from "../../stores/todo";
 import { type ToolEntry, toolEntryKey, useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
-import { PiLogo } from "../common";
+import { SaiAtlasLogo } from "../common";
 import { ReadGroupCard } from "../tools/ReadGroupCard";
 import { ToolCard } from "../tools/ToolCard";
 import { ConversationNavigator } from "./ConversationNavigator";
@@ -142,6 +142,20 @@ function SessionTranscript() {
 		// Archived todo changes interleave by timestamp (transcript archive rows).
 		return mergeTodoSnapshots(grouped, todoHistory);
 	}, [displayMessages, hiddenCount, transcriptDetail, todoHistory, expandedProcessKeys]);
+	// Retry belongs to the last assistant message row only (process and read
+	// groups own no footer), and only while the pane is idle. Retry re-sends the
+	// latest user message, so a user row after that answer (a turn still waiting
+	// for its reply, or one whose reply folded into a process row) means the
+	// answer is no longer the trailing turn and offers no Retry.
+	const lastAssistantMessage = useMemo(() => {
+		for (let index = historyRows.length - 1; index >= 0; index--) {
+			const row = historyRows[index];
+			if (row?.kind !== "message") continue;
+			if (row.message.role === "user") return null;
+			if (row.message.role === "assistant") return row.message;
+		}
+		return null;
+	}, [historyRows]);
 
 	// The assistant message exists as an empty shell from message_start until
 	// the first delta — only real content swaps the status row for the
@@ -538,8 +552,8 @@ function SessionTranscript() {
 					)}
 					{status !== "starting" && rows.length === 0 && !isStreaming && !switchPending && (
 						<div className="omp-empty-canvas flex min-h-full flex-col justify-center pb-20">
-							<div className="omp-empty-logo mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--omp-btn-primary-bg)] text-[var(--omp-btn-primary-text)]">
-								<PiLogo size={22} />
+							<div className="omp-empty-logo mb-6">
+								<SaiAtlasLogo kind="icon" surface="page" height={48} className="[&>img]:rounded-[22%]" />
 							</div>
 							<h1 className="font-display text-[30px] font-semibold leading-tight tracking-[-0.025em] text-[var(--omp-text)]">
 								{isChat ? t("chat.empty.title.chat") : t("chat.empty.title")}
@@ -599,7 +613,12 @@ function SessionTranscript() {
 								>
 									<div className="omp-transcript-row w-full">
 										{row.kind === "message" ? (
-											<MessageBubble message={row.message} reaction={row.reaction} runningIndicator="dot" />
+											<MessageBubble
+												message={row.message}
+												reaction={row.reaction}
+												retryable={!isStreaming && row.message === lastAssistantMessage}
+												runningIndicator="dot"
+											/>
 										) : row.kind === "readGroup" ? (
 											<ReadGroupCard entries={row.entries} runningIndicator="dot" usage={row.usage} />
 										) : row.kind === "process" ? (

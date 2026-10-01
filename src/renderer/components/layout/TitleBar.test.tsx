@@ -15,13 +15,15 @@ Object.assign(globalThis, { document, window, Event, HTMLElement, Element, Node,
 
 interface TestButton {
 	title: string;
+	textContent: string | null;
 	click: () => void;
+	getAttribute: (name: string) => string | null;
 }
 
-interface TestElement {
-	textContent: string | null;
+interface TestElement extends TestButton {
 	remove: () => void;
-	querySelectorAll: (selector: string) => TestButton[];
+	querySelector: (selector: string) => TestElement | null;
+	querySelectorAll: (selector: string) => TestElement[];
 }
 
 const sessions = {
@@ -81,6 +83,7 @@ afterEach(async () => {
 	useMessagesStore.getState().reset();
 	useToolsStore.getState().reset();
 	useUiStore.getState().closeSessionOverlays();
+	useUiStore.setState({ panelVisible: false });
 	getSessionStats.mockRestore();
 	vi.clearAllMocks();
 });
@@ -215,5 +218,91 @@ describe("TitleBar", () => {
 		expect(importItem).toBeDefined();
 		await act(async () => importItem?.click());
 		expect(useUiStore.getState().importDialogOpen).toBe(true);
+	});
+
+	it("renders the VIF breadcrumb, metrics group, and workspace toggle", async () => {
+		useSessionStore.setState({
+			status: "ready",
+			sessionId: "session-1",
+			cwd: "/tmp/project",
+			sessionName: "demo-run",
+		});
+		useMessagesStore.setState({
+			messages: [{ role: "assistant", timestamp: 1_000, duration: 2_000 }],
+		});
+		useToolsStore.setState({
+			activeTools: new Map([
+				[
+					"tool-1",
+					{
+						toolName: "read",
+						args: {},
+						status: "done",
+						partialResult: null,
+						streamingArgs: "",
+						result: null,
+						isError: false,
+						startTime: 3_000,
+						endTime: 6_000,
+					},
+				],
+			]),
+		});
+		await mount();
+		await act(async () => Promise.resolve());
+
+		expect(container.querySelector("h1")?.textContent).toContain("demo-run");
+
+		const metrics = container.querySelector('[role="group"][aria-label="Session metrics"]');
+		expect(metrics).not.toBeNull();
+		expect(metrics?.querySelectorAll("[title]").map(segment => segment.getAttribute("title"))).toEqual([
+			"Active context tokens",
+			"Active context cost",
+			"Context window used",
+			"Cache hit rate",
+			"Actual execution time",
+		]);
+		expect(metrics?.textContent).toContain("1.5k");
+		expect(metrics?.textContent).toContain("$0.1234");
+		expect(metrics?.textContent).toContain("50%");
+		expect(metrics?.textContent).toContain("5.0s");
+		expect(container.querySelectorAll(".omp-signal-light")).toHaveLength(1);
+
+		const workspace = container.querySelectorAll("button").find(button => button.textContent === "Workspace");
+		expect(workspace?.getAttribute("aria-pressed")).toBe("false");
+		await act(async () => workspace?.click());
+		expect(useUiStore.getState().panelVisible).toBe(true);
+		expect(workspace?.getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("shows the share of the context window when its capacity is known", async () => {
+		useSessionStore.setState({
+			status: "ready",
+			sessionId: "session-1",
+			cwd: "/tmp/project",
+			contextUsage: { tokens: 50_000, contextWindow: 200_000, percent: 25 },
+		});
+		await mount();
+		await act(async () => Promise.resolve());
+
+		const segment = container.querySelector('[role="group"] [title="Context window used"]');
+		expect(segment).not.toBeNull();
+		expect(segment?.textContent).toContain("25%");
+	});
+
+	it("shows a dash instead of a percentage when the context capacity is unknown", async () => {
+		useSessionStore.setState({
+			status: "ready",
+			sessionId: "session-1",
+			cwd: "/tmp/project",
+			contextUsage: { tokens: 50_000, contextWindow: 0, percent: 0 },
+		});
+		await mount();
+		await act(async () => Promise.resolve());
+
+		const segment = container.querySelector('[role="group"] [title="Context window used"]');
+		expect(segment).not.toBeNull();
+		expect(segment?.textContent).toContain("—");
+		expect(segment?.textContent).not.toContain("%");
 	});
 });

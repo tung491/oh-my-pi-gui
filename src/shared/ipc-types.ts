@@ -213,6 +213,7 @@ export type RuntimeErrorSource =
 	| "child-process"
 	| "main-uncaught"
 	| "main-unhandled-rejection"
+	| "global-shortcut"
 	| "unknown";
 
 /** Bounded, serializable renderer/main failure payload written as JSONL. */
@@ -861,6 +862,8 @@ export interface LogBatch {
 }
 
 export interface OmpApi {
+	/** process.platform of the host; drives the keyboard layout (Ctrl vs ⌘). */
+	readonly platform: string;
 	runtime: {
 		/** Best-effort fire-and-forget reporting so fatal render paths never wait on IPC. */
 		report(error: RuntimeErrorReport): void;

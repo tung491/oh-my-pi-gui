@@ -65,7 +65,7 @@ describe("UpdateBanner", () => {
 		});
 		await mount(<UpdateBanner />);
 
-		expect(container.textContent).toContain("drag omp into Applications");
+		expect(container.textContent).toContain("drag Sai ATLAS into Applications");
 		expect(container.textContent).toContain("Privacy & Security");
 		const openButton = container
 			.querySelectorAll("button")
@@ -86,6 +86,7 @@ describe("UpdateBanner", () => {
 
 		expect(container.textContent).toContain("Restart & install");
 		expect(container.textContent).not.toContain("Open installer");
+		expect(container.textContent).not.toMatch(/Finder|DMG/i);
 	});
 
 	it("keeps user-initiated verification failures visible with a retry action", async () => {

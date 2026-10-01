@@ -341,10 +341,10 @@ describe("SidecarManager", () => {
 		}
 	});
 
-	it("names the missing packaged binary by path", () => {
-		expect(missingSidecarMessage(true, "/Applications/omp.app/Contents/Resources")).toContain(
-			path.join("/Applications/omp.app/Contents/Resources", "omp"),
-		);
+	it("names the missing packaged binary by path and the app to reinstall", () => {
+		const message = missingSidecarMessage(true, "/Applications/Sai ATLAS.app/Contents/Resources");
+		expect(message).toContain(path.join("/Applications/Sai ATLAS.app/Contents/Resources", "omp"));
+		expect(message).toContain("Reinstall Sai ATLAS");
 	});
 
 	it("carries the crashed spawn's stderr into the restart reason and the crash report", async () => {

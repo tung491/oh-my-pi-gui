@@ -42,6 +42,7 @@ import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import * as path from "node:path";
+import { sidecarOutName } from "../src/main/bundled-omp-path";
 
 const guiRoot = path.join(import.meta.dir, "..");
 const repoRoot = path.join(guiRoot, "..", "..");
@@ -115,11 +116,6 @@ function addonFilenamesFor(platformTag: string): readonly string[] {
 	return platformTag.endsWith("-x64")
 		? [`pi_natives.${platformTag}-modern.node`, `pi_natives.${platformTag}-baseline.node`]
 		: [`pi_natives.${platformTag}.node`];
-}
-
-function sidecarOutName(osName: string, arch: string): string {
-	if (osName === "win32" || osName === "windows") return "omp.exe";
-	return arch === "x64" ? `omp.${arch}` : "omp";
 }
 
 function resolveTarget(): SidecarTarget {

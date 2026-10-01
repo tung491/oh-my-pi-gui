@@ -19,9 +19,14 @@ import { useT } from "../../lib/i18n";
 import { PREVIEW_TEXT_CHARS } from "../../lib/preview";
 import { useSessionStore } from "../../stores/session";
 import { type ToolEntry, useToolsStore } from "../../stores/tools";
+import { SegmentedControl } from "../common";
 import { RepositoryChanges } from "./RepositoryChanges";
 
 const DIFF_TOOLS = new Set(["edit", "apply_patch", "ast_edit", "write"]);
+
+/** Where the panel reads diffs from, in the order the source control lists them. */
+const DIFF_MODES = ["repository", "current", "timeline", "artifacts"] as const;
+type DiffMode = (typeof DIFF_MODES)[number];
 
 export interface DiffCandidate {
 	id: string;
@@ -473,7 +478,7 @@ export function DiffPanel() {
 	const activeTools = useToolsStore(state => state.activeTools);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [split, setSplit] = useState(false);
-	const [mode, setMode] = useState<"repository" | "current" | "timeline" | "artifacts">("repository");
+	const [mode, setMode] = useState<DiffMode>("repository");
 	const sessionId = useSessionStore(state => state.sessionId);
 	const allCandidates = useMemo(() => buildEditCandidates(activeTools), [activeTools]);
 	const candidates = useMemo(
@@ -490,20 +495,12 @@ export function DiffPanel() {
 					{t("diffPanel.title")}
 				</span>
 				<div className="flex items-center gap-1">
-					<div className="flex items-center gap-0.5 rounded-md border border-(--omp-border-muted) p-0.5">
-						{(["repository", "current", "timeline", "artifacts"] as const).map(value => (
-							<button
-								aria-label={t(`diffPanel.mode.${value}`)}
-								aria-pressed={mode === value}
-								className={`rounded px-1.5 py-0.5 text-omp-xxs font-medium tracking-wide uppercase transition-colors ${mode === value ? "bg-(--omp-selected-bg) text-(--omp-text)" : "text-(--omp-dim) hover:text-(--omp-text)"}`}
-								key={value}
-								onClick={() => setMode(value)}
-								type="button"
-							>
-								{t(`diffPanel.mode.${value}`)}
-							</button>
-						))}
-					</div>
+					<SegmentedControl
+						ariaLabel={t("diffPanel.source")}
+						onChange={setMode}
+						options={DIFF_MODES.map(value => ({ value, label: t(`diffPanel.mode.${value}`) }))}
+						value={mode}
+					/>
 					{mode === "current" && (
 						<div className="flex items-center gap-0.5 rounded-md border border-(--omp-border-muted) p-0.5">
 							<button

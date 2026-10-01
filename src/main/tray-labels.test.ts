@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { TrayState } from "../shared/ipc-types";
+import { PRODUCT_NAME } from "../shared/product";
 import {
 	aggregateTrayStatus,
 	approvalLabel,
@@ -35,14 +36,14 @@ function state(overrides: Partial<TrayState> = {}): TrayState {
 
 describe("tray status surface", () => {
 	it("names the run state in the hover text, in the language the renderer reports", () => {
-		expect(trayTooltip(state({ status: "streaming" }))).toBe("omp — alpha · Running");
-		expect(trayTooltip(state({ status: "waiting", language: "zh" }))).toBe("omp — alpha · 等待确认");
+		expect(trayTooltip(state({ status: "streaming" }))).toBe("Sai ATLAS — alpha · Running");
+		expect(trayTooltip(state({ status: "waiting", language: "zh" }))).toBe("Sai ATLAS — alpha · 等待确认");
 		expect(trayTooltip(state({ status: "error" }))).toContain("Error");
 		expect(trayTooltip(state({ status: "idle" }))).toContain("Idle");
 	});
 
 	it("labels the project before any renderer state arrives", () => {
-		expect(trayTooltip(null)).toBe("omp");
+		expect(trayTooltip(null)).toBe(PRODUCT_NAME);
 	});
 });
 

@@ -154,6 +154,16 @@ function bodyText(): string {
 	return document.body.textContent ?? "";
 }
 
+interface TestNode extends TestElement {
+	getAttribute: (name: string) => string | null;
+	querySelectorAll: (selector: string) => ArrayLike<TestNode>;
+}
+
+function queryNodes(selector: string, scope?: TestNode | null): TestNode[] {
+	const source = scope ?? (document as unknown as TestNode);
+	return Array.from(source.querySelectorAll(selector));
+}
+
 describe("AgentHubWindow hub tab", () => {
 	it("pauses and resumes all agents from the hub header", async () => {
 		const omp = installOmpMock();
@@ -172,6 +182,26 @@ describe("AgentHubWindow hub tab", () => {
 		expect(omp.setAgentsPaused).toHaveBeenCalledWith(false);
 		expect(useSessionStore.getState().agentsPaused).toBe(false);
 	});
+	it("keeps live-row spinners out of the accessibility tree", async () => {
+		installOmpMock();
+		seedHub();
+		await mount(<AgentHubWindow initialTab="hub" onClose={() => {}} open />);
+
+		/** A status region assistive tech can reach: not under an aria-hidden ancestor. */
+		const exposed = (node: Element): boolean => {
+			for (let current: Element | null = node; current; current = current.parentElement) {
+				if (current.getAttribute("aria-hidden") === "true") return false;
+			}
+			return true;
+		};
+		for (const id of ["a1", "a2"]) {
+			const row = document.querySelector(`[role="row"][data-agent-id="${id}"]`);
+			if (!row) throw new Error(`row ${id} not found`);
+			expect(row.querySelector("svg.animate-spin")).not.toBeNull();
+			expect([...row.querySelectorAll('[role="status"]')].filter(exposed)).toHaveLength(0);
+		}
+	});
+
 	it("distinguishes same-type agents by task label and shows model/kind/status", async () => {
 		installOmpMock();
 		seedHub();
@@ -278,5 +308,44 @@ describe("AgentHubWindow hub tab", () => {
 		expect(reviveButtons.length).toBe(1);
 		await click(reviveButtons[0]!);
 		expect(omp.reviveSubagent).toHaveBeenCalledWith("a2");
+	});
+
+	it("filters the hub by status tags", async () => {
+		installOmpMock();
+		seedHub();
+		await mount(<AgentHubWindow initialTab="hub" onClose={() => {}} open />);
+
+		const group = queryNodes('[role="group"][aria-label="Filter agents by status"]')[0];
+		if (!group) throw new Error("status filter group not found");
+		const tags = queryNodes("button", group);
+		const texts = tags.map(tag => tag.textContent?.trim());
+		// "All" plus one Tag per status label present: two running agents share a Tag.
+		expect(texts[0]).toBe("All 3");
+		expect(texts.slice(1).sort()).toEqual(["parked 1", "running 2"]);
+		expect(new Set(texts).size).toBe(texts.length);
+		expect(tags.map(tag => tag.getAttribute("aria-pressed"))).toEqual(["true", "false", "false"]);
+
+		const table = queryNodes('[role="table"]')[0];
+		if (!table) throw new Error("agent table not found");
+		expect(queryNodes('[role="columnheader"]', table).map(cell => cell.textContent)).toEqual([
+			"Status",
+			"Agent",
+			"Model",
+			"Elapsed",
+			"Actions",
+		]);
+		const rows = queryNodes('[role="row"][data-agent-id]', table);
+		expect(rows.map(row => row.getAttribute("data-agent-id"))).toEqual(["a3", "a2", "a1"]);
+		expect(queryNodes('[role="cell"]', rows[0]).length).toBe(5);
+
+		const parked = tags.find(tag => tag.textContent?.startsWith("parked"));
+		if (!parked) throw new Error("parked tag not found");
+		await click(parked);
+
+		const filtered = queryNodes('[role="row"][data-agent-id]');
+		expect(filtered.length).toBe(1);
+		expect(filtered[0]?.getAttribute("data-agent-id")).toBe("a2");
+		expect(parked.getAttribute("aria-pressed")).toBe("true");
+		expect(tags[0]?.getAttribute("aria-pressed")).toBe("false");
 	});
 });

@@ -1,5 +1,6 @@
 import {
 	ChevronRight,
+	CircleGauge,
 	Clock3,
 	Coins,
 	Database,
@@ -9,6 +10,7 @@ import {
 	Info,
 	MoreHorizontal,
 	PanelLeft,
+	PanelRight,
 	Search,
 	Share2,
 	Wrench,
@@ -16,6 +18,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { SessionStats } from "../../../shared/rpc-types";
 import { useSessionList } from "../../hooks/use-session-list";
+import { contextUsageView } from "../../lib/context-usage";
 import { basename, cx, formatCost, formatDuration, formatPercent, formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
@@ -28,6 +31,7 @@ import { useActiveTabKind } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
+import { Badge, type BadgeVariant, Button, IconButton } from "../common";
 import { ContextMenu, type ContextMenuAnchor, type ContextMenuItem } from "../common/ContextMenu";
 import { WorkspaceDialog } from "../dialogs/WorkspaceDialog";
 import { sessionCacheHitPercent, sessionExecutionDurationMs } from "./session-metrics";
@@ -47,6 +51,7 @@ export function TitleBar() {
 	const isStreaming = useSessionStore(s => s.isStreaming);
 	const isCompacting = useSessionStore(s => s.isCompacting);
 	const statsPulse = useSessionStore(s => s.statsPulse);
+	const contextUsage = useSessionStore(s => s.contextUsage);
 	const isChat = useActiveTabKind() === "chat";
 
 	const planModeEnabled = useSessionStore(s => s.planModeEnabled);
@@ -56,6 +61,8 @@ export function TitleBar() {
 	const tools = useToolsStore(s => s.activeTools);
 	const sidebarVisible = useUiStore(s => s.sidebarVisible);
 	const toggleSidebar = useUiStore(s => s.toggleSidebar);
+	const panelVisible = useUiStore(s => s.panelVisible);
+	const togglePanel = useUiStore(s => s.togglePanel);
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
 	const openUsage = useUiStore(s => s.openUsage);
 	const openStatsDashboard = useUiStore(s => s.openStatsDashboard);
@@ -134,6 +141,7 @@ export function TitleBar() {
 	const displayName = sessionName || current?.title || t("sidebar.newSession");
 	const visibleStats = stats?.sessionId === sessionId ? stats : null;
 	const cacheHit = sessionCacheHitPercent(visibleStats);
+	const contextView = contextUsageView(contextUsage);
 	const executionDuration = sessionExecutionDurationMs({
 		messages,
 		streamingMessage,
@@ -161,8 +169,6 @@ export function TitleBar() {
 			});
 	};
 
-	const iconButton =
-		"no-drag omp-pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)]";
 	const working = isStreaming || isCompacting;
 	const statusActive = working || status === "starting" || status === "restarting";
 	const statusLabel = working
@@ -181,6 +187,15 @@ export function TitleBar() {
 			: status === "error" || status === "exited"
 				? "var(--omp-error)"
 				: "var(--omp-warning)";
+	const statusVariant: BadgeVariant = working
+		? "info"
+		: status === "ready"
+			? "success"
+			: status === "error" || status === "exited"
+				? "error"
+				: "default";
+	const metricSegment = "flex items-center gap-1.5 px-2.5";
+	const metricIcon = "text-(--omp-accent)";
 
 	const actionMenuItems: ContextMenuItem[] = [
 		{
@@ -277,29 +292,27 @@ export function TitleBar() {
 	];
 
 	return (
-		<header className="omp-titlebar drag-region flex h-12 min-w-0 shrink-0 items-center gap-1 overflow-hidden border-b border-[var(--omp-border-muted)] bg-[var(--omp-titlebar-bg)] px-2.5">
-			<button
-				type="button"
-				aria-label={t("titlebar.toggleSidebar")}
+		<header className="omp-titlebar drag-region flex h-13 min-w-0 shrink-0 items-center gap-1 overflow-hidden border-b border-(--omp-border-muted) bg-(--omp-titlebar-bg) px-2.5">
+			<IconButton
+				className="no-drag"
+				icon={<PanelLeft size={18} className={cx(sidebarVisible && "text-[var(--omp-text)]")} />}
+				label={t("titlebar.toggleSidebar")}
 				onClick={toggleSidebar}
-				title={t("titlebar.toggleSidebar")}
-				className={iconButton}
-			>
-				<PanelLeft size={18} className={cx(sidebarVisible && "text-[var(--omp-text)]")} />
-			</button>
-			<button
-				type="button"
-				aria-label={t("titlebar.commands")}
-				title={t("titlebar.commands")}
+				size="sm"
+				variant="ghost"
+			/>
+			<IconButton
+				className="no-drag"
+				icon={<Search aria-hidden="true" size={16} />}
+				label={t("titlebar.commands")}
 				onClick={openCommandPalette}
-				className={iconButton}
-			>
-				<Search aria-hidden="true" size={16} />
-			</button>
+				size="sm"
+				variant="ghost"
+			/>
 
-			<div className="omp-titlebar-identity no-drag flex min-w-0 items-center gap-1.5">
+			<div className="omp-titlebar-identity no-drag flex min-w-0 items-center gap-1.5 overflow-hidden">
 				<button
-					className="omp-pressable flex min-w-0 max-w-48 items-center gap-2 truncate rounded-lg px-2 py-1.5 text-omp-lg font-medium text-[var(--omp-muted)] hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)] disabled:cursor-not-allowed disabled:text-[var(--omp-dim)]"
+					className="omp-pressable flex min-w-0 max-w-48 items-center gap-2 truncate rounded-lg px-2 py-1.5 text-omp-lg font-medium text-(--omp-text-secondary) hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)] disabled:cursor-not-allowed disabled:text-[var(--omp-dim)]"
 					disabled={isStreaming}
 					onClick={() => setWorkspaceOpen(true)}
 					title={isStreaming ? t("titlebar.abortHint") : t("titlebar.openProject")}
@@ -323,30 +336,32 @@ export function TitleBar() {
 						className="min-w-0 max-w-56 rounded-lg border border-[var(--omp-input-focus-border)] bg-[var(--omp-input-bg)] px-2.5 py-1.5 text-omp-lg font-medium text-[var(--omp-text)] outline-none"
 					/>
 				) : (
-					<button
-						type="button"
-						title={t("titlebar.rename")}
-						onClick={() => {
-							setDraft(sessionName ?? "");
-							setEditingName(true);
-						}}
-						className="omp-pressable min-w-0 max-w-72 truncate rounded-lg px-2 py-1.5 text-omp-lg font-semibold text-[var(--omp-text)] hover:bg-[var(--omp-selected-bg)]"
-					>
-						{displayName}
-					</button>
+					<h1 className="no-drag flex min-w-0 font-display text-omp-xl font-semibold">
+						<button
+							type="button"
+							title={t("titlebar.rename")}
+							onClick={() => {
+								setDraft(sessionName ?? "");
+								setEditingName(true);
+							}}
+							className="omp-pressable min-w-0 max-w-72 truncate rounded-lg px-2 py-1.5 text-(--omp-text) hover:bg-[var(--omp-selected-bg)]"
+						>
+							{displayName}
+						</button>
+					</h1>
 				)}
 			</div>
 
-			<div className="omp-titlebar-status no-drag flex shrink-0 items-center gap-1.5 px-1 text-omp-sm font-medium text-[var(--omp-muted)]">
+			<Badge className="omp-titlebar-status no-drag" variant={statusVariant}>
 				<span
 					role="img"
 					aria-label={statusLabel}
 					title={statusLabel}
-					className={cx("omp-signal-light", statusActive && "omp-signal-light--active")}
+					className={cx("omp-signal-light omp-signal-light--dot", statusActive && "omp-signal-light--active")}
 					style={{ color: statusColor }}
 				/>
 				<span className="omp-titlebar-status-label">{statusLabel}</span>
-			</div>
+			</Badge>
 
 			{planModeEnabled && (
 				<span
@@ -359,36 +374,55 @@ export function TitleBar() {
 
 			<div className="flex-1" />
 
-			<div className="omp-session-metrics no-drag flex shrink-0 items-center gap-3 font-mono text-omp-sm tabular-nums text-[var(--omp-muted)]">
+			<div
+				role="group"
+				aria-label={t("titlebar.metrics")}
+				className="omp-session-metrics no-drag flex h-[30px] shrink-0 items-stretch divide-x divide-(--omp-border-muted) rounded-lg border border-(--omp-border-muted) bg-(--omp-bg-secondary) font-mono text-omp-sm font-medium tabular-nums text-(--omp-text)" // surface-ok: sunken metrics group
+			>
 				<span
-					className="flex items-center gap-1"
+					className={metricSegment}
 					title={t(visibleStats?.history ? "titlebar.metric.historyTokens" : "titlebar.metric.tokens")}
 				>
-					<Database aria-hidden="true" size={14} />
+					<Database aria-hidden="true" className={metricIcon} size={13} />
 					{visibleStats ? formatTokens(visibleStats.history?.totalTokens ?? visibleStats.tokens.total) : "—"}
 				</span>
 				<span
-					className="flex items-center gap-1"
+					className={metricSegment}
 					title={t(visibleStats?.history ? "titlebar.metric.historyCost" : "titlebar.metric.cost")}
 				>
-					<Coins aria-hidden="true" size={14} />
+					<Coins aria-hidden="true" className={metricIcon} size={13} />
 					{visibleStats ? formatCost(visibleStats.history?.cost ?? visibleStats.cost, 4) : "—"}
 				</span>
-				<span className="flex items-center gap-1" title={t("titlebar.metric.cacheHit")}>
-					<Gauge aria-hidden="true" size={14} />
+				<span className={cx(metricSegment, "omp-titlebar-command")} title={t("titlebar.contextTooltip")}>
+					<CircleGauge aria-hidden="true" className={metricIcon} size={13} />
+					{contextView.capacityKnown ? `${Math.round(contextView.percent)}%` : "—"}
+				</span>
+				<span className={cx(metricSegment, "omp-titlebar-command")} title={t("titlebar.metric.cacheHit")}>
+					<Gauge aria-hidden="true" className={metricIcon} size={13} />
 					{formatPercent(cacheHit, 0)}
 				</span>
-				<span className="flex items-center gap-1" title={t("titlebar.metric.duration")}>
-					<Clock3 aria-hidden="true" size={14} />
+				<span className={metricSegment} title={t("titlebar.metric.duration")}>
+					<Clock3 aria-hidden="true" className={metricIcon} size={13} />
 					{executionDuration > 0 ? formatDuration(executionDuration) : t("time.secondsShort", { count: 0 })}
 				</span>
 			</div>
-			<button
-				type="button"
-				aria-label={t("titlebar.actions")}
+			<Button
+				aria-pressed={panelVisible}
+				className="no-drag"
+				icon={<PanelRight aria-hidden="true" size={14} />}
+				onClick={togglePanel}
+				size="sm"
+				title={t("titlebar.workspace")}
+				variant="secondary"
+			>
+				<span className="omp-titlebar-command">{t("panel.title")}</span>
+			</Button>
+			<IconButton
 				aria-expanded={actionsMenu !== null}
 				aria-haspopup="menu"
-				title={t("titlebar.actions")}
+				className="no-drag"
+				icon={<MoreHorizontal aria-hidden="true" size={17} />}
+				label={t("titlebar.actions")}
 				onClick={event => {
 					const rect = event.currentTarget.getBoundingClientRect();
 					setActionsMenu({
@@ -396,10 +430,9 @@ export function TitleBar() {
 						y: (Number.isFinite(rect.bottom) ? rect.bottom : 40) + 4,
 					});
 				}}
-				className={iconButton}
-			>
-				<MoreHorizontal aria-hidden="true" size={17} />
-			</button>
+				size="sm"
+				variant="ghost"
+			/>
 			{actionsMenu && (
 				<ContextMenu
 					x={actionsMenu.x}

@@ -2,7 +2,7 @@ import { parseHTML } from "linkedom";
 import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vitest";
-import { DiffView } from "./diff";
+import { DiffView, diffLineCounts } from "./diff";
 import { loadHljs } from "./highlight";
 import { I18nProvider } from "./i18n";
 
@@ -68,5 +68,11 @@ describe("DiffView render budget", () => {
 		expect(paintedRows(short)).toBe(3);
 		expect(short.querySelector("button[aria-label='Copy diff']")).not.toBeNull();
 		expect(short.body.textContent ?? "").not.toContain("more lines");
+	});
+});
+
+describe("diffLineCounts", () => {
+	it("counts added and removed lines, not hunk headers or context", () => {
+		expect(diffLineCounts("@@ -1,2 +1,3 @@\n a\n-b\n+c\n+d\n")).toEqual({ added: 2, removed: 1 });
 	});
 });

@@ -125,6 +125,17 @@ export function parseDiff(text: string): DiffLine[] {
 	return lines;
 }
 
+/** Added and removed line counts of a unified diff; hunk headers and context lines are not counted. */
+export function diffLineCounts(text: string): { added: number; removed: number } {
+	let added = 0;
+	let removed = 0;
+	for (const line of parseDiff(text)) {
+		if (line.type === "add") added += 1;
+		else if (line.type === "remove") removed += 1;
+	}
+	return { added, removed };
+}
+
 interface IntraSegment {
 	text: string;
 	changed: boolean;

@@ -50,27 +50,61 @@ export function installQuitGuard(tabInventory: () => WindowTabFact[], teardown: 
 			return;
 		}
 		asking = true;
-		const language = getMainLanguage();
-		const owner = BrowserWindow.getFocusedWindow();
-		const options: MessageBoxOptions = {
-			type: "warning",
-			buttons: [mainT("quit.quitAnyway", language), mainT("quit.keepWorking", language)],
-			defaultId: 1,
-			cancelId: 1,
-			message: mainT("quit.workingTitle", language),
-			detail: mainT("quit.workingBody", language, {
-				working: risk.workingTabs,
-				total: risk.totalTabs,
-				windows: risk.workingWindows,
-			}),
-		};
-		void (owner ? dialog.showMessageBox(owner, options) : dialog.showMessageBox(options))
-			.then(result => {
+		void confirmRiskyQuit(risk)
+			.then(quit => {
 				asking = false;
-				if (result.response === 0) requestQuit();
+				if (quit) requestQuit();
 			})
 			.catch(() => {
 				asking = false;
 			});
 	});
+}
+
+/** The working-tabs warning; true when the user picks "Quit anyway". */
+async function confirmRiskyQuit(risk: QuitRisk): Promise<boolean> {
+	const language = getMainLanguage();
+	const owner = BrowserWindow.getFocusedWindow();
+	const options: MessageBoxOptions = {
+		type: "warning",
+		buttons: [mainT("quit.quitAnyway", language), mainT("quit.keepWorking", language)],
+		defaultId: 1,
+		cancelId: 1,
+		message: mainT("quit.workingTitle", language),
+		detail: mainT("quit.workingBody", language, {
+			working: risk.workingTabs,
+			total: risk.totalTabs,
+			windows: risk.workingWindows,
+		}),
+	};
+	const result = await (owner ? dialog.showMessageBox(owner, options) : dialog.showMessageBox(options));
+	return result.response === 0;
+}
+
+/**
+ * Approve a quit before something irreversible runs ahead of it: a deb
+ * update installs through pkexec + dpkg before electron-updater calls
+ * app.quit(). Resolves false when the user keeps working.
+ */
+export async function approveQuitBeforeInstall(): Promise<boolean> {
+	if (approved) return true;
+	if (asking) return false;
+	const risk = quitRisk();
+	if (quitNeedsConfirmation(risk)) {
+		asking = true;
+		try {
+			if (!(await confirmRiskyQuit(risk))) return false;
+		} catch {
+			return false;
+		} finally {
+			asking = false;
+		}
+	}
+	approved = true;
+	return true;
+}
+
+/** The install failed after approval: the app keeps running, so the next quit asks again. */
+export function withdrawQuitApproval(): void {
+	approved = false;
 }

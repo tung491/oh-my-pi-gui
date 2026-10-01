@@ -59,6 +59,7 @@ import type {
 	SessionInfoUpdateFrame,
 	SubagentFrame,
 } from "../shared/rpc-types";
+import { DeepLinkBuffer } from "./deep-link-buffer";
 
 function rpcCommand(cmd: RpcCommand, timeoutMs?: number): Promise<RpcResponse> {
 	return ipcRenderer.invoke(IPC_COMMANDS.RPC_COMMAND, {
@@ -67,8 +68,8 @@ function rpcCommand(cmd: RpcCommand, timeoutMs?: number): Promise<RpcResponse> {
 	});
 }
 
-function subscribe<T>(channel: string, callback: (data: T) => void): () => void {
-	const listener = (_event: Electron.IpcRendererEvent, data: T) => {
+function isolated<T>(channel: string, callback: (data: T) => void): (data: T) => void {
+	return data => {
 		// Node aborts the remaining listeners of an emit once one throws, so a
 		// single bad handler would silently freeze every other feature listening
 		// to the same main->renderer channel. Isolate it and report instead.
@@ -84,6 +85,11 @@ function subscribe<T>(channel: string, callback: (data: T) => void): () => void 
 			} satisfies RuntimeErrorReport);
 		}
 	};
+}
+
+function subscribe<T>(channel: string, callback: (data: T) => void): () => void {
+	const handle = isolated(channel, callback);
+	const listener = (_event: Electron.IpcRendererEvent, data: T) => handle(data);
 	ipcRenderer.on(channel, listener);
 	return () => {
 		ipcRenderer.removeListener(channel, listener);
@@ -91,6 +97,10 @@ function subscribe<T>(channel: string, callback: (data: T) => void): () => void 
 }
 
 let activeTabId: string | null = null;
+
+// Listening from the start: a cold-start link can land before the renderer subscribes.
+const deepLinks = new DeepLinkBuffer<DeepLinkPayload>();
+ipcRenderer.on(IPC_EVENTS.DEEP_LINK, (_event, link: DeepLinkPayload) => deepLinks.deliver(link));
 
 function subscribeActiveTab<T>(channel: string, callback: (data: T) => void): () => void {
 	return subscribe<IpcActiveTabEnvelope<T>>(channel, envelope => {
@@ -103,6 +113,7 @@ function subscribeTab<T>(channel: string, callback: (data: T, tabId: string) => 
 }
 
 const api: OmpApi = {
+	platform: process.platform,
 	runtime: {
 		report: (error: RuntimeErrorReport) => ipcRenderer.send(IPC_COMMANDS.RUNTIME_ERROR_REPORT, error),
 		logPath: () => ipcRenderer.invoke(IPC_COMMANDS.RUNTIME_LOG_PATH) as Promise<string>,
@@ -186,7 +197,7 @@ const api: OmpApi = {
 				callback(data.action, data),
 			),
 		onDeepLink: (callback: (link: DeepLinkPayload) => void) =>
-			subscribe<DeepLinkPayload>(IPC_EVENTS.DEEP_LINK, callback),
+			deepLinks.subscribe(isolated(IPC_EVENTS.DEEP_LINK, callback)),
 		onUpdaterStatus: (callback: (status: UpdateStatus) => void) =>
 			subscribe<UpdateStatus>(IPC_EVENTS.UPDATER_STATUS, callback),
 	},

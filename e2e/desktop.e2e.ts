@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { type ElectronApplication, _electron as electron, type Page } from "playwright";
+import { type ElectronApplication, _electron as electron, type Locator, type Page } from "playwright";
 
 let app: ElectronApplication;
 let page: Page;
@@ -163,7 +163,7 @@ test("math survives history reload and scrolls inside its column in both themes"
 	await expect(markdown.locator(".katex-html").filter({ hasText: "显存有效带宽" })).toHaveCount(1);
 	await expect(markdown.locator("h1, h2, .katex-error")).toHaveCount(0);
 	const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-	for (const theme of ["Graphite", "Porcelain"]) {
+	for (const theme of ["VIF Navy", "VIF Light"]) {
 		await command("/theme");
 		const picker = page.getByRole("dialog");
 		await picker.getByPlaceholder("Search themes…").fill(theme);
@@ -206,12 +206,12 @@ test("math survives history reload and scrolls inside its column in both themes"
 test("all named themes apply with readable primary text and no stale scheme tokens", async () => {
 	test.setTimeout(90_000);
 	const labels = [
-		"Graphite",
+		"VIF Navy",
 		"Slate",
 		"Deep Sea",
 		"Espresso",
 		"Ember",
-		"Porcelain",
+		"VIF Light",
 		"Ivory",
 		"Sand",
 		"Rose Quartz",
@@ -265,6 +265,34 @@ test("all named themes apply with readable primary text and no stale scheme toke
 	expect(new Set(Object.values(colors)).size).toBeGreaterThan(8);
 	await fs.writeFile("test-results/theme-values.json", JSON.stringify(colors, null, 2));
 	await fs.writeFile("test-results/theme-contrast.json", JSON.stringify(contrastValues, null, 2));
+});
+
+test("the Sai ATLAS logo shows the tone its surface needs in every theme family", async () => {
+	await command("Logo sample");
+	const avatar = page.locator("[data-assistant-avatar]").last();
+	await expect(avatar).toBeVisible();
+	const lockup = page.locator("aside .drag-region [data-logo-surface]");
+	const visibleTones = (logo: Locator) =>
+		logo.evaluate(element =>
+			Array.from(element.querySelectorAll("img"))
+				.filter(img => getComputedStyle(img).display !== "none")
+				.map(img => img.dataset.logoTone),
+		);
+	// VIF Light keeps a navy sidebar, Sand has a light one, Deep Sea is a legacy dark theme.
+	for (const [theme, sidebarTone, pageTone] of [
+		["VIF Navy", "dark", "dark"],
+		["VIF Light", "dark", "light"],
+		["Sand", "light", "light"],
+		["Deep Sea", "dark", "dark"],
+	] as const) {
+		await command("/theme");
+		const picker = page.getByRole("dialog");
+		await picker.getByPlaceholder("Search themes…").fill(theme);
+		await picker.locator("button[aria-pressed]").filter({ hasText: theme }).click();
+		await expect(picker).toHaveCount(0);
+		expect(await visibleTones(lockup), `${theme} sidebar lockup`).toEqual([sidebarTone]);
+		expect(await visibleTones(avatar), `${theme} assistant avatar`).toEqual([pageTone]);
+	}
 });
 
 test("uncertain delivery preserves the draft and blocks duplicate sending until reviewed", async () => {
@@ -607,8 +635,8 @@ test("failed preference writes retain edits and never allow a premature restart"
 	await page.keyboard.press("Escape");
 	await page.getByRole("button", { name: "Choose theme", exact: true }).click();
 	const picker = page.getByRole("dialog");
-	await picker.getByPlaceholder("Search themes…").fill("Porcelain");
-	await picker.locator("button[aria-pressed]").filter({ hasText: "Porcelain" }).click();
+	await picker.getByPlaceholder("Search themes…").fill("VIF Light");
+	await picker.locator("button[aria-pressed]").filter({ hasText: "VIF Light" }).click();
 	await expect(picker).toHaveCount(0);
 	await expect(page.getByRole("alert").filter({ hasText: "audit appearance write refused" })).toBeVisible();
 	expect(errors).toEqual([]);

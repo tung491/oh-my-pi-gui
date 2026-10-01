@@ -1020,6 +1020,8 @@ export interface ModelInfo {
 	/** Below the catalog these are reported only for models with a rate card. */
 	maxTokens?: number | null;
 	cost?: ModelCost;
+	/** Present on the wire; the catalog Model carries it. */
+	reasoning?: boolean;
 }
 
 export interface RpcSessionState {

@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo } from "react";
 import { Line } from "react-chartjs-2";
-import { baseChartOptions, bucketLabels, CHART_COLORS, compact } from "../../lib/chart";
+import { baseChartOptions, bucketLabels, chartColors, compact } from "../../lib/chart";
 import "../../lib/chart";
 import { useStats } from "../../hooks/use-stats";
 import { useT } from "../../lib/i18n";
@@ -112,6 +112,7 @@ export function BehaviorRoute({ range, refreshKey }: { range: StatsRange; refres
 	);
 
 	const trend = useMemo(() => {
+		const colors = chartColors();
 		const series = stats?.behaviorSeries ?? [];
 		const timestamps = [...new Set(series.map(point => point.timestamp))].sort((a, b) => a - b);
 		return {
@@ -123,7 +124,7 @@ export function BehaviorRoute({ range, refreshKey }: { range: StatsRange; refres
 						.filter(point => point.timestamp === ts)
 						.reduce((acc, point) => acc + point[signal.key as SignalKey], 0),
 				),
-				borderColor: CHART_COLORS[index % CHART_COLORS.length],
+				borderColor: colors[index % colors.length],
 				backgroundColor: "transparent",
 				tension: 0.3,
 				pointRadius: 0,

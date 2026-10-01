@@ -9,6 +9,15 @@ import { projectFiles, showcaseTimestamp } from "./showcase-data";
 const root = path.resolve(import.meta.dir, "..");
 const realHome = os.homedir();
 const privateText = [realHome, root, process.env.USER].filter((value): value is string => Boolean(value));
+const theme = process.env.SHOWCASE_THEME === "light" ? "light" : "dark";
+const outRoot = process.env.SHOWCASE_OUT ?? path.join(root, "docs", "screenshots");
+const captureOnboarding = process.env.SHOWCASE_ONBOARDING === "1";
+// The launch env replaces the parent's, so pass the display through for Linux hosts.
+const displayEnv = Object.fromEntries(
+	["DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"].flatMap(key =>
+		process.env[key] ? [[key, process.env[key]]] : [],
+	),
+);
 
 async function captureLocale(language: "en" | "zh"): Promise<void> {
 	const t = language === "zh" ? zh : en;
@@ -17,12 +26,9 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 	const project = path.join(home, "projects", "aurora-web");
 	const agent = path.join(home, ".omp", "agent");
 	const desktop = path.join(temporary, "desktop");
-	const output = path.join(root, "docs", "screenshots", language);
+	const output = path.join(outRoot, language);
 	await Promise.all([project, agent, desktop, output].map(directory => fs.mkdir(directory, { recursive: true })));
-	await Bun.write(
-		path.join(desktop, "prefs.json"),
-		JSON.stringify({ language, firstRunComplete: true, theme: "dark" }),
-	);
+	await Bun.write(path.join(desktop, "prefs.json"), JSON.stringify({ language, firstRunComplete: true, theme }));
 	const fixture = path.join(temporary, "omp-showcase");
 	await Bun.write(
 		fixture,
@@ -62,7 +68,14 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 		);
 	}
 	const app = await electron.launch({
-		args: [path.join(root, "out", "main", "index.js"), project, `--user-data-dir=${desktop}`],
+		args: [
+			path.join(root, "out", "main", "index.js"),
+			project,
+			`--user-data-dir=${desktop}`,
+			// Xwayland presents an obscured window at 1 Hz, so each screenshot would wait for a
+			// frame for seconds; unpacing frames from presentation keeps the stability poll sampling.
+			...(process.platform === "linux" ? ["--disable-gpu-vsync"] : []),
+		],
 		cwd: project,
 		env: {
 			HOME: home,
@@ -77,6 +90,7 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 			OMP_SHOWCASE_PROJECT: project,
 			OMP_SHOWCASE_LANG: language,
 			PI_NOTIFICATIONS: "off",
+			...displayEnv,
 		},
 	});
 	const errors: string[] = [];
@@ -95,6 +109,14 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 		page.setDefaultTimeout(15_000);
 		await page.setViewportSize({ width: 1440, height: 960 });
 		await expect(page.locator("textarea").first()).toBeVisible();
+		if (captureOnboarding) {
+			// One step in: the provider step. A second Continue would open the Providers window.
+			await page.getByRole("button", { name: t["onboarding.wizard.continue"], exact: true }).click();
+			await expect(page.getByRole("dialog")).toContainText(
+				t["onboarding.wizard.stepOf"].replace("{current}", "2").replace("{total}", "5"),
+			);
+			await shot("00-onboarding");
+		}
 		await page.getByRole("button", { name: t["onboarding.later"], exact: true }).click();
 		await expect(page.getByTitle(t["input.model"], { exact: true })).toBeEnabled();
 		await expect(page.getByText(titles[0], { exact: true }).first()).toBeVisible();
@@ -173,7 +195,7 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 		await shot("05-model-roles");
 		await close();
 
-		await nav("titlebar.agentHub");
+		await nav("sidebar.nav.agentHub");
 		await page.getByRole("tab", { name: new RegExp(`^${t["agentHub.tabs.hub"]}`) }).click();
 		await expect(page.getByRole("dialog")).toContainText("scout");
 		await shot("06-agent-hub");

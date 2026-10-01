@@ -3,19 +3,22 @@
  * App lifecycle: ready → window, sidecar, session index, IPC, tray, menu, deep links, updater.
  */
 
-import { existsSync, mkdirSync } from "node:fs";
+import "./pin-user-data";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { app, BrowserWindow, globalShortcut, nativeImage, session } from "electron";
 import Store from "electron-store";
 import { nativeAccelerator } from "../shared/hotkeys";
 import type { SessionKind } from "../shared/ipc-types";
+import { APP_ID, PRODUCT_NAME } from "../shared/product";
 import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
-import { setupDeepLinks } from "./deep-link";
+import { DEEP_LINK_PROTOCOL, setupDeepLinks } from "./deep-link";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { firstUsableCwd } from "./initial-cwd";
 import { registerIpcHandlers } from "./ipc";
+import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { writeRuntimeLog } from "./runtime-log";
@@ -31,14 +34,6 @@ import { setupUpdater } from "./updater";
 import { WindowManager } from "./window";
 import { resolveWindowSpawnTarget } from "./window-spawn-target";
 
-// Honor Electron's explicit profile before acquiring its instance lock.
-const userDataDirectory = app.commandLine.getSwitchValue("user-data-dir");
-if (userDataDirectory) {
-	const directory = resolve(userDataDirectory);
-	mkdirSync(directory, { recursive: true });
-	app.setPath("userData", directory);
-}
-
 // Single instance lock
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -47,7 +42,10 @@ if (!gotLock) {
 
 // App identity: the dev run shows "Electron" + the default atom icon in the
 // dock otherwise. Packaged builds get both from the bundle via electron-builder.
-app.setName("omp");
+// The name no longer decides the profile path (./pin-user-data fixes it), and
+// it comes after the lock because Windows keys that lock on the name.
+app.setName(PRODUCT_NAME);
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 {
 	const dockIcon = join(app.getAppPath(), "resources", "icon.png");
 	if (process.platform === "darwin" && existsSync(dockIcon)) {
@@ -130,8 +128,9 @@ function prefsStore(): Store<MainPrefs> {
 }
 
 function resolveExplicitStartupCwd(): string | undefined {
-	const explicitCwd = process.argv[2];
-	return explicitCwd && existsSync(explicitCwd) ? explicitCwd : undefined;
+	// Packaged Linux/Windows argv is [exe, …args]; a dev run is [electron, appDir, …args].
+	const request = parseLaunchArgv(launchArguments(process.argv, Boolean(process.defaultApp)), DEEP_LINK_PROTOCOL);
+	return request.kind === "path" ? resolve(request.path) : undefined;
 }
 
 function resolveInitialCwd(): string {
@@ -376,7 +375,9 @@ app.whenReady().then(() => {
 	sessionIndex = new SessionIndex(undefined, initialCwd);
 	statsClient = new StatsClient();
 	// Built-in stats dashboard: spawned from the SAME bundled binary. No
-	// external `omp stats` process is required (closed loop).
+	// external `omp stats` process is required (closed loop). Not started here:
+	// it is a whole second runtime most sessions never read, so the first
+	// dashboard request spawns it through the STATS_FETCH revive path.
 	if (bundledOmp) {
 		statsServer = new StatsServerManager(bundledOmp);
 		statsServer.on("ready", (port: number) => {
@@ -385,7 +386,6 @@ app.whenReady().then(() => {
 		statsServer.on("exit", () => {
 			statsClient.port = 0;
 		});
-		statsServer.start();
 	}
 	logWatcher = new LogWatcher();
 
@@ -405,7 +405,8 @@ app.whenReady().then(() => {
 
 	// Global shortcut: Cmd+Shift+O — toggle focused window, else show the most
 	// recent, else spawn one (multi-window decision tree).
-	globalShortcut.register(nativeAccelerator("window.toggle"), () => {
+	const toggleAccelerator = nativeAccelerator("window.toggle");
+	const toggleRegistered = globalShortcut.register(toggleAccelerator, () => {
 		const focused = BrowserWindow.getFocusedWindow();
 		if (focused && !focused.isDestroyed() && windowManager.recordFor(focused)) {
 			if (focused.isVisible()) focused.hide();
@@ -423,6 +424,15 @@ app.whenReady().then(() => {
 		}
 		spawnWindow();
 	});
+	// Another client may already hold the chord, and under XWayland the grab
+	// only fires while an omp window has focus (README → Linux).
+	if (!toggleRegistered) {
+		writeRuntimeLog({
+			source: "global-shortcut",
+			message: `globalShortcut.register refused ${toggleAccelerator}`,
+			details: { accelerator: toggleAccelerator },
+		});
+	}
 	sessionIndex.start();
 	logWatcher.start();
 	// Read before the first window restores: every tab change rewrites the store,

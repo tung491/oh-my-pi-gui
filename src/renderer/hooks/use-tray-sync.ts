@@ -9,6 +9,7 @@
 
 import { useEffect } from "react";
 import type { TrayState } from "../../shared/ipc-types";
+import { PRODUCT_NAME } from "../../shared/product";
 import { contextUsageView } from "../lib/context-usage";
 import { basename } from "../lib/format";
 import { useLang } from "../lib/i18n";
@@ -55,7 +56,7 @@ export function useTraySync(): void {
 			status: trayStatus,
 			language: lang === "en" ? "en" : "zh",
 			cwd: cwd || null,
-			projectName: cwd ? basename(cwd) || cwd : "omp",
+			projectName: cwd ? basename(cwd) || cwd : PRODUCT_NAME,
 			modelId: model?.id ?? null,
 			thinkingLevel: thinkingLevel ?? "off",
 			fastMode,

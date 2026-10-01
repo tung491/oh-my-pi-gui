@@ -32,6 +32,30 @@ await Bun.sleep(5000);
 	}
 });
 
+test("a never-started server comes up on the first demand read", async () => {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-stats-lazy-"));
+	const binary = path.join(directory, "stats-lazy.ts");
+	await fs.writeFile(
+		binary,
+		`#!/usr/bin/env bun
+process.stdout.write("Dashboard available at: http://127.0.0.1:55124\\n");
+await Bun.sleep(5000);
+`,
+	);
+	await fs.chmod(binary, 0o755);
+	// The app never calls start(): the first dashboard read is what spawns it.
+	const server = new StatsServerManager(binary);
+	try {
+		expect(server.port).toBe(0);
+		expect(server.ensureRunning()).toBe("scheduled");
+		await expect.poll(() => server.port, { timeout: 5000 }).toBe(55124);
+		expect(server.ensureRunning()).toBe("already-pending");
+	} finally {
+		server.kill();
+		await fs.rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("stats does not contact an unrelated default server before its own listener is ready", async () => {
 	const fetch = vi.spyOn(globalThis, "fetch");
 	const client = new StatsClient();

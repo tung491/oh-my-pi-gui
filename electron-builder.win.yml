@@ -1,5 +1,5 @@
-appId: sh.omp.gui
-productName: omp
+appId: vn.io.vif.saiatlas
+productName: Sai ATLAS
 afterPack: scripts/after-pack.cjs
 directories:
   buildResources: resources
@@ -29,16 +29,20 @@ win:
   verifyUpdateCodeSignature: false
 
 nsis:
+  # UUIDv5 of the old appId sh.omp.gui in electron-builder's namespace, kept so
+  # the installer finds an existing omp install and upgrades it in place.
+  # Never change or remove it.
+  guid: 9d72fc94-91dd-54d1-8fda-3b6e5e8d23f2
   oneClick: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: omp
-  artifactName: ${productName}-${version}-setup.${ext}
+  shortcutName: Sai ATLAS
+  artifactName: Sai-ATLAS-${version}-setup.${ext}
 
 portable:
-  artifactName: ${productName}-${version}-portable.${ext}
+  artifactName: Sai-ATLAS-${version}-portable.${ext}
 
 publish:
   provider: github

@@ -48,6 +48,8 @@ export interface KeymapAction {
 	readonly labelKey: string;
 	/** Canonical default chords (first is the primary display chord). */
 	readonly defaults: readonly string[];
+	/** Defaults off macOS when the Ctrl-twin rule would collide (thinking.toggle's ⌃T is tab.new's twin there). */
+	readonly otherDefaults?: readonly string[];
 	/**
 	 * True = fires even while an overlay/dialog owns the keyboard or a focused
 	 * control consumed the key — the pre-B3 behavior of the unguarded ⌘ block
@@ -169,6 +171,76 @@ export function parseChord(input: string): Chord | null {
 /** Canonical chord string: modifiers in ⌥⇧⌃⌘ order + the canonical base key. */
 export function serializeChord(chord: Chord): string {
 	return `${chord.alt ? "⌥" : ""}${chord.shift ? "⇧" : ""}${chord.ctrl ? "⌃" : ""}${chord.meta ? "⌘" : ""}${chord.key}`;
+}
+
+/**
+ * macOS keeps the glyph table; every other host gets Ctrl twins and text
+ * labels. Linux and Windows compile the same chords and differ only in the
+ * name of the ⌘ key (Super vs Win).
+ */
+export type KeyboardPlatform = "mac" | "linux" | "windows";
+
+export function keyboardPlatformOf(hostPlatform: string | undefined): KeyboardPlatform {
+	if (hostPlatform === undefined || hostPlatform === "darwin") return "mac";
+	return hostPlatform === "win32" ? "windows" : "linux";
+}
+
+/** The running window's layout, from the preload bridge (absent in unit tests → mac). */
+export function currentKeyboardPlatform(): KeyboardPlatform {
+	return keyboardPlatformOf(globalThis.window?.omp?.platform);
+}
+
+/** ⌘ → ⌃, re-serialized so the modifier order stays canonical; chords without ⌘ pass through. */
+export function ctrlTwin(chord: string): string {
+	const parsed = parseChord(chord);
+	if (!parsed?.meta) return chord;
+	return serializeChord({ ...parsed, meta: false, ctrl: true });
+}
+
+function textModifiers(platform: KeyboardPlatform): readonly (readonly [glyph: string, name: string])[] {
+	return [
+		["⌃", "Ctrl"],
+		["⌥", "Alt"],
+		["⇧", "Shift"],
+		["⌘", platform === "windows" ? "Win" : "Super"],
+	];
+}
+const TEXT_KEYS: Record<string, string> = {
+	"↵": "Enter",
+	"⇥": "Tab",
+	"␣": "Space",
+	"⎋": "Esc",
+	"⌫": "Backspace",
+	"⌦": "Delete",
+};
+const MODIFIER_GLYPHS = "⌥⇧⌃⌘";
+
+function formatOneChord(chord: string, platform: KeyboardPlatform): string {
+	let rest = chord;
+	const held = new Set<string>();
+	while (rest.length > 0 && MODIFIER_GLYPHS.includes(rest.charAt(0))) {
+		held.add(rest.charAt(0));
+		rest = rest.slice(1);
+	}
+	if (held.size === 0) return chord;
+	const names = textModifiers(platform)
+		.filter(([glyph]) => held.has(glyph))
+		.map(([, name]) => name);
+	return [...names, TEXT_KEYS[rest] ?? rest].join("+");
+}
+
+/** Display form of one chord or a " / "-joined list: glyphs on macOS, "Ctrl+Shift+T" elsewhere. */
+export function formatChord(keys: string, platform: KeyboardPlatform): string {
+	if (platform === "mac") return keys;
+	return keys
+		.split(" / ")
+		.map(chord => formatOneChord(chord, platform))
+		.join(" / ");
+}
+
+/** Display a CmdOrCtrl chord spelled in its macOS form (menu accelerators, hint constants). */
+export function displayShortcut(chord: string, platform: KeyboardPlatform): string {
+	return formatChord(platform === "mac" ? chord : ctrlTwin(chord), platform);
 }
 
 /** Structural subset of KeyboardEvent that chord extraction reads (test-friendly). */
@@ -320,6 +392,7 @@ export const KEYMAP_ACTIONS = [
 		id: "thinking.toggle",
 		labelKey: "hotkeys.row.thinkingToggle",
 		defaults: ["⌃T"],
+		otherDefaults: [],
 		overlaySafe: false,
 		hotkeyGroup: "generation",
 	},
@@ -403,6 +476,21 @@ export const RESERVED_CHORDS: readonly ReservedChord[] = [
 	})),
 ];
 
+/** Defaults one host compiles: macOS as declared; elsewhere Ctrl twins first, ⌘ forms kept. */
+export function platformDefaults(action: KeymapAction, platform: KeyboardPlatform): readonly string[] {
+	if (platform === "mac") return action.defaults;
+	if (action.otherDefaults) return action.otherDefaults;
+	return [...new Set([...action.defaults.map(ctrlTwin), ...action.defaults])];
+}
+
+/** Native accelerators are CmdOrCtrl, so off macOS they hold the Ctrl form. */
+export function reservedChordsFor(platform: KeyboardPlatform): readonly ReservedChord[] {
+	if (platform === "mac") return RESERVED_CHORDS;
+	return RESERVED_CHORDS.map(entry =>
+		entry.hotkeyGroup === "native" ? { ...entry, chord: ctrlTwin(entry.chord) } : entry,
+	);
+}
+
 /** Rows the reference dialog files under a group, in registry order. */
 export function keymapActionsForGroup<const Group extends HotkeyGroupId>(
 	group: Group,
@@ -414,8 +502,8 @@ export function keymapActionsForGroup<const Group extends HotkeyGroupId>(
 }
 
 /** Non-remappable rows the reference dialog files under a group. */
-export function reservedChordsForGroup(group: ReservedChordGroup): ReservedChord[] {
-	return RESERVED_CHORDS.filter(entry => entry.hotkeyGroup === group);
+export function reservedChordsForGroup(group: ReservedChordGroup, platform: KeyboardPlatform = "mac"): ReservedChord[] {
+	return reservedChordsFor(platform).filter(entry => entry.hotkeyGroup === group);
 }
 
 export interface ChordOwner {
@@ -451,11 +539,12 @@ export const KEYMAP_ACTION_BY_ID: Readonly<Record<KeymapActionId, KeymapAction>>
 export function compileKeymap<A extends KeymapAction>(
 	actions: readonly A[],
 	overrides: KeymapOverrides,
+	platform: KeyboardPlatform = "mac",
 ): Map<string, A["id"]> {
 	const map = new Map<string, A["id"]>();
 	for (const action of actions) {
 		if (overrides[action.id]?.length) continue; // replaced, not merged
-		for (const raw of action.defaults) {
+		for (const raw of platformDefaults(action, platform)) {
 			const parsed = parseChord(raw);
 			if (parsed) map.set(serializeChord(parsed), action.id);
 		}
@@ -493,12 +582,13 @@ export interface KeymapConflict {
 export function detectConflicts(
 	actions: readonly KeymapAction[],
 	overrides: KeymapOverrides,
-	reserved: readonly ReservedChord[] = RESERVED_CHORDS,
+	platform: KeyboardPlatform = "mac",
 ): KeymapConflict[] {
+	const reserved = reservedChordsFor(platform);
 	const defaultChords = new Map<string, Set<string>>();
 	for (const action of actions) {
 		const chords = new Set<string>();
-		for (const raw of action.defaults) {
+		for (const raw of platformDefaults(action, platform)) {
 			const parsed = parseChord(raw);
 			if (parsed) chords.add(serializeChord(parsed));
 		}

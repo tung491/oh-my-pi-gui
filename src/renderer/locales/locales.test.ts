@@ -9,9 +9,12 @@
  * 4. For the namespaces internationalized in the language-switcher wave,
  *    zh must genuinely translate — no value may be identical to its English
  *    source unless allowlisted as a proper noun / acronym / symbol.
+ * 5. The GUI is "Sai ATLAS" in both locales; "omp" names only agent features.
  */
 
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { PRODUCT_NAME } from "../../shared/product";
 import { en } from "./en";
 import { zh } from "./zh";
 
@@ -88,6 +91,18 @@ const ALLOW_IDENTICAL: Record<string, true> = {
 	"themePicker.theme.latte.label": true, // Latte — theme name
 };
 
+/** Copy about the bundled coding agent, which keeps the omp name. */
+const AGENT_SCOPE_OMP: Record<string, true> = {
+	"benchmark.description": true, // the bundled omp benchmark
+	"collab.joinDesc": true, // collab links are an agent feature
+	"collab.joinPlaceholder": true,
+};
+
+const LOCALES = [
+	["en", en],
+	["zh", zh],
+] as const;
+
 const LATIN_LETTER = /[a-zA-Z]/;
 
 /** Drops `{placeholder}` tokens so only prose is checked — they are code, not English words. */
@@ -132,5 +147,33 @@ describe("locale parity", () => {
 			if (!LATIN_LETTER.test(proseOf(en[key]))) continue;
 			expect(zh[key], `zh["${key}"] duplicates the English source`).not.toBe(en[key]);
 		}
+	});
+});
+
+describe("product name", () => {
+	it("names the GUI Sai ATLAS and keeps omp for agent features", () => {
+		for (const [locale, entries] of LOCALES) {
+			for (const [key, value] of Object.entries(entries)) {
+				if (AGENT_SCOPE_OMP[key]) continue;
+				const prose = value.replaceAll("~/.omp", "").replaceAll("omp://", "");
+				expect(/\bomp\b/.test(prose), `${locale}["${key}"] names the product omp: ${value}`).toBe(false);
+			}
+		}
+	});
+
+	it("never shortens the product name to ATLAS", () => {
+		for (const [locale, entries] of LOCALES) {
+			for (const [key, value] of Object.entries(entries)) {
+				expect(/(?<!Sai )\bATLAS\b/.test(value), `${locale}["${key}"]: ${value}`).toBe(false);
+			}
+		}
+	});
+
+	it("binds the brand key and the window shell to PRODUCT_NAME", () => {
+		expect(en["brand.name"]).toBe(PRODUCT_NAME);
+		expect(zh["brand.name"]).toBe(PRODUCT_NAME);
+		const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+		expect(html).toContain(`<title>${PRODUCT_NAME}</title>`);
+		expect(html).toContain('<link rel="icon" type="image/svg+xml" href="./brand/sai-atlas-icon-on-light.svg" />');
 	});
 });
