@@ -751,6 +751,42 @@ process.stdin.on("end", () => {
 			}
 		});
 
+		it("keeps a woken session with no modes to restore when restarted before ready", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-wake-restart-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir);
+			const sessionPath = path.join(tempDir, "session.jsonl");
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			try {
+				sidecar.wake(sessionPath);
+				const ready = waitForReady(sidecar);
+				sidecar.restart();
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		});
+
+		it("continues a refused wake's session across repeated restarts before ready", async () => {
+			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-refused-restarts-"));
+			const { binaryPath, logPath } = await fakeSidecar(tempDir, { fail: ["set_plan_mode"] });
+			const sessionPath = path.join(tempDir, "session.jsonl");
+			const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+			try {
+				sidecar.wake(sessionPath, refusePlanMode);
+				await expect.poll(() => sidecar.status, { timeout: 5_000, interval: 25 }).toBe("error");
+				const ready = waitForReady(sidecar);
+				sidecar.restart();
+				sidecar.restart();
+				await ready;
+				expect(lastArgv(await logLines(logPath))).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
+			} finally {
+				sidecar.dispose();
+				await fs.rm(tempDir, { recursive: true, force: true });
+			}
+		}, 10_000);
+
 		it("drops a pending gate when a restart re-roots the tab or opens another session", async () => {
 			const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-gate-dropped-"));
 			const { binaryPath, logPath } = await fakeSidecar(tempDir);

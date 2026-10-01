@@ -256,12 +256,11 @@ export class SidecarManager extends EventEmitter {
 	#options: SidecarOptions;
 	#proxyEnvVars: Record<string, string> = {};
 	#shellEnvVars: Record<string, string> = {};
+	/** The session the next spawn opens with `--session`; cleared once a spawn boots. */
 	#resumeSessionPath: string | null = null;
 	#freshLaunchPending: boolean;
 	/** Set by wake(); runs on the first `ready` of whichever spawn gets there, then clears. */
 	#readyGate: ReadyGate | null = null;
-	/** The session a wake was resuming when its gate refused; a plain restart() continues it. */
-	#refusedWakeSessionPath: string | null = null;
 	/** A child still running its own teardown; the next spawn waits for it to exit. */
 	#draining: Promise<void> | null = null;
 	#disposed = false;
@@ -571,9 +570,9 @@ export class SidecarManager extends EventEmitter {
 					return;
 				}
 				// A refused wake must not leave an agent running without the modes
-				// it slept with. Stop it the way hibernation does, and keep its
-				// session so a plain restart() continues it without them.
-				this.#refusedWakeSessionPath = this.#resumeSessionPath;
+				// it slept with. Stop it the way hibernation does. It has not
+				// booted, so it keeps its session: a plain restart() continues it
+				// without them.
 				const child = this.#child;
 				this.#cleanup();
 				this.#setStatus("error", outcome.error, extra);
@@ -684,18 +683,19 @@ export class SidecarManager extends EventEmitter {
 	}
 
 	restart(cwd?: string, resumeSessionPath?: string): void {
-		// A woken tab keeps its session across a restart that does not re-root
-		// it. A refused wake continues without the modes it slept with; a wake
-		// still restoring them (its child died, or the user restarted before
-		// `ready`) keeps its gate, so the respawn re-arms them before `ready`.
-		// Opening another session drops the gate: its modes were not that one's.
-		const woken = cwd ? null : (this.#refusedWakeSessionPath ?? (this.#readyGate ? this.#resumeSessionPath : null));
-		const gate = woken && (resumeSessionPath ?? woken) === woken ? this.#readyGate : null;
-		this.#refusedWakeSessionPath = null;
+		// A spawn that has not booted yet (a wake, a refused wake, a resume
+		// restarted before `ready`) still holds the session it was opening. A
+		// restart that does not re-root the tab continues that session, and a
+		// wake still restoring its modes keeps its gate, so the respawn re-arms
+		// them before `ready`. Re-rooting the tab or opening another session
+		// drops both: those modes were not that session's.
+		const pending = cwd ? null : this.#resumeSessionPath;
+		const sameTarget = !cwd && (resumeSessionPath === undefined || resumeSessionPath === pending);
+		const gate = sameTarget ? this.#readyGate : null;
 		this.kill();
 		if (cwd) this.#options = { ...this.#options, cwd };
 		this.#readyGate = gate;
-		this.#resumeSessionPath = resumeSessionPath ?? woken;
+		this.#resumeSessionPath = resumeSessionPath ?? pending;
 		this.#restartCount = 0;
 		this.start();
 	}
@@ -765,7 +765,6 @@ export class SidecarManager extends EventEmitter {
 	 * session another tab may own. `gate` runs before `ready` is announced.
 	 */
 	wake(sessionPath: string | null, gate: ReadyGate | null = null): void {
-		this.#refusedWakeSessionPath = null;
 		this.#readyGate = gate;
 		this.#resumeSessionPath = sessionPath;
 		if (!sessionPath) this.#freshLaunchPending = true;
