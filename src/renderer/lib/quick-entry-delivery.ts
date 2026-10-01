@@ -90,8 +90,8 @@ async function deliver(prompt: QuickEntryPrompt): Promise<void> {
 		return;
 	}
 	composer.getState().queueAutoSubmit({ id: prompt.id, text: prompt.text });
-	const outcome = await handoff(tabId, composer);
-	if (outcome === "closed") {
+	const outcome = await handoff(tabId, composer, prompt.id);
+	if (outcome === "closed" || outcome === "reset") {
 		await returnToBar(prompt, "interrupted");
 	} else if (outcome === "timeout") {
 		// Never sent silently later: the text stays visible in that tab's composer.
@@ -101,10 +101,14 @@ async function deliver(prompt: QuickEntryPrompt): Promise<void> {
 	}
 }
 
-type HandoffOutcome = "handed-off" | "closed" | "timeout";
+type HandoffOutcome = "handed-off" | "reset" | "closed" | "timeout";
 
-/** The composer cleared the flag (InputArea sent or kept the text and acknowledged), the tab closed, or time ran out. */
-function handoff(tabId: string, composer: StoreApi<ComposerStore>): Promise<HandoffOutcome> {
+/**
+ * InputArea took the prompt (sent it, or kept the text, and acknowledged), a
+ * new session reset the composer and dropped the text, the tab closed, or
+ * time ran out.
+ */
+function handoff(tabId: string, composer: StoreApi<ComposerStore>, promptId: string): Promise<HandoffOutcome> {
 	const tabOpen = () => useTabsStore.getState().tabs.some(tab => tab.id === tabId);
 	return new Promise(resolve => {
 		let settled = false;
@@ -117,14 +121,15 @@ function handoff(tabId: string, composer: StoreApi<ComposerStore>): Promise<Hand
 			resolve(outcome);
 		};
 		const timer = setTimeout(() => finish("timeout"), QUICK_ENTRY_HANDOFF_CEILING_MS);
-		const unsubscribeComposer = composer.subscribe(state => {
-			if (state.autoSubmit === null) finish("handed-off");
-		});
+		const settle = (state: ComposerStore) => {
+			if (state.autoSubmit === null) finish(state.handedOff === promptId ? "handed-off" : "reset");
+		};
+		const unsubscribeComposer = composer.subscribe(settle);
 		const unsubscribeTabs = useTabsStore.subscribe(() => {
 			if (!tabOpen()) finish("closed");
 		});
 		if (!tabOpen()) finish("closed");
-		else if (composer.getState().autoSubmit === null) finish("handed-off");
+		else settle(composer.getState());
 	});
 }
 

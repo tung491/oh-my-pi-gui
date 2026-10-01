@@ -162,6 +162,20 @@ describe("quick-entry delivery", () => {
 		expect(quickEntry.ack).not.toHaveBeenCalled();
 	});
 
+	it("returns a prompt whose composer a new session cleared before the hand-off", async () => {
+		await useTabsStore.getState().reconcileTabs();
+		queueBatches([prompt("a")]);
+		spawn.mockResolvedValueOnce({ tabId: "t1" });
+
+		const drain = drainQuickEntry();
+		await vi.waitFor(() => expect(composerOf("t1").getState().autoSubmit).toEqual({ id: "a" }));
+		composerOf("t1").getState().reset();
+		await drain;
+
+		expect(quickEntry.returnToBar).toHaveBeenCalledWith(prompt("a"), "interrupted");
+		expect(quickEntry.ack).not.toHaveBeenCalled();
+	});
+
 	it("leaves the text in a tab that never became ready, and acknowledges it", async () => {
 		vi.useFakeTimers();
 		await useTabsStore.getState().reconcileTabs();
