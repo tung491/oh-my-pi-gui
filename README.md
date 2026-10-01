@@ -9,7 +9,7 @@
 <a href="https://github.com/nornzach/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/downloads/nornzach/oh-my-pi-gui/total?style=flat&colorA=222222&colorB=58A6FF" alt="Downloads"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/github/license/nornzach/oh-my-pi-gui?style=flat&colorA=222222&colorB=BE185D" alt="License"></a>
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-222222?style=flat" alt="Platform: macOS | Windows | Linux">
-<img src="https://img.shields.io/badge/Electron-35-47848F?style=flat&logo=electron&logoColor=white" alt="Electron">
+<img src="https://img.shields.io/badge/Electron-44-47848F?style=flat&logo=electron&logoColor=white" alt="Electron">
 <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white" alt="React">
 
 [English](#english) · [中文](#中文) · [Releases / 下载](https://github.com/nornzach/oh-my-pi-gui/releases)
@@ -155,6 +155,8 @@ Search with `⌘K`. Supported commands lead to native controls; pass-through and
 |---|---|
 | Apple Silicon | [omp-0.9.10-arm64.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg) |
 | Intel | [omp-0.9.10.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg) |
+
+Sai ATLAS builds on Electron 44 need macOS 13 or later. The updater does not offer them to macOS 12.
 
 | Windows x64 | v0.9.10 download |
 |---|---|
@@ -488,6 +490,8 @@ v0.9.10 包含以下 GUI 改进与内置 Agent 更新：
 |---|---|
 | Apple Silicon | [omp-0.9.10-arm64.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg) |
 | Intel | [omp-0.9.10.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg) |
+
+基于 Electron 44 的 Sai ATLAS 版本需要 macOS 13 或更高版本，macOS 12 上不会收到这些版本的更新。
 
 | Windows x64 | v0.9.10 下载 |
 |---|---|
