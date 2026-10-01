@@ -214,3 +214,24 @@ export function captureInstallError(
 	}
 	return failure;
 }
+
+/**
+ * Run `install` with the AppImage runtime's extract-mode switch in `env` when
+ * `extract` asks for it and `env` does not carry it already, and take it out
+ * again however the install ends. electron-updater runs the new AppImage once,
+ * synchronously, before its install returns, so that run sees the switch and
+ * nothing this process spawns later (its sidecars, the relaunch) inherits it.
+ */
+export function withAppImageExtractEnv<T>(
+	env: { [name: string]: string | undefined },
+	extract: boolean,
+	install: () => T,
+): T {
+	const set = extract && !env.APPIMAGE_EXTRACT_AND_RUN;
+	if (set) env.APPIMAGE_EXTRACT_AND_RUN = "1";
+	try {
+		return install();
+	} finally {
+		if (set) delete env.APPIMAGE_EXTRACT_AND_RUN;
+	}
+}

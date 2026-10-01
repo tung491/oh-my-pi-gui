@@ -17,6 +17,7 @@ import {
 	settleIncompleteUpdateCheck,
 	sha512FileBase64,
 	sweepInstallerPartials,
+	withAppImageExtractEnv,
 } from "./updater-state";
 
 describe("update check terminal state", () => {
@@ -240,5 +241,32 @@ describe("Linux package kind and deb installs", () => {
 		expect(failure?.message).toBe("pkexec dismissed");
 		expect(captureInstallError(subscribe, () => {})).toBeUndefined();
 		expect(emitter.listenerCount("error")).toBe(0);
+	});
+});
+
+describe("AppImage extract-mode install", () => {
+	it("sets the runtime switch for the install only, whether it succeeds or throws", () => {
+		const env: { [name: string]: string | undefined } = { APPIMAGE: "/apps/Sai-ATLAS.AppImage" };
+		const seen = withAppImageExtractEnv(env, true, () => env.APPIMAGE_EXTRACT_AND_RUN);
+		expect(seen).toBe("1");
+		expect(env).toEqual({ APPIMAGE: "/apps/Sai-ATLAS.AppImage" });
+		expect(() =>
+			withAppImageExtractEnv(env, true, () => {
+				throw new Error("mv failed");
+			}),
+		).toThrow("mv failed");
+		expect("APPIMAGE_EXTRACT_AND_RUN" in env).toBe(false);
+	});
+
+	it("leaves the environment alone for a mounted launch", () => {
+		const env: { [name: string]: string | undefined } = {};
+		expect(withAppImageExtractEnv(env, false, () => env.APPIMAGE_EXTRACT_AND_RUN)).toBeUndefined();
+		expect(env).toEqual({});
+	});
+
+	it("keeps a switch the launch environment already carried", () => {
+		const env: { [name: string]: string | undefined } = { APPIMAGE_EXTRACT_AND_RUN: "1" };
+		withAppImageExtractEnv(env, true, () => {});
+		expect(env).toEqual({ APPIMAGE_EXTRACT_AND_RUN: "1" });
 	});
 });

@@ -21,7 +21,7 @@ import type { UpdateInstallMode, UpdateStatus } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS } from "../shared/ipc-types";
 import { approveQuitBeforeInstall, withdrawQuitApproval } from "./app-quit";
 import { mainT } from "./i18n";
-import { relaunchArgs, runsExtractedAppImage } from "./relaunch-args";
+import { appImageRuntimeArgs, relaunchArgs, runsExtractedAppImage } from "./relaunch-args";
 import {
 	asksBeforeInstall,
 	captureInstallError,
@@ -37,6 +37,7 @@ import {
 	settleIncompleteUpdateCheck,
 	sha512FileBase64,
 	sweepInstallerPartials,
+	withAppImageExtractEnv,
 } from "./updater-state";
 
 const linuxKind =
@@ -320,12 +321,28 @@ export function setupUpdater(): void {
 		}
 		return current;
 	});
+	// Set from a click until its install fails or is declined. An extract-mode
+	// AppImage install blocks this process for a whole extraction, and a second
+	// click queued behind it would reset electron-updater's install guard, so
+	// its install-on-quit would run again over the new file.
+	let applying = false;
 	ipcMain.handle(IPC_COMMANDS.UPDATER_APPLY, async () => {
-		if (current.state !== "downloaded") return;
-		if (current.mode === "manual") {
+		const status = current;
+		if (status.state !== "downloaded" || applying) return;
+		applying = true;
+		let installed = false;
+		try {
+			installed = await applyDownloadedUpdate(status);
+		} finally {
+			applying = installed;
+		}
+	});
+	/** Install the downloaded update; true once the app is quitting into it. */
+	async function applyDownloadedUpdate(status: Extract<UpdateStatus, { state: "downloaded" }>): Promise<boolean> {
+		if (status.mode === "manual") {
 			if (!downloadedInstallerPath) {
 				broadcast({ state: "error", message: mainT("updates.installerMissing"), showInBanner: true });
-				return;
+				return false;
 			}
 			try {
 				await openManualInstaller(downloadedInstallerPath);
@@ -336,49 +353,53 @@ export function setupUpdater(): void {
 					showInBanner: true,
 				});
 			}
-			return;
+			return false;
 		}
 		// A deb runs pkexec + dpkg and an AppImage swaps its file before
 		// electron-updater quits, so the working-tabs prompt must come first:
 		// a quit cancelled afterwards would keep the old process running on top
 		// of the new install.
-		if (asksBeforeInstall(linuxKind) && !(await approveQuitBeforeInstall())) return;
-		// electron-updater runs the new AppImage once before it returns, and on a
-		// host that needs extract mode that run cannot mount it. The runtime reads
-		// the same switch from the environment, which that run and the relaunch
-		// below inherit.
-		const extractForInstall =
-			linuxKind === "appimage" && runsExtractedAppImage(process.env) && !process.env.APPIMAGE_EXTRACT_AND_RUN;
-		if (extractForInstall) process.env.APPIMAGE_EXTRACT_AND_RUN = "1";
+		if (asksBeforeInstall(linuxKind) && !(await approveQuitBeforeInstall())) return false;
 		// Both install synchronously and report a cancelled prompt or failed
 		// install only as an "error" event, which the passive handler keeps out
-		// of the banner.
-		const failure = captureInstallError(
-			listener => {
-				autoUpdater.on("error", listener);
-				return () => autoUpdater.removeListener("error", listener);
-			},
-			() => autoUpdater.quitAndInstall(),
+		// of the banner. electron-updater runs the new AppImage once before it
+		// returns, and on a host that needs extract mode that run cannot mount
+		// it, so it gets the runtime's switch through the environment.
+		const failure = withAppImageExtractEnv(
+			process.env,
+			linuxKind === "appimage" && runsExtractedAppImage(process.env),
+			() =>
+				captureInstallError(
+					listener => {
+						autoUpdater.on("error", listener);
+						return () => autoUpdater.removeListener("error", listener);
+					},
+					() => autoUpdater.quitAndInstall(),
+				),
 		);
 		if (failure) {
-			// This process keeps running, and its sidecars must not inherit the switch.
-			if (extractForInstall) delete process.env.APPIMAGE_EXTRACT_AND_RUN;
 			if (asksBeforeInstall(linuxKind)) withdrawQuitApproval();
+			// The file swap has normally happened already. An install at quit
+			// would unlink the new AppImage where an unversioned file name took
+			// the old one's place; the next launch's check offers the update
+			// again if the swap did not happen.
+			if (linuxKind === "appimage") autoUpdater.autoInstallOnAppQuit = false;
 			broadcast({
 				state: "error",
 				message: `${mainT("updates.installFailed")} (${failure.message})`,
 				showInBanner: true,
 			});
-			return;
+			return false;
 		}
 		// Armed only after a successful install, before electron-updater's
 		// deferred quit: Electron starts it once this process has exited. Only
-		// the display backend is passed on, so a launch link or workspace is not
-		// replayed; extract mode rides the environment set above.
+		// the AppImage mode and the display backend are passed on, so a launch
+		// link or workspace is not replayed.
 		if (linuxKind === "appimage" && appImageTarget) {
-			app.relaunch({ execPath: appImageTarget, args: relaunchArgs([]) });
+			app.relaunch({ execPath: appImageTarget, args: [...appImageRuntimeArgs(process.env), ...relaunchArgs([])] });
 		}
-	});
+		return true;
+	}
 	ipcMain.handle(IPC_COMMANDS.UPDATER_GET_STATUS, () => current);
 	ipcMain.handle(IPC_COMMANDS.UPDATER_VERSION, () => appVersion());
 
