@@ -680,7 +680,8 @@ T_{\\text{请求}} = T_{\\text{排队等待}} + T_{\\text{网络传输}} + T_{\\
 					if (command.message === "fixture background job") backgroundJobRunning = true;
 					write({ type: "message_end", message: answer });
 					state.isStreaming = false;
-					write({ type: "agent_end", messages: [answer], isTerminal: true });
+					// omp's run messages start with the prompt, so the commit carries it too.
+					write({ type: "agent_end", messages: [user, answer], isTerminal: true });
 				}
 				break;
 			}
