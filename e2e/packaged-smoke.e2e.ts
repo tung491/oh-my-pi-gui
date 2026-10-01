@@ -16,6 +16,8 @@ import { type ElectronApplication, _electron as electron, type Page } from "play
 import type { RpcSessionState } from "../src/shared/rpc-types";
 
 const executablePath = process.env.OMP_GUI_TEST_APP;
+/** XWayland on Linux, so no case asks the developer's desktop to bind global shortcuts through the portal. */
+const PLATFORM_ARGS = process.platform === "linux" ? ["--ozone-platform=x11"] : [];
 
 /** Inferred, like e2e/real-core.e2e.ts: a ProcessEnv annotation would not satisfy electron.launch. */
 function buildEnv(agent: string, root: string) {
@@ -63,7 +65,7 @@ async function waitForSidecar(page: Page): Promise<void> {
 async function launch(profile: Profile, args: string[] = []): Promise<{ app: ElectronApplication; page: Page }> {
 	const app = await electron.launch({
 		executablePath,
-		args: [...args, `--user-data-dir=${profile.desktop}`],
+		args: [...PLATFORM_ARGS, ...args, `--user-data-dir=${profile.desktop}`],
 		// Playwright prepends --no-sandbox on Linux unless told the sandbox is wanted.
 		chromiumSandbox: true,
 		env: profile.env,
@@ -83,12 +85,32 @@ async function sessionState(page: Page): Promise<RpcSessionState> {
 /** A refused second instance: hands its argv to the running app and exits. */
 async function secondInstance(profile: Profile, args: string[]): Promise<void> {
 	if (!executablePath) throw new Error("OMP_GUI_TEST_APP is not set");
-	const child = spawn(executablePath, [...args, `--user-data-dir=${profile.desktop}`], {
+	const child = spawn(executablePath, [...PLATFORM_ARGS, ...args, `--user-data-dir=${profile.desktop}`], {
 		env: profile.env,
 		cwd: profile.root,
 		stdio: "ignore",
 	});
 	await once(child, "exit");
+}
+
+const isBarUrl = (url: string) => url.includes("quick-entry.html");
+
+async function barVisible(app: ElectronApplication): Promise<boolean> {
+	return app.evaluate(({ BrowserWindow }) =>
+		BrowserWindow.getAllWindows().some(
+			win => win.webContents.getURL().includes("quick-entry.html") && win.isVisible(),
+		),
+	);
+}
+
+/** The quick-entry bar once main has created it and it is on screen. */
+async function quickEntryBar(app: ElectronApplication): Promise<Page> {
+	await expect.poll(() => app.windows().some(window => isBarUrl(window.url())), { timeout: 30_000 }).toBe(true);
+	const bar = app.windows().find(window => isBarUrl(window.url()));
+	if (!bar) throw new Error("quick entry window not found");
+	await bar.waitForFunction(() => document.querySelector("textarea") !== null);
+	await expect.poll(() => barVisible(app), { timeout: 30_000 }).toBe(true);
+	return bar;
 }
 
 test.describe("installed package", () => {
@@ -151,6 +173,37 @@ test.describe("installed package", () => {
 			await expect.poll(async () => (await sessionState(other)).cwd, { timeout: 30_000 }).toBe(profile.otherProject);
 		} finally {
 			await app.close();
+		}
+	});
+
+	test("opens quick entry from the command line, cold and warm", async () => {
+		test.setTimeout(240_000);
+		const profile = await createProfile();
+		const warm = await launch(profile, [profile.project]);
+		try {
+			const before = (await warm.page.evaluate(() => window.omp.tabs.list())).length;
+			await secondInstance(profile, ["--quick-entry"]);
+			const bar = await quickEntryBar(warm.app);
+			const text = "quick entry from the command line";
+			await bar.locator("textarea").fill(text);
+			await bar.locator("textarea").press("Enter");
+			await expect.poll(() => barVisible(warm.app)).toBe(false);
+			await expect
+				.poll(async () => (await warm.page.evaluate(() => window.omp.tabs.list())).length, { timeout: 30_000 })
+				.toBe(before + 1);
+			await expect(warm.page.getByText(text).first()).toBeVisible({ timeout: 30_000 });
+		} finally {
+			await warm.app.close();
+		}
+		// Cold: the bar waits for the restored window, and that window's first
+		// focus must not blur it away.
+		const cold = await launch(profile, ["--quick-entry"]);
+		try {
+			await quickEntryBar(cold.app);
+			await cold.page.waitForTimeout(2_000);
+			expect(await barVisible(cold.app)).toBe(true);
+		} finally {
+			await cold.app.close();
 		}
 	});
 
