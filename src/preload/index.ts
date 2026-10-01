@@ -1,5 +1,6 @@
 /**
- * Preload script: exposes the OmpApi on window.omp via contextBridge.
+ * Preload script: exposes the OmpApi on window.omp via contextBridge, or only
+ * window.ompQuickEntry in the quick-entry bar (main passes --omp-quick-entry).
  * All RPC commands delegate to ipcRenderer.invoke(IPC_COMMANDS.RPC_COMMAND, ...).
  * Event subscriptions return unsubscribe functions.
  */
@@ -30,6 +31,8 @@ import type {
 	MenuAction,
 	MenuActionPayload,
 	OmpApi,
+	QuickEntryFailure,
+	QuickEntryPrompt,
 	RunProgressState,
 	RuntimeErrorReport,
 	SessionInfo,
@@ -60,6 +63,11 @@ import type {
 	SubagentFrame,
 } from "../shared/rpc-types";
 import { DeepLinkBuffer } from "./deep-link-buffer";
+import { buildQuickEntryBarApi } from "./quick-entry-api";
+
+// One sandboxed bundle serves both pages: a sandboxed preload cannot require a
+// shared chunk, so the bar is told apart by the argument main adds for it.
+const isQuickEntry = process.argv.includes("--omp-quick-entry");
 
 function rpcCommand(cmd: RpcCommand, timeoutMs?: number): Promise<RpcResponse> {
 	return ipcRenderer.invoke(IPC_COMMANDS.RPC_COMMAND, {
@@ -100,7 +108,7 @@ let activeTabId: string | null = null;
 
 // Listening from the start: a cold-start link can land before the renderer subscribes.
 const deepLinks = new DeepLinkBuffer<DeepLinkPayload>();
-ipcRenderer.on(IPC_EVENTS.DEEP_LINK, (_event, link: DeepLinkPayload) => deepLinks.deliver(link));
+if (!isQuickEntry) ipcRenderer.on(IPC_EVENTS.DEEP_LINK, (_event, link: DeepLinkPayload) => deepLinks.deliver(link));
 
 function subscribeActiveTab<T>(channel: string, callback: (data: T) => void): () => void {
 	return subscribe<IpcActiveTabEnvelope<T>>(channel, envelope => {
@@ -337,6 +345,14 @@ const api: OmpApi = {
 				error?: string;
 			}>,
 	},
+
+	quickEntry: {
+		claimPending: () => ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_CLAIM) as Promise<QuickEntryPrompt[]>,
+		ack: (id: string) => ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_ACK, id) as Promise<void>,
+		returnToBar: (prompt: QuickEntryPrompt, reason: QuickEntryFailure) =>
+			ipcRenderer.invoke(IPC_COMMANDS.QUICK_ENTRY_RETURN, { prompt, reason }) as Promise<void>,
+	},
 };
 
-contextBridge.exposeInMainWorld("omp", api);
+if (isQuickEntry) contextBridge.exposeInMainWorld("ompQuickEntry", buildQuickEntryBarApi());
+else contextBridge.exposeInMainWorld("omp", api);

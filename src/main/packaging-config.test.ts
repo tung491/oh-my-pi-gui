@@ -424,3 +424,15 @@ describe("Linux CI workflow", () => {
 		expect(publishers).toEqual(["pages.yml"]);
 	});
 });
+
+describe("renderer pages", () => {
+	const csp = (page: string) =>
+		fs
+			.readFileSync(path.join(PACKAGE_ROOT, "src", "renderer", page), "utf8")
+			.match(/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/)?.[1];
+
+	it("the quick-entry page ships the same content security policy", () => {
+		expect(csp("index.html")).toBeDefined();
+		expect(csp("quick-entry.html")).toBe(csp("index.html"));
+	});
+});

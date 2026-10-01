@@ -87,6 +87,8 @@ export const IPC_EVENTS = {
 	PROGRESS_SET: "progress:set",
 	/** Auto-update status machine push (idle/checking/available/downloading/downloaded/not-available/error) */
 	UPDATER_STATUS: "updater:status",
+	/** Main → quick-entry bar: the state for this show (QuickEntryBarState) */
+	QUICK_ENTRY_STATE: "quick-entry:state",
 } as const;
 
 // ============================================================================
@@ -196,6 +198,18 @@ export const IPC_COMMANDS = {
 	UPDATER_GET_STATUS: "updater:getStatus",
 	/** Current app version (settings → updates row) */
 	UPDATER_VERSION: "updater:version",
+	/** Bar → main: queue a quick-entry prompt for the main window */
+	QUICK_ENTRY_SUBMIT: "quick-entry:submit",
+	/** Bar → main: a restored prompt was taken into the bar's draft */
+	QUICK_ENTRY_CONSUME_RESTORED: "quick-entry:consume-restored",
+	/** Bar → main: hide the bar (Esc) */
+	QUICK_ENTRY_DISMISS: "quick-entry:dismiss",
+	/** Chat window → main: lease the prompts queued for this window */
+	QUICK_ENTRY_CLAIM: "quick-entry:claim",
+	/** Chat window → main: a leased prompt reached its tab's composer */
+	QUICK_ENTRY_ACK: "quick-entry:ack",
+	/** Chat window → main: give a leased prompt back to the bar's restore list */
+	QUICK_ENTRY_RETURN: "quick-entry:return",
 } as const;
 
 export type RuntimeErrorSource =
@@ -215,6 +229,7 @@ export type RuntimeErrorSource =
 	| "main-unhandled-rejection"
 	| "global-shortcut"
 	| "notification"
+	| "quick-entry"
 	| "unknown";
 
 /** Bounded, serializable renderer/main failure payload written as JSONL. */
@@ -294,6 +309,67 @@ export type MenuAction =
 
 /** Action forwarded to the renderer for an omp:// deep link. */
 export type DeepLinkPayload = { action: "new-session" } | { action: "switch-session"; sessionId: string };
+
+// ============================================================================
+// Quick entry (the summoned bar and its handoff to a chat window)
+// ============================================================================
+
+/** Where a quick-entry message starts. */
+export type QuickEntryTarget = { kind: "chat" } | { kind: "work" } | { kind: "workspace"; cwd: string };
+
+export interface QuickEntryWorkspace {
+	cwd: string;
+	name: string;
+}
+
+export type QuickEntryFailure =
+	| "tab-cap"
+	| "no-window"
+	| "workspace-missing"
+	| "tab-failed"
+	| "interrupted"
+	| "invalid";
+
+export interface QuickEntryPrompt {
+	id: string;
+	text: string;
+	target: QuickEntryTarget;
+}
+
+/** A prompt that did not reach a tab, waiting in the bar's restore list. */
+export interface QuickEntryReturned extends QuickEntryPrompt {
+	reason: QuickEntryFailure;
+}
+
+/** Main → bar on every show (IPC_EVENTS.QUICK_ENTRY_STATE). */
+export interface QuickEntryBarState {
+	language: "en" | "zh";
+	target: QuickEntryTarget;
+	/** Recent agent workspaces, most recent first; Work is not listed. */
+	workspaces: QuickEntryWorkspace[];
+	/** Failed handoffs, oldest first; never merged. */
+	restored: QuickEntryReturned[];
+	/** Monotonic per show; the bar refocuses its input when it changes. */
+	showId: number;
+}
+
+export interface QuickEntrySubmitPayload {
+	text: string;
+	target: QuickEntryTarget;
+}
+
+export type QuickEntrySubmitResult = { ok: true } | { ok: false; reason: QuickEntryFailure };
+
+/** window.ompQuickEntry: the only surface the bar page sees. */
+export interface QuickEntryBarApi {
+	readonly platform: string;
+	/** The latest state replays to each new subscriber. */
+	onState(callback: (state: QuickEntryBarState) => void): () => void;
+	submit(payload: QuickEntrySubmitPayload): Promise<QuickEntrySubmitResult>;
+	/** The bar took this restored prompt into its draft; main drops it from the list. */
+	consumeRestored(id: string): void;
+	dismiss(): void;
+}
 
 /** Optional payload carried alongside a MenuAction (approval mode / project cwd). */
 export interface MenuActionPayload {
@@ -1226,5 +1302,13 @@ export interface OmpApi {
 			text: string | null;
 			error?: string;
 		}>;
+	};
+	quickEntry: {
+		/** Lease the prompts main queued for this window (not deleted until ack). */
+		claimPending(): Promise<QuickEntryPrompt[]>;
+		/** The prompt's text was handed to its tab's composer; main drops the lease. */
+		ack(id: string): Promise<void>;
+		/** Give a prompt back to the bar's restore list after a renderer-side failure (never opens the bar). */
+		returnToBar(prompt: QuickEntryPrompt, reason: QuickEntryFailure): Promise<void>;
 	};
 }

@@ -6,7 +6,7 @@ import { isAbsolute, resolve } from "node:path";
 import { app } from "electron";
 import { type DeepLinkPayload, IPC_EVENTS } from "../shared/ipc-types";
 import { launchArguments, parseLaunchArgv } from "./launch-argv";
-import type { SpawnWindow, WindowManager } from "./window";
+import { type SpawnWindow, sendWhenLoaded, type WindowManager } from "./window";
 
 export const DEEP_LINK_PROTOCOL = "omp";
 
@@ -111,12 +111,5 @@ function handleDeepLink(url: string, windowManager: WindowManager, spawnWindow: 
 
 	// Cold start: the renderer only subscribes after load — hold the link until
 	// then, otherwise it is silently dropped.
-	const link = payload;
-	if (win.webContents.isLoading()) {
-		win.webContents.once("did-finish-load", () => {
-			if (!win.isDestroyed()) win.webContents.send(IPC_EVENTS.DEEP_LINK, link);
-		});
-	} else {
-		win.webContents.send(IPC_EVENTS.DEEP_LINK, link);
-	}
+	sendWhenLoaded(win, IPC_EVENTS.DEEP_LINK, payload);
 }

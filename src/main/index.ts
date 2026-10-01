@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { app, BrowserWindow, globalShortcut, nativeImage, session } from "electron";
 import Store from "electron-store";
 import { nativeAccelerator } from "../shared/hotkeys";
-import type { SessionKind } from "../shared/ipc-types";
+import type { QuickEntryTarget, SessionKind } from "../shared/ipc-types";
 import { APP_ID, PRODUCT_NAME } from "../shared/product";
 import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
@@ -21,6 +21,7 @@ import { registerIpcHandlers } from "./ipc";
 import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
+import { QuickEntryController } from "./quick-entry";
 import { writeRuntimeLog } from "./runtime-log";
 import { SessionIndex } from "./session-index";
 import { shellSpawnEnv } from "./shell-env";
@@ -129,6 +130,8 @@ interface MainPrefs {
 	tabLayouts?: PersistedTabLayout[];
 	/** Pre-multi-window shape, migrated on the first persist. */
 	tabLayout?: PersistedTabLayout;
+	/** The quick-entry bar's last target. */
+	quickEntryTarget?: QuickEntryTarget;
 	[key: string]: unknown;
 }
 
@@ -222,6 +225,7 @@ let statsServer: StatsServerManager | null = null;
 let sessionIndex: SessionIndex;
 let statsClient: StatsClient;
 let logWatcher: LogWatcher;
+let quickEntry: QuickEntryController | null = null;
 
 function errorMessage(value: unknown): { message: string; stack?: string } {
 	if (value instanceof Error) return { message: value.message, stack: value.stack };
@@ -415,6 +419,32 @@ app.whenReady().then(() => {
 		initialCwd: resolveInitialCwd,
 	});
 
+	const portal = usesShortcutPortal(process.platform, process.env, {
+		platform: app.commandLine.getSwitchValue("ozone-platform"),
+		hint: app.commandLine.getSwitchValue("ozone-platform-hint"),
+	});
+	writeRuntimeLog({
+		source: "global-shortcut",
+		message: "global shortcut mode",
+		details: { portal, enableFeatures: app.commandLine.getSwitchValue("enable-features") },
+	});
+	quickEntry = new QuickEntryController({
+		windowManager,
+		spawnWindow,
+		sidecarPool,
+		sessionIndex,
+		defaultWorkspace: ensureDefaultWorkspace,
+		readTarget: () => prefsStore().get("quickEntryTarget"),
+		saveTarget: target => prefsStore().set("quickEntryTarget", target),
+		portalSession: portal,
+	});
+	quickEntry.registerIpc();
+	// The bar is not a WindowManager record, so Electron's window-all-closed
+	// would never fire on Win/Linux while it exists, hidden or not.
+	windowManager.subscribeWindowClosed(() => {
+		if (process.platform !== "darwin" && windowManager.getAllWindows().length === 0) quickEntry?.destroyWindow();
+	});
+
 	// Global shortcut: Cmd+Shift+O — toggle focused window, else show the most
 	// recent, else spawn one (multi-window decision tree).
 	const toggleAccelerator = nativeAccelerator("window.toggle");
@@ -445,15 +475,6 @@ app.whenReady().then(() => {
 			details: { accelerator: toggleAccelerator },
 		});
 	}
-	const portal = usesShortcutPortal(process.platform, process.env, {
-		platform: app.commandLine.getSwitchValue("ozone-platform"),
-		hint: app.commandLine.getSwitchValue("ozone-platform-hint"),
-	});
-	writeRuntimeLog({
-		source: "global-shortcut",
-		message: "global shortcut mode",
-		details: { portal, enableFeatures: app.commandLine.getSwitchValue("enable-features") },
-	});
 	sessionIndex.start();
 	logWatcher.start();
 	// Read before the first window restores: every tab change rewrites the store,
@@ -466,6 +487,7 @@ app.whenReady().then(() => {
 	if (!explicitStartupCwd) {
 		for (const layout of savedLayouts.slice(1)) spawnWindowWithLayout(layout);
 	}
+	quickEntry.markStartupWindows(windowManager.getAllWindows());
 
 	// Tray, menu, deep links, updater
 	createTray(windowManager, spawnWindow);
@@ -502,4 +524,5 @@ installQuitGuard(
 		logWatcher?.stop();
 		destroyTray();
 	},
+	() => windowManager?.getTargetWindow() ?? null,
 );

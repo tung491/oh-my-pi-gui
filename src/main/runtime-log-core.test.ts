@@ -74,7 +74,8 @@ describe("runtime crash log", () => {
 		);
 	});
 
-	it("keeps a failed notification report under its own source", () => {
+	it("keeps notification and quick-entry failures under their own sources", () => {
 		expect(normalizeRuntimeErrorReport({ source: "notification", message: "failed" }).source).toBe("notification");
+		expect(normalizeRuntimeErrorReport({ source: "quick-entry", message: "failed" }).source).toBe("quick-entry");
 	});
 });
