@@ -177,6 +177,8 @@ await Bun.sleep(5000);
 	}
 });
 
+// Up to 5 s for the port, 2.2 s of reads and 3 s for the stop can pass
+// vitest's 5 s default on a loaded host.
 test("reads keep the server up and their absence stops it", async () => {
 	const { directory, binary } = await fakeStats(
 		"idle",
@@ -201,7 +203,7 @@ await Bun.sleep(30000);
 		server.kill();
 		await fs.rm(directory, { recursive: true, force: true });
 	}
-});
+}, 15_000);
 
 test("a server stopped while booting never announces its port", async () => {
 	// Ignores SIGINT so the stopped child still prints its URL, as a slow
