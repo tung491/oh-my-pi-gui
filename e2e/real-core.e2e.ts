@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import { _electron as electron } from "playwright";
 import type { RpcSessionState } from "../src/shared/rpc-types";
+import { DESKTOP_ENTRY_SWITCHES } from "./packaged-launch";
 
 test("real bundled sidecar persists settings and sessions and serves every stats route", async () => {
 	test.setTimeout(180_000);
@@ -37,7 +38,11 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 	if (executablePath) Reflect.deleteProperty(env, "OMP_BUNDLED_OMP");
 	const app = await electron.launch({
 		...(executablePath ? { executablePath } : {}),
-		args: [...(executablePath ? [] : [path.resolve("out/main/index.js")]), project, `--user-data-dir=${desktop}`],
+		args: [
+			...(executablePath ? DESKTOP_ENTRY_SWITCHES : [path.resolve("out/main/index.js")]),
+			project,
+			`--user-data-dir=${desktop}`,
+		],
 		env,
 	});
 	const mainOutput: string[] = [];

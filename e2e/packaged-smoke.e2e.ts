@@ -15,6 +15,7 @@ import { expect, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron, type Page } from "playwright";
 import { LINUX_DISPLAY_SWITCH } from "../src/main/relaunch-args";
 import type { RpcSessionState } from "../src/shared/rpc-types";
+import { DESKTOP_ENTRY_SWITCHES } from "./packaged-launch";
 
 const executablePath = process.env.OMP_GUI_TEST_APP;
 
@@ -64,13 +65,7 @@ async function waitForSidecar(page: Page): Promise<void> {
 async function launch(profile: Profile, args: string[] = []): Promise<{ app: ElectronApplication; page: Page }> {
 	const app = await electron.launch({
 		executablePath,
-		// The desktop entry passes the display switch. Without it the app
-		// restarts itself once to add it, and Playwright would lose the process.
-		args: [
-			...args,
-			...(process.platform === "linux" ? [LINUX_DISPLAY_SWITCH] : []),
-			`--user-data-dir=${profile.desktop}`,
-		],
+		args: [...DESKTOP_ENTRY_SWITCHES, ...args, `--user-data-dir=${profile.desktop}`],
 		// Playwright prepends --no-sandbox on Linux unless told the sandbox is wanted.
 		chromiumSandbox: true,
 		env: profile.env,
@@ -234,7 +229,7 @@ test.describe("installed package", () => {
 		try {
 			await expect
 				.poll(async () => (await mainProcesses(profile)).map(entry => entry.argv.slice(1)), { timeout: 30_000 })
-				.toEqual([[profile.project, `--user-data-dir=${profile.desktop}`, LINUX_DISPLAY_SWITCH]]);
+				.toEqual([[LINUX_DISPLAY_SWITCH, profile.project, `--user-data-dir=${profile.desktop}`]]);
 		} finally {
 			// Only the process this test started, found by its throwaway profile.
 			for (const { pid } of await mainProcesses(profile)) process.kill(pid, "SIGTERM");
