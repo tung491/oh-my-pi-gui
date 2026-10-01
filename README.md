@@ -219,7 +219,7 @@ Windows packages are currently unsigned. Windows SmartScreen may require **More 
 
 On Linux and Windows, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+Shift+T`, `Ctrl+K`). The thinking toggle has no default chord there, because Ctrl+T opens a tab; assign one in Keyboard Shortcuts.
 
-**Quick entry** opens a small bar over whatever app you are in. Choose **Chat**, or **Agent** with the Work folder or a recent workspace, type, and press Enter: the message is sent from a new tab in the main window, which comes to the front. Shift+Enter adds a line. Esc or clicking away closes the bar and keeps the draft. A message starting with `!` or `$` opens in the new tab unsent, and a message that cannot be delivered, for example at the tab limit, stays in the bar with the reason. Change the chord or turn it off in Settings → Keyboard Shortcuts. `⇧⌘O` (`Ctrl+Shift+O`) still shows or hides the window.
+**Quick entry** opens a small bar over whatever app you are in. Choose **Chat**, or **Agent** with the Work folder or a recent workspace, type, and press Enter: the message is sent from a new tab in the main window, which comes to the front. Shift+Enter adds a line. Esc or clicking away closes the bar and keeps the draft. A shell command (`!ls`) or Python code (`$ print(1)`) opens in the new tab unsent, and a message that cannot be delivered, for example at the tab limit, stays in the bar with the reason. Change the chord or turn it off in Settings → Keyboard Shortcuts. `⇧⌘O` (`Ctrl+Shift+O`) still shows or hides the window.
 
 On GNOME Wayland with the `.deb`, the first launch asks you to allow both global shortcuts. GNOME then owns the keys: change or remove them in Settings → Apps → Sai ATLAS → Global Shortcuts. A chord changed in Sai ATLAS applies after a restart, when GNOME asks again; turning quick entry off takes effect at once. Without the portal (an AppImage without desktop integration, wlroots compositors such as Sway, or a declined dialog), bind `sai-atlas --quick-entry` as a custom keyboard shortcut, or `~/Applications/Sai-ATLAS.AppImage --quick-entry` for the AppImage; on Sway, `bindsym ctrl+shift+space exec sai-atlas --quick-entry`.
 
@@ -564,7 +564,7 @@ Windows 包当前未签名。首次启动前请确认下载来源；Windows Smar
 
 在 Linux 和 Windows 上，⌘ 快捷键改用 Ctrl，并以文字显示（`Ctrl+T`、`Ctrl+Shift+T`、`Ctrl+K`）。思考开关在这些平台上没有默认快捷键，因为 Ctrl+T 用于新建标签页；可在键盘快捷键中自行指定。
 
-**快速输入**会在当前应用之上打开一个小输入栏。选择**聊天**，或选择 **Agent** 并指定**工作**（默认工作区）或最近的工作区，输入后按 Enter：消息会从主窗口的新标签页发出，主窗口随之切到最前。Shift+Enter 换行。按 Esc 或点击别处会关闭输入栏并保留草稿。以 `!` 或 `$` 开头的消息会在新标签页中打开但不发送；无法送达的消息（例如已达标签页上限）会留在输入栏中并说明原因。可在 设置 → 键盘快捷键 中更改组合键或关闭快速输入。`⇧⌘O`（`Ctrl+Shift+O`）仍用于显示或隐藏窗口。
+**快速输入**会在当前应用之上打开一个小输入栏。选择**聊天**，或选择 **Agent** 并指定**工作**（默认工作区）或最近的工作区，输入后按 Enter：消息会从主窗口的新标签页发出，主窗口随之切到最前。Shift+Enter 换行。按 Esc 或点击别处会关闭输入栏并保留草稿。Shell 命令（`!ls`）或 Python 代码（`$ print(1)`）会在新标签页中打开但不发送；无法送达的消息（例如已达标签页上限）会留在输入栏中并说明原因。可在 设置 → 键盘快捷键 中更改组合键或关闭快速输入。`⇧⌘O`（`Ctrl+Shift+O`）仍用于显示或隐藏窗口。
 
 在通过 `.deb` 安装的 GNOME Wayland 上，首次启动会请求允许两个全局快捷键。之后这些按键由 GNOME 管理：可在 设置 → 应用 → Sai ATLAS → 全局快捷键 中更改或移除。在 Sai ATLAS 中更改的组合键会在重启后生效，届时 GNOME 会再次询问；关闭快速输入则立即生效。没有门户时（未做桌面集成的 AppImage、Sway 等 wlroots 合成器，或拒绝了对话框），请把 `sai-atlas --quick-entry` 绑定为自定义键盘快捷键，AppImage 则绑定 `~/Applications/Sai-ATLAS.AppImage --quick-entry`；在 Sway 上可用 `bindsym ctrl+shift+space exec sai-atlas --quick-entry`。
 
