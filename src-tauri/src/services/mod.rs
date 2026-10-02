@@ -8,6 +8,7 @@ mod dialogs;
 mod editor;
 mod fs;
 mod host_tools;
+mod legacy_storage;
 mod log_watcher;
 mod models_config;
 mod open_path_target;
@@ -161,7 +162,10 @@ impl ServicesPort for Services {
     }
 
     fn import_legacy_renderer_storage(&self) -> BoxFuture<'_, ()> {
-        // The port imports Chromium localStorage here, before any window exists.
+        // Runs before any window exists; `services::init` awaits it synchronously.
+        if let Some(ctx) = self.ctx() {
+            legacy_storage::import(&ctx.prefs, crate::paths::user_data_dir());
+        }
         Box::pin(std::future::ready(()))
     }
 
