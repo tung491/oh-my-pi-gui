@@ -1,0 +1,12 @@
+[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec=sai-atlas %U
+StartupWMClass=vn.io.vif.saiatlas
+Icon={{icon}}
+Name=Sai ATLAS
+Terminal=false
+Type=Application
+MimeType=x-scheme-handler/omp;
