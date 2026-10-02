@@ -37,11 +37,21 @@ pub enum StoreError {
     Serialize(#[from] serde_json::Error),
     #[error("the store lock was poisoned")]
     Poisoned,
+    #[error("{path} could not be read ({source}); refusing to overwrite it")]
+    Unreadable {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 struct Inner {
     path: PathBuf,
     root: Value,
+    /// Set when the file exists but could not be read (EACCES, EIO, a directory
+    /// in its place): the store answers reads from an empty document and refuses
+    /// every write, so the user's settings are never replaced with `{}`.
+    unreadable: Option<std::io::Error>,
 }
 
 /// A JSON document on disk with dotted-path access. Cheap to clone; clones share the document.
@@ -133,26 +143,35 @@ fn delete_path(root: &mut Value, segments: &[String]) -> bool {
 }
 
 impl JsonStore {
-    /// Open (or lazily create) the store at `path`. A missing file reads as an
-    /// empty object. An unreadable one is moved aside to `<name>.corrupt` so the
-    /// next write does not silently overwrite what the user had.
+    /// Open (or lazily create) the store at `path`. Only a missing file reads as
+    /// an empty object. A file that does not parse is moved aside to
+    /// `<name>.corrupt` so the next write does not silently overwrite what the
+    /// user had; a file that cannot be read at all makes the store read-only.
     pub fn open(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
-        let root = match std::fs::read(&path) {
+        let (root, unreadable) = match std::fs::read(&path) {
             Ok(bytes) => match serde_json::from_slice::<Value>(&bytes) {
-                Ok(value) if value.is_object() => value,
+                Ok(value) if value.is_object() => (value, None),
                 Ok(_) | Err(_) => {
                     let mut aside = path.clone().into_os_string();
                     aside.push(".corrupt");
                     // Best effort: if even the rename fails there is nothing more to do here.
                     let _ = std::fs::rename(&path, PathBuf::from(aside));
-                    Value::Object(Map::new())
+                    (Value::Object(Map::new()), None)
                 }
             },
-            Err(_) => Value::Object(Map::new()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (Value::Object(Map::new()), None),
+            Err(error) => {
+                crate::runtime_log::note(
+                    "unknown",
+                    format!("could not read {}: {error}; the store is read-only until the file can be read", path.display()),
+                    serde_json::json!({ "path": path.display().to_string() }),
+                );
+                (Value::Object(Map::new()), Some(error))
+            }
         };
         Self {
-            inner: Arc::new(Mutex::new(Inner { path, root })),
+            inner: Arc::new(Mutex::new(Inner { path, root, unreadable })),
             counter: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -210,6 +229,9 @@ impl JsonStore {
 
     fn persist(&self, inner: &Inner) -> Result<(), StoreError> {
         let path = &inner.path;
+        if let Some(error) = &inner.unreadable {
+            return Err(StoreError::Unreadable { path: path.clone(), source: std::io::Error::new(error.kind(), error.to_string()) });
+        }
         let write_error = |source: std::io::Error| StoreError::Write { path: path.clone(), source };
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(write_error)?;
@@ -245,6 +267,22 @@ mod tests {
 
     fn store_in(dir: &tempfile::TempDir) -> JsonStore {
         JsonStore::open(dir.path().join("prefs.json"))
+    }
+
+    #[test]
+    fn an_unreadable_store_refuses_to_overwrite_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        // A directory where the file should be reads with an error that is not NotFound.
+        let path = dir.path().join("prefs.json");
+        std::fs::create_dir(&path).unwrap();
+        std::fs::write(path.join("keep"), b"user data").unwrap();
+        let store = JsonStore::open(&path);
+        assert_eq!(store.get("welcome.completed"), None);
+        let refused = store.set("welcome.completed", json!(true)).unwrap_err();
+        assert!(matches!(refused, StoreError::Unreadable { .. }), "{refused}");
+        assert!(store.update("x", |_| Some(json!(1))).is_err());
+        assert!(std::fs::read(path.join("keep")).is_ok(), "nothing was replaced");
+        assert!(!dir.path().join("prefs.json.corrupt").exists(), "an unreadable file is not treated as corrupt");
     }
 
     #[test]
