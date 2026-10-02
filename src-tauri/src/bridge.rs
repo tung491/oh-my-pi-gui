@@ -1070,7 +1070,7 @@ mod tests {
         let ack = dispatch_for_test(&ctx, main_caller(), "runtime:error-report", vec![report]).await.unwrap();
         assert_eq!(ack, Value::Null);
         let unknown = dispatch_for_test(&ctx, main_caller(), "fs:read", vec![json!({ "path": "x" })]).await;
-        assert_eq!(unknown, Err(IpcError::not_ported("fs:read")));
+        assert_eq!(unknown, Err(IpcError::new("not ported: fs:read")));
     }
 
     #[test]

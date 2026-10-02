@@ -14,10 +14,19 @@ case "$MODULE" in
 esac
 
 # --- toolchain --------------------------------------------------------------
+# An explicit CARGO_HOME_BIN in the environment wins over the pins file.
+ENV_CARGO_HOME_BIN="${CARGO_HOME_BIN:-}"
 # shellcheck disable=SC1091
 source "$ROOT/scripts/rust-pins.env"
-CARGO_HOME_BIN="${CARGO_HOME_BIN:?CARGO_HOME_BIN missing from scripts/rust-pins.env}"
+CARGO_HOME_BIN="${ENV_CARGO_HOME_BIN:-${CARGO_HOME_BIN:?CARGO_HOME_BIN missing from scripts/rust-pins.env}}"
 export PATH="$CARGO_HOME_BIN:$PATH"
+# bun lives outside the system PATH on developer machines; find it the same way.
+if ! command -v bun >/dev/null 2>&1; then
+  for candidate in "$HOME/.bun/bin" /usr/local/bin /opt/homebrew/bin; do
+    if [[ -x "$candidate/bun" ]]; then export PATH="$candidate:$PATH"; break; fi
+  done
+fi
+command -v bun >/dev/null 2>&1 || { echo "bun is missing; install it from https://bun.sh" >&2; exit 1; }
 CARGO="$CARGO_HOME_BIN/cargo"
 if ! "$CARGO" tauri --version 2>/dev/null | grep -q '^tauri-cli 2\.'; then
   echo 'cargo tauri is missing; run ~/.cargo/bin/cargo install tauri-cli --version "^2" --locked' >&2
@@ -188,7 +197,8 @@ for target in aarch64-apple-darwin x86_64-pc-windows-msvc; do
   fi
   OUT=$("$CARGO" check --manifest-path "$MANIFEST" --target "$target" --all-features 2>&1)
   if [[ $? -ne 0 ]]; then
-    if echo "$OUT" | grep -qiE 'sdk|xcrun|linker|could not find native static library|pkg-config|\.framework'; then
+    # Without the platform toolchain, cc-rs cannot build the Objective-C / Windows C helpers in the dependency tree.
+    if echo "$OUT" | grep -qiE 'sdk|xcrun|linker|could not find native static library|pkg-config|\.framework|cc-rs|objective-c|unrecognized command-line option|windows\.h|winapi'; then
       warn 9 "cargo check --target $target needs the platform SDK; skipped"
     else
       echo "$OUT" | tail -40 >&2
