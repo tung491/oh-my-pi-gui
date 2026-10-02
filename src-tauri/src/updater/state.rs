@@ -83,7 +83,7 @@ pub(crate) enum MacInstallerArchitecture {
 
 /// The last path segment of `url`, percent-decoded; the raw string when it
 /// does not parse (matching `new URL(url, base)` plus `decodeURIComponent`).
-fn release_file_name(url: &str) -> String {
+pub(crate) fn release_file_name(url: &str) -> String {
     let Ok(base) = reqwest::Url::parse("https://updates.invalid") else {
         return url.to_string();
     };
@@ -131,6 +131,11 @@ pub(crate) fn select_mac_installer(
 
 /// A certificate-backed signature has both an authority chain and a team.
 /// Ad-hoc signatures explicitly report `Signature=adhoc` and no team.
+///
+/// The Tauri macOS bundle is ad-hoc signed and has no Squirrel flow, so the
+/// install mode is always manual there and nothing reads `codesign` output;
+/// the rule stays for its ported test.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn has_stable_mac_signing_identity(codesign_details: &str) -> bool {
     let lines = || codesign_details.lines().map(str::trim);
     if lines().any(|line| line == "Signature=adhoc" || line == "TeamIdentifier=not set") {
@@ -300,11 +305,17 @@ pub(crate) fn asks_before_install(kind: Option<LinuxPackageKind>) -> bool {
 }
 
 /// A failure listener handed to `subscribe` in [`capture_install_error`].
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) type InstallErrorListener = Arc<dyn Fn(String) + Send + Sync>;
 
 /// Run an install and return the first failure it reported, whether through
 /// the subscribed listener or as its own error. `subscribe` returns the
 /// unsubscribe function, which runs once the install returns.
+///
+/// electron-updater reported install failures as events next to the return
+/// value; the Rust installers return their failure directly, so only the
+/// ported test exercises this.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn capture_install_error<S, U, I>(subscribe: S, install: I) -> Option<String>
 where
     S: FnOnce(InstallErrorListener) -> U,
