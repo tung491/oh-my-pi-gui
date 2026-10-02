@@ -6,6 +6,7 @@
 pub mod ipc;
 mod pool;
 mod snowflake;
+mod tab_spawn;
 #[cfg(test)]
 mod window_spawn_target;
 
