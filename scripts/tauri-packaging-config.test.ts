@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { type PlistObject, parsePlistFile } from "app-builder-lib/out/util/plist";
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 import { APP_ID, PRODUCT_NAME } from "../src/shared/product";
 import { MAC_UPDATE_FLOOR } from "./mac-update-floor";
 import { assetNames, darwinReleaseFor } from "./release-feeds";
@@ -364,5 +365,48 @@ describe("macOS bundle", () => {
 		const [major, minor] = parts(darwin);
 		const [floorMajor, floorMinor] = parts(MAC_UPDATE_FLOOR);
 		expect((major ?? 0) * 100 + (minor ?? 0)).toBeGreaterThanOrEqual((floorMajor ?? 0) * 100 + (floorMinor ?? 0));
+	});
+});
+
+describe("Tauri CI job", () => {
+	interface Job {
+		"runs-on"?: string;
+		env?: Record<string, string>;
+		steps?: { run?: string; uses?: string; with?: Record<string, string | boolean | number> }[];
+	}
+
+	it("builds, lints and tests the Rust core and checks the API snapshots with pinned actions", () => {
+		const ci = parseYaml(fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8")) as {
+			jobs?: Record<string, Job>;
+		};
+		const job = ci.jobs?.["tauri-linux"];
+		expect(job?.["runs-on"]).toBe("ubuntu-latest");
+		expect(job?.env?.CARGO_HOME_BIN).toBe("/home/runner/.cargo/bin");
+		const runs = job?.steps?.flatMap(step => (step.run ? [step.run] : [])) ?? [];
+		for (const command of [
+			"bun install --frozen-lockfile",
+			"bun run build:renderer:tauri",
+			"cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
+			"cargo test --manifest-path src-tauri/Cargo.toml --all-features",
+			'BASE="$(git merge-base HEAD origin/main)" bash scripts/check-module.sh foundation',
+		]) {
+			expect(runs).toContain(command);
+		}
+		const setup = runs.join("\n");
+		for (const needle of [
+			"bubblewrap",
+			"xdg-dbus-proxy",
+			"source scripts/rust-pins.env",
+			"$PUBLIC_API_TOOLCHAIN",
+			"$CARGO_PUBLIC_API_VERSION",
+			'tauri-cli --version "^2" --locked',
+		]) {
+			expect(setup).toContain(needle);
+		}
+		const uses = job?.steps?.flatMap(step => (step.uses ? [step.uses] : [])) ?? [];
+		for (const action of uses) expect(action).toMatch(/^[\w-]+\/[\w-]+@[0-9a-f]{40}$/);
+		expect(job?.steps?.find(step => step.uses?.startsWith("actions/checkout@"))?.with?.["persist-credentials"]).toBe(
+			false,
+		);
 	});
 });
