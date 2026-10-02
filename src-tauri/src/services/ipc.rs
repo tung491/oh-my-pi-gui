@@ -4,11 +4,11 @@
 
 use std::sync::Arc;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::bridge::{IpcError, Reply};
 use crate::ctx::AppCtx;
-use crate::ports::Caller;
+use crate::ports::{Caller, SessionScope};
 
 /// `runtime:error-report`
 pub fn runtime_error_report(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
@@ -31,40 +31,155 @@ pub fn log_snapshot(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Repl
     Reply::err(IpcError::not_ported("log:snapshot"))
 }
 
+fn requested_scope(payload: &Value) -> SessionScope {
+    if payload.get("scope").and_then(Value::as_str) == Some("local") { SessionScope::Local } else { SessionScope::Global }
+}
+
 /// `sessions:list`
 pub fn sessions_list(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("sessions:list"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let scope = requested_scope(&payload);
+    let cwd = ctx.tabs.cwd_for(caller, None);
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let sessions = ctx.services.sessions_list(scope, cwd).await.map_err(|error| IpcError::new(error.to_string()))?;
+        Ok(serde_json::to_value(sessions).unwrap_or(Value::Null))
+    }))
 }
 
-/// `sessions:delete`
-pub fn sessions_delete(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("sessions:delete"))
+fn rpc_response_ok(response: &Value) -> Result<(), IpcError> {
+    if response.get("success").and_then(Value::as_bool) == Some(true) {
+        return Ok(());
+    }
+    Err(IpcError::new(response.get("error").and_then(Value::as_str).unwrap_or("Sidecar request failed").to_string()))
 }
 
-/// `sessions:rename`
+/// `sessions:delete`, ported exactly from `ipc.ts:582-602`: refuse only while
+/// the owning tab's sidecar is running; if the owner is live and idle, send
+/// it `drop_session` and await the reply before deleting; if the owner has no
+/// process, drop the claim first so a restored tab cannot wake into a path
+/// that no longer exists, then delete.
+pub fn sessions_delete(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let session_path = match payload.get("sessionPath").and_then(Value::as_str) {
+        Some(path) if path.ends_with(".jsonl") => path.to_string(),
+        _ => return Reply::err(IpcError::new("Invalid session path")),
+    };
+    let owner = ctx.tabs.session_owner(&session_path);
+    let is_live = owner.is_some() && ctx.tabs.session_owner_is_live(&session_path);
+    if is_live {
+        // The command is queued on the owner's stdin before `command_for_idle_session`
+        // returns, so calling it synchronously here and awaiting only the reply is safe.
+        let pending = ctx.tabs.command_for_idle_session(&session_path, json!({ "type": "drop_session" }));
+        let ctx = ctx.clone();
+        return Reply::Later(Box::pin(async move {
+            let Some(response) = pending.await else { return Err(IpcError::new("Session is currently running")) };
+            rpc_response_ok(&response)?;
+            let cancelled = response.get("data").and_then(|data| data.get("cancelled")).and_then(Value::as_bool).unwrap_or(false);
+            if cancelled {
+                return Err(IpcError::new("Session deletion was cancelled"));
+            }
+            ctx.services.session_delete(&session_path).await.map(|_| Value::Null).map_err(|error| IpcError::new(error.to_string()))
+        }));
+    }
+    // Either no tab claims the file, or the claiming tab has no process (a
+    // restored tab that was never shown). Nothing is loaded anywhere, so the
+    // file IS the session — drop the tab's claim first.
+    if let Some(owner) = owner {
+        ctx.tabs.note_session_file(&owner.tab_id, None);
+    }
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        ctx.services.session_delete(&session_path).await.map(|_| Value::Null).map_err(|error| IpcError::new(error.to_string()))
+    }))
+}
+
+/// `sessions:rename`, same ownership rules as delete (`ipc.ts:603-632`); the
+/// no-owner fallback uses the caller's own sidecar when it is ready and connected.
 pub fn sessions_rename(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("sessions:rename"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let session_path = match payload.get("sessionPath").and_then(Value::as_str) {
+        Some(path) if path.ends_with(".jsonl") => path.to_string(),
+        _ => return Reply::err(IpcError::new("Invalid session path")),
+    };
+    let name = payload.get("name").and_then(Value::as_str).map(str::trim).unwrap_or("").to_string();
+    if name.is_empty() {
+        return Reply::err(IpcError::new("Session name cannot be empty"));
+    }
+    let command = json!({ "type": "set_session_name", "name": name, "sessionPath": session_path });
+    let live_owner = ctx.tabs.session_owner(&session_path).is_some() && ctx.tabs.session_owner_is_live(&session_path);
+    if live_owner {
+        let pending = ctx.tabs.command_for_idle_session(&session_path, command);
+        return Reply::Later(Box::pin(async move {
+            let Some(response) = pending.await else { return Err(IpcError::new("Session is currently running")) };
+            rpc_response_ok(&response)?;
+            Ok(Value::Null)
+        }));
+    }
+    if let Some(sidecar) = ctx.tabs.sidecar_for_window(caller.win_id) {
+        if sidecar.status() == crate::ports::SidecarStatus::Ready && sidecar.has_rpc_client() {
+            let pending = sidecar.request(command, None);
+            return Reply::Later(Box::pin(async move {
+                let response = pending.await.map_err(|error| IpcError::new(error.to_string()))?;
+                rpc_response_ok(&response)?;
+                Ok(Value::Null)
+            }));
+        }
+    }
+    Reply::err(IpcError::new("Sidecar not connected"))
 }
 
-/// `sessions:search`
+/// `sessions:search`: full-content search over the same candidate set the list view would show.
 pub fn sessions_search(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("sessions:search"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let scope = requested_scope(&payload);
+    let query = payload.get("query").and_then(Value::as_str).unwrap_or("").to_string();
+    let cwd = ctx.tabs.cwd_for(caller, None);
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let candidates = ctx.services.sessions_list(scope, cwd).await.map_err(|error| IpcError::new(error.to_string()))?;
+        let paths: Vec<String> = candidates.into_iter().map(|info| info.path).collect();
+        let results = ctx.services.session_search(&query, paths).await;
+        Ok(serde_json::to_value(results).unwrap_or(Value::Null))
+    }))
 }
 
-/// `session:open-new-window`
+/// `session:open-new-window`: open a session (or a fresh project window) in a
+/// new parallel window with its own sidecar; focuses the owner window instead
+/// of double-attaching when the session is already open. `ipc.ts:633-647`.
 pub fn session_open_new_window(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("session:open-new-window"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let session_path = payload.get("sessionPath").and_then(Value::as_str).map(str::to_string);
+    let payload_cwd = payload.get("cwd").and_then(Value::as_str).filter(|cwd| !cwd.is_empty()).map(str::to_string);
+    let caller_cwd = ctx.tabs.cwd_for(caller, None);
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        if let Some(session_path) = &session_path {
+            if let Some(owner) = ctx.tabs.session_owner(session_path) {
+                if ctx.desktop.focus(owner.win_id) {
+                    return Ok(Value::Bool(true));
+                }
+            }
+        }
+        if ctx.tabs.at_cap() {
+            return Ok(Value::Bool(false));
+        }
+        let cwd = payload_cwd.or(caller_cwd).or_else(|| {
+            let home = dirs::home_dir();
+            crate::paths::initial_cwd(&[home.as_deref().and_then(|path| path.to_str())])
+        });
+        let kind = match &session_path {
+            Some(path) => Some(ctx.services.session_kind_for(path).await),
+            None => None,
+        };
+        Ok(Value::Bool(ctx.desktop.spawn_window(cwd, session_path, kind).is_some()))
+    }))
 }
 
-/// `session:consume-pending`
-pub fn session_consume_pending(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("session:consume-pending"))
+/// `session:consume-pending`: a fresh window pulls the session it was opened
+/// to display (one-shot).
+pub fn session_consume_pending(ctx: &Arc<AppCtx>, caller: Caller, _args: Vec<Value>) -> Reply {
+    Reply::ok(ctx.desktop.consume_pending_session(caller.win_id).map(Value::String).unwrap_or(Value::Null))
 }
 
 /// `system:open-external`
