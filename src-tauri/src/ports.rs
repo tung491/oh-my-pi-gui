@@ -390,8 +390,9 @@ pub struct SidecarOptions {
 pub enum SidecarError {
     #[error("the sidecar is not running")]
     NotRunning,
-    #[error("the sidecar did not answer within {0} ms")]
-    Timeout(u64),
+    /// The TS message: `RPC timeout (<ms>ms): <command type>`.
+    #[error("RPC timeout ({timeout_ms}ms): {command_type}")]
+    Timeout { timeout_ms: u64, command_type: String },
     #[error("the sidecar connection closed before the response arrived")]
     Closed,
     #[error("{0}")]
@@ -615,9 +616,11 @@ pub trait DesktopPort: Send + Sync {
     fn on_second_instance(&self, argv: Vec<String>, cwd: Option<String>);
     fn request_quit(&self);
     /// `RunEvent::ExitRequested`: `code` is `None` for a user-initiated exit (last
-    /// window closed, OS quit). Return `true` to keep the app running
-    /// (`api.prevent_exit()`; e.g. macOS keeps running without windows, or the
-    /// quit guard asks first); `false` lets the frozen shutdown order run.
+    /// window closed, OS quit) and `Some` for the app's own `AppHandle::exit`
+    /// (`request_quit`, the updater, SIGTERM). Return `true` to keep the app
+    /// running (`api.prevent_exit()`; e.g. macOS keeps running without windows,
+    /// or the quit guard asks first); `false` lets the frozen shutdown order run.
+    /// Always return `false` for `Some(_)`: those exits were already decided.
     fn on_exit_requested(&self, code: Option<i32>) -> bool;
     /// macOS `RunEvent::Reopen` (dock click).
     fn on_reopen(&self, has_visible_windows: bool);
@@ -734,10 +737,10 @@ pub struct MessageDialogOptions {
     pub message: String,
     pub detail: Option<String>,
     pub kind: MessageKind,
-    /// Button labels in display order; the answer is an index into this list.
+    /// One to three button labels in display order; the answer is an index into
+    /// this list. Closing the dialog without a choice counts as the **last**
+    /// button on every platform, so callers put the safe choice last.
     pub buttons: Vec<String>,
-    pub default_button: usize,
-    pub cancel_button: Option<usize>,
     pub parent: Option<WindowId>,
 }
 
@@ -756,7 +759,7 @@ pub trait Host: Send + Sync {
     fn open_dialog(&self, options: OpenDialogOptions) -> BoxFuture<'_, Option<Vec<PathBuf>>>;
     /// The chosen path, or `None` when cancelled.
     fn save_dialog(&self, options: SaveDialogOptions) -> BoxFuture<'_, Option<PathBuf>>;
-    /// The index of the button the user chose (the cancel button when dismissed).
+    /// The index of the button the user chose; a dismissed dialog answers the last button.
     fn message_dialog(&self, options: MessageDialogOptions) -> BoxFuture<'_, usize>;
     /// Open an `http`/`https` URL in the browser. Callers check the scheme; the host refuses any other.
     fn open_url(&self, url: &str) -> Result<(), HostError>;

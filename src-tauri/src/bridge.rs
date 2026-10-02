@@ -579,15 +579,25 @@ impl Bridge {
 
     // -- outbound ----------------------------------------------------------
 
-    /// Send `payload` on `channel` to one window. Before the page attaches the
-    /// message is queued (deep links and the bar state are kept as replay state
-    /// instead); the quick-entry window receives only its state channel.
+    /// Send `payload` on `channel` to one registered window. Before the page
+    /// attaches the message is queued (deep links and the bar state are kept as
+    /// replay state instead); the quick-entry window receives only its state
+    /// channel; an unregistered window id drops the message.
     pub fn emit_to_window(&self, win_id: WindowId, channel: &str, payload: Value) {
         let envelope = Envelope { channel: channel.to_string(), payload };
         let sink = {
             let mut state = lock(&self.state);
-            let kind = if win_id == WindowId::QUICK_ENTRY { WindowKind::QuickEntry } else { WindowKind::Main };
-            let window = state.windows.entry(win_id).or_insert_with(|| WindowState::new(kind));
+            // Only windows that `build_window` registered (or that attached) exist; a
+            // message for a closed or never-built window is dropped, never queued forever.
+            let Some(window) = state.windows.get_mut(&win_id) else {
+                self.dropped_outbound.fetch_add(1, Ordering::Relaxed);
+                runtime_log::note(
+                    "unknown",
+                    format!("bridge dropped {channel} for unknown window {win_id}"),
+                    json!({ "winId": win_id.0, "channel": channel }),
+                );
+                return;
+            };
             if window.kind == WindowKind::QuickEntry && channel != QUICK_ENTRY_STATE_CHANNEL {
                 return;
             }
@@ -953,6 +963,18 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_unregistered_window_drops_the_message() {
+        let ctx = ctx();
+        ctx.bridge.emit_to_window(WindowId(9), "sessions:changed", Value::Null);
+        assert!(ctx.bridge.windows().is_empty());
+        assert_eq!(ctx.bridge.dropped_outbound(), 1);
+        ctx.bridge.register_window(main_caller());
+        ctx.bridge.unregister_window(WindowId(1));
+        ctx.bridge.emit_to_window(WindowId(1), "sessions:changed", Value::Null);
+        assert!(ctx.bridge.windows().is_empty(), "a closed window is not resurrected");
+    }
+
+    #[tokio::test]
     async fn reattach_drops_the_old_channel() {
         let ctx = ctx();
         let old = attach(&ctx, main_caller(), "g1").await;
@@ -985,6 +1007,7 @@ mod tests {
     #[tokio::test]
     async fn replays_undelivered_deep_links_in_order() {
         let ctx = ctx();
+        ctx.bridge.register_window(main_caller());
         ctx.bridge.emit_to_window(WindowId(1), DEEP_LINK_CHANNEL, json!({ "action": "switch-session", "sessionId": "a" }));
         ctx.bridge.emit_to_window(WindowId(1), DEEP_LINK_CHANNEL, json!({ "action": "new-session" }));
         let first = attach(&ctx, main_caller(), "g1").await;
@@ -998,6 +1021,7 @@ mod tests {
     #[tokio::test]
     async fn quick_entry_receives_only_its_state_channel() {
         let ctx = ctx();
+        ctx.bridge.register_window(Caller::quick_entry());
         ctx.bridge.emit_to_window(WindowId::QUICK_ENTRY, QUICK_ENTRY_STATE_CHANNEL, json!({ "showId": 1 }));
         ctx.bridge.emit_to_window(WindowId::QUICK_ENTRY, QUICK_ENTRY_STATE_CHANNEL, json!({ "showId": 2 }));
         ctx.bridge.emit_to_window(WindowId::QUICK_ENTRY, "sessions:changed", Value::Null);

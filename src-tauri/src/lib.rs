@@ -146,7 +146,7 @@ impl Host for TauriHost {
     }
 
     fn message_dialog(&self, options: MessageDialogOptions) -> BoxFuture<'_, usize> {
-        let MessageDialogOptions { title, message, detail, kind, buttons, default_button, cancel_button, parent } = options;
+        let MessageDialogOptions { title, message, detail, kind, buttons, parent } = options;
         let text = match detail {
             Some(detail) if !detail.is_empty() => format!("{message}\n\n{detail}"),
             _ => message,
@@ -167,18 +167,19 @@ impl Host for TauriHost {
             [ok, cancel] => MessageDialogButtons::OkCancelCustom(ok.clone(), cancel.clone()),
             [yes, no, cancel, ..] => MessageDialogButtons::YesNoCancelCustom(yes.clone(), no.clone(), cancel.clone()),
         });
-        let fallback = cancel_button.unwrap_or(default_button);
+        // The plugin reports the last button and a dismissed dialog alike as `Cancel`.
+        let last = labels.len().saturating_sub(1);
         let (tx, rx) = tokio::sync::oneshot::channel();
         builder.show_with_result(move |result| {
             let index = match result {
                 MessageDialogResult::Ok | MessageDialogResult::Yes => 0,
-                MessageDialogResult::No => 1,
-                MessageDialogResult::Cancel => fallback,
-                MessageDialogResult::Custom(label) => labels.iter().position(|l| *l == label).unwrap_or(fallback),
+                MessageDialogResult::No => 1.min(last),
+                MessageDialogResult::Cancel => last,
+                MessageDialogResult::Custom(label) => labels.iter().position(|l| *l == label).unwrap_or(last),
             };
             let _ = tx.send(index);
         });
-        Box::pin(async move { rx.await.unwrap_or(fallback) })
+        Box::pin(async move { rx.await.unwrap_or(last) })
     }
 
     fn open_url(&self, url: &str) -> Result<(), HostError> {

@@ -312,12 +312,6 @@
     "method": "status"
   },
   {
-    "caller": "ollama",
-    "callee": "omp",
-    "ts": "src/main/ollama/remedy.ts:1",
-    "method": "spawn_env"
-  },
-  {
     "caller": "foundation",
     "callee": "updater",
     "ts": "src/main/updater.ts:224",
@@ -340,5 +334,23 @@
     "callee": "updater",
     "ts": "src/main/updater.ts:367",
     "method": "relaunch_after_exit"
+  },
+  {
+    "caller": "ollama",
+    "callee": "omp",
+    "ts": "src/main/ollama/base-url.ts:7",
+    "method": "spawn_env"
+  },
+  {
+    "caller": "ollama",
+    "callee": "omp",
+    "ts": "src/main/ollama/probe.ts:9",
+    "method": "spawn_env"
+  },
+  {
+    "caller": "services",
+    "callee": "omp",
+    "ts": "src/main/editor.ts:34",
+    "method": "spawn_env"
   }
 ]

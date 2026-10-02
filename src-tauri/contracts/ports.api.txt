@@ -178,7 +178,9 @@ pub enum sai_atlas_lib::ports::SidecarError
 pub sai_atlas_lib::ports::SidecarError::Closed
 pub sai_atlas_lib::ports::SidecarError::NotRunning
 pub sai_atlas_lib::ports::SidecarError::Other(alloc::string::String)
-pub sai_atlas_lib::ports::SidecarError::Timeout(u64)
+pub sai_atlas_lib::ports::SidecarError::Timeout
+pub sai_atlas_lib::ports::SidecarError::Timeout::command_type: alloc::string::String
+pub sai_atlas_lib::ports::SidecarError::Timeout::timeout_ms: u64
 impl core::clone::Clone for sai_atlas_lib::ports::SidecarError
 pub fn sai_atlas_lib::ports::SidecarError::clone(&self) -> Self
 impl core::cmp::Eq for sai_atlas_lib::ports::SidecarError
@@ -440,8 +442,6 @@ impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::IpcTabWorkt
 pub fn sai_atlas_lib::ports::IpcTabWorktree::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub struct sai_atlas_lib::ports::MessageDialogOptions
 pub sai_atlas_lib::ports::MessageDialogOptions::buttons: alloc::vec::Vec<alloc::string::String>
-pub sai_atlas_lib::ports::MessageDialogOptions::cancel_button: core::option::Option<usize>
-pub sai_atlas_lib::ports::MessageDialogOptions::default_button: usize
 pub sai_atlas_lib::ports::MessageDialogOptions::detail: core::option::Option<alloc::string::String>
 pub sai_atlas_lib::ports::MessageDialogOptions::kind: sai_atlas_lib::ports::MessageKind
 pub sai_atlas_lib::ports::MessageDialogOptions::message: alloc::string::String

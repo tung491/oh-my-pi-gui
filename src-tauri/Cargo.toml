@@ -62,3 +62,5 @@ tauri-nspanel = "2"
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["test-util"] }
+# `tauri::test::mock_app()` for modules that need an AppHandle in unit tests.
+tauri = { version = "2.12", features = ["test"] }

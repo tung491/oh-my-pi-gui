@@ -115,7 +115,7 @@ impl Host for FakeHost {
     fn message_dialog(&self, options: MessageDialogOptions) -> BoxFuture<'_, usize> {
         self.log.record(format!("message_dialog({})", options.title));
         let mut answers = lock(&self.message_dialog_answers);
-        let value = if answers.is_empty() { options.cancel_button.unwrap_or(options.default_button) } else { answers.remove(0) };
+        let value = if answers.is_empty() { options.buttons.len().saturating_sub(1) } else { answers.remove(0) };
         ready(value)
     }
 
