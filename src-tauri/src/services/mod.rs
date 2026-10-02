@@ -4,12 +4,15 @@
 pub mod ipc;
 
 mod dialog_memory;
+mod dialogs;
+mod editor;
 mod fs;
 mod models_config;
 mod open_path_target;
 mod provider_cleanup;
 mod session_cache;
 mod session_index;
+mod system;
 
 use std::path::PathBuf;
 use std::any::Any;
@@ -87,6 +90,8 @@ pub fn register(reg: &mut Registry) {
 pub struct Services {
     ctx: CtxRef,
     index: Arc<SessionIndex>,
+    pub(crate) dialog_memory: dialogs::DialogMemory,
+    pub(crate) notify_dedupe: system::NotifyDedupe,
 }
 
 impl Services {
@@ -95,7 +100,12 @@ impl Services {
         // Almost every caller passes its own cwd (`ctx.tabs.cwd_for`); this is
         // only the fallback for a "local" scope query with no caller cwd at all.
         let default_cwd = String::new();
-        Self { ctx, index: Arc::new(SessionIndex::new(sessions_dir, default_cwd)) }
+        Self {
+            ctx,
+            index: Arc::new(SessionIndex::new(sessions_dir, default_cwd)),
+            dialog_memory: dialogs::DialogMemory::new(),
+            notify_dedupe: system::NotifyDedupe::new(),
+        }
     }
 
     /// The application context; `None` only while the process shuts down.
@@ -168,5 +178,13 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
         }));
         services.index.start();
     }
+    let weak_ctx = Arc::downgrade(ctx);
+    ctx.desktop.on_window_closed(Box::new(move |record| {
+        if let Some(ctx) = weak_ctx.upgrade() {
+            if let Some(services) = ctx.services.as_any().downcast_ref::<Services>() {
+                services.dialog_memory.forget(record.id);
+            }
+        }
+    }));
     Ok(())
 }

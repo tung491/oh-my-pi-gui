@@ -15,7 +15,7 @@ use crate::ports::{Caller, SessionScope};
 use super::fs as workspace_fs;
 
 /// `~/` expands against the home directory; everything else passes through unchanged.
-fn expand_home(path: &str) -> String {
+pub(super) fn expand_home(path: &str) -> String {
     match path.strip_prefix("~/") {
         Some(rest) => dirs::home_dir().map(|home| home.join(rest).to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string()),
         None => path.to_string(),
@@ -195,39 +195,96 @@ pub fn session_consume_pending(ctx: &Arc<AppCtx>, caller: Caller, _args: Vec<Val
 }
 
 /// `system:open-external`
-pub fn system_open_external(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("system:open-external"))
+pub fn system_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    if let Some(url) = args.into_iter().next().and_then(|value| value.as_str().map(str::to_string)) {
+        if super::system::allowed_external_url(&url) {
+            let _ = ctx.host.open_url(&url);
+        }
+    }
+    Reply::ok(Value::Null)
 }
 
 /// `system:open-path`
 pub fn system_open_path(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("system:open-path"))
+    let Some(target) = args.into_iter().next().and_then(|value| value.as_str().map(str::to_string)) else {
+        return Reply::ok(json!({ "ok": false, "error": "Empty path" }));
+    };
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        match super::system::open_path(&ctx, caller, &target).await {
+            Ok(outcome) => Ok(json!({ "ok": true, "resolvedPath": outcome.resolved_path })),
+            Err(error) => Ok(json!({ "ok": false, "error": error.message() })),
+        }
+    }))
 }
 
-/// `system:save-dialog`
+fn filters_from(value: Option<Value>) -> Option<Vec<crate::ports::FileFilter>> {
+    let array = value?.as_array()?.clone();
+    Some(
+        array
+            .iter()
+            .filter_map(|item| {
+                let name = item.get("name")?.as_str()?.to_string();
+                let extensions =
+                    item.get("extensions")?.as_array()?.iter().filter_map(|ext| ext.as_str().map(str::to_string)).collect();
+                Some(crate::ports::FileFilter { name, extensions })
+            })
+            .collect(),
+    )
+}
+
+/// `system:save-dialog(defaultPath, filters)`
 pub fn system_save_dialog(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("system:save-dialog"))
+    let mut iter = args.into_iter();
+    let default_path = iter.next().and_then(|value| value.as_str().map(str::to_string)).filter(|path| !path.is_empty());
+    let filters = filters_from(iter.next());
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let Some(services) = ctx.services.as_any().downcast_ref::<crate::services::Services>() else { return Ok(Value::Null) };
+        let result = super::dialogs::save_dialog(&ctx, &services.dialog_memory, caller.win_id, default_path.as_deref(), filters).await;
+        Ok(result.map(|path| Value::String(path.to_string_lossy().into_owned())).unwrap_or(Value::Null))
+    }))
 }
 
-/// `system:open-dialog`
+/// `system:open-dialog(filters, options)`
 pub fn system_open_dialog(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("system:open-dialog"))
+    let mut iter = args.into_iter();
+    let filters = filters_from(iter.next());
+    let directory = iter.next().and_then(|options| options.get("directory").and_then(Value::as_bool)).unwrap_or(false);
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let Some(services) = ctx.services.as_any().downcast_ref::<crate::services::Services>() else { return Ok(Value::Null) };
+        let result = super::dialogs::open_dialog(&ctx, &services.dialog_memory, caller.win_id, filters, directory).await;
+        let paths: Option<Vec<String>> = result.map(|paths| paths.into_iter().map(|path| path.to_string_lossy().into_owned()).collect());
+        Ok(paths.map(|paths| serde_json::to_value(paths).unwrap_or(Value::Null)).unwrap_or(Value::Null))
+    }))
 }
 
 /// `system:clipboard-read`
-pub fn system_clipboard_read(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("system:clipboard-read"))
+pub fn system_clipboard_read(ctx: &Arc<AppCtx>, _caller: Caller, _args: Vec<Value>) -> Reply {
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move { Ok(Value::String(ctx.host.clipboard_read_text().await.unwrap_or_default())) }))
 }
 
-/// `system:notify`
+/// `system:notify`, with the same per-window dedupe window as `ipc.ts:865`;
+/// on failure it writes a runtime log entry instead of failing the call.
 pub fn system_notify(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("system:notify"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let Some(title) = payload.get("title").and_then(Value::as_str) else { return Reply::ok(Value::Null) };
+    let body = payload.get("body").and_then(Value::as_str).unwrap_or("");
+    let key = super::system::NotifyDedupe::dedupe_key(caller.win_id, title, body);
+    let should_show =
+        ctx.services.as_any().downcast_ref::<crate::services::Services>().map(|services| services.notify_dedupe.should_show(&key)).unwrap_or(true);
+    if should_show {
+        if let Err(error) = ctx.host.notify(title, Some(body).filter(|body| !body.is_empty())) {
+            crate::runtime_log::write(
+                &json!({ "source": "notification", "message": format!("Notification failed: {error}") }),
+                Some(caller.win_id.0),
+                None,
+            );
+        }
+    }
+    Reply::ok(Value::Null)
 }
 
 /// `prefs:get`
@@ -427,7 +484,23 @@ pub fn fs_read_image(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Rep
 }
 
 /// `editor:open-external`
-pub fn editor_open_external(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("editor:open-external"))
+pub fn editor_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let content = payload.get("content").and_then(Value::as_str).unwrap_or("").to_string();
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let Some(editor_cmd) = ctx.omp.resolve_editor_command().await else {
+            return Ok(json!({
+                "ok": false,
+                "unavailable": true,
+                "text": Value::Null,
+                "error": "Set $VISUAL or $EDITOR to use an external editor",
+            }));
+        };
+        let path_env = ctx.omp.spawn_env().await.get("PATH").cloned().unwrap_or_default();
+        match super::editor::open_in_external_editor(&content, &editor_cmd, &path_env).await {
+            Ok(result) => Ok(json!({ "ok": true, "unavailable": false, "text": result.text })),
+            Err(error) => Ok(json!({ "ok": false, "unavailable": false, "text": Value::Null, "error": error.to_string() })),
+        }
+    }))
 }
