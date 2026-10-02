@@ -93,16 +93,20 @@ mod tests {
     #[tokio::test]
     #[cfg(unix)]
     async fn the_temp_file_is_removed_after_the_round_trip() {
-        use std::os::unix::fs::PermissionsExt;
         // A tiny script captures the temp file path it was handed, so the test
         // can confirm the file existed during the round trip and is gone after.
         let dir = tempfile::tempdir().unwrap();
         let captured = dir.path().join("captured-path");
         let script_path = dir.path().join("editor.sh");
-        std::fs::write(&script_path, format!("#!/bin/sh\nprintf '%s' \"$1\" > '{}'\n", captured.display())).unwrap();
-        let mut perms = std::fs::metadata(&script_path).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&script_path, perms).unwrap();
+        let body = format!("#!/bin/sh\nprintf '%s' \"$1\" > '{}'\n", captured.display());
+        // Written by a child shell: a write descriptor held in the test process would be
+        // copied by any concurrent fork, and exec of the script would fail with ETXTBSY.
+        let status = tokio::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%s' \"$1\" > \"$0\" && chmod 755 \"$0\"", &script_path.to_string_lossy(), &body])
+            .status()
+            .await
+            .unwrap();
+        assert!(status.success());
 
         let result = open_in_external_editor("draft", script_path.to_str().unwrap(), "").await.unwrap();
         assert_eq!(result.text, Some("draft".to_string()));
