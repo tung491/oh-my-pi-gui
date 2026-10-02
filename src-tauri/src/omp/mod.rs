@@ -13,6 +13,8 @@ mod rpc_client;
 mod shell_env;
 mod stats;
 mod stats_restart_policy;
+#[cfg(test)]
+mod test_support;
 pub mod supervisor;
 
 use std::any::Any;

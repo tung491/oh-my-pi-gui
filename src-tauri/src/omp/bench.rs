@@ -434,11 +434,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn abort_stops_a_running_benchmark_and_frees_the_slot() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("fake-bench.sh");
-        std::fs::write(&script, "#!/bin/sh\nexec /usr/bin/sleep 600\n").unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&script, "#!/bin/sh\nexec /usr/bin/sleep 600\n");
         let runner = BenchRunner::default();
         assert!(!runner.abort());
         let run = runner.run(script, dir.path().to_string_lossy().into_owned(), options(&["m"], "chat", 1.0, 1.0), Vec::new());
@@ -454,11 +452,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_finished_benchmark_reports_its_summary_exit_code_and_stderr() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("fake-bench.sh");
-        std::fs::write(&script, "#!/bin/sh\necho 'warming up' >&2\nprintf '%s' '{\"runs\":1,\"models\":[],\"failures\":0}'\n").unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&script, "#!/bin/sh\necho 'warming up' >&2\nprintf '%s' '{\"runs\":1,\"models\":[],\"failures\":0}'\n");
         let runner = BenchRunner::default();
         let result = runner.run(script, dir.path().to_string_lossy().into_owned(), options(&["m"], "chat", 1.0, 1.0), vec![("PI_TEST".into(), "1".into())]).await;
         let summary = IpcBenchmarkSummary { runs: 1, failures: 0, profile: None, models: Vec::new() };

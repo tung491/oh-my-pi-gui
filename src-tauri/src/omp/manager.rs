@@ -1010,7 +1010,6 @@ pub(crate) mod tests {
     use super::*;
     use crate::bridge::Registry;
     use crate::testing::{fake_ctx_with, Fakes};
-    use std::os::unix::fs::PermissionsExt;
     use std::sync::Weak;
 
     pub(crate) fn fixture_path() -> PathBuf {
@@ -1029,8 +1028,7 @@ pub(crate) mod tests {
     /// A bun script standing in for omp, as the TS tests write them.
     fn write_script(dir: &Path, body: &str) -> PathBuf {
         let path = dir.join("fake-sidecar.ts");
-        std::fs::write(&path, format!("#!/usr/bin/env bun\n{body}\n")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&path, &format!("#!/usr/bin/env bun\n{body}\n"));
         path
     }
 

@@ -441,7 +441,6 @@ impl StatsClient {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
     pub(crate) fn no_env() -> SpawnEnvProvider {
@@ -450,8 +449,7 @@ pub(crate) mod tests {
 
     fn write_bun_script(dir: &Path, name: &str, body: &str) -> PathBuf {
         let path = dir.join(name);
-        std::fs::write(&path, format!("#!/usr/bin/env bun\n{body}\n")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&path, &format!("#!/usr/bin/env bun\n{body}\n"));
         path
     }
 
@@ -506,10 +504,16 @@ pub(crate) mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn split_numeric_loopback_readiness_selects_the_bundled_listener_and_resets_after_exit() {
         let dir = tempfile::tempdir().unwrap();
+        // The script exits only once the test has seen Ready, so a loaded machine cannot reap
+        // the child before its readiness line is read (a wall-clock pause could not promise that).
+        let gate = dir.path().join("exit-gate");
         let binary = write_bun_script(
             dir.path(),
             "stats.ts",
-            "process.stdout.write(\"\\x1b[32mDashboard available at: http://127.0.0.1:54\");\nawait Bun.sleep(30);\nprocess.stdout.write(\"321\\x1b[39m\\n\");\nawait Bun.sleep(100);\nprocess.exit(1);",
+            &format!(
+                "const GATE = {:?};\nprocess.stdout.write(\"\\x1b[32mDashboard available at: http://127.0.0.1:54\");\nawait Bun.sleep(30);\nprocess.stdout.write(\"321\\x1b[39m\\n\");\nwhile (!(await Bun.file(GATE).exists())) await Bun.sleep(10);\nprocess.exit(1);",
+                gate.display().to_string()
+            ),
         );
         let server = StatsServer::new(binary, no_env());
         let ports: Arc<Mutex<Vec<u16>>> = Arc::default();
@@ -526,6 +530,7 @@ pub(crate) mod tests {
         server.on_event(Box::new(move |_| {}));
         server.start();
         assert!(poll_until(Duration::from_secs(5), || lock(&ports).as_slice() == [54321]).await, "ready ports {:?}", lock(&ports));
+        std::fs::write(&gate, b"").unwrap();
         assert!(poll_until(Duration::from_secs(5), || lock(&exits).len() == 1).await, "exit events {:?}", lock(&exits));
         assert_eq!(server.port(), 0);
         assert_eq!(*lock(&exits), vec![0]);
