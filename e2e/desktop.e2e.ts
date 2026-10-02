@@ -114,7 +114,7 @@ test("settings expose eight groups, translated search and independent display pr
 	await expect(settings).toContainText("Choose GUI theme");
 	await page.screenshot({ path: "test-results/01-settings.png", scale: "css", animations: "disabled" });
 	const search = settings.getByPlaceholder("Search settings and managed resources…");
-	await search.fill("压缩");
+	await search.fill("Tự động nén");
 	await expect(settings).toContainText("Auto compaction");
 	await search.fill("paste.largeMenuThreshold");
 	await expect(settings).toContainText("paste");
