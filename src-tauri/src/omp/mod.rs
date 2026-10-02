@@ -3,6 +3,7 @@
 //! the bodies below are the stubs the port replaces.
 
 pub mod ipc;
+mod rpc_bridge;
 pub mod supervisor;
 
 use std::collections::HashMap;
