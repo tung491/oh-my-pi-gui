@@ -435,6 +435,16 @@ mod tests {
         Arc::new(|_win, _frame| {})
     }
 
+    /// A sink that forwards every frame (regardless of listener window) to a channel,
+    /// so a test can observe progress without racing a wall-clock sleep.
+    fn channel_sink() -> (ProgressSink, tokio::sync::mpsc::UnboundedReceiver<PullProgress>) {
+        let (progress_tx, progress_rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink: ProgressSink = Arc::new(move |_win, frame| {
+            let _ = progress_tx.send(frame);
+        });
+        (sink, progress_rx)
+    }
+
     fn immediate_base_url(url: String) -> BaseUrlFn {
         Arc::new(move || {
             let url = url.clone();
@@ -510,11 +520,17 @@ mod tests {
             let _ = stream.shutdown().await;
         })
         .await;
-        let puller = OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::from_millis(100), no_sink());
-        let started = std::time::Instant::now();
-        let final_frame = puller.pull("qwen3:4b", None).await;
+        let (progress_sink, mut progress_rx) = channel_sink();
+        let puller = OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::from_millis(100), progress_sink);
+        let final_frame = puller.pull("qwen3:4b", Some(WindowId(1))).await;
         assert!(final_frame.done);
-        assert!(started.elapsed() < Duration::from_millis(100));
+        // `finish` sends the terminal frame synchronously, so it is already queued
+        // by the time `pull()` resolves.
+        let mut frames = Vec::new();
+        while let Ok(frame) = progress_rx.try_recv() {
+            frames.push(frame);
+        }
+        assert_eq!(frames.last().map(|frame| frame.done), Some(true));
         fake.close().await;
     }
 
@@ -529,14 +545,26 @@ mod tests {
             }
         })
         .await;
-        let puller = Arc::new(OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::ZERO, no_sink()));
+        let (progress_sink, mut progress_rx) = channel_sink();
+        let puller = Arc::new(OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::ZERO, progress_sink));
         let puller2 = puller.clone();
-        let pending = tokio::spawn(async move { puller2.pull("qwen3:8b", None).await });
+        let pending = tokio::spawn(async move { puller2.pull("qwen3:8b", Some(WindowId(1))).await });
         let (_body, mut stream) = rx.recv().await.expect("the pull request arrives");
         write_head_streaming(&mut stream, 200, "application/x-ndjson").await;
         let line = serde_json::json!({ "status": "pulling aaa", "digest": "aaa", "total": 1000, "completed": 250 });
         let _ = stream.write_all(format!("{line}\n").as_bytes()).await;
-        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Wait for the parser to have actually observed the frame before cancelling,
+        // instead of hoping a fixed sleep outlasts scheduling under load.
+        loop {
+            let frame = tokio::time::timeout(Duration::from_secs(5), progress_rx.recv())
+                .await
+                .expect("a progress frame arrives before the timeout")
+                .expect("the progress channel stays open");
+            if frame.status == "pulling aaa" {
+                break;
+            }
+        }
 
         puller.cancel();
         let final_frame = pending.await.expect("the pull task completes");
@@ -545,6 +573,7 @@ mod tests {
             PullProgress { tag: "qwen3:8b".to_string(), status: "pulling aaa".to_string(), completed: 250, total: 1000, percent: 25, done: false, error: None }
         );
         assert_eq!(puller.active_tag(), None);
+        assert!(matches!(progress_rx.try_recv(), Err(tokio::sync::mpsc::error::TryRecvError::Empty)));
         drop(stream);
 
         // Pulling again starts a fresh request (Ollama resumes from its kept layers).
