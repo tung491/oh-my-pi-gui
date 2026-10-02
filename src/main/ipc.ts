@@ -891,7 +891,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		}
 		if (isMainOwnedPrefKey(payload.key)) throw new Error("Preference is managed by the app");
 		prefsStore.set(payload.key, payload.value);
-		if (payload.key === "language" && (payload.value === "en" || payload.value === "zh")) {
+		if (payload.key === "language" && (payload.value === "en" || payload.value === "vi")) {
 			createMenu(windowManager, deps.spawnWindow);
 		}
 	});

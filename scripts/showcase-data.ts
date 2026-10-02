@@ -129,20 +129,26 @@ export const projectDiffs: Record<string, RpcGitDiff> = Object.fromEntries(
 );
 
 export function createShowcaseData(
-	locale: "en" | "zh",
+	locale: "en" | "vi",
 	cwd: string,
 ): { replies: Record<string, unknown>; stats: Record<string, unknown> } {
-	const text = (en: string, zh: string): string => (locale === "zh" ? zh : en);
-	const demo = text("Demo", "演示");
-	const notice = text("Synthetic demo data · no external requests", "合成演示数据 · 无外部请求");
+	const text = (en: string, vi: string): string => (locale === "vi" ? vi : en);
+	const demo = text("Demo", "Minh họa");
+	const notice = text(
+		"Synthetic demo data · no external requests",
+		"Dữ liệu minh họa tổng hợp · không có yêu cầu bên ngoài",
+	);
 	const sessionId = `showcase-aurora-web-${locale}`;
-	const sessionName = text("Build accessible settings", "构建无障碍设置页");
+	const sessionName = text("Build accessible settings", "Xây dựng trang cài đặt trợ năng");
 	const rateCard = { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 };
 	const model: ModelInfo = {
 		provider: "anthropic",
 		id: "claude-sonnet-4-5",
 		name: `Claude Sonnet 4.5 · ${demo}`,
-		description: text("Demo coding model · illustrative prices and limits", "演示编程模型 · 价格与额度均为示例"),
+		description: text(
+			"Demo coding model · illustrative prices and limits",
+			"Mô hình lập trình minh họa · giá và giới hạn chỉ mang tính minh họa",
+		),
 		contextWindow: 200_000,
 		maxTokens: 16_384,
 		cost: rateCard,
@@ -155,7 +161,7 @@ export function createShowcaseData(
 			provider: "anthropic",
 			id: "claude-opus-4-5",
 			name: `Claude Opus 4.5 · ${demo}`,
-			description: text("Demo deep-reasoning model · not connected", "演示深度推理模型 · 未连接"),
+			description: text("Demo deep-reasoning model · not connected", "Mô hình suy luận sâu minh họa · chưa kết nối"),
 			contextWindow: 200_000,
 			maxTokens: 16_384,
 			cost: rateCard,
@@ -165,7 +171,7 @@ export function createShowcaseData(
 			provider: "openai",
 			id: "gpt-5.2",
 			name: `GPT-5.2 · ${demo}`,
-			description: text("Demo general-purpose model · not connected", "演示通用模型 · 未连接"),
+			description: text("Demo general-purpose model · not connected", "Mô hình đa năng minh họa · chưa kết nối"),
 			contextWindow: 200_000,
 			maxTokens: 16_384,
 			cost: rateCard,
@@ -175,7 +181,10 @@ export function createShowcaseData(
 			provider: "openai",
 			id: "gpt-5.2-codex",
 			name: `GPT-5.2 Codex · ${demo}`,
-			description: text("Demo code-review model · not connected", "演示代码审查模型 · 未连接"),
+			description: text(
+				"Demo code-review model · not connected",
+				"Mô hình đánh giá mã nguồn minh họa · chưa kết nối",
+			),
 			contextWindow: 200_000,
 			maxTokens: 16_384,
 			cost: rateCard,
@@ -185,7 +194,7 @@ export function createShowcaseData(
 			provider: "google",
 			id: "gemini-3-pro-preview",
 			name: `Gemini 3 Pro · ${demo}`,
-			description: text("Demo planning model · not connected", "演示规划模型 · 未连接"),
+			description: text("Demo planning model · not connected", "Mô hình lập kế hoạch minh họa · chưa kết nối"),
 			contextWindow: 1_000_000,
 			maxTokens: 16_384,
 			cost: rateCard,
@@ -195,7 +204,10 @@ export function createShowcaseData(
 			provider: "google",
 			id: "gemini-3-flash-preview",
 			name: `Gemini 3 Flash · ${demo}`,
-			description: text("Demo fast-exploration model · not connected", "演示快速探索模型 · 未连接"),
+			description: text(
+				"Demo fast-exploration model · not connected",
+				"Mô hình khám phá nhanh minh họa · chưa kết nối",
+			),
 			contextWindow: 1_000_000,
 			maxTokens: 16_384,
 			cost: rateCard,
@@ -220,15 +232,15 @@ export function createShowcaseData(
 			loginAvailable: false,
 			disabled: false,
 			modelCount: 2,
-			account: text("Example catalog · no account connected", "示例目录 · 未连接任何账号"),
+			account: text("Example catalog · no account connected", "Danh mục mẫu · chưa kết nối tài khoản"),
 		})),
 	};
 
 	const summary = text(
 		"## Accessible settings, ready\n\n- Added a named settings region and visible labels.\n- Kept native checkboxes for keyboard navigation.\n- Added coverage for labels and heading associations in `Preferences.test.tsx`.\n\n**Demo test result:** 3/3 passed. Synthetic data; no external requests.",
-		"## 无障碍设置页已就绪\n\n- 为设置区域添加名称与可见标签。\n- 保留原生复选框，支持键盘操作。\n- 在 `Preferences.test.tsx` 中补充标签关联与标题语义的测试。\n\n**演示测试结果：** 3/3 通过。数据均为合成，无外部请求。",
+		"## Trang cài đặt trợ năng đã sẵn sàng\n\n- Đã thêm vùng cài đặt có tên và nhãn hiển thị rõ ràng.\n- Giữ nguyên các hộp kiểm gốc để điều hướng bằng bàn phím.\n- Bổ sung kiểm thử cho nhãn và liên kết tiêu đề trong `Preferences.test.tsx`.\n\n**Kết quả kiểm thử minh họa:** 3/3 vượt qua. Dữ liệu tổng hợp; không có yêu cầu ra ngoài.",
 	);
-	const editIntent = text("Add accessible labels and regression coverage", "补充无障碍标签与回归测试");
+	const editIntent = text("Add accessible labels and regression coverage", "Thêm nhãn trợ năng và kiểm thử hồi quy");
 	const messages: AgentMessage[] = [
 		{
 			role: "user",
@@ -239,7 +251,7 @@ export function createShowcaseData(
 					type: "text",
 					text: text(
 						"In the aurora-web demo project, make the preferences page accessible: add visible labels, preserve keyboard navigation, and cover the changes with tests.",
-						"请为 aurora-web 演示项目构建无障碍设置页：添加可见标签，保留键盘操作，并为改动补充测试。",
+						"Trong dự án minh họa aurora-web, hãy làm cho trang tùy chọn có khả năng trợ năng: thêm nhãn hiển thị, bảo toàn điều hướng bằng bàn phím và bổ sung kiểm thử cho các thay đổi.",
 					),
 				},
 			],
@@ -258,7 +270,7 @@ export function createShowcaseData(
 					type: "thinking",
 					thinking: text(
 						"I’ll keep the native controls, associate each visible label with its input, and name the settings region. The demo checks will cover these semantics without contacting a provider.",
-						"我会保留原生控件，将可见标签与输入框关联，并为设置区域命名。演示检查将覆盖这些语义，不联系任何服务商。",
+						"Tôi sẽ giữ nguyên các điều khiển gốc, liên kết từng nhãn hiển thị với ô nhập tương ứng và đặt tên cho vùng cài đặt. Các kiểm tra minh họa sẽ bao quát các ngữ nghĩa này mà không cần gọi đến nhà cung cấp.",
 					),
 				},
 				{
@@ -283,7 +295,12 @@ export function createShowcaseData(
 			toolCallId: "showcase-edit-preferences",
 			toolName: "edit",
 			isError: false,
-			content: [{ type: "text", text: text("Demo: updated two synthetic files.", "演示：已更新两个合成文件。") }],
+			content: [
+				{
+					type: "text",
+					text: text("Demo: updated two synthetic files.", "Minh họa: đã cập nhật hai tệp tổng hợp."),
+				},
+			],
 			details: {
 				perFileResults: [preferencesPath, testsPath].map(path => ({
 					path,
@@ -372,7 +389,7 @@ export function createShowcaseData(
 				limits: [
 					{
 						id: "demo-session",
-						label: text("Session allowance (example)", "会话额度（示例）"),
+						label: text("Session allowance (example)", "Hạn mức phiên (minh họa)"),
 						usedFraction: 0.32,
 						remainingFraction: 0.68,
 						resetsAt: showcaseTimestamp + 2 * 3_600_000,
@@ -380,7 +397,7 @@ export function createShowcaseData(
 					},
 					{
 						id: "demo-week",
-						label: text("Weekly allowance (example)", "每周额度（示例）"),
+						label: text("Weekly allowance (example)", "Hạn mức hàng tuần (minh họa)"),
 						usedFraction: 0.18,
 						remainingFraction: 0.82,
 						resetsAt: showcaseTimestamp + 4 * dayMs,
@@ -395,11 +412,11 @@ export function createShowcaseData(
 				limits: [
 					{
 						id: "demo-requests",
-						label: text("Request allowance (example)", "请求额度（示例）"),
+						label: text("Request allowance (example)", "Hạn mức yêu cầu (minh họa)"),
 						used: 42,
 						limit: 200,
 						usedFraction: 0.21,
-						unit: text("requests", "次"),
+						unit: text("requests", "yêu cầu"),
 						status: "ok",
 					},
 				],
@@ -424,12 +441,36 @@ export function createShowcaseData(
 		kind: "chat",
 	}));
 	const roleMetadata: ModelRoleMetadata[] = [
-		{ id: "default", name: text("Default", "默认"), tag: text("DEFAULT", "默认"), color: "success", section: "chat" },
-		{ id: "smol", name: text("Fast", "快速"), tag: text("FAST", "快速"), color: "warning", section: "chat" },
-		{ id: "slow", name: text("Thinking", "推理"), tag: text("THINK", "推理"), color: "accent", section: "chat" },
-		{ id: "plan", name: text("Architect", "规划"), tag: text("PLAN", "规划"), color: "muted", section: "chat" },
-		{ id: "task", name: text("Subtask", "子任务"), tag: text("TASK", "任务"), color: "muted", section: "chat" },
-		{ id: "advisor", name: text("Advisor", "顾问"), tag: text("REVIEW", "审查"), color: "accent", section: "chat" },
+		{
+			id: "default",
+			name: text("Default", "Mặc định"),
+			tag: text("DEFAULT", "MẶC ĐỊNH"),
+			color: "success",
+			section: "chat",
+		},
+		{ id: "smol", name: text("Fast", "Nhanh"), tag: text("FAST", "NHANH"), color: "warning", section: "chat" },
+		{
+			id: "slow",
+			name: text("Thinking", "Suy nghĩ"),
+			tag: text("THINK", "SUY NGHĨ"),
+			color: "accent",
+			section: "chat",
+		},
+		{
+			id: "plan",
+			name: text("Architect", "Kiến trúc"),
+			tag: text("PLAN", "KẾ HOẠCH"),
+			color: "muted",
+			section: "chat",
+		},
+		{ id: "task", name: text("Subtask", "Tác vụ con"), tag: text("TASK", "TÁC VỤ"), color: "muted", section: "chat" },
+		{
+			id: "advisor",
+			name: text("Advisor", "Cố vấn"),
+			tag: text("REVIEW", "ĐÁNH GIÁ"),
+			color: "accent",
+			section: "chat",
+		},
 	];
 	const assignments: Record<string, string> = {
 		default: "anthropic/claude-sonnet-4-5",
@@ -452,8 +493,11 @@ export function createShowcaseData(
 			cost: 0.012,
 			durationMs: 28_000,
 			toolCount: 4,
-			task: text("Demo · map the existing form patterns", "演示 · 梳理现有表单模式"),
-			note: text("Found reusable labels and native controls", "已定位可复用标签与原生控件"),
+			task: text("Demo · map the existing form patterns", "Minh họa · khảo sát các mẫu biểu mẫu hiện có"),
+			note: text(
+				"Found reusable labels and native controls",
+				"Đã tìm thấy nhãn có thể tái sử dụng và điều khiển gốc",
+			),
 		},
 		{
 			agent: "task",
@@ -463,8 +507,8 @@ export function createShowcaseData(
 			cost: 0.018,
 			durationMs: 38_000,
 			toolCount: 3,
-			task: text("Demo · check the narrow-screen layout", "演示 · 检查窄屏布局"),
-			note: text("Checking spacing at 320 px · 2/3 checks", "正在检查 320 像素间距 · 已完成 2/3 项"),
+			task: text("Demo · check the narrow-screen layout", "Minh họa · kiểm tra bố cục màn hình hẹp"),
+			note: text("Checking spacing at 320 px · 2/3 checks", "Đang kiểm tra khoảng cách ở 320 px · 2/3 kiểm tra"),
 		},
 		{
 			agent: "reviewer",
@@ -474,8 +518,8 @@ export function createShowcaseData(
 			cost: 0.0098,
 			durationMs: 19_000,
 			toolCount: 2,
-			task: text("Demo · review keyboard and label semantics", "演示 · 复核键盘与标签语义"),
-			note: text("Review complete · parked for follow-up", "复核完成 · 已停驻，等待后续任务"),
+			task: text("Demo · review keyboard and label semantics", "Minh họa · đánh giá ngữ nghĩa bàn phím và nhãn"),
+			note: text("Review complete · parked for follow-up", "Đã đánh giá xong · tạm dừng chờ tiếp tục"),
 		},
 	];
 	const subagents: SubagentSnapshot[] = agentRows.map((row, index) => {
@@ -536,15 +580,15 @@ export function createShowcaseData(
 
 	const schema: SettingsSchemaResult = {
 		tabs: [
-			{ id: "context", label: text("Context", "上下文"), groups: [] },
-			{ id: "model", label: text("Models", "模型"), groups: [] },
-			{ id: "providers", label: text("Providers", "服务商"), groups: [] },
-			{ id: "tasks", label: text("Tasks", "任务"), groups: [] },
-			{ id: "files", label: text("Files", "文件"), groups: [] },
-			{ id: "shell", label: text("Shell", "终端"), groups: [] },
-			{ id: "tools", label: text("Tools", "工具"), groups: [] },
-			{ id: "memory", label: text("Memory", "记忆"), groups: [] },
-			{ id: "interaction", label: text("Interaction", "交互"), groups: [] },
+			{ id: "context", label: text("Context", "Ngữ cảnh"), groups: [] },
+			{ id: "model", label: text("Models", "Mô hình"), groups: [] },
+			{ id: "providers", label: text("Providers", "Nhà cung cấp"), groups: [] },
+			{ id: "tasks", label: text("Tasks", "Tác vụ"), groups: [] },
+			{ id: "files", label: text("Files", "Tệp"), groups: [] },
+			{ id: "shell", label: text("Shell", "Dòng lệnh"), groups: [] },
+			{ id: "tools", label: text("Tools", "Công cụ"), groups: [] },
+			{ id: "memory", label: text("Memory", "Bộ nhớ"), groups: [] },
+			{ id: "interaction", label: text("Interaction", "Tương tác"), groups: [] },
 		],
 		entries: [
 			{
@@ -553,10 +597,10 @@ export function createShowcaseData(
 				tab: "context",
 				value: true,
 				default: true,
-				label: text("Automatic compaction", "自动压缩"),
+				label: text("Automatic compaction", "Tự động nén"),
 				description: text(
 					"Demo: preserve room for the next task by summarizing older context.",
-					"演示：汇总较早的上下文，为后续任务保留空间。",
+					"Minh họa: giữ chỗ cho tác vụ tiếp theo bằng cách tóm tắt ngữ cảnh cũ hơn.",
 				),
 			},
 			{
@@ -565,10 +609,10 @@ export function createShowcaseData(
 				tab: "context",
 				value: 80,
 				default: 80,
-				label: text("Context threshold (%)", "上下文阈值（%）"),
+				label: text("Context threshold (%)", "Ngưỡng ngữ cảnh (%)"),
 				description: text(
 					"Demo: compact when context reaches this percentage.",
-					"演示：上下文达到此比例时进行压缩。",
+					"Minh họa: nén khi ngữ cảnh đạt đến tỷ lệ phần trăm này.",
 				),
 			},
 			{
@@ -577,10 +621,10 @@ export function createShowcaseData(
 				tab: "context",
 				value: 16_384,
 				default: 16_384,
-				label: text("Reserved output tokens", "预留输出令牌"),
+				label: text("Reserved output tokens", "Token đầu ra dự lưu"),
 				description: text(
 					"Demo: keep a response budget available after compaction.",
-					"演示：压缩后仍为模型回复预留额度。",
+					"Minh họa: duy trì ngân sách phản hồi khả dụng sau khi nén.",
 				),
 			},
 			{
@@ -589,10 +633,10 @@ export function createShowcaseData(
 				tab: "model",
 				value: false,
 				default: false,
-				label: text("Hide reasoning blocks", "隐藏推理内容"),
+				label: text("Hide reasoning blocks", "Ẩn khối suy luận"),
 				description: text(
 					"Demo: keep reasoning visible alongside the answer.",
-					"演示：在回答旁保留可查看的推理内容。",
+					"Minh họa: giữ hiển thị phần suy luận bên cạnh câu trả lời.",
 				),
 			},
 			{
@@ -601,10 +645,10 @@ export function createShowcaseData(
 				tab: "tasks",
 				value: true,
 				default: true,
-				label: text("Show agent models", "显示智能体模型"),
+				label: text("Show agent models", "Hiển thị mô hình của agent"),
 				description: text(
 					"Demo: identify the model assigned to each delegated task.",
-					"演示：显示每个委派任务使用的模型。",
+					"Minh họa: xác định mô hình được chỉ định cho từng tác vụ được ủy quyền.",
 				),
 			},
 			{
@@ -613,8 +657,11 @@ export function createShowcaseData(
 				tab: "shell",
 				value: true,
 				default: true,
-				label: text("Shell tool", "终端工具"),
-				description: text("Demo capability only; no commands are executed.", "仅展示演示能力，不实际执行命令。"),
+				label: text("Shell tool", "Công cụ dòng lệnh"),
+				description: text(
+					"Demo capability only; no commands are executed.",
+					"Chỉ là khả năng minh họa; không có lệnh nào được thực thi.",
+				),
 			},
 			{
 				path: "tools.approvalMode",
@@ -622,15 +669,15 @@ export function createShowcaseData(
 				tab: "tools",
 				value: "always-ask",
 				default: "always-ask",
-				label: text("Tool approvals", "工具审批"),
+				label: text("Tool approvals", "Phê duyệt công cụ"),
 				description: text(
 					"Demo: request confirmation before a tool changes the workspace.",
-					"演示：工具更改工作区前请求确认。",
+					"Minh họa: yêu cầu xác nhận trước khi một công cụ thay đổi không gian làm việc.",
 				),
 				options: [
-					{ value: "always-ask", label: text("Always ask", "始终询问") },
-					{ value: "write", label: text("Ask before writes", "写入前询问") },
-					{ value: "yolo", label: text("Do not ask", "不询问") },
+					{ value: "always-ask", label: text("Always ask", "Luôn hỏi") },
+					{ value: "write", label: text("Ask before writes", "Hỏi trước khi ghi") },
+					{ value: "yolo", label: text("Do not ask", "Không hỏi") },
 				],
 			},
 			{
@@ -639,11 +686,11 @@ export function createShowcaseData(
 				tab: "memory",
 				value: "off",
 				default: "off",
-				options: [{ value: "off", label: text("Off", "关闭") }],
-				label: text("Persistent memory", "持久记忆"),
+				options: [{ value: "off", label: text("Off", "Tắt") }],
+				label: text("Persistent memory", "Bộ nhớ bền vững"),
 				description: text(
 					"Disabled in the demo; no personal history is loaded.",
-					"演示中已禁用，不读取任何个人历史。",
+					"Đã tắt trong bản minh họa; không có lịch sử cá nhân nào được tải.",
 				),
 			},
 			{
@@ -652,8 +699,11 @@ export function createShowcaseData(
 				tab: "interaction",
 				value: true,
 				default: false,
-				label: text("Show token usage", "显示令牌用量"),
-				description: text("Demo: display synthetic usage figures for the session.", "演示：显示此会话的合成用量。"),
+				label: text("Show token usage", "Hiển thị lượng dùng token"),
+				description: text(
+					"Demo: display synthetic usage figures for the session.",
+					"Minh họa: hiển thị số liệu sử dụng tổng hợp cho phiên làm việc.",
+				),
 			},
 		],
 	};
@@ -673,19 +723,19 @@ export function createShowcaseData(
 	const skills: RpcSkillsResult = {
 		skills: [
 			{
-				name: text("Accessibility review", "无障碍审查"),
+				name: text("Accessibility review", "Đánh giá trợ năng"),
 				slug: "accessibility",
 				description: text(
 					"Demo skill: inspect labels, focus order, and native controls.",
-					"演示技能：检查标签、焦点顺序与原生控件。",
+					"Kỹ năng minh họa: kiểm tra nhãn, thứ tự lấy tiêu điểm và các điều khiển gốc.",
 				),
 			},
 			{
-				name: text("React testing", "React 测试"),
+				name: text("React testing", "Kiểm thử React"),
 				slug: "react-testing",
 				description: text(
 					"Demo skill: protect component behavior with focused regression tests.",
-					"演示技能：用针对性的回归测试保护组件行为。",
+					"Kỹ năng minh họa: bảo vệ hành vi thành phần bằng các kiểm thử hồi quy tập trung.",
 				),
 			},
 		].map(skill => ({
@@ -693,7 +743,7 @@ export function createShowcaseData(
 			description: skill.description,
 			source: "native:project",
 			provider: "native",
-			providerName: text("Demo project", "演示项目"),
+			providerName: text("Demo project", "Dự án minh họa"),
 			level: "project",
 			location: `${cwd}/.showcase/skills/${skill.slug}/SKILL.md`,
 			enabled: true,
@@ -704,12 +754,12 @@ export function createShowcaseData(
 	const mcpServers: RpcMcpServersResult = {
 		servers: [
 			{
-				name: text("Design references · demo", "设计参考 · 演示"),
+				name: text("Design references · demo", "Tài liệu thiết kế tham khảo · minh họa"),
 				transport: "http",
 				url: "https://design.example.invalid/mcp",
 			},
 			{
-				name: text("Project documentation · demo", "项目文档 · 演示"),
+				name: text("Project documentation · demo", "Tài liệu dự án · minh họa"),
 				transport: "http",
 				url: "https://docs.example.invalid/mcp",
 			},
@@ -736,11 +786,17 @@ export function createShowcaseData(
 		],
 	};
 	const commands: AvailableCommand[] = [
-		{ name: "settings", description: text("Open demo settings", "打开演示设置") },
-		{ name: "models", description: text("Browse the demo model catalog", "浏览演示模型目录") },
-		{ name: "context", description: text("Inspect synthetic context usage", "查看合成上下文用量") },
-		{ name: "stats", description: text("Open synthetic activity statistics", "打开合成活动统计") },
-		{ name: "providers", description: text("Inspect disconnected demo providers", "查看未连接的演示服务商") },
+		{ name: "settings", description: text("Open demo settings", "Mở cài đặt minh họa") },
+		{ name: "models", description: text("Browse the demo model catalog", "Duyệt danh mục mô hình minh họa") },
+		{
+			name: "context",
+			description: text("Inspect synthetic context usage", "Kiểm tra lượng dùng ngữ cảnh tổng hợp"),
+		},
+		{ name: "stats", description: text("Open synthetic activity statistics", "Mở thống kê hoạt động tổng hợp") },
+		{
+			name: "providers",
+			description: text("Inspect disconnected demo providers", "Xem các nhà cung cấp minh họa chưa kết nối"),
+		},
 	].map(command => ({ ...command, source: "builtin", textModeExecutable: false }));
 
 	const replies = {
@@ -791,17 +847,17 @@ export function createShowcaseData(
 				{
 					name: "read",
 					source: "builtin",
-					description: text("Demo: inspect synthetic project files", "演示：查看合成项目文件"),
+					description: text("Demo: inspect synthetic project files", "Minh họa: kiểm tra các tệp dự án tổng hợp"),
 				},
 				{
 					name: "edit",
 					source: "builtin",
-					description: text("Demo: preview a two-file change", "演示：预览两个文件的改动"),
+					description: text("Demo: preview a two-file change", "Minh họa: xem trước thay đổi trên hai tệp"),
 				},
 				{
 					name: "task",
 					source: "builtin",
-					description: text("Demo: display delegated work", "演示：展示委派任务"),
+					description: text("Demo: display delegated work", "Minh họa: hiển thị công việc được ủy quyền"),
 				},
 			],
 		} satisfies RpcActiveToolsResult,
@@ -838,9 +894,9 @@ export function createShowcaseData(
 
 	// The renderer prints agentType verbatim, so localize this display column.
 	const byAgentType: Array<Omit<AgentTypeStats, "agentType"> & { agentType: string }> = [
-		{ agentType: text("Main · demo", "主智能体 · 演示"), requests: 290 },
-		{ agentType: text("Subagents · demo", "子智能体 · 演示"), requests: 174 },
-		{ agentType: text("Advisor · demo", "顾问 · 演示"), requests: 44 },
+		{ agentType: text("Main · demo", "Chính · minh họa"), requests: 290 },
+		{ agentType: text("Subagents · demo", "Agent phụ · minh họa"), requests: 174 },
+		{ agentType: text("Advisor · demo", "Cố vấn · minh họa"), requests: 44 },
 	].map(row => ({
 		agentType: row.agentType,
 		totalRequests: row.requests,

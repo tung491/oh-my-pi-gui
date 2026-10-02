@@ -9,35 +9,35 @@ import type { TrayState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 
 export type TrayStatus = TrayState["status"];
-export type TrayLang = "zh" | "en";
+export type TrayLang = "vi" | "en";
 export type TrayApprovalMode = TrayState["approvalMode"];
 
 /** Tray-label strings, translated in main (the renderer reports the language). */
 export const TRAY_LABELS = {
-	showHide: { zh: "显示 / 隐藏", en: "Show / Hide" },
-	quit: { zh: "退出", en: "Quit" },
-	newSession: { zh: "新建会话", en: "New Session" },
-	openProject: { zh: "打开项目…", en: "Open Project…" },
-	handoff: { zh: "交接(Handoff)", en: "Handoff" },
-	usageStats: { zh: "Usage 统计…", en: "Usage Stats…" },
-	workspaces: { zh: "工作区跳转", en: "Switch Workspace" },
-	addWorkspace: { zh: "添加工作区…", en: "Add Workspace…" },
-	quickStart: { zh: "快速开始", en: "Quick Start" },
-	quickConfig: { zh: "快速配置", en: "Quick Config" },
-	fastMode: { zh: "快速模式", en: "Fast Mode" },
-	thinking: { zh: "思考强度", en: "Thinking" },
-	approval: { zh: "工具审批", en: "Tool Approval" },
-	language: { zh: "语言", en: "Language" },
-	approvalYolo: { zh: "完全访问", en: "Full access" },
-	approvalWrite: { zh: "自动编辑", en: "Auto-edit" },
-	approvalAsk: { zh: "每次询问", en: "Ask every time" },
-	context: { zh: "上下文", en: "Context" },
-	tokens: { zh: "tokens", en: "tokens" },
-	noModel: { zh: "未选模型", en: "No model" },
-	statusIdle: { zh: "空闲", en: "Idle" },
-	statusStreaming: { zh: "运行中", en: "Running" },
-	statusWaiting: { zh: "等待确认", en: "Needs input" },
-	statusError: { zh: "出错", en: "Error" },
+	showHide: { vi: "Hiện / Ẩn", en: "Show / Hide" },
+	quit: { vi: "Thoát", en: "Quit" },
+	newSession: { vi: "Phiên mới", en: "New Session" },
+	openProject: { vi: "Mở dự án…", en: "Open Project…" },
+	handoff: { vi: "Bàn giao (Handoff)", en: "Handoff" },
+	usageStats: { vi: "Thống kê sử dụng…", en: "Usage Stats…" },
+	workspaces: { vi: "Chuyển không gian làm việc", en: "Switch Workspace" },
+	addWorkspace: { vi: "Thêm không gian làm việc…", en: "Add Workspace…" },
+	quickStart: { vi: "Khởi động nhanh", en: "Quick Start" },
+	quickConfig: { vi: "Cấu hình nhanh", en: "Quick Config" },
+	fastMode: { vi: "Chế độ nhanh", en: "Fast Mode" },
+	thinking: { vi: "Mức suy nghĩ", en: "Thinking" },
+	approval: { vi: "Phê duyệt công cụ", en: "Tool Approval" },
+	language: { vi: "Ngôn ngữ", en: "Language" },
+	approvalYolo: { vi: "Toàn quyền truy cập", en: "Full access" },
+	approvalWrite: { vi: "Tự động chỉnh sửa", en: "Auto-edit" },
+	approvalAsk: { vi: "Hỏi mỗi lần", en: "Ask every time" },
+	context: { vi: "Ngữ cảnh", en: "Context" },
+	tokens: { vi: "tokens", en: "tokens" },
+	noModel: { vi: "Chưa chọn mô hình", en: "No model" },
+	statusIdle: { vi: "Rảnh", en: "Idle" },
+	statusStreaming: { vi: "Đang chạy", en: "Running" },
+	statusWaiting: { vi: "Chờ phản hồi", en: "Needs input" },
+	statusError: { vi: "Lỗi", en: "Error" },
 } as const;
 
 export type TrayLabelKey = keyof typeof TRAY_LABELS;
@@ -83,7 +83,7 @@ export function formatTokens(n: number): string {
 /** Hover text: the icon itself stays a static template mark by design. */
 export function trayTooltip(state: TrayState | null): string {
 	if (!state) return PRODUCT_NAME;
-	return `${PRODUCT_NAME} — ${state.projectName} · ${statusLabel(state.language === "en" ? "en" : "zh", state.status)}`;
+	return `${PRODUCT_NAME} — ${state.projectName} · ${statusLabel(state.language === "en" ? "en" : "vi", state.status)}`;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { createShowcaseData } from "./showcase-data";
 
-const locale = process.env.OMP_SHOWCASE_LANG === "zh" ? "zh" : "en";
+const locale = process.env.OMP_SHOWCASE_LANG === "vi" ? "vi" : "en";
 const data = createShowcaseData(locale, process.env.OMP_SHOWCASE_PROJECT ?? process.cwd());
 
 if (process.argv.includes("stats")) {
@@ -45,7 +45,10 @@ if (process.argv.includes("stats")) {
 				id: command.id,
 				command: command.type,
 				success: false,
-				error: locale === "zh" ? "演示场景未启用此操作" : "This action is not enabled in the demonstration",
+				error:
+					locale === "vi"
+						? "Thao tác này không được bật trong kịch bản minh họa"
+						: "This action is not enabled in the demonstration",
 			});
 		}
 	});

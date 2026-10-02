@@ -61,7 +61,7 @@ afterEach(async () => {
 });
 
 describe("LangSwitcher", () => {
-	it("shows the current language and toggles EN ⇄ 中文 on click", async () => {
+	it("shows the current language and toggles EN ⇄ VI on click", async () => {
 		await mountSwitcher();
 		const button = document.querySelector("button") as unknown as TestElement;
 		expect(button.textContent).toContain("EN");
@@ -70,7 +70,7 @@ describe("LangSwitcher", () => {
 			button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
 		});
 		await flush();
-		expect(button.textContent).toContain("中文");
+		expect(button.textContent).toContain("VI");
 
 		await act(async () => {
 			button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
@@ -84,9 +84,9 @@ describe("LangSwitcher", () => {
 		expect(document.querySelector("button")?.getAttribute("data-tone")).toBe("onDark");
 	});
 
-	it("rehydrates the persisted language (omp.lang=zh → 中文)", async () => {
+	it("rehydrates the persisted language (omp.lang=vi → VI)", async () => {
 		// I18nProvider reads the LANG_KEY at mount; install a stub store first.
-		const store: Record<string, string> = { "omp.lang": "zh" };
+		const store: Record<string, string> = { "omp.lang": "vi" };
 		globals.localStorage = {
 			getItem: (key: string) => store[key] ?? null,
 			setItem: (key: string, value: string) => {
@@ -98,7 +98,7 @@ describe("LangSwitcher", () => {
 		};
 		try {
 			await mountSwitcher();
-			expect(document.querySelector("button")?.textContent).toContain("中文");
+			expect(document.querySelector("button")?.textContent).toContain("VI");
 		} finally {
 			delete globals.localStorage;
 		}
@@ -126,7 +126,7 @@ describe("LangSwitcher", () => {
 		};
 		bridgeWindow.omp = {
 			prefs: {
-				get: async () => "zh",
+				get: async () => "vi",
 				set: async (key, value) => {
 					writes.push({ key, value });
 				},
@@ -134,7 +134,7 @@ describe("LangSwitcher", () => {
 		};
 		try {
 			await mountSwitcher();
-			expect(document.querySelector("button")?.textContent).toContain("中文");
+			expect(document.querySelector("button")?.textContent).toContain("VI");
 			expect(writes).toEqual([]);
 		} finally {
 			delete bridgeWindow.omp;

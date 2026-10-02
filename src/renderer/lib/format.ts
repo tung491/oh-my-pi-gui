@@ -20,7 +20,7 @@ export function formatTimeAgo(iso: string | undefined | null): string {
 	if (seconds < 3600) return translate("time.minutesShort", { count: Math.floor(seconds / 60) });
 	if (seconds < 86_400) return translate("time.hoursShort", { count: Math.floor(seconds / 3600) });
 	if (seconds < 604_800) return translate("time.daysShort", { count: Math.floor(seconds / 86_400) });
-	const locale = getCurrentLanguage() === "zh" ? "zh-CN" : "en-US";
+	const locale = getCurrentLanguage() === "vi" ? "vi-VN" : "en-US";
 	return new Date(then).toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
@@ -30,7 +30,7 @@ export function formatClock(value: number | string | undefined | null): string {
 	if (timestamp == null) return "";
 	const date = new Date(timestamp);
 	const now = new Date();
-	const locale = getCurrentLanguage() === "zh" ? "zh-CN" : "en-US";
+	const locale = getCurrentLanguage() === "vi" ? "vi-VN" : "en-US";
 	const time: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hour12: false };
 	if (date.toDateString() === now.toDateString()) return date.toLocaleTimeString(locale, time);
 	if (date.getFullYear() === now.getFullYear()) {
@@ -42,7 +42,7 @@ export function formatClock(value: number | string | undefined | null): string {
 /** Compact hour/minute label for dense visual timelines. */
 export function formatShortClock(value: number | string | undefined | null): string {
 	const timestamp = toMs(value);
-	const locale = getCurrentLanguage() === "zh" ? "zh-CN" : "en-US";
+	const locale = getCurrentLanguage() === "vi" ? "vi-VN" : "en-US";
 	return timestamp == null
 		? ""
 		: new Date(timestamp).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: false });

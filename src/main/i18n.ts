@@ -1,7 +1,7 @@
 import { app } from "electron";
 import Store from "electron-store";
 
-export type MainLanguage = "en" | "zh";
+export type MainLanguage = "en" | "vi";
 
 type MainTextKey =
 	| "dialog.openProject"
@@ -68,94 +68,94 @@ type MainTextKey =
 	| "updates.unsupportedArchitecture";
 
 const TEXT: Record<MainTextKey, Record<MainLanguage, string>> = {
-	"dialog.openProject": { en: "Open project", zh: "打开项目" },
-	"menu.about": { en: "About Sai ATLAS", zh: "关于 Sai ATLAS" },
-	"menu.addToDictionary": { en: "Add to dictionary", zh: "添加到词典" },
-	"menu.closeTab": { en: "Close Tab", zh: "关闭标签页" },
-	"menu.closeWindow": { en: "Close Window", zh: "关闭窗口" },
-	"menu.commandCenter": { en: "Command Center", zh: "命令中心" },
-	"menu.capabilities": { en: "Capabilities", zh: "能力" },
-	"menu.importSession": { en: "Import Session", zh: "导入会话" },
-	"menu.branchPicker": { en: "Branch from Message", zh: "从消息分支" },
-	"menu.sessionTree": { en: "Session Tree", zh: "会话树" },
-	"menu.modelPicker": { en: "Select Model", zh: "选择模型" },
-	"menu.usage": { en: "Usage", zh: "用量" },
-	"menu.workspaceChanges": { en: "Git Changes", zh: "Git 变更" },
-	"menu.restartCore": { en: "Restart OMP Core", zh: "重启 OMP Core" },
-	"menu.contextReport": { en: "Context Report", zh: "上下文报告" },
-	"menu.debugConsole": { en: "Debug Console", zh: "调试控制台" },
-	"menu.documentation": { en: "Documentation", zh: "文档" },
-	"menu.edit": { en: "Edit", zh: "编辑" },
-	"menu.exportHtml": { en: "Export HTML", zh: "导出 HTML" },
-	"menu.file": { en: "File", zh: "文件" },
-	"menu.handoff": { en: "Handoff", zh: "交接（Handoff）" },
-	"menu.help": { en: "Help", zh: "帮助" },
-	"menu.hotkeys": { en: "Keyboard Shortcuts", zh: "键盘快捷键" },
-	"menu.jobs": { en: "Jobs", zh: "任务" },
-	"menu.agentHub": { en: "Agent Hub", zh: "代理中心" },
-	"menu.extensions": { en: "Extensions", zh: "扩展" },
-	"menu.inventory": { en: "Plugins & Resources", zh: "插件与资源" },
-	"menu.modes": { en: "Modes", zh: "模式" },
-	"menu.modelRoles": { en: "Model Roles", zh: "模型角色" },
-	"menu.newChatTab": { en: "New Chat Tab", zh: "新建聊天标签页" },
-	"menu.newSession": { en: "New Session", zh: "新建会话" },
-	"menu.newTab": { en: "New Tab", zh: "新建标签页" },
-	"menu.newWindow": { en: "New Window", zh: "新建窗口" },
-	"menu.openProject": { en: "Open Project…", zh: "打开项目…" },
-	"menu.prCenter": { en: "PR Center", zh: "PR 中心" },
-	"menu.providers": { en: "Providers & Login", zh: "提供商与登录" },
-	"menu.session": { en: "Session", zh: "会话" },
-	"menu.sessionInfo": { en: "Session Info", zh: "会话信息" },
-	"menu.shareSession": { en: "Share Session", zh: "分享会话" },
-	"menu.settings": { en: "Settings…", zh: "设置…" },
-	"menu.stats": { en: "Session Stats", zh: "会话统计" },
-	"menu.togglePanel": { en: "Toggle Panel", zh: "显示或隐藏面板" },
-	"menu.toggleSidebar": { en: "Toggle Sidebar", zh: "显示或隐藏侧边栏" },
-	"menu.tools": { en: "Tools", zh: "工具" },
-	"menu.view": { en: "View", zh: "视图" },
-	"menu.window": { en: "Window", zh: "窗口" },
-	"menu.workspaceDirs": { en: "Workspace Directories", zh: "工作区目录" },
-	"quit.keepWorking": { en: "Keep working", zh: "继续工作" },
-	"quit.quitAnyway": { en: "Quit anyway", zh: "仍要退出" },
+	"dialog.openProject": { en: "Open project", vi: "Mở dự án" },
+	"menu.about": { en: "About Sai ATLAS", vi: "Giới thiệu về Sai ATLAS" },
+	"menu.addToDictionary": { en: "Add to dictionary", vi: "Thêm vào từ điển" },
+	"menu.closeTab": { en: "Close Tab", vi: "Đóng thẻ" },
+	"menu.closeWindow": { en: "Close Window", vi: "Đóng cửa sổ" },
+	"menu.commandCenter": { en: "Command Center", vi: "Trung tâm lệnh" },
+	"menu.capabilities": { en: "Capabilities", vi: "Khả năng" },
+	"menu.importSession": { en: "Import Session", vi: "Nhập phiên" },
+	"menu.branchPicker": { en: "Branch from Message", vi: "Tạo nhánh từ tin nhắn" },
+	"menu.sessionTree": { en: "Session Tree", vi: "Cây phiên" },
+	"menu.modelPicker": { en: "Select Model", vi: "Chọn mô hình" },
+	"menu.usage": { en: "Usage", vi: "Mức sử dụng" },
+	"menu.workspaceChanges": { en: "Git Changes", vi: "Thay đổi Git" },
+	"menu.restartCore": { en: "Restart OMP Core", vi: "Khởi động lại OMP Core" },
+	"menu.contextReport": { en: "Context Report", vi: "Báo cáo ngữ cảnh" },
+	"menu.debugConsole": { en: "Debug Console", vi: "Bảng điều khiển gỡ lỗi" },
+	"menu.documentation": { en: "Documentation", vi: "Tài liệu" },
+	"menu.edit": { en: "Edit", vi: "Chỉnh sửa" },
+	"menu.exportHtml": { en: "Export HTML", vi: "Xuất HTML" },
+	"menu.file": { en: "File", vi: "Tệp" },
+	"menu.handoff": { en: "Handoff", vi: "Bàn giao (Handoff)" },
+	"menu.help": { en: "Help", vi: "Trợ giúp" },
+	"menu.hotkeys": { en: "Keyboard Shortcuts", vi: "Phím tắt bàn phím" },
+	"menu.jobs": { en: "Jobs", vi: "Tác vụ" },
+	"menu.agentHub": { en: "Agent Hub", vi: "Trung tâm Agent" },
+	"menu.extensions": { en: "Extensions", vi: "Tiện ích mở rộng" },
+	"menu.inventory": { en: "Plugins & Resources", vi: "Plugin & Tài nguyên" },
+	"menu.modes": { en: "Modes", vi: "Chế độ" },
+	"menu.modelRoles": { en: "Model Roles", vi: "Vai trò mô hình" },
+	"menu.newChatTab": { en: "New Chat Tab", vi: "Thẻ trò chuyện mới" },
+	"menu.newSession": { en: "New Session", vi: "Phiên mới" },
+	"menu.newTab": { en: "New Tab", vi: "Thẻ mới" },
+	"menu.newWindow": { en: "New Window", vi: "Cửa sổ mới" },
+	"menu.openProject": { en: "Open Project…", vi: "Mở dự án…" },
+	"menu.prCenter": { en: "PR Center", vi: "Trung tâm PR" },
+	"menu.providers": { en: "Providers & Login", vi: "Nhà cung cấp & Đăng nhập" },
+	"menu.session": { en: "Session", vi: "Phiên" },
+	"menu.sessionInfo": { en: "Session Info", vi: "Thông tin phiên" },
+	"menu.shareSession": { en: "Share Session", vi: "Chia sẻ phiên" },
+	"menu.settings": { en: "Settings…", vi: "Cài đặt…" },
+	"menu.stats": { en: "Session Stats", vi: "Thống kê phiên" },
+	"menu.togglePanel": { en: "Toggle Panel", vi: "Bật/Tắt bảng điều khiển" },
+	"menu.toggleSidebar": { en: "Toggle Sidebar", vi: "Bật/Tắt thanh bên" },
+	"menu.tools": { en: "Tools", vi: "Công cụ" },
+	"menu.view": { en: "View", vi: "Xem" },
+	"menu.window": { en: "Window", vi: "Cửa sổ" },
+	"menu.workspaceDirs": { en: "Workspace Directories", vi: "Thư mục không gian làm việc" },
+	"quit.keepWorking": { en: "Keep working", vi: "Tiếp tục làm việc" },
+	"quit.quitAnyway": { en: "Quit anyway", vi: "Vẫn thoát" },
 	"quit.workingBody": {
 		en: "{working} of {total} sessions are still working in {windows} window(s). Quitting stops them and their agents.",
-		zh: "仍有 {working}/{total} 个会话正在 {windows} 个窗口中工作。退出会中止它们及其代理。",
+		vi: "{working} trên {total} phiên vẫn đang hoạt động trong {windows} cửa sổ. Thoát sẽ dừng các phiên này và các agent của chúng.",
 	},
-	"quit.workingTitle": { en: "Sessions are still running", zh: "仍有会话在运行" },
+	"quit.workingTitle": { en: "Sessions are still running", vi: "Các phiên vẫn đang chạy" },
 	"restart.body": {
 		en: "Sai ATLAS's installed files were replaced while it was running, so this window can no longer load them reliably. {working} of {total} sessions are still working.",
-		zh: "Sai ATLAS 运行期间安装文件已被替换，窗口无法可靠地加载它们。仍有 {working}/{total} 个会话正在工作。",
+		vi: "Các tệp cài đặt của Sai ATLAS đã bị thay thế khi đang chạy, do đó cửa sổ này không thể tải chúng ổn định nữa. {working} trên {total} phiên vẫn đang hoạt động.",
 	},
-	"restart.later": { en: "Later", zh: "稍后再说" },
-	"restart.now": { en: "Restart now", zh: "立即重启" },
-	"restart.title": { en: "Restart to finish updating", zh: "重启以完成更新" },
+	"restart.later": { en: "Later", vi: "Để sau" },
+	"restart.now": { en: "Restart now", vi: "Khởi động lại ngay" },
+	"restart.title": { en: "Restart to finish updating", vi: "Khởi động lại để hoàn tất cập nhật" },
 	"updates.downloadFailed": {
 		en: "The installer download failed.",
-		zh: "安装程序下载失败。",
+		vi: "Tải xuống trình cài đặt thất bại.",
 	},
 	"updates.hashMismatch": {
 		en: "The downloaded installer failed SHA-512 verification and was removed.",
-		zh: "下载的安装程序未通过 SHA-512 校验，已被删除。",
+		vi: "Trình cài đặt đã tải xuống không vượt qua xác minh SHA-512 và đã bị xóa.",
 	},
 	"updates.installFailed": {
 		en: "The update could not be installed.",
-		zh: "无法安装更新。",
+		vi: "Không thể cài đặt bản cập nhật.",
 	},
 	"updates.installerMissing": {
 		en: "This release does not include the required installer for this Mac.",
-		zh: "此版本不包含当前 Mac 所需的安装程序。",
+		vi: "Bản phát hành này không bao gồm trình cài đặt cần thiết cho máy Mac này.",
 	},
 	"updates.noResult": {
 		en: "Update check completed without a result.",
-		zh: "更新检查已完成，但未返回结果。",
+		vi: "Kiểm tra cập nhật hoàn tất nhưng không có kết quả.",
 	},
 	"updates.openInstallerFailed": {
 		en: "The installer was downloaded, but macOS could not open it.",
-		zh: "安装程序已下载，但 macOS 无法打开。",
+		vi: "Trình cài đặt đã được tải xuống, nhưng macOS không thể mở tệp.",
 	},
 	"updates.unsupportedArchitecture": {
 		en: "This Mac architecture does not have a supported installer.",
-		zh: "当前 Mac 架构没有受支持的安装程序。",
+		vi: "Kiến trúc máy Mac này không có trình cài đặt được hỗ trợ.",
 	},
 };
 
@@ -163,8 +163,8 @@ const prefs = new Store<{ language?: MainLanguage }>({ name: "prefs" });
 
 export function getMainLanguage(): MainLanguage {
 	const stored = prefs.get("language");
-	if (stored === "en" || stored === "zh") return stored;
-	return app.getLocale().toLowerCase().startsWith("zh") ? "zh" : "en";
+	if (stored === "en" || stored === "vi") return stored;
+	return app.getLocale().toLowerCase().startsWith("vi") ? "vi" : "en";
 }
 
 export function mainT(

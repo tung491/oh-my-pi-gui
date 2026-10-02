@@ -55,7 +55,7 @@ function send(windowManager: WindowManager, action: MenuAction, payload?: MenuAc
 }
 
 function buildContextMenu(windowManager: WindowManager, state: TrayState | null): Electron.Menu {
-	const lang: TrayLang = state?.language === "en" ? "en" : "zh";
+	const lang: TrayLang = state?.language === "en" ? "en" : "vi";
 	const template: Electron.MenuItemConstructorOptions[] = [];
 
 	// Header: app + current project + the aggregate run status. This is where
@@ -135,7 +135,7 @@ function buildContextMenu(windowManager: WindowManager, state: TrayState | null)
 				})),
 			},
 			{
-				label: `${t(lang, "language")}: ${lang === "zh" ? "中文" : "English"}`,
+				label: `${t(lang, "language")}: ${lang === "vi" ? "Tiếng Việt" : "English"}`,
 				click: () => send(windowManager, "toggle-language"),
 			},
 		],

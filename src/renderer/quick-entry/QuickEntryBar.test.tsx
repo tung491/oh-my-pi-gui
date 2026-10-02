@@ -17,7 +17,7 @@ import type {
 } from "../../shared/ipc-types";
 import { I18nProvider } from "../lib/i18n";
 import { en } from "../locales/en";
-import { zh } from "../locales/zh";
+import { vi as viLocale } from "../locales/vi";
 import { QuickEntryBar } from "./QuickEntryBar";
 
 const { document, window, Event, HTMLElement, Element, Node } = parseHTML("<html><body></body></html>");
@@ -292,9 +292,9 @@ describe("QuickEntryBar", () => {
 	});
 
 	it("renders in the language main sends", async () => {
-		await mount(baseState({ language: "zh" }));
+		await mount(baseState({ language: "vi" }));
 
-		expect(textarea().getAttribute("placeholder")).toBe(zh["quickEntry.placeholder"]);
-		expect(button(zh["quickEntry.target.chat"])).toBeDefined();
+		expect(textarea().getAttribute("placeholder")).toBe(viLocale["quickEntry.placeholder"]);
+		expect(button(viLocale["quickEntry.target.chat"])).toBeDefined();
 	});
 });
