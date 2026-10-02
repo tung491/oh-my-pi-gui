@@ -275,6 +275,22 @@ describe("renderer security", () => {
 describe("Linux package", () => {
 	const depends = () => platform("linux").bundle?.linux?.deb?.depends ?? [];
 
+	it("deb control names the maintainer, homepage and description of the Electron package", () => {
+		// The bundler writes Maintainer from bundle.publisher (Cargo.toml has no authors),
+		// Homepage from bundle.homepage and Description from the descriptions.
+		const bundle = platform("linux").bundle as TauriConfig["bundle"] & {
+			publisher?: string;
+			homepage?: string;
+			shortDescription?: string;
+			longDescription?: string;
+		};
+		const description = readJson<{ description: string }>("package.json").description;
+		expect(bundle?.publisher).toBe("Tung Son Do <dosontung007@gmail.com>");
+		expect(bundle?.homepage).toBe("https://github.com/tung491/oh-my-pi-gui");
+		expect(bundle?.shortDescription).toBe(description);
+		expect(bundle?.longDescription).toBe(description);
+	});
+
 	it("deb depends on bubblewrap, xdg-dbus-proxy and the gstreamer pipewire plugin", () => {
 		// WebKit treats a missing bwrap as fatal once its web-process sandbox is on.
 		expect(depends()).toEqual(
