@@ -1,0 +1,368 @@
+/**
+ * Tauri packaging contract: the identity, sandbox, sidecar placement, update
+ * feeds and installer hooks every Tauri bundle must keep. The Electron
+ * equivalents live in src/main/packaging-config.test.ts.
+ */
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { type PlistObject, parsePlistFile } from "app-builder-lib/out/util/plist";
+import { describe, expect, it } from "vitest";
+import { APP_ID, PRODUCT_NAME } from "../src/shared/product";
+import { MAC_UPDATE_FLOOR } from "./mac-update-floor";
+import { assetNames, darwinReleaseFor } from "./release-feeds";
+import { SIDECAR_SOURCES, stagedSidecarPath } from "./stage-tauri-sidecar";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const TAURI = path.join(ROOT, "src-tauri");
+
+type Json = Record<string, unknown>;
+
+interface TauriConfig {
+	productName?: string;
+	identifier?: string;
+	mainBinaryName?: string;
+	version?: string;
+	build?: { features?: string[] };
+	app?: {
+		enableGTKAppId?: boolean;
+		withGlobalTauri?: boolean;
+		security?: { csp?: string; dangerousDisableAssetCspModification?: boolean | string[] };
+	};
+	plugins?: { "deep-link"?: { desktop?: { schemes?: string[] }; mobile?: unknown[] } };
+	bundle?: {
+		active?: boolean;
+		targets?: string[];
+		externalBin?: string[];
+		resources?: Record<string, string> | string[];
+		macOS?: { minimumSystemVersion?: string; signingIdentity?: string; entitlements?: string };
+		windows?: { nsis?: { installMode?: string; installerHooks?: string } };
+		linux?: { deb?: { depends?: string[]; desktopTemplate?: string; files?: Record<string, string> } };
+	};
+}
+
+function readJson<T = Json>(relative: string): T {
+	return JSON.parse(fs.readFileSync(path.join(ROOT, relative), "utf8")) as T;
+}
+
+const base = (): TauriConfig => readJson("src-tauri/tauri.conf.json");
+const platform = (os: "linux" | "macos" | "windows"): TauriConfig => readJson(`src-tauri/tauri.${os}.conf.json`);
+const overlay = (os: "linux" | "macos" | "windows"): TauriConfig => readJson(`src-tauri/${os}/sidecar.conf.json`);
+
+/** RFC 7396 merge, as tauri-cli applies the platform file and then each `--config` overlay. */
+function merge(target: Json, patch: Json): Json {
+	const out: Json = { ...target };
+	for (const [key, value] of Object.entries(patch)) {
+		if (value === null) delete out[key];
+		else if (
+			typeof value === "object" &&
+			!Array.isArray(value) &&
+			typeof out[key] === "object" &&
+			!Array.isArray(out[key])
+		) {
+			out[key] = merge(out[key] as Json, value as Json);
+		} else out[key] = value;
+	}
+	return out;
+}
+
+/** The configuration a `package:tauri:*` build of `os` bundles with. */
+function bundled(os: "linux" | "macos" | "windows"): TauriConfig {
+	return merge(merge(base() as Json, platform(os) as Json), overlay(os) as Json) as TauriConfig;
+}
+
+const scripts = (): Record<string, string> => readJson<{ scripts: Record<string, string> }>("package.json").scripts;
+const packageScripts = () => Object.entries(scripts()).filter(([name]) => name.startsWith("package:tauri:"));
+
+function filesUnder(directory: string): string[] {
+	if (!fs.existsSync(directory)) return [];
+	return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+		const full = path.join(directory, entry.name);
+		return entry.isDirectory() ? filesUnder(full) : [full];
+	});
+}
+
+/** Every packaging input: the four configs, the overlays and every file under the per-OS dirs. */
+function packagingFiles(): string[] {
+	return [
+		...[
+			"tauri.conf.json",
+			"tauri.linux.conf.json",
+			"tauri.macos.conf.json",
+			"tauri.windows.conf.json",
+			"Info.plist",
+		].map(name => path.join(TAURI, name)),
+		...["linux", "macos", "windows"].flatMap(dir => filesUnder(path.join(TAURI, dir))),
+	];
+}
+
+/** The deb's (and, through the shared data tree, the AppImage's) desktop entry template. */
+function desktopTemplate(): string {
+	const template = platform("linux").bundle?.linux?.deb?.desktopTemplate;
+	if (!template) throw new Error("tauri.linux.conf.json sets no bundle.linux.deb.desktopTemplate");
+	return fs.readFileSync(path.join(TAURI, template), "utf8");
+}
+
+describe("product identity", () => {
+	it("names the product and app id the core and the Electron build use", () => {
+		expect(base().identifier).toBe(APP_ID);
+		expect(base().identifier).toBe("vn.io.vif.saiatlas");
+		expect(base().productName).toBe(PRODUCT_NAME);
+		expect(base().productName).toBe("Sai ATLAS");
+		// The version comes from package.json, which the release bumps.
+		expect(base().version).toBe("../package.json");
+	});
+
+	it("registers the omp deep-link scheme", () => {
+		expect(base().plugins?.["deep-link"]?.desktop?.schemes).toEqual(["omp"]);
+		expect(base().plugins?.["deep-link"]?.mobile).toEqual([]);
+		expect(desktopTemplate()).toMatch(/^MimeType=x-scheme-handler\/omp;$/m);
+	});
+
+	it("names the Linux binary and package sai-atlas", () => {
+		expect(base().mainBinaryName).toBe("sai-atlas");
+		// tauri-bundler writes `Package:` as the kebab-cased product name.
+		expect(PRODUCT_NAME.toLowerCase().replace(/\s+/g, "-")).toBe("sai-atlas");
+		expect(desktopTemplate()).toMatch(/^Exec=sai-atlas %U$/m);
+	});
+
+	it("enableGTKAppId is true", () => {
+		expect(base().app?.enableGTKAppId).toBe(true);
+	});
+
+	it("the desktop template sets StartupWMClass to the identifier", () => {
+		const template = desktopTemplate();
+		expect(platform("linux").bundle?.linux?.deb?.desktopTemplate).toBe("linux/vn.io.vif.saiatlas.desktop");
+		expect(template).toMatch(new RegExp(`^StartupWMClass=${APP_ID.replaceAll(".", "\\.")}$`, "m"));
+		expect(template).toMatch(/^Name=Sai ATLAS$/m);
+		expect(template.match(/^\[Desktop Entry\]$/gm)).toHaveLength(1);
+	});
+
+	it("bundles for every target and names the asset files the updaters look for", () => {
+		expect(base().bundle?.active).toBe(true);
+		expect(platform("linux").bundle?.targets).toEqual(["appimage", "deb"]);
+		expect(platform("macos").bundle?.targets).toEqual(["dmg", "app"]);
+		expect(platform("windows").bundle?.targets).toEqual(["nsis"]);
+		expect(assetNames("1.0.0")).toMatchObject({
+			macArm64Dmg: "Sai-ATLAS-1.0.0-arm64.dmg",
+			macX64Dmg: "Sai-ATLAS-1.0.0.dmg",
+			macArm64Zip: "Sai-ATLAS-1.0.0-arm64.zip",
+			macX64Zip: "Sai-ATLAS-1.0.0.zip",
+			bridgeArm64Dmg: "omp-1.0.0-arm64.dmg",
+			bridgeX64Dmg: "omp-1.0.0.dmg",
+		});
+		// The Rust updater selects the same DMG names.
+		const state = fs.readFileSync(path.join(TAURI, "src/updater/state.rs"), "utf8");
+		expect(state).toContain('"Sai-ATLAS-{version}-arm64.dmg"');
+		expect(state).toContain('"Sai-ATLAS-{version}.dmg"');
+	});
+});
+
+describe("sidecar placement", () => {
+	it("macOS and Windows configs ship binaries/omp as externalBin", () => {
+		expect(bundled("macos").bundle?.externalBin).toEqual(["binaries/omp"]);
+		expect(bundled("windows").bundle?.externalBin).toEqual(["binaries/omp"]);
+		expect(bundled("macos").bundle?.resources).toBeUndefined();
+		expect(bundled("windows").bundle?.resources).toBeUndefined();
+	});
+
+	it("the Linux config ships the sidecar as the omp resource and sets no externalBin", () => {
+		// Installs as /usr/lib/Sai ATLAS/omp (deb) and $APPDIR/usr/lib/Sai ATLAS/omp
+		// (AppImage), where paths::resolve_bundled_omp looks, never on PATH.
+		expect(bundled("linux").bundle?.resources).toEqual({ "binaries/omp-x86_64-unknown-linux-gnu": "omp" });
+		expect(bundled("linux").bundle?.externalBin).toBeUndefined();
+		expect(stagedSidecarPath("x86_64-unknown-linux-gnu")).toBe("src-tauri/binaries/omp-x86_64-unknown-linux-gnu");
+	});
+
+	it("tauri.conf.json and the platform configs declare no externalBin or resources, so cargo builds never need a staged sidecar", () => {
+		// tauri-build copies both at compile time and fails when the file is missing.
+		for (const config of [base(), platform("linux"), platform("macos"), platform("windows")]) {
+			expect(config.bundle?.externalBin).toBeUndefined();
+			expect(config.bundle?.resources).toBeUndefined();
+		}
+	});
+
+	it("every package:tauri script stages the matching triple and passes the matching overlay", () => {
+		const expected: Record<string, [string, string]> = {
+			"package:tauri:linux": ["x86_64-unknown-linux-gnu", "src-tauri/linux/sidecar.conf.json"],
+			"package:tauri:mac:arm64": ["aarch64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
+			"package:tauri:mac:x64": ["x86_64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
+			"package:tauri:win": ["x86_64-pc-windows-msvc", "src-tauri/windows/sidecar.conf.json"],
+		};
+		expect(
+			packageScripts()
+				.map(([name]) => name)
+				.sort(),
+		).toEqual(Object.keys(expected).sort());
+		for (const [name, [triple, overlayPath]] of Object.entries(expected)) {
+			const script = scripts()[name] ?? "";
+			expect(script, name).toContain(`bun scripts/stage-tauri-sidecar.ts ${triple} &&`);
+			expect(script, name).toContain(`cargo tauri build --target ${triple} --config ${overlayPath}`);
+			expect(script, name).toContain("source scripts/rust-pins.env");
+			expect(SIDECAR_SOURCES[triple], name).toBeDefined();
+		}
+	});
+});
+
+describe("renderer security", () => {
+	it("CSP policy equals the meta CSP in src/renderer/index.html", () => {
+		const html = fs.readFileSync(path.join(ROOT, "src/renderer/index.html"), "utf8");
+		const meta = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/.exec(html)?.[1];
+		expect(meta).toBeDefined();
+		expect(base().app?.security?.csp).toBe(meta);
+	});
+
+	it("only style-src skips asset CSP modification", () => {
+		expect(base().app?.security?.dangerousDisableAssetCspModification).toEqual(["style-src"]);
+	});
+
+	it("withGlobalTauri is false", () => {
+		expect(base().app?.withGlobalTauri).toBe(false);
+	});
+
+	it("capabilities grant only the omp bridge commands", () => {
+		const capabilities = fs.readdirSync(path.join(TAURI, "capabilities")).sort();
+		expect(capabilities).toEqual(["main.json", "quick-entry.json"]);
+		const main = readJson<{ windows: string[]; permissions: string[] }>("src-tauri/capabilities/main.json");
+		expect(main.windows).toEqual(["main-*"]);
+		expect(main.permissions).toEqual(["allow-omp-invoke", "allow-omp-attach"]);
+	});
+
+	it("the quick-entry capability grants only its commands", () => {
+		const quick = readJson<{ windows: string[]; permissions: string[] }>("src-tauri/capabilities/quick-entry.json");
+		expect(quick.windows).toEqual(["quick-entry"]);
+		expect(quick.permissions).toEqual(["allow-omp-quick-entry-invoke", "allow-omp-attach"]);
+	});
+
+	it("keeps the Linux renderer sandboxed: no --no-sandbox anywhere in packaging", () => {
+		for (const file of packagingFiles()) {
+			expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain("--no-sandbox");
+		}
+		for (const [name, script] of packageScripts()) expect(script, name).not.toContain("--no-sandbox");
+	});
+
+	it("no bundle or package script enables e2e-hooks", () => {
+		for (const os of ["linux", "macos", "windows"] as const)
+			expect(bundled(os).build?.features ?? []).not.toContain("e2e-hooks");
+		for (const file of packagingFiles()) {
+			expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain("e2e-hooks");
+		}
+		for (const [name, script] of Object.entries(scripts())) {
+			if (/tauri build|cargo tauri|package/.test(script) || name.startsWith("package")) {
+				expect(script, name).not.toContain("e2e-hooks");
+			}
+		}
+	});
+
+	it("no package or release script sets SAI_ATLAS_UPDATE_BASE", () => {
+		for (const [name, script] of Object.entries(scripts()))
+			expect(script, name).not.toContain("SAI_ATLAS_UPDATE_BASE");
+		for (const file of [
+			...packagingFiles(),
+			path.join(ROOT, "scripts/release-feeds.ts"),
+			path.join(ROOT, "scripts/stage-tauri-sidecar.ts"),
+			path.join(ROOT, ".github/workflows/ci.yml"),
+		]) {
+			expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain("SAI_ATLAS_UPDATE_BASE");
+		}
+	});
+});
+
+describe("Linux package", () => {
+	const depends = () => platform("linux").bundle?.linux?.deb?.depends ?? [];
+
+	it("deb depends on bubblewrap, xdg-dbus-proxy and the gstreamer pipewire plugin", () => {
+		// WebKit treats a missing bwrap as fatal once its web-process sandbox is on.
+		expect(depends()).toEqual(
+			expect.arrayContaining([
+				"libwebkit2gtk-4.1-0",
+				"libayatana-appindicator3-1",
+				"gstreamer1.0-pipewire",
+				"gstreamer1.0-plugins-good",
+				"bubblewrap",
+				"xdg-dbus-proxy",
+			]),
+		);
+	});
+
+	it("deb does not depend on gstreamer1.0-plugins-bad", () => {
+		// Dictation captures PCM through WebAudio; MediaRecorder stays unused.
+		expect(depends()).not.toContain("gstreamer1.0-plugins-bad");
+	});
+
+	it("marks the deb install so the updater picks the dpkg path", () => {
+		const files = platform("linux").bundle?.linux?.deb?.files ?? {};
+		expect(files["/usr/lib/Sai ATLAS/package-type"]).toBe("linux/package-type");
+		expect(fs.readFileSync(path.join(TAURI, "linux/package-type"), "utf8").trim()).toBe("deb");
+	});
+
+	it("no AppArmor profile is bundled", () => {
+		// Ubuntu 26.04's bwrap-userns-restrict profile already allows bubblewrap.
+		for (const file of packagingFiles()) {
+			expect(path.basename(file).toLowerCase(), path.relative(ROOT, file)).not.toContain("apparmor");
+			expect(fs.readFileSync(file, "utf8").toLowerCase(), path.relative(ROOT, file)).not.toContain("apparmor.d");
+		}
+	});
+});
+
+describe("Windows installer", () => {
+	it("the NSIS hook names the old Electron GUID", () => {
+		const nsis = platform("windows").bundle?.windows?.nsis;
+		expect(nsis?.installMode).toBe("currentUser");
+		expect(nsis?.installerHooks).toBe("windows/hooks.nsh");
+		const hooks = fs.readFileSync(path.join(TAURI, "windows/hooks.nsh"), "utf8");
+		expect(hooks).toContain("!macro NSIS_HOOK_PREINSTALL");
+		expect(hooks).toContain(
+			"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\9d72fc94-91dd-54d1-8fda-3b6e5e8d23f2",
+		);
+		expect(hooks).toMatch(/ReadRegStr \$R0 HKCU .*"QuietUninstallString"/);
+		expect(hooks).toMatch(/ReadRegStr \$R0 HKLM .*"QuietUninstallString"/);
+		expect(hooks).toContain("ExecWait");
+	});
+});
+
+describe("macOS bundle", () => {
+	const PRIVACY_KEYS = [
+		"NSMicrophoneUsageDescription",
+		"NSCameraUsageDescription",
+		"NSBluetoothAlwaysUsageDescription",
+		"NSBluetoothPeripheralUsageDescription",
+	];
+
+	it("names the app in every privacy prompt the bundle can trigger", async () => {
+		const plist = (await parsePlistFile(path.join(TAURI, "Info.plist"))) as PlistObject;
+		for (const key of PRIVACY_KEYS) expect(String(plist[key]), key).toContain(PRODUCT_NAME);
+	});
+
+	it("ships an explicit transport policy that leaves ATS on and excepts loopback", async () => {
+		const plist = (await parsePlistFile(path.join(TAURI, "Info.plist"))) as PlistObject;
+		expect(plist.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true });
+	});
+
+	it("signs ad hoc with the app entitlements", () => {
+		expect(platform("macos").bundle?.macOS?.signingIdentity).toBe("-");
+		expect(platform("macos").bundle?.macOS?.entitlements).toBe("macos/app.entitlements");
+	});
+
+	it("app entitlements grant no dyld or library-validation exemption", async () => {
+		const app = (await parsePlistFile(path.join(TAURI, "macos/app.entitlements"))) as PlistObject;
+		expect(app).toEqual({ "com.apple.security.device.audio-input": true });
+		const omp = (await parsePlistFile(path.join(TAURI, "macos/omp.entitlements"))) as PlistObject;
+		expect(omp).toEqual({
+			"com.apple.security.cs.allow-jit": true,
+			"com.apple.security.cs.allow-unsigned-executable-memory": true,
+		});
+	});
+
+	it("macOS floor matches the update-feed floor", () => {
+		const floor = platform("macos").bundle?.macOS?.minimumSystemVersion ?? "";
+		expect(floor).toBe("13.3");
+		// The feed carries the Darwin release of the same floor, and it clears the release gate.
+		const darwin = darwinReleaseFor(floor);
+		expect(darwin).toBe("22.4.0");
+		const parts = (version: string) => version.split(".").map(Number);
+		const [major, minor] = parts(darwin);
+		const [floorMajor, floorMinor] = parts(MAC_UPDATE_FLOOR);
+		expect((major ?? 0) * 100 + (minor ?? 0)).toBeGreaterThanOrEqual((floorMajor ?? 0) * 100 + (floorMinor ?? 0));
+	});
+});
