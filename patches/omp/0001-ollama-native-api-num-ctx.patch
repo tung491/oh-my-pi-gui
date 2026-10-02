@@ -1,0 +1,329 @@
+From 411f2721847970a477b1d5a7442fedf7237797a2 Mon Sep 17 00:00:00 2001
+From: Tung Son Do <dosontung007@gmail.com>
+Date: Fri, 2 Oct 2026 13:12:39 +0900
+Subject: [PATCH] feat(ollama): opt-in native api that sends num_ctx for
+ implicit Ollama
+
+Over the OpenAI-compatible endpoint a local Ollama server loads every model at
+its own default context (4096 on most GPUs), which is smaller than the agent's
+first request, so the first turn fails with exceed_context_size_error.
+
+PI_OLLAMA_API=ollama-chat switches the implicit Ollama provider to the native
+/api/chat, which now sends the model's context window as options.num_ctx. The
+window is the discovered context capped at OLLAMA_CONTEXT_LENGTH, or 16384 when
+it is unset. Native-api discovery rows use the root base URL and a separate
+cache namespace. The default stays openai-responses.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ docs/environment-variables.md                 |  3 +-
+ docs/models.md                                |  6 ++-
+ packages/ai/src/providers/ollama.ts           | 15 +++++-
+ packages/ai/test/ollama-num-ctx.test.ts       | 43 ++++++++++++++++
+ .../src/config/model-discovery.ts             | 19 ++++++-
+ .../coding-agent/src/config/model-registry.ts | 18 ++++++-
+ .../coding-agent/test/model-discovery.test.ts | 49 ++++++++++++++++++-
+ 7 files changed, 145 insertions(+), 8 deletions(-)
+ create mode 100644 packages/ai/test/ollama-num-ctx.test.ts
+
+diff --git a/docs/environment-variables.md b/docs/environment-variables.md
+index 653a6a53..4f81a758 100644
+--- a/docs/environment-variables.md
++++ b/docs/environment-variables.md
+@@ -463,7 +463,8 @@ Shell subprocess filtering is separate (`packages/utils/src/env.ts`): it strips
+ | `LM_STUDIO_BASE_URL`         | Default implicit LM Studio discovery base URL override (`http://127.0.0.1:1234/v1` if unset)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+ | `OLLAMA_BASE_URL`            | Default implicit Ollama discovery base URL override (`OLLAMA_HOST` if unset, then `http://127.0.0.1:11434`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+ | `OLLAMA_HOST`                | Ollama host used for implicit Ollama discovery when `OLLAMA_BASE_URL` is unset; accepts Ollama-style values such as `127.0.0.1:11434` or `http://host:11434`                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+-| `OLLAMA_CONTEXT_LENGTH`      | Positive integer context-window override for implicit Ollama discovery; affects OMP context budgeting only and does not change Ollama's runtime `num_ctx`                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
++| `OLLAMA_CONTEXT_LENGTH`      | Positive integer context-window override for implicit Ollama discovery. With `PI_OLLAMA_API=ollama-chat` it is also the `num_ctx` sent to Ollama (default 16384); otherwise it affects OMP context budgeting only                                                                                                                                                                                                                                                                                                                                                                                          |
++| `PI_OLLAMA_API`              | `ollama-chat` makes implicit Ollama use the native `/api/chat` and send the context window as `num_ctx`; unset keeps `openai-responses`                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+ | `LLAMA_CPP_BASE_URL`         | Default implicit Llama.cpp discovery base URL override (`http://127.0.0.1:8080` if unset)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+ | `PI_EDIT_VARIANT`            | Forces the edit tool variant when valid (`patch`, `replace`, `hashline`, `apply_patch`, `sloppy`); invalid values (including `auto`) are ignored. A matching `edit.modelVariants` entry still wins over it                                                                                                                                                                                                                                                                                                                                                                                                 |
+ | `PI_EDIT_FUZZY`              | `1`/`true` forces edit fuzzy matching on, `0`/`false` off; `auto` or any other value is ignored and `edit.fuzzyMatch` applies |
+diff --git a/docs/models.md b/docs/models.md
+index 5f4e97cf..65d5cb75 100644
+--- a/docs/models.md
++++ b/docs/models.md
+@@ -337,14 +337,16 @@ prices; rich provider discovery such as LiteLLM can supply its own prices.
+ If `ollama` is not explicitly configured, registry adds an implicit discoverable provider:
+ 
+ - provider: `ollama`
+-- api: `openai-responses`
++- api: `openai-responses`, or `ollama-chat` when `PI_OLLAMA_API=ollama-chat`
+ - base URL: `OLLAMA_BASE_URL`, or `OLLAMA_HOST`, or `http://127.0.0.1:11434`
+ - context window: `OLLAMA_CONTEXT_LENGTH` if set, otherwise Ollama `/api/show` metadata, otherwise `128000`
+ - auth mode: keyless (`auth: none` behavior)
+ 
+ Runtime discovery calls Ollama endpoints and normalizes discovered OpenAI-compatible models to `openai-responses`.
+ 
+-`OLLAMA_CONTEXT_LENGTH` does not configure Ollama's runtime `num_ctx`; set that in Ollama/model configuration separately.
++Over `openai-responses`, `OLLAMA_CONTEXT_LENGTH` does not configure Ollama's runtime `num_ctx`; set that in Ollama/model configuration separately.
++
++With `PI_OLLAMA_API=ollama-chat`, models are called through Ollama's native `/api/chat` and every request carries `options.num_ctx`, so the server loads the model at the window OMP budgets for instead of its own default (4096 on most GPUs). That window is the discovered context capped at `OLLAMA_CONTEXT_LENGTH`, or at 16384 when it is unset. The cap also applies to a larger `num_ctx` set in a Modelfile.
+ 
+ ### Implicit llama.cpp discovery
+ 
+diff --git a/packages/ai/src/providers/ollama.ts b/packages/ai/src/providers/ollama.ts
+index 3a371eae..40a2b2c0 100644
+--- a/packages/ai/src/providers/ollama.ts
++++ b/packages/ai/src/providers/ollama.ts
+@@ -310,8 +310,21 @@ function createChatBody(model: Model<"ollama-chat">, context: Context, options:
+ 	const toolChoice = mapToolChoice(options?.toolChoice);
+ 	const selectedTools = selectToolsForToolChoice(context.tools, options?.toolChoice);
+ 	const tools = convertTools(selectedTools);
+-	const runtimeOptions: { num_predict?: number; temperature?: number; top_p?: number } = {};
++	const runtimeOptions: { num_ctx?: number; num_predict?: number; temperature?: number; top_p?: number } = {};
+ 	let hasRuntimeOptions = false;
++	// A local server otherwise loads the model at its own default context (4096 on
++	// most GPUs), below the window the agent plans for. Keyed on the local provider
++	// id, whose window the registry caps; cloud and custom providers manage their own.
++	const contextWindow = model.contextWindow;
++	if (
++		model.provider === "ollama" &&
++		contextWindow !== null &&
++		Number.isSafeInteger(contextWindow) &&
++		contextWindow > 0
++	) {
++		runtimeOptions.num_ctx = contextWindow;
++		hasRuntimeOptions = true;
++	}
+ 	if (options?.maxTokens !== undefined && !model.omitMaxOutputTokens) {
+ 		// Ollama Cloud rejects `num_predict` above 65536 with HTTP 400 uniformly
+ 		// across cloud-served models (confirmed empirically, #3392). Deliberately
+diff --git a/packages/ai/test/ollama-num-ctx.test.ts b/packages/ai/test/ollama-num-ctx.test.ts
+new file mode 100644
+index 00000000..bd63069a
+--- /dev/null
++++ b/packages/ai/test/ollama-num-ctx.test.ts
+@@ -0,0 +1,43 @@
++import { describe, expect, it } from "bun:test";
++import type { Context } from "@oh-my-pi/pi-ai";
++import { streamOllama } from "@oh-my-pi/pi-ai/providers/ollama";
++import { buildModel } from "@oh-my-pi/pi-catalog/build";
++
++function ollamaModel(provider: "ollama" | "ollama-cloud") {
++	return buildModel({
++		id: "gemma4:e2b",
++		name: "Gemma 4 E2B",
++		api: "ollama-chat",
++		provider,
++		baseUrl: provider === "ollama" ? "http://127.0.0.1:11434" : "https://ollama.com",
++		reasoning: false,
++		input: ["text"],
++		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
++		contextWindow: 16_384,
++		maxTokens: 8192,
++	});
++}
++
++async function requestOptions(provider: "ollama" | "ollama-cloud"): Promise<Record<string, unknown> | undefined> {
++	let options: Record<string, unknown> | undefined;
++	const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
++		const body = JSON.parse(String(init?.body)) as { options?: Record<string, unknown> };
++		options = body.options;
++		return new Response('{"message":{"content":"ok"},"done":true,"prompt_eval_count":1,"eval_count":1}\n', {
++			status: 200,
++		});
++	};
++	const context: Context = { messages: [{ role: "user", content: "hi", timestamp: 0 }] };
++	await streamOllama(ollamaModel(provider), context, { apiKey: "test-key", fetch: fetchMock }).result();
++	return options;
++}
++
++describe("Ollama chat context size", () => {
++	it("asks a local server for the model's context window", async () => {
++		expect((await requestOptions("ollama"))?.num_ctx).toBe(16_384);
++	});
++
++	it("leaves the context to Ollama Cloud", async () => {
++		expect((await requestOptions("ollama-cloud"))?.num_ctx).toBeUndefined();
++	});
++});
+diff --git a/packages/coding-agent/src/config/model-discovery.ts b/packages/coding-agent/src/config/model-discovery.ts
+index 9154e78b..e7475dfd 100644
+--- a/packages/coding-agent/src/config/model-discovery.ts
++++ b/packages/coding-agent/src/config/model-discovery.ts
+@@ -155,6 +155,22 @@ export function getImplicitOllamaBaseUrl(): string {
+ 	return baseUrl || normalizeOllamaHostEnv(Bun.env.OLLAMA_HOST) || DEFAULT_OLLAMA_BASE_URL;
+ }
+ 
++/**
++ * Context the implicit Ollama provider requests per call over the native API
++ * when `OLLAMA_CONTEXT_LENGTH` is unset. Ollama's own default (4096 on most
++ * GPUs) is smaller than the agent's first request.
++ */
++export const OLLAMA_NATIVE_DEFAULT_CONTEXT = 16_384;
++
++/**
++ * The api the implicit Ollama provider speaks. `PI_OLLAMA_API=ollama-chat`
++ * selects the native `/api/chat`, which can carry `num_ctx`; the OpenAI-compatible
++ * endpoint stays the default.
++ */
++export function getImplicitOllamaApi(): "openai-responses" | "ollama-chat" {
++	return Bun.env.PI_OLLAMA_API?.trim() === "ollama-chat" ? "ollama-chat" : "openai-responses";
++}
++
+ export function getOllamaContextLengthOverride(): number | undefined {
+ 	const value = Bun.env.OLLAMA_CONTEXT_LENGTH?.trim();
+ 	if (!value) return undefined;
+@@ -571,7 +587,8 @@ export async function discoverOllamaModels(
+ 			name: entry.name,
+ 			api: providerConfig.api,
+ 			provider: providerConfig.provider,
+-			baseUrl: `${endpoint}/v1`,
++			// The native api lives at the root; only the OpenAI-compatible one is under /v1.
++			baseUrl: providerConfig.api === "ollama-chat" ? endpoint : `${endpoint}/v1`,
+ 			reasoning: metadata?.reasoning ?? false,
+ 			input: metadata?.input ?? ["text"],
+ 			imageInputDecoder: "stb",
+diff --git a/packages/coding-agent/src/config/model-registry.ts b/packages/coding-agent/src/config/model-registry.ts
+index 14a9dd7b..d5d799a6 100644
+--- a/packages/coding-agent/src/config/model-registry.ts
++++ b/packages/coding-agent/src/config/model-registry.ts
+@@ -76,12 +76,14 @@ import {
+ 	discoverLmStudioModelRuntimeMetadata,
+ 	discoverModelsByProviderType,
+ 	ensureLlamaCppV1BaseUrl,
++	getImplicitOllamaApi,
+ 	getImplicitOllamaBaseUrl,
+ 	getOllamaContextLengthOverride,
+ 	isDiscoveryAuthRejection,
+ 	normalizeBareDiscoveryBaseUrl,
+ 	normalizeLiteLLMDiscoveryBaseUrl,
+ 	normalizeLlamaCppBaseUrl,
++	OLLAMA_NATIVE_DEFAULT_CONTEXT,
+ } from "./model-discovery";
+ import {
+ 	AUTHORITATIVE_RUNTIME_CATALOG_PROVIDERS,
+@@ -1456,6 +1458,15 @@ export class ModelRegistry {
+ 				)
+ 			: withDecoderMetadata;
+ 
++		if (providerConfig.provider === "ollama" && providerConfig.api === "ollama-chat") {
++			// The native api sends this window as `num_ctx`, so it is what the server
++			// allocates: capped, because discovery reports the model's training context.
++			const limit = getOllamaContextLengthOverride() ?? OLLAMA_NATIVE_DEFAULT_CONTEXT;
++			return withRemoteCompaction.map(model => {
++				const contextWindow = Math.min(model.contextWindow ?? limit, limit);
++				return { ...model, contextWindow, maxTokens: Math.min(model.maxTokens ?? contextWindow, contextWindow) };
++			});
++		}
+ 		if (providerConfig.provider !== "ollama" || providerConfig.api !== "openai-responses") {
+ 			return withRemoteCompaction;
+ 		}
+@@ -1490,7 +1501,7 @@ export class ModelRegistry {
+ 		if (!configuredProviders.has("ollama") && !disabledProviders.has("ollama")) {
+ 			this.#discoverableProviders.push({
+ 				provider: "ollama",
+-				api: "openai-responses",
++				api: getImplicitOllamaApi(),
+ 				baseUrl: getImplicitOllamaBaseUrl(),
+ 				discovery: { type: "ollama" },
+ 				optional: !hasOllamaEndpointOverride,
+@@ -1832,7 +1843,10 @@ export class ModelRegistry {
+ 
+ 	#configuredDiscoveryCacheProviderId(providerConfig: DiscoveryProviderConfig): string {
+ 		if (providerConfig.discovery.type === "ollama") {
+-			return resolveOllamaModelCacheProviderId(providerConfig.provider, providerConfig.baseUrl);
++			const cacheProviderId = resolveOllamaModelCacheProviderId(providerConfig.provider, providerConfig.baseUrl);
++			// Rows carry their api and base URL, so native-api rows must not satisfy a
++			// cache read for the OpenAI-compatible provider, or the reverse.
++			return providerConfig.api === "ollama-chat" ? `${cacheProviderId}:ollama-chat` : cacheProviderId;
+ 		}
+ 		if (providerConfig.discovery.type === "openai-models-list") {
+ 			// context-v3 invalidates rows cached before server-advertised input
+diff --git a/packages/coding-agent/test/model-discovery.test.ts b/packages/coding-agent/test/model-discovery.test.ts
+index 666e81fe..f2c1313c 100644
+--- a/packages/coding-agent/test/model-discovery.test.ts
++++ b/packages/coding-agent/test/model-discovery.test.ts
+@@ -31,6 +31,7 @@ describe("ModelRegistry runtime discovery", () => {
+ 	let originalOllamaBaseUrl: string | undefined;
+ 	let originalOllamaHost: string | undefined;
+ 	let originalOllamaContextLength: string | undefined;
++	let originalOllamaApi: string | undefined;
+ 	let originalAnthropicApiKey: string | undefined;
+ 	let originalLlamaCppBaseUrl: string | undefined;
+ 
+@@ -39,10 +40,12 @@ describe("ModelRegistry runtime discovery", () => {
+ 		originalOllamaBaseUrl = Bun.env.OLLAMA_BASE_URL;
+ 		originalOllamaHost = Bun.env.OLLAMA_HOST;
+ 		originalOllamaContextLength = Bun.env.OLLAMA_CONTEXT_LENGTH;
++		originalOllamaApi = Bun.env.PI_OLLAMA_API;
+ 		originalAnthropicApiKey = Bun.env.ANTHROPIC_API_KEY;
+ 		delete Bun.env.OLLAMA_BASE_URL;
+ 		delete Bun.env.OLLAMA_HOST;
+ 		delete Bun.env.OLLAMA_CONTEXT_LENGTH;
++		delete Bun.env.PI_OLLAMA_API;
+ 		delete Bun.env.ANTHROPIC_API_KEY;
+ 		// The developer's shell or ~/.omp/agent/.env must not redirect llama.cpp discovery probes.
+ 		originalLlamaCppBaseUrl = Bun.env.LLAMA_CPP_BASE_URL;
+@@ -74,6 +77,11 @@ describe("ModelRegistry runtime discovery", () => {
+ 		} else {
+ 			Bun.env.OLLAMA_CONTEXT_LENGTH = originalOllamaContextLength;
+ 		}
++		if (originalOllamaApi === undefined) {
++			delete Bun.env.PI_OLLAMA_API;
++		} else {
++			Bun.env.PI_OLLAMA_API = originalOllamaApi;
++		}
+ 		if (originalAnthropicApiKey === undefined) {
+ 			delete Bun.env.ANTHROPIC_API_KEY;
+ 		} else {
+@@ -105,7 +113,8 @@ describe("ModelRegistry runtime discovery", () => {
+ 			| "LM_STUDIO_BASE_URL"
+ 			| "OLLAMA_BASE_URL"
+ 			| "OLLAMA_CONTEXT_LENGTH"
+-			| "OLLAMA_HOST",
++			| "OLLAMA_HOST"
++			| "PI_OLLAMA_API",
+ 		value: string | undefined,
+ 	) {
+ 		const original = Bun.env[name];
+@@ -840,6 +849,44 @@ describe("ModelRegistry runtime discovery", () => {
+ 		expect(model?.maxTokens).toBe(32768);
+ 	});
+ 
++	test("keeps implicit Ollama on the OpenAI-compatible api by default", async () => {
++		const registry = new ModelRegistry(authStorage, modelsJsonPath, { fetch: mockOllamaDiscovery(["phi4-mini"]) });
++		await registry.refresh();
++
++		const model = registry.find("ollama", "phi4-mini");
++		expect(model?.api).toBe("openai-responses");
++		expect(model?.baseUrl).toBe("http://127.0.0.1:11434/v1");
++	});
++
++	test("speaks the native api with a capped window when PI_OLLAMA_API selects it", async () => {
++		using _api = withEnv("PI_OLLAMA_API", "ollama-chat");
++		const fetchMock = mockOllamaDiscovery(["gemma4:e2b"], "http://127.0.0.1:11434", {
++			model_info: { "gemma4.context_length": 131072 },
++			capabilities: ["completion", "tools"],
++		});
++		const registry = new ModelRegistry(authStorage, modelsJsonPath, { fetch: fetchMock });
++		await registry.refresh();
++
++		const model = registry.find("ollama", "gemma4:e2b");
++		expect(model?.api).toBe("ollama-chat");
++		expect(model?.baseUrl).toBe("http://127.0.0.1:11434");
++		expect(model?.contextWindow).toBe(16384);
++		expect(model?.maxTokens).toBe(16384);
++	});
++
++	test("lets OLLAMA_CONTEXT_LENGTH set the native window", async () => {
++		using _api = withEnv("PI_OLLAMA_API", "ollama-chat");
++		using _contextLength = withEnv("OLLAMA_CONTEXT_LENGTH", "32768");
++		const fetchMock = mockOllamaDiscovery(["gemma4:e2b"], "http://127.0.0.1:11434", {
++			model_info: { "gemma4.context_length": 131072 },
++			capabilities: ["completion"],
++		});
++		const registry = new ModelRegistry(authStorage, modelsJsonPath, { fetch: fetchMock });
++		await registry.refresh();
++
++		expect(registry.find("ollama", "gemma4:e2b")?.contextWindow).toBe(32768);
++	});
++
+ 	test("prefers Ollama runtime num_ctx over training context metadata", async () => {
+ 		const fetchMock = mockOllamaDiscovery(["qwen3:27b"], "http://127.0.0.1:11434", {
+ 			parameters: "temperature 0.6\nnum_ctx 123904\n",
+-- 
+2.53.0
+

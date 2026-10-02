@@ -249,6 +249,53 @@ async function restoreStagedAddons(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Agent patches: GUI-owned changes to monorepo source, applied for the build
+// ---------------------------------------------------------------------------
+
+const agentPatchesDir = path.join(guiRoot, "patches", "omp");
+/** Patches this build applied, reverted afterwards so the monorepo checkout stays as it was. */
+const appliedByUs: string[] = [];
+
+async function gitApply(args: readonly string[]): Promise<boolean> {
+	const proc = Bun.spawn(["git", "apply", ...args], { cwd: repoRoot, stdout: "ignore", stderr: "pipe" });
+	return (await proc.exited) === 0;
+}
+
+/**
+ * Apply each `patches/omp/*.patch` to the monorepo. A patch already present in
+ * the checkout (committed there, or applied by hand) is left alone.
+ */
+async function applyAgentPatches(): Promise<void> {
+	const names = existsSync(agentPatchesDir)
+		? (await fs.readdir(agentPatchesDir)).filter(name => name.endsWith(".patch")).sort()
+		: [];
+	for (const name of names) {
+		const file = path.join(agentPatchesDir, name);
+		if (await gitApply(["--reverse", "--check", file])) {
+			console.log(`[build:omp] agent patch ${name} already present`);
+			continue;
+		}
+		if (!(await gitApply([file]))) {
+			throw new Error(
+				[
+					`Agent patch ${name} no longer applies to the monorepo (upstream changed the same code).`,
+					`Rebase it: apply by hand with \`git apply --3way ${path.relative(repoRoot, file)}\` at the monorepo root,`,
+					`resolve, then regenerate it with \`git diff > ${path.relative(repoRoot, file)}\`.`,
+				].join("\n"),
+			);
+		}
+		appliedByUs.push(file);
+		console.log(`[build:omp] applied agent patch ${name}`);
+	}
+}
+
+async function revertAgentPatches(): Promise<void> {
+	for (const file of appliedByUs.splice(0).reverse()) {
+		if (!(await gitApply(["--reverse", file]))) console.warn(`[build:omp] could not revert ${file}`);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Embed → compile → restore stub
 // ---------------------------------------------------------------------------
 
@@ -288,29 +335,35 @@ const require = createRequire(import.meta.url);
 const transformersVersion = (require("@huggingface/transformers/package.json") as { version?: string }).version;
 if (!transformersVersion) throw new Error("@huggingface/transformers package.json has no version");
 
-await stageNativeAddon(target);
 try {
+	await applyAgentPatches();
+	await stageNativeAddon(target);
 	try {
-		await runPackageScript(statsDir, "gen:stats");
-		await runPackageScript(collabWebDir, "gen:tool-views");
-		await embedNativeForTarget(target);
-		await compileCodingAgent({
-			repoRoot,
-			entrypoint: path.join(codingAgentDir, "src", "cli.ts"),
-			outfile: out,
-			transformersVersion,
-			...(target.target ? { target: target.target } : {}),
-		});
+		try {
+			await runPackageScript(statsDir, "gen:stats");
+			await runPackageScript(collabWebDir, "gen:tool-views");
+			await embedNativeForTarget(target);
+			await compileCodingAgent({
+				repoRoot,
+				entrypoint: path.join(codingAgentDir, "src", "cli.ts"),
+				outfile: out,
+				transformersVersion,
+				...(target.target ? { target: target.target } : {}),
+			});
+		} finally {
+			// Compiled assets are temporary source substitutions. Reset every family
+			// even when generation or compilation fails; Promise.all starts both
+			// cleanups before surfacing an individual failure.
+			await restoreGeneratedAssets();
+		}
 	} finally {
-		// Compiled assets are temporary source substitutions. Reset every family
-		// even when generation or compilation fails; Promise.all starts both
-		// cleanups before surfacing an individual failure.
-		await restoreGeneratedAssets();
+		// Staged .node files are untracked artifacts: remove files we added and
+		// restore any local matching-path addon that predated this build.
+		await restoreStagedAddons();
 	}
 } finally {
-	// Staged .node files are untracked artifacts: remove files we added and
-	// restore any local matching-path addon that predated this build.
-	await restoreStagedAddons();
+	// Applied patches are build-time source substitutions, like the generated assets.
+	await revertAgentPatches();
 }
 
 console.log(`built bundled omp → ${out}${target.target ? ` (target ${target.target})` : ""}`);
