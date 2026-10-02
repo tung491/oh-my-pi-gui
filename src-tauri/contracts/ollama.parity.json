@@ -1,0 +1,34 @@
+[
+  {
+    "ts": "src/main/ollama/base-url.test.ts",
+    "rust": "src-tauri/src/ollama/base_url.rs"
+  },
+  {
+    "ts": "src/main/ollama/hardware.test.ts",
+    "rust": "src-tauri/src/ollama/hardware.rs"
+  },
+  {
+    "ts": "src/main/ollama/install-progress.test.ts",
+    "rust": "src-tauri/src/ollama/install_progress.rs"
+  },
+  {
+    "ts": "src/main/ollama/probe.test.ts",
+    "rust": "src-tauri/src/ollama/probe.rs"
+  },
+  {
+    "ts": "src/main/ollama/pull.test.ts",
+    "rust": "src-tauri/src/ollama/pull.rs"
+  },
+  {
+    "ts": "src/main/ollama/remedy.test.ts",
+    "rust": "src-tauri/src/ollama/remedy.rs"
+  },
+  {
+    "ts": "src/main/ollama/warm.test.ts",
+    "rust": "src-tauri/src/ollama/warm.rs"
+  },
+  {
+    "ts": "src/shared/ollama-catalog.test.ts",
+    "rust": "src-tauri/src/ollama/catalog.rs"
+  }
+]

@@ -1,0 +1,14 @@
+[
+  {
+    "ts": "src/main/sidecar-pool.test.ts",
+    "rust": "src-tauri/src/tabs/pool.rs"
+  },
+  {
+    "ts": "src/main/tab-spawn.test.ts",
+    "rust": "src-tauri/src/tabs/tab_spawn.rs"
+  },
+  {
+    "ts": "src/main/window-spawn-target.test.ts",
+    "rust": "src-tauri/src/tabs/window_spawn_target.rs"
+  }
+]
