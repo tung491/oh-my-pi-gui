@@ -257,11 +257,13 @@ impl Desktop {
 
         let weak = Arc::downgrade(ctx);
         let toggle: shortcut::Activation = Arc::new(move || {
-            if let Some(ctx) = weak.upgrade() {
-                if let Some(desktop) = Desktop::of(&ctx) {
-                    desktop.toggle_window_shortcut(&ctx);
+            survive("window toggle shortcut", || {
+                if let Some(ctx) = weak.upgrade() {
+                    if let Some(desktop) = Desktop::of(&ctx) {
+                        desktop.toggle_window_shortcut(&ctx);
+                    }
                 }
-            }
+            });
         });
         if let Some(accelerator) = native_accelerator("window.toggle") {
             match registry.register(accelerator, toggle) {
@@ -292,11 +294,13 @@ impl Desktop {
             xwayland_only: xwayland_only(platform, &env),
             on_activate: Arc::new(move || {
                 runtime_log::note("global-shortcut", "quick entry shortcut activated", json!({ "portal": portal }));
-                if let Some(ctx) = activate_ctx.upgrade() {
-                    if let Some(desktop) = Desktop::of(&ctx) {
-                        desktop.quick_entry.toggle(&ctx, desktop);
+                survive("quick entry shortcut", || {
+                    if let Some(ctx) = activate_ctx.upgrade() {
+                        if let Some(desktop) = Desktop::of(&ctx) {
+                            desktop.quick_entry.toggle(&ctx, desktop);
+                        }
                     }
-                }
+                });
             }),
             platform,
         });
@@ -514,26 +518,30 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
         use tauri_plugin_deep_link::DeepLinkExt;
         let weak = Arc::downgrade(ctx);
         app.deep_link().on_open_url(move |event| {
-            let Some(ctx) = weak.upgrade() else { return };
-            let Some(desktop) = Desktop::of(&ctx) else { return };
-            for url in event.urls() {
-                let text = url.to_string();
-                if url.scheme() == "file" {
-                    if let Ok(path) = url.to_file_path() {
-                        desktop.open_file(&ctx, path.to_string_lossy().to_string());
+            survive("deep link event", || {
+                let Some(ctx) = weak.upgrade() else { return };
+                let Some(desktop) = Desktop::of(&ctx) else { return };
+                for url in event.urls() {
+                    let text = url.to_string();
+                    if url.scheme() == "file" {
+                        if let Ok(path) = url.to_file_path() {
+                            desktop.open_file(&ctx, path.to_string_lossy().to_string());
+                        }
+                    } else {
+                        desktop.open_url(&ctx, text);
                     }
-                } else {
-                    desktop.open_url(&ctx, text);
                 }
-            }
+            });
         });
     }
     {
         let weak = Arc::downgrade(ctx);
         app.on_menu_event(move |_app, event| {
-            let Some(ctx) = weak.upgrade() else { return };
-            let Some(desktop) = Desktop::of(&ctx) else { return };
-            desktop.on_menu_id(&ctx, event.id().as_ref());
+            survive("menu event", || {
+                let Some(ctx) = weak.upgrade() else { return };
+                let Some(desktop) = Desktop::of(&ctx) else { return };
+                desktop.on_menu_id(&ctx, event.id().as_ref());
+            });
         });
     }
     desktop.start(ctx, registry);

@@ -478,8 +478,10 @@ impl Desktop {
         if self.is_quitting_latched() {
             return;
         }
-        let layouts: Vec<PersistedTabLayout> =
-            self.windows.ids().into_iter().filter_map(|id| survive("tabs.tab_layout_for_window", || ctx.tabs.tab_layout_for_window(id)).flatten()).collect();
+        let Some(layouts) = collect_layouts(&self.windows.ids(), |id| ctx.tabs.tab_layout_for_window(id)) else {
+            runtime_log::note("unknown", "tab layouts not saved: a window's layout could not be read", json!({}));
+            return;
+        };
         if layouts.is_empty() {
             return;
         }
@@ -561,6 +563,16 @@ impl Desktop {
     }
 }
 
+/// Every live window's layout, in window order. `None` when any query failed:
+/// a partial list would be saved as the whole session and lose the other windows.
+pub(crate) fn collect_layouts(ids: &[WindowId], query: impl Fn(WindowId) -> Option<PersistedTabLayout>) -> Option<Vec<PersistedTabLayout>> {
+    let mut layouts = Vec::new();
+    for id in ids {
+        layouts.extend(survive("tabs.tab_layout_for_window", || query(*id))?);
+    }
+    Some(layouts)
+}
+
 /// `windowState` as JSON.
 #[cfg(test)]
 pub(crate) fn saved_state_value(ctx: &AppCtx) -> Option<serde_json::Value> {
@@ -583,7 +595,7 @@ mod tauri_backend {
     use super::{Backend, MainWindowSpec, MenuItemModel, QuickEntrySpec, WinEvent};
     use crate::desktop::quick_entry_core::QUICK_ENTRY_SIZE;
     use crate::desktop::window_bounds::Rect;
-    use crate::desktop::{lock, menu, tray, Desktop, Platform};
+    use crate::desktop::{lock, menu, survive, tray, Desktop, Platform};
     use crate::ports::{CtxRef, WindowId, WindowKind};
     use crate::webview::{self, WindowSpec};
     use crate::{paths, product};
@@ -608,6 +620,12 @@ mod tauri_backend {
         fn observe(&self, window: &WebviewWindow, id: WindowId) {
             let ctx = self.ctx.clone();
             window.on_window_event(move |event| {
+                survive("window event", || Self::route_window_event(&ctx, id, event));
+            });
+        }
+
+        fn route_window_event(ctx: &CtxRef, id: WindowId, event: &WindowEvent) {
+            {
                 let mapped = match event {
                     WindowEvent::Moved(_) => WinEvent::Moved,
                     WindowEvent::Resized(_) => WinEvent::Resized,
@@ -622,7 +640,7 @@ mod tauri_backend {
                 if let (true, WindowEvent::CloseRequested { api, .. }) = (prevent_close, event) {
                     api.prevent_close();
                 }
-            });
+            }
         }
 
         fn logical_rect(window: &WebviewWindow) -> Option<Rect> {
@@ -1305,6 +1323,22 @@ mod tests {
         desktop.persist_tab_layouts(&ctx);
         assert_eq!(ctx.prefs.get("tabLayouts").map(|v| v.as_array().map(Vec::len)), Some(Some(1)));
         assert_eq!(ctx.prefs.get("tabLayout"), None);
+    }
+
+    #[test]
+    fn a_layout_query_that_panics_keeps_the_saved_session_untouched() {
+        let ids = [WindowId(1), WindowId(2), WindowId(3)];
+        let layout = PersistedTabLayout { version: 1, tabs: vec![], active_index: 0, split: None };
+        let healthy = collect_layouts(&ids, |id| (id != WindowId(2)).then(|| layout.clone()));
+        assert_eq!(healthy.map(|l| l.len()), Some(2));
+        let broken = collect_layouts(&ids, |id| if id == WindowId(2) { panic!("not yet implemented") } else { Some(layout.clone()) });
+        assert_eq!(broken, None, "one failed window must not shrink the saved session to the others");
+
+        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
+        fakes.tabs.layouts.lock().unwrap().insert(id, layout);
+        desktop.persist_tab_layouts(&ctx);
+        assert_eq!(ctx.prefs.get("tabLayouts").and_then(|v| v.as_array().map(Vec::len)), Some(1));
     }
 
     #[tokio::test(start_paused = true)]

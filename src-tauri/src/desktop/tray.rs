@@ -264,12 +264,14 @@ pub(crate) fn build_tray(app: &tauri::AppHandle, tooltip: &str, items: &[MenuIte
         // Left click focuses the main window as before; the menu stays on the right button.
         builder = builder.show_menu_on_left_click(false).on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                let app = tray.app_handle();
-                if let Some(ctx) = tauri::Manager::try_state::<std::sync::Arc<AppCtx>>(app) {
-                    if let Some(desktop) = Desktop::of(&ctx) {
-                        desktop.on_tray_click(&ctx);
+                super::survive("tray click", || {
+                    let app = tray.app_handle();
+                    if let Some(ctx) = tauri::Manager::try_state::<std::sync::Arc<AppCtx>>(app) {
+                        if let Some(desktop) = Desktop::of(&ctx) {
+                            desktop.on_tray_click(&ctx);
+                        }
                     }
-                }
+                });
             }
         });
     }
