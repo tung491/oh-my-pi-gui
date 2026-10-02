@@ -17,6 +17,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cx } from "../../../lib/format";
 import { useT } from "../../../lib/i18n";
+import { writePersisted } from "../../../lib/persisted-storage";
 import { useQueuedMessages } from "../../../stores/queue";
 import { useSessionStore } from "../../../stores/session";
 import { useSubagentsStore } from "../../../stores/subagents";
@@ -60,7 +61,7 @@ function WorkspaceDockContent() {
 	const clampHeight = useCallback(clampFocusHeight, []);
 	const persistHeight = useCallback((height: number) => {
 		try {
-			localStorage.setItem("omp.dock.focusHeight", String(height));
+			writePersisted("omp.dock.focusHeight", String(height));
 		} catch {
 			/* storage unavailable — session-only */
 		}

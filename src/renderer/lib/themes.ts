@@ -22,6 +22,7 @@
 
 import type { RpcThemeColorsResult } from "../../shared/rpc-types";
 import { saveGuiPreference } from "./display-preferences";
+import { writePersisted } from "./persisted-storage";
 import { acceptsActiveTabEvents, onActiveTabRouteSettled, onActiveTabRouteState } from "./tab-routing";
 import { applyTheme, markCustomThemeTokens, resolveTheme, THEME_SCHEME_STORAGE_KEY } from "./theme";
 
@@ -1727,7 +1728,7 @@ export function applyThemeByName(selection: ThemeSelection, opts: { persist?: bo
 		void saveGuiPreference("themeName", selection, () => {});
 		void saveGuiPreference("theme", legacyTheme, () => {});
 		try {
-			localStorage.setItem(THEME_SCHEME_STORAGE_KEY, selection === "system" ? "system" : THEMES[selection].scheme);
+			writePersisted(THEME_SCHEME_STORAGE_KEY, selection === "system" ? "system" : THEMES[selection].scheme);
 		} catch {
 			// localStorage unavailable — the async path still applies the theme.
 		}

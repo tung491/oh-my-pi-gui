@@ -10,6 +10,7 @@
 - **Local-model welcome screen**: the first launch shows one screen with this machine's memory and graphics, the Ollama status, and three model sizes that fit the machine. Download a model with a progress bar (Cancel stops it, Download again resumes), then **Continue to the assistant** to make it the default. When Ollama is stopped or missing, Linux offers **Start Ollama** and **Install Ollama** through the system password prompt, and macOS and Windows link to ollama.com/download with **Check again**. **Run setup again** in the Ollama window reopens the screen.
 - **Gemma model suggestions**: the welcome screen suggests Gemma 4 E2B, E4B and 26B A4B (Google's QAT 4-bit GGUF builds from Hugging Face), sized with the same memory, speed and tier rules as SAI OS's welcome app. A machine too small for any comfortable fit still gets the smallest model, marked as a tight fit. Each card also shows how many parameters are active per token.
 - **Ollama install progress on Linux**: **Install Ollama** shows the installer's current step and a download percentage instead of a bare spinner, in both the welcome screen and the Ollama window.
+- Settings that lived only in the window (language, theme, dock height, palette history, dismissed update) are now also saved to the profile.
 
 ### Changed
 

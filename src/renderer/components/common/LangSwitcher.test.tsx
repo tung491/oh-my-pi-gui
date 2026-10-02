@@ -135,7 +135,7 @@ describe("LangSwitcher", () => {
 		try {
 			await mountSwitcher();
 			expect(document.querySelector("button")?.textContent).toContain("VI");
-			expect(writes).toEqual([]);
+			expect(writes.filter(write => write.key === "language")).toEqual([]);
 		} finally {
 			delete bridgeWindow.omp;
 			delete globals.localStorage;

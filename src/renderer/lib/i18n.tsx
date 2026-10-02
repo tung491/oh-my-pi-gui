@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { en } from "../locales/en";
 import { vi } from "../locales/vi";
+import { writePersisted } from "./persisted-storage";
 
 export type Locale = Record<string, string>;
 export type Lang = "en" | "vi";
@@ -19,7 +20,7 @@ function readStoredLanguage(): Lang | undefined {
 
 function storeLanguage(lang: Lang): void {
 	try {
-		localStorage.setItem(LANG_KEY, lang);
+		writePersisted(LANG_KEY, lang);
 	} catch {
 		/* ignore */
 	}

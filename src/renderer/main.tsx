@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { RootErrorBoundary } from "./components/common/RootErrorBoundary";
 import { I18nProvider } from "./lib/i18n";
+import { mirrorAllToPrefs } from "./lib/persisted-storage";
 import { installGlobalRuntimeErrorHandlers, reportRuntimeError } from "./lib/runtime-errors";
 import "./styles/global.css";
 import "./styles/theme-dark.css";
@@ -9,6 +10,8 @@ import "./styles/theme-light.css";
 import "./styles/components.css";
 
 installGlobalRuntimeErrorHandlers();
+// Mirror values stored before the write-through existed, so the profile holds them too.
+mirrorAllToPrefs();
 
 const container = document.getElementById("root");
 if (!container) {

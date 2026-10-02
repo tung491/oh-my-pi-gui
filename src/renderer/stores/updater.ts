@@ -8,6 +8,7 @@
  */
 import { create } from "zustand";
 import type { UpdateStatus } from "../../shared/ipc-types";
+import { writePersisted } from "../lib/persisted-storage";
 
 const DISMISSAL_KEY = "omp.update.dismissed";
 
@@ -41,7 +42,7 @@ export function loadDismissal(): UpdateDismissal {
 
 function persistDismissal(dismissal: UpdateDismissal): void {
 	try {
-		localStorage.setItem(DISMISSAL_KEY, JSON.stringify(dismissal));
+		writePersisted(DISMISSAL_KEY, JSON.stringify(dismissal));
 	} catch {
 		/* storage unavailable — dismissal becomes session-only */
 	}

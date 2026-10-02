@@ -25,6 +25,7 @@ import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
 import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { retryLastTurn as retryLastTurnShared } from "../../lib/messages";
+import { writePersisted } from "../../lib/persisted-storage";
 import { openHandoffDialog } from "../../stores/fork-handoff";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
@@ -57,7 +58,7 @@ function loadRecent(): string[] {
 
 function saveRecent(names: string[]) {
 	try {
-		localStorage.setItem(RECENT_KEY, JSON.stringify(names.slice(0, RECENT_LIMIT)));
+		writePersisted(RECENT_KEY, JSON.stringify(names.slice(0, RECENT_LIMIT)));
 	} catch {
 		// Storage unavailable — recents are best-effort.
 	}
