@@ -18,7 +18,6 @@
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -477,8 +476,8 @@ mod tests {
         let growing_before = first.iter().find(|info| info.id == "growing").cloned();
         assert_eq!(growing_before.map(|info| info.message_count), Some(0));
 
-        // Ensure the mtime actually advances on filesystems with coarse resolution.
-        std::thread::sleep(Duration::from_millis(5));
+        // The cache keys on `mtime:size`, so the size change alone invalidates
+        // the entry even when the filesystem's mtime resolution is coarse.
         let mut contents = std::fs::read_to_string(&growing).unwrap();
         contents.push_str(&format!("{}\n", serde_json::json!({ "type": "message", "message": { "role": "user", "content": "next turn" } })));
         std::fs::write(&growing, contents).unwrap();

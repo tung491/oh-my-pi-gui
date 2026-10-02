@@ -38,9 +38,12 @@ pub fn runtime_log_path(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> 
 }
 
 /// `log:snapshot`
-pub fn log_snapshot(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("log:snapshot"))
+pub fn log_snapshot(ctx: &Arc<AppCtx>, _caller: Caller, _args: Vec<Value>) -> Reply {
+    let Some(services) = ctx.services.as_any().downcast_ref::<crate::services::Services>() else {
+        return Reply::ok(json!({ "lines": Vec::<String>::new(), "nextSequence": 0 }));
+    };
+    let snapshot = services.log_watcher.snapshot();
+    Reply::ok(json!({ "lines": snapshot.lines, "nextSequence": snapshot.next_sequence }))
 }
 
 fn requested_scope(payload: &Value) -> SessionScope {
@@ -288,27 +291,52 @@ pub fn system_notify(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Rep
 }
 
 /// `prefs:get`
-pub fn prefs_get(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("prefs:get"))
+pub fn prefs_get(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    match payload.get("key").and_then(Value::as_str) {
+        Some(key) => Reply::ok(ctx.prefs.get(key).unwrap_or(Value::Null)),
+        None => Reply::ok(ctx.prefs.all()),
+    }
 }
 
-/// `prefs:set`
-pub fn prefs_set(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("prefs:set"))
+/// `prefs:set`: rejects a key the main process owns, and an unreadable store
+/// (the file existed but could not be read at startup, so it is never
+/// overwritten) with the store's own error message.
+pub fn prefs_set(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let Some(key) = payload.get("key").and_then(Value::as_str).map(str::to_string) else {
+        return Reply::err(IpcError::new("Invalid preference key"));
+    };
+    if ctx.desktop.is_main_owned_pref_key(&key) {
+        return Reply::err(IpcError::new("Preference is managed by the app"));
+    }
+    let value = payload.get("value").cloned().unwrap_or(Value::Null);
+    if let Err(error) = ctx.prefs.set(&key, value.clone()) {
+        return Reply::err(IpcError::new(error.to_string()));
+    }
+    if key == "language" && (value == json!("en") || value == json!("vi")) {
+        ctx.desktop.rebuild_menu();
+    }
+    Reply::ok(Value::Null)
 }
 
 /// `models:providers-list`
-pub fn models_providers_list(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("models:providers-list"))
+pub fn models_providers_list(_ctx: &Arc<AppCtx>, _caller: Caller, _args: Vec<Value>) -> Reply {
+    match super::models_config::list_models_providers(&crate::paths::agent_dir()) {
+        Ok(providers) => Reply::ok(serde_json::to_value(providers).unwrap_or(Value::Array(Vec::new()))),
+        Err(error) => Reply::err(IpcError::new(error.to_string())),
+    }
 }
 
 /// `provider-cleanup:config`
-pub fn provider_cleanup_config(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("provider-cleanup:config"))
+pub fn provider_cleanup_config(_ctx: &Arc<AppCtx>, _caller: Caller, _args: Vec<Value>) -> Reply {
+    match super::provider_cleanup::clean_config(&crate::paths::agent_dir(), chrono::Local::now().naive_local()) {
+        Ok(result) => Reply::ok(json!({
+            "backupPath": result.backup_path.map(|path| path.to_string_lossy().into_owned()),
+            "removed": result.removed,
+        })),
+        Err(error) => Reply::err(IpcError::new(error.to_string())),
+    }
 }
 
 /// `fs:list`: node:fs-equivalent workspace listing, rooted at the calling
@@ -503,4 +531,84 @@ pub fn editor_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>
             Err(error) => Ok(json!({ "ok": false, "unavailable": false, "text": Value::Null, "error": error.to_string() })),
         }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::bridge::{self, Registry};
+    use crate::ports::{Caller, WindowId};
+    use crate::testing::{self, Fakes};
+    use serde_json::json;
+
+    fn registry() -> Registry {
+        let mut reg = Registry::new();
+        crate::services::register(&mut reg);
+        reg
+    }
+
+    fn ctx(fakes: &Fakes) -> std::sync::Arc<crate::ctx::AppCtx> {
+        testing::fake_ctx_cyclic(fakes, registry(), |ctx, ports| {
+            ports.services = Some(std::sync::Arc::new(crate::services::Services::new(ctx.clone())));
+        })
+    }
+
+    #[tokio::test]
+    async fn dispatches_prefs_get_and_prefs_set() {
+        let fakes = Fakes::default();
+        let ctx = ctx(&fakes);
+        let caller = Caller::main(WindowId(1));
+        bridge::dispatch_for_test(&ctx, caller, "prefs:set", vec![json!({ "key": "welcome.completed", "value": true })])
+            .await
+            .unwrap();
+        let value = bridge::dispatch_for_test(&ctx, caller, "prefs:get", vec![json!({ "key": "welcome.completed" })]).await.unwrap();
+        assert_eq!(value, json!(true));
+        let all = bridge::dispatch_for_test(&ctx, caller, "prefs:get", vec![json!({})]).await.unwrap();
+        assert_eq!(all["welcome"]["completed"], json!(true));
+    }
+
+    #[tokio::test]
+    async fn prefs_set_refuses_a_main_owned_key_and_rebuilds_the_menu_on_language_change() {
+        let fakes = Fakes::default();
+        fakes.desktop.main_owned_keys.lock().unwrap().push("windowBounds".into());
+        let ctx = ctx(&fakes);
+        let caller = Caller::main(WindowId(1));
+        let refused = bridge::dispatch_for_test(&ctx, caller, "prefs:set", vec![json!({ "key": "windowBounds", "value": {} })]).await;
+        assert!(refused.is_err());
+
+        bridge::dispatch_for_test(&ctx, caller, "prefs:set", vec![json!({ "key": "language", "value": "vi" })]).await.unwrap();
+        assert!(fakes.desktop.log.calls().iter().any(|call| call == "rebuild_menu()"));
+    }
+
+    #[tokio::test]
+    async fn prefs_set_rejects_when_the_store_could_not_be_read_at_startup() {
+        let fakes = Fakes::default();
+        // A directory in the file's place makes `JsonStore::open` mark the
+        // store unreadable (matches `prefs.rs`'s own unreadable-store test).
+        std::fs::create_dir(fakes.dir.path().join("prefs.json")).unwrap();
+        let ctx = ctx(&fakes);
+        let caller = Caller::main(WindowId(1));
+        let result = bridge::dispatch_for_test(&ctx, caller, "prefs:set", vec![json!({ "key": "a", "value": 1 })]).await;
+        assert!(result.is_err(), "an unreadable store must reject the write instead of silently dropping it");
+    }
+
+    #[tokio::test]
+    async fn dispatches_runtime_error_report_and_log_path() {
+        let fakes = Fakes::default();
+        let ctx = ctx(&fakes);
+        let caller = Caller::main(WindowId(1));
+        bridge::dispatch_for_test(&ctx, caller, "runtime:error-report", vec![json!({ "source": "unknown", "message": "boom" })])
+            .await
+            .unwrap();
+        let path = bridge::dispatch_for_test(&ctx, caller, "runtime:log-path", vec![]).await.unwrap();
+        assert!(path.as_str().is_some_and(|path| !path.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn dispatches_log_snapshot() {
+        let fakes = Fakes::default();
+        let ctx = ctx(&fakes);
+        let caller = Caller::main(WindowId(1));
+        let snapshot = bridge::dispatch_for_test(&ctx, caller, "log:snapshot", vec![]).await.unwrap();
+        assert_eq!(snapshot, json!({ "lines": [], "nextSequence": 0 }));
+    }
 }

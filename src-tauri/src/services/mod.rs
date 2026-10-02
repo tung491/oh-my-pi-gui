@@ -7,6 +7,8 @@ mod dialog_memory;
 mod dialogs;
 mod editor;
 mod fs;
+mod host_tools;
+mod log_watcher;
 mod models_config;
 mod open_path_target;
 mod provider_cleanup;
@@ -25,6 +27,7 @@ use tauri::AppHandle;
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
 use crate::ports::{CtxRef, Caller, ServiceError, ServicesPort, SessionInfo, SessionKind, SessionScope};
+use log_watcher::LogWatcher;
 use session_index::SessionIndex;
 
 pub const CHANNELS: &[(&str, Scope)] = &[
@@ -90,19 +93,23 @@ pub fn register(reg: &mut Registry) {
 pub struct Services {
     ctx: CtxRef,
     index: Arc<SessionIndex>,
+    pub(crate) log_watcher: Arc<LogWatcher>,
     pub(crate) dialog_memory: dialogs::DialogMemory,
     pub(crate) notify_dedupe: system::NotifyDedupe,
 }
 
 impl Services {
     pub fn new(ctx: CtxRef) -> Self {
-        let sessions_dir = crate::paths::agent_dir().join("sessions");
+        let agent_dir = crate::paths::agent_dir();
+        let sessions_dir = agent_dir.join("sessions");
+        let logs_dir = agent_dir.join("..").join("logs");
         // Almost every caller passes its own cwd (`ctx.tabs.cwd_for`); this is
         // only the fallback for a "local" scope query with no caller cwd at all.
         let default_cwd = String::new();
         Self {
             ctx,
             index: Arc::new(SessionIndex::new(sessions_dir, default_cwd)),
+            log_watcher: Arc::new(LogWatcher::new(logs_dir)),
             dialog_memory: dialogs::DialogMemory::new(),
             notify_dedupe: system::NotifyDedupe::new(),
         }
@@ -148,8 +155,9 @@ impl ServicesPort for Services {
     }
 
     fn execute_host_tool(&self, caller: Caller, name: &str, args: Value) -> Option<BoxFuture<'static, Result<Value, String>>> {
-        let _ = (caller, name, args);
-        todo!()
+        let _ = caller;
+        let Some(ctx) = self.ctx() else { return None };
+        host_tools::execute(&ctx, name, &args)
     }
 
     fn import_legacy_renderer_storage(&self) -> BoxFuture<'_, ()> {
@@ -158,9 +166,9 @@ impl ServicesPort for Services {
     }
 
     fn shutdown(&self) -> BoxFuture<'_, ()> {
-        // No log watcher runs yet; the port stops it here too once Task 6.5 lands.
         let _ = self.ctx();
         self.index.stop();
+        self.log_watcher.stop();
         Box::pin(std::future::ready(()))
     }
 }
@@ -177,6 +185,16 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
             }
         }));
         services.index.start();
+
+        let weak_ctx = Arc::downgrade(ctx);
+        let log_watcher = services.log_watcher.clone();
+        services.log_watcher.on_lines(Box::new(move |lines| {
+            if let Some(ctx) = weak_ctx.upgrade() {
+                let snapshot = log_watcher.snapshot();
+                ctx.bridge.broadcast_main("log:line", serde_json::json!({ "lines": lines, "nextSequence": snapshot.next_sequence }));
+            }
+        }));
+        services.log_watcher.start();
     }
     let weak_ctx = Arc::downgrade(ctx);
     ctx.desktop.on_window_closed(Box::new(move |record| {
