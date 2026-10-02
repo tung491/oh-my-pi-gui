@@ -4,6 +4,16 @@
 
 pub mod ipc;
 
+mod app_icons;
+mod launch_argv;
+mod quick_entry_core;
+mod quit_guard;
+mod shortcut_core;
+mod tab_layout;
+mod tray_labels;
+mod wayland_portal;
+mod window_bounds;
+
 use std::any::Any;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -38,6 +48,26 @@ pub const EMITS: &[&str] = &[
     "deep-link",
     "quick-entry:state",
 ];
+
+/// The OS family, in Node's spelling, for the decisions that differ per platform.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Platform {
+    Darwin,
+    Win32,
+    Linux,
+}
+
+impl Platform {
+    pub(crate) fn current() -> Self {
+        if cfg!(target_os = "macos") {
+            Platform::Darwin
+        } else if cfg!(windows) {
+            Platform::Win32
+        } else {
+            Platform::Linux
+        }
+    }
+}
 
 pub fn register(reg: &mut Registry) {
     reg.register("app:quit", Scope::Main, ipc::app_quit);
