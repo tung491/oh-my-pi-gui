@@ -3,6 +3,17 @@
 
 pub mod ipc;
 
+mod base_url;
+mod catalog;
+mod hardware;
+mod install_progress;
+mod probe;
+mod pull;
+mod remedy;
+mod warm;
+#[cfg(test)]
+mod test_fake_ollama;
+
 use std::any::Any;
 use std::sync::Arc;
 
