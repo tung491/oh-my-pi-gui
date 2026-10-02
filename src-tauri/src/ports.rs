@@ -577,6 +577,9 @@ pub trait TabsPort: Send + Sync {
     /// Recreate a window's tabs from a saved layout; the number of tabs restored.
     fn restore_layout(&self, win_id: WindowId, layout: PersistedTabLayout) -> usize;
     /// Stop every sidecar through its supervisor, in parallel, and wait for them.
+    /// Runs inside `block_on` on the main thread during shutdown: the future must
+    /// never await a main-thread round trip made from another thread (a spawned
+    /// task reading window geometry, say), or quitting deadlocks.
     fn dispose_all(&self) -> BoxFuture<'_, ()>;
     fn on_window_tabs_changed(&self, listener: WindowTabsChangedListener);
     /// `cwdFor` from `ipc.ts`: the tab's cwd, else the window's sidecar cwd, else the window record's cwd.
@@ -632,6 +635,8 @@ pub trait DesktopPort: Send + Sync {
     fn approve_quit_before_install(&self) -> BoxFuture<'_, bool>;
     fn withdraw_quit_approval(&self);
     /// Last step of the frozen shutdown order: destroy windows and the tray.
+    /// Runs inside `block_on` on the main thread: persist bounds synchronously
+    /// here, and never await a main-thread getter issued from another thread.
     fn shutdown(&self) -> BoxFuture<'_, ()>;
 }
 

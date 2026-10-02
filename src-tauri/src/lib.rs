@@ -283,7 +283,9 @@ fn build_ctx(app: &AppHandle, relaunch: PendingRelaunch) -> Arc<AppCtx> {
     })
 }
 
-/// The frozen shutdown order. Runs once; later calls are no-ops.
+/// The frozen shutdown order. Runs once; later calls are no-ops. It blocks the
+/// main thread, so none of these futures may await a main-thread round trip
+/// issued from another thread (see `TabsPort::dispose_all`, `DesktopPort::shutdown`).
 fn shutdown(ctx: &Arc<AppCtx>, done: &AtomicBool, reason: &str) {
     if done.swap(true, Ordering::SeqCst) {
         return;
