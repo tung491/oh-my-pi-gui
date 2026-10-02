@@ -1,4 +1,5 @@
 pub fn sai_atlas_lib::bridge::Bridge::attach(&self, &alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::string::String, alloc::rcs::arc::Arc<dyn sai_atlas_lib::bridge::OutboundSink>)
+pub fn sai_atlas_lib::bridge::Bridge::detach(&self, sai_atlas_lib::ports::WindowId)
 pub fn sai_atlas_lib::bridge::Bridge::emit_to_window(&self, sai_atlas_lib::ports::WindowId, &str, serde_json::value::Value)
 pub fn sai_atlas_lib::bridge::Bridge::invoke(&self, &alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::string::String, u64, alloc::string::String, alloc::vec::Vec<serde_json::value::Value>) -> impl core::future::future::Future<Output = core::result::Result<serde_json::value::Value, sai_atlas_lib::bridge::IpcError>> + core::marker::Send + 'static
 pub fn sai_atlas_lib::bridge::Bridge::is_attached(&self, sai_atlas_lib::ports::WindowId) -> bool
