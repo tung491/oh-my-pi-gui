@@ -365,8 +365,17 @@ fn startup_failure(stage: &str, error: impl std::fmt::Display) -> ExitCode {
 
 /// Start the application and run it to exit.
 pub fn run() -> ExitCode {
+    // The profile comes first: with no config directory and no override there is
+    // nowhere to log to, so this failure can only be reported on stderr.
+    let profile = match paths::resolve_user_data_dir() {
+        Ok(profile) => profile,
+        Err(error) => {
+            eprintln!("{}: resolving the profile directory: {error}", product::PRODUCT_NAME);
+            return ExitCode::from(STARTUP_FAILURE_EXIT_CODE);
+        }
+    };
     runtime_log::install(RuntimeLog::new(paths::runtime_log_path(), env!("CARGO_PKG_VERSION")));
-    if let Err(error) = std::fs::create_dir_all(paths::user_data_dir()) {
+    if let Err(error) = std::fs::create_dir_all(profile) {
         return startup_failure("creating the profile directory", error);
     }
 

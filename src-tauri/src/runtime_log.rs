@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+#[cfg(not(test))]
 use crate::paths;
 
 const MAX_LOG_BYTES: u64 = 4 * 1024 * 1024;
@@ -231,7 +232,19 @@ pub fn install(log: RuntimeLog) -> &'static RuntimeLog {
 /// The process-wide log, installed lazily at the profile's default path when
 /// nothing installed one first (so a failure before setup still gets written).
 pub fn global() -> &'static RuntimeLog {
-    GLOBAL.get_or_init(|| RuntimeLog::new(paths::runtime_log_path(), env!("CARGO_PKG_VERSION")))
+    GLOBAL.get_or_init(|| RuntimeLog::new(default_path(), env!("CARGO_PKG_VERSION")))
+}
+
+#[cfg(not(test))]
+fn default_path() -> PathBuf {
+    paths::runtime_log_path()
+}
+
+/// Tests never write into the user's real crash log: the process-wide log of a
+/// test binary lands in a per-process file under the system temp directory.
+#[cfg(test)]
+fn default_path() -> PathBuf {
+    std::env::temp_dir().join("sai-atlas-tests").join(format!("{}-gui-runtime.jsonl", std::process::id()))
 }
 
 /// Write a report through the process-wide log.
