@@ -3,9 +3,10 @@
 //! receives and returns scripted values, so a module's tests never depend on
 //! another module's code. Compiled only for tests.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -83,6 +84,7 @@ pub struct FakeHost {
     pub version: Mutex<String>,
     pub locale: Mutex<Option<String>>,
     pub exit_codes: Mutex<Vec<i32>>,
+    pub relaunches: Mutex<Vec<PathBuf>>,
 }
 
 impl FakeHost {
@@ -164,6 +166,11 @@ impl Host for FakeHost {
         self.log.record(format!("exit({code})"));
         lock(&self.exit_codes).push(code);
     }
+
+    fn relaunch_after_exit(&self, program: PathBuf) {
+        self.log.record(format!("relaunch_after_exit({})", program.display()));
+        lock(&self.relaunches).push(program);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +251,7 @@ impl SidecarHandle for FakeSidecar {
         *lock(&self.status) = SidecarStatus::Starting;
     }
 
-    fn request(&self, command: Value, timeout_ms: Option<u64>) -> BoxFuture<'_, Result<Value, SidecarError>> {
+    fn request(&self, command: Value, timeout_ms: Option<u64>) -> BoxFuture<'static, Result<Value, SidecarError>> {
         self.log.record(format!("request({command}, {timeout_ms:?})"));
         let mut responses = lock(&self.responses);
         let answer = if responses.is_empty() { Ok(serde_json::json!({ "success": true })) } else { responses.remove(0) };
@@ -277,13 +284,13 @@ impl SidecarHandle for FakeSidecar {
         }
     }
 
-    fn kill(&self) -> BoxFuture<'_, ()> {
+    fn kill(&self) -> BoxFuture<'static, ()> {
         self.log.record("kill()");
         *lock(&self.status) = SidecarStatus::Exited;
         ready(())
     }
 
-    fn dispose(&self) -> BoxFuture<'_, ()> {
+    fn dispose(&self) -> BoxFuture<'static, ()> {
         self.log.record("dispose()");
         *lock(&self.status) = SidecarStatus::Exited;
         lock(&self.events).take();
@@ -321,6 +328,10 @@ impl FakeOmp {
 }
 
 impl OmpPort for FakeOmp {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn new_sidecar(&self, options: SidecarOptions) -> (Arc<dyn SidecarHandle>, SidecarEvents) {
         self.log.record(format!("new_sidecar({}, {:?}, fresh={})", options.cwd, options.kind, options.fresh));
         let (sidecar, events) = FakeSidecar::new(options);
@@ -376,6 +387,10 @@ impl FakeTabs {
 }
 
 impl TabsPort for FakeTabs {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn acquire(&self, options: AcquireOptions) -> Option<String> {
         self.log.record(format!("acquire({options:?})"));
         if *lock(&self.at_cap) {
@@ -405,7 +420,7 @@ impl TabsPort for FakeTabs {
         lock(&self.active).get(&win_id).cloned()
     }
 
-    fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'_, Option<Value>> {
+    fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'static, Option<Value>> {
         self.log.record(format!("command_for_idle_session({session_path}, {command})"));
         let mut responses = lock(&self.idle_responses);
         let answer = if responses.is_empty() { None } else { responses.remove(0) };
@@ -511,6 +526,8 @@ pub struct FakeDesktop {
     pub approve_install: Mutex<bool>,
     pub main_owned_keys: Mutex<Vec<String>>,
     pub closed_listeners: Mutex<Vec<WindowClosedListener>>,
+    /// What `on_exit_requested` answers (true keeps the app running).
+    pub prevent_exit: Mutex<bool>,
 }
 
 impl FakeDesktop {
@@ -535,6 +552,10 @@ impl FakeDesktop {
 }
 
 impl DesktopPort for FakeDesktop {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn spawn_window(&self, cwd: Option<String>, pending_session_path: Option<String>, kind: Option<SessionKind>) -> Option<WindowId> {
         self.log.record(format!("spawn_window({cwd:?}, {pending_session_path:?}, {kind:?})"));
         let id = lock(&self.spawn_result).take().or_else(|| {
@@ -607,6 +628,15 @@ impl DesktopPort for FakeDesktop {
         *lock(&self.quitting) = true;
     }
 
+    fn on_exit_requested(&self, code: Option<i32>) -> bool {
+        self.log.record(format!("on_exit_requested({code:?})"));
+        *lock(&self.prevent_exit)
+    }
+
+    fn on_reopen(&self, has_visible_windows: bool) {
+        self.log.record(format!("on_reopen({has_visible_windows})"));
+    }
+
     fn mark_quitting(&self) {
         self.log.record("mark_quitting()");
         *lock(&self.quitting) = true;
@@ -658,6 +688,10 @@ impl FakeServices {
 }
 
 impl ServicesPort for FakeServices {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn sessions_list(&self, scope: SessionScope, cwd: Option<String>) -> BoxFuture<'_, Result<Vec<SessionInfo>, ServiceError>> {
         self.log.record(format!("sessions_list({scope:?}, {cwd:?})"));
         ready(Ok(lock(&self.sessions).clone()))
@@ -713,6 +747,10 @@ pub struct FakeOllama {
 }
 
 impl OllamaPort for FakeOllama {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn shutdown(&self) -> BoxFuture<'_, ()> {
         self.log.record("shutdown()");
         ready(())
@@ -726,12 +764,21 @@ pub struct FakeUpdater {
 }
 
 impl UpdaterPort for FakeUpdater {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_now(&self) {
         self.log.record("check_now()");
     }
 
     fn status(&self) -> Value {
         lock(&self.status).clone()
+    }
+
+    fn shutdown(&self) -> BoxFuture<'_, ()> {
+        self.log.record("shutdown()");
+        ready(())
     }
 }
 
@@ -767,23 +814,45 @@ impl Default for Fakes {
     }
 }
 
-/// Build an `AppCtx` from `fakes` and the channel `registry`.
-pub fn fake_ctx_with(fakes: &Fakes, registry: Registry) -> Arc<AppCtx> {
+/// Ports a module test installs instead of the fakes (usually its own production struct).
+#[derive(Default)]
+pub struct Ports {
+    pub omp: Option<Arc<dyn OmpPort>>,
+    pub tabs: Option<Arc<dyn TabsPort>>,
+    pub desktop: Option<Arc<dyn DesktopPort>>,
+    pub services: Option<Arc<dyn ServicesPort>>,
+    pub ollama: Option<Arc<dyn OllamaPort>>,
+    pub updater: Option<Arc<dyn UpdaterPort>>,
+}
+
+/// Build an `AppCtx` from `fakes` and the channel `registry`, letting `build`
+/// replace ports with real ones that receive the context's `Weak` handle:
+/// `fake_ctx_cyclic(&fakes, reg, |ctx, ports| ports.omp = Some(Arc::new(Omp::new(ctx.clone()))))`.
+pub fn fake_ctx_cyclic(fakes: &Fakes, registry: Registry, build: impl FnOnce(&Weak<AppCtx>, &mut Ports)) -> Arc<AppCtx> {
     let prefs = JsonStore::open(fakes.dir.path().join("prefs.json"));
     let window_state = JsonStore::open(fakes.dir.path().join("window-state.json"));
-    Arc::new(AppCtx {
-        host: fakes.host.clone(),
-        bridge: Bridge::new(registry),
-        prefs: prefs.clone(),
-        window_state,
-        i18n: MainI18n::new(prefs, fakes.host.system_locale()),
-        omp: fakes.omp.clone(),
-        tabs: fakes.tabs.clone(),
-        desktop: fakes.desktop.clone(),
-        services: fakes.services.clone(),
-        ollama: fakes.ollama.clone(),
-        updater: fakes.updater.clone(),
+    Arc::new_cyclic(|ctx| {
+        let mut ports = Ports::default();
+        build(ctx, &mut ports);
+        AppCtx {
+            host: fakes.host.clone(),
+            bridge: Bridge::new(registry),
+            prefs: prefs.clone(),
+            window_state,
+            i18n: MainI18n::new(prefs, fakes.host.system_locale()),
+            omp: ports.omp.unwrap_or_else(|| fakes.omp.clone()),
+            tabs: ports.tabs.unwrap_or_else(|| fakes.tabs.clone()),
+            desktop: ports.desktop.unwrap_or_else(|| fakes.desktop.clone()),
+            services: ports.services.unwrap_or_else(|| fakes.services.clone()),
+            ollama: ports.ollama.unwrap_or_else(|| fakes.ollama.clone()),
+            updater: ports.updater.unwrap_or_else(|| fakes.updater.clone()),
+        }
     })
+}
+
+/// Build an `AppCtx` from `fakes` and the channel `registry`.
+pub fn fake_ctx_with(fakes: &Fakes, registry: Registry) -> Arc<AppCtx> {
+    fake_ctx_cyclic(fakes, registry, |_, _| {})
 }
 
 /// An `AppCtx` over fresh fakes; the fakes stay reachable through `Fakes` when

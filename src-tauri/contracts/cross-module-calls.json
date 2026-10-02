@@ -1,54 +1,344 @@
 [
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:105", "method": "sidecar_for_window" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:115", "method": "sidecar_for_tab" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:116", "method": "cwd_for" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:116", "method": "record" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:368", "method": "on_window_closed" },
-  { "caller": "omp", "callee": "desktop", "ts": "src/main/ipc.ts:368", "method": "on_window_closed" },
-  { "caller": "omp", "callee": "tabs", "ts": "src/main/ipc.ts:358", "method": "cwd_for" },
-  { "caller": "tabs", "callee": "services", "ts": "src/main/ipc.ts:382", "method": "execute_host_tool" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:420", "method": "record" },
-  { "caller": "tabs", "callee": "desktop", "ts": "src/main/ipc.ts:509", "method": "set_cwd" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:579", "method": "cwd_for" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:586", "method": "session_owner" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:587", "method": "session_owner_is_live" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:588", "method": "command_for_idle_session" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:599", "method": "note_session_file" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:613", "method": "session_owner" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:613", "method": "session_owner_is_live" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:614", "method": "command_for_idle_session" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:636", "method": "session_owner" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:637", "method": "focus" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:639", "method": "at_cap" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:647", "method": "spawn_window" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:654", "method": "consume_pending_session" },
-  { "caller": "tabs", "callee": "services", "ts": "src/main/tab-spawn.ts:41", "method": "session_kind_for" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:730", "method": "cwd_for" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:893", "method": "is_main_owned_pref_key" },
-  { "caller": "services", "callee": "desktop", "ts": "src/main/ipc.ts:896", "method": "rebuild_menu" },
-  { "caller": "tabs", "callee": "desktop", "ts": "src/main/ipc.ts:949", "method": "set_cwd" },
-  { "caller": "tabs", "callee": "desktop", "ts": "src/main/ipc.ts:969", "method": "set_cwd" },
-  { "caller": "services", "callee": "tabs", "ts": "src/main/ipc.ts:1151", "method": "cwd_for" },
-  { "caller": "services", "callee": "omp", "ts": "src/main/editor.ts:22", "method": "resolve_editor_command" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/index.ts:290", "method": "tab_layout_for_window" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/index.ts:306", "method": "restore_layout" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/index.ts:331", "method": "acquire" },
-  { "caller": "tabs", "callee": "omp", "ts": "src/main/index.ts:356", "method": "new_sidecar" },
-  { "caller": "tabs", "callee": "omp", "ts": "src/main/index.ts:364", "method": "spawn_env" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/index.ts:396", "method": "on_window_tabs_changed" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/index.ts:542", "method": "tab_inventory" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/quick-entry.ts:356", "method": "at_cap" },
-  { "caller": "desktop", "callee": "services", "ts": "src/main/quick-entry.ts:430", "method": "sessions_list" },
-  { "caller": "desktop", "callee": "updater", "ts": "src/main/menu.ts:218", "method": "check_now" },
-  { "caller": "updater", "callee": "desktop", "ts": "src/main/updater.ts:22", "method": "approve_quit_before_install" },
-  { "caller": "updater", "callee": "desktop", "ts": "src/main/updater.ts:22", "method": "withdraw_quit_approval" },
-  { "caller": "foundation", "callee": "desktop", "ts": "src/main/index.ts:396", "method": "mark_quitting" },
-  { "caller": "foundation", "callee": "tabs", "ts": "src/main/sidecar-pool.ts:754", "method": "dispose_all" },
-  { "caller": "foundation", "callee": "omp", "ts": "src/main/index.ts:411", "method": "shutdown" },
-  { "caller": "foundation", "callee": "services", "ts": "src/main/session-index.ts:70", "method": "shutdown" },
-  { "caller": "foundation", "callee": "desktop", "ts": "src/main/index.ts:453", "method": "shutdown" },
-  { "caller": "foundation", "callee": "ollama", "ts": "src/main/ollama/register-ipc.ts:26", "method": "shutdown" },
-  { "caller": "foundation", "callee": "desktop", "ts": "src/main/index.ts:463", "method": "on_second_instance" },
-  { "caller": "desktop", "callee": "tabs", "ts": "src/main/sidecar-pool.ts:232", "method": "release_window" },
-  { "caller": "updater", "callee": "updater", "ts": "src/main/updater.ts:217", "method": "status" }
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:105",
+    "method": "sidecar_for_window"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:115",
+    "method": "sidecar_for_tab"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:116",
+    "method": "cwd_for"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:116",
+    "method": "record"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:368",
+    "method": "on_window_closed"
+  },
+  {
+    "caller": "omp",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:368",
+    "method": "on_window_closed"
+  },
+  {
+    "caller": "omp",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:358",
+    "method": "cwd_for"
+  },
+  {
+    "caller": "tabs",
+    "callee": "services",
+    "ts": "src/main/ipc.ts:382",
+    "method": "execute_host_tool"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:420",
+    "method": "record"
+  },
+  {
+    "caller": "tabs",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:509",
+    "method": "set_cwd"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:579",
+    "method": "cwd_for"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:586",
+    "method": "session_owner"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:587",
+    "method": "session_owner_is_live"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:588",
+    "method": "command_for_idle_session"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:599",
+    "method": "note_session_file"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:613",
+    "method": "session_owner"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:613",
+    "method": "session_owner_is_live"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:614",
+    "method": "command_for_idle_session"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:636",
+    "method": "session_owner"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:637",
+    "method": "focus"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:639",
+    "method": "at_cap"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:647",
+    "method": "spawn_window"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:654",
+    "method": "consume_pending_session"
+  },
+  {
+    "caller": "tabs",
+    "callee": "services",
+    "ts": "src/main/tab-spawn.ts:41",
+    "method": "session_kind_for"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:730",
+    "method": "cwd_for"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:893",
+    "method": "is_main_owned_pref_key"
+  },
+  {
+    "caller": "services",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:896",
+    "method": "rebuild_menu"
+  },
+  {
+    "caller": "tabs",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:949",
+    "method": "set_cwd"
+  },
+  {
+    "caller": "tabs",
+    "callee": "desktop",
+    "ts": "src/main/ipc.ts:969",
+    "method": "set_cwd"
+  },
+  {
+    "caller": "services",
+    "callee": "tabs",
+    "ts": "src/main/ipc.ts:1151",
+    "method": "cwd_for"
+  },
+  {
+    "caller": "services",
+    "callee": "omp",
+    "ts": "src/main/editor.ts:22",
+    "method": "resolve_editor_command"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/index.ts:290",
+    "method": "tab_layout_for_window"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/index.ts:306",
+    "method": "restore_layout"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/index.ts:331",
+    "method": "acquire"
+  },
+  {
+    "caller": "tabs",
+    "callee": "omp",
+    "ts": "src/main/index.ts:356",
+    "method": "new_sidecar"
+  },
+  {
+    "caller": "tabs",
+    "callee": "omp",
+    "ts": "src/main/index.ts:364",
+    "method": "spawn_env"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/index.ts:396",
+    "method": "on_window_tabs_changed"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/index.ts:542",
+    "method": "tab_inventory"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/quick-entry.ts:356",
+    "method": "at_cap"
+  },
+  {
+    "caller": "desktop",
+    "callee": "services",
+    "ts": "src/main/quick-entry.ts:430",
+    "method": "sessions_list"
+  },
+  {
+    "caller": "desktop",
+    "callee": "updater",
+    "ts": "src/main/updater.ts:217",
+    "method": "check_now"
+  },
+  {
+    "caller": "updater",
+    "callee": "desktop",
+    "ts": "src/main/updater.ts:22",
+    "method": "approve_quit_before_install"
+  },
+  {
+    "caller": "updater",
+    "callee": "desktop",
+    "ts": "src/main/updater.ts:22",
+    "method": "withdraw_quit_approval"
+  },
+  {
+    "caller": "foundation",
+    "callee": "desktop",
+    "ts": "src/main/index.ts:396",
+    "method": "mark_quitting"
+  },
+  {
+    "caller": "foundation",
+    "callee": "tabs",
+    "ts": "src/main/sidecar-pool.ts:754",
+    "method": "dispose_all"
+  },
+  {
+    "caller": "foundation",
+    "callee": "omp",
+    "ts": "src/main/index.ts:411",
+    "method": "shutdown"
+  },
+  {
+    "caller": "foundation",
+    "callee": "services",
+    "ts": "src/main/session-index.ts:70",
+    "method": "shutdown"
+  },
+  {
+    "caller": "foundation",
+    "callee": "desktop",
+    "ts": "src/main/index.ts:453",
+    "method": "shutdown"
+  },
+  {
+    "caller": "foundation",
+    "callee": "ollama",
+    "ts": "src/main/ollama/register-ipc.ts:26",
+    "method": "shutdown"
+  },
+  {
+    "caller": "foundation",
+    "callee": "desktop",
+    "ts": "src/main/index.ts:463",
+    "method": "on_second_instance"
+  },
+  {
+    "caller": "desktop",
+    "callee": "tabs",
+    "ts": "src/main/sidecar-pool.ts:232",
+    "method": "release_window"
+  },
+  {
+    "caller": "updater",
+    "callee": "updater",
+    "ts": "src/main/updater.ts:217",
+    "method": "status"
+  },
+  {
+    "caller": "ollama",
+    "callee": "omp",
+    "ts": "src/main/ollama/remedy.ts:1",
+    "method": "spawn_env"
+  },
+  {
+    "caller": "foundation",
+    "callee": "updater",
+    "ts": "src/main/updater.ts:224",
+    "method": "shutdown"
+  },
+  {
+    "caller": "foundation",
+    "callee": "desktop",
+    "ts": "src/main/index.ts:527",
+    "method": "on_exit_requested"
+  },
+  {
+    "caller": "foundation",
+    "callee": "desktop",
+    "ts": "src/main/index.ts:525",
+    "method": "on_reopen"
+  },
+  {
+    "caller": "updater",
+    "callee": "updater",
+    "ts": "src/main/updater.ts:367",
+    "method": "relaunch_after_exit"
+  }
 ]

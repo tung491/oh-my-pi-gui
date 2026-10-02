@@ -1,5 +1,7 @@
 impl sai_atlas_lib::ports::UpdaterPort for sai_atlas_lib::updater::Updater
+pub fn sai_atlas_lib::updater::Updater::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::updater::Updater::check_now(&self)
+pub fn sai_atlas_lib::updater::Updater::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub fn sai_atlas_lib::updater::Updater::status(&self) -> serde_json::value::Value
 pub mod sai_atlas_lib::updater::ipc
 pub fn sai_atlas_lib::updater::ipc::updater_apply(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
@@ -9,11 +11,11 @@ pub fn sai_atlas_lib::updater::ipc::updater_get_status(&alloc::rcs::arc::Arc<sai
 pub fn sai_atlas_lib::updater::ipc::updater_version(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub struct sai_atlas_lib::updater::Updater
 impl sai_atlas_lib::updater::Updater
-pub fn sai_atlas_lib::updater::Updater::new() -> Self
-impl core::default::Default for sai_atlas_lib::updater::Updater
-pub fn sai_atlas_lib::updater::Updater::default() -> Self
+pub fn sai_atlas_lib::updater::Updater::new(sai_atlas_lib::ports::CtxRef) -> Self
 impl sai_atlas_lib::ports::UpdaterPort for sai_atlas_lib::updater::Updater
+pub fn sai_atlas_lib::updater::Updater::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::updater::Updater::check_now(&self)
+pub fn sai_atlas_lib::updater::Updater::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub fn sai_atlas_lib::updater::Updater::status(&self) -> serde_json::value::Value
 pub const sai_atlas_lib::updater::CHANNELS: &[(&str, sai_atlas_lib::bridge::Scope)]
 pub const sai_atlas_lib::updater::EMITS: &[&str]

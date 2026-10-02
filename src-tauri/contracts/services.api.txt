@@ -1,4 +1,5 @@
 impl sai_atlas_lib::ports::ServicesPort for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::services::Services::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
 pub fn sai_atlas_lib::services::Services::import_legacy_renderer_storage(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub fn sai_atlas_lib::services::Services::on_sessions_changed(&self, alloc::boxed::Box<(dyn core::ops::function::Fn() + core::marker::Send + core::marker::Sync)>)
@@ -35,10 +36,9 @@ pub fn sai_atlas_lib::services::ipc::system_open_path(&alloc::rcs::arc::Arc<sai_
 pub fn sai_atlas_lib::services::ipc::system_save_dialog(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub struct sai_atlas_lib::services::Services
 impl sai_atlas_lib::services::Services
-pub fn sai_atlas_lib::services::Services::new() -> Self
-impl core::default::Default for sai_atlas_lib::services::Services
-pub fn sai_atlas_lib::services::Services::default() -> Self
+pub fn sai_atlas_lib::services::Services::new(sai_atlas_lib::ports::CtxRef) -> Self
 impl sai_atlas_lib::ports::ServicesPort for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::services::Services::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
 pub fn sai_atlas_lib::services::Services::import_legacy_renderer_storage(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub fn sai_atlas_lib::services::Services::on_sessions_changed(&self, alloc::boxed::Box<(dyn core::ops::function::Fn() + core::marker::Send + core::marker::Sync)>)

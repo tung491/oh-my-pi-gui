@@ -3,6 +3,7 @@
 
 pub mod ipc;
 
+use std::any::Any;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
@@ -11,7 +12,7 @@ use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::{
+use crate::ports::{CtxRef, 
     AcquireOptions, Caller, IpcSessionOwner, IpcTabInfo, IpcTabViewSplit, PersistedTabLayout, SidecarHandle, TabsPort,
     WindowId, WindowTabFact, WindowTabsChangedListener,
 };
@@ -78,22 +79,25 @@ pub fn register(reg: &mut Registry) {
 
 /// Production `TabsPort`.
 pub struct Tabs {
-    _private: (),
+    ctx: CtxRef,
 }
 
 impl Tabs {
-    pub fn new() -> Self {
-        Self { _private: () }
+    pub fn new(ctx: CtxRef) -> Self {
+        Self { ctx }
     }
-}
 
-impl Default for Tabs {
-    fn default() -> Self {
-        Self::new()
+    /// The application context; `None` only while the process shuts down.
+    fn ctx(&self) -> Option<Arc<AppCtx>> {
+        self.ctx.upgrade()
     }
 }
 
 impl TabsPort for Tabs {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn acquire(&self, options: AcquireOptions) -> Option<String> {
         let _ = options;
         todo!()
@@ -122,7 +126,7 @@ impl TabsPort for Tabs {
         todo!()
     }
 
-    fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'_, Option<Value>> {
+    fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'static, Option<Value>> {
         let _ = (session_path, command);
         todo!()
     }
@@ -198,6 +202,7 @@ impl TabsPort for Tabs {
 
     fn dispose_all(&self) -> BoxFuture<'_, ()> {
         // No sidecars exist yet; the port stops every supervisor here.
+        let _ = self.ctx();
         Box::pin(std::future::ready(()))
     }
 

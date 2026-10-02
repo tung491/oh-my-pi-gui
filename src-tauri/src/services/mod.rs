@@ -4,6 +4,7 @@
 pub mod ipc;
 
 use std::path::PathBuf;
+use std::any::Any;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
@@ -12,7 +13,7 @@ use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::{Caller, ServiceError, ServicesPort, SessionInfo, SessionKind, SessionScope};
+use crate::ports::{CtxRef, Caller, ServiceError, ServicesPort, SessionInfo, SessionKind, SessionScope};
 
 pub const CHANNELS: &[(&str, Scope)] = &[
     ("runtime:error-report", Scope::Main),
@@ -75,22 +76,25 @@ pub fn register(reg: &mut Registry) {
 
 /// Production `ServicesPort`.
 pub struct Services {
-    _private: (),
+    ctx: CtxRef,
 }
 
 impl Services {
-    pub fn new() -> Self {
-        Self { _private: () }
+    pub fn new(ctx: CtxRef) -> Self {
+        Self { ctx }
     }
-}
 
-impl Default for Services {
-    fn default() -> Self {
-        Self::new()
+    /// The application context; `None` only while the process shuts down.
+    fn ctx(&self) -> Option<Arc<AppCtx>> {
+        self.ctx.upgrade()
     }
 }
 
 impl ServicesPort for Services {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn sessions_list(&self, scope: SessionScope, cwd: Option<String>) -> BoxFuture<'_, Result<Vec<SessionInfo>, ServiceError>> {
         let _ = (scope, cwd);
         todo!()
@@ -132,6 +136,7 @@ impl ServicesPort for Services {
 
     fn shutdown(&self) -> BoxFuture<'_, ()> {
         // No watchers run yet; the port stops the session and log watchers here.
+        let _ = self.ctx();
         Box::pin(std::future::ready(()))
     }
 }

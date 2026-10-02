@@ -8,14 +8,14 @@ pub fn sai_atlas_lib::ollama::ipc::ollama_status(&alloc::rcs::arc::Arc<sai_atlas
 pub fn sai_atlas_lib::ollama::ipc::ollama_warm(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub struct sai_atlas_lib::ollama::Ollama
 impl sai_atlas_lib::ollama::Ollama
-pub fn sai_atlas_lib::ollama::Ollama::new() -> Self
-impl core::default::Default for sai_atlas_lib::ollama::Ollama
-pub fn sai_atlas_lib::ollama::Ollama::default() -> Self
+pub fn sai_atlas_lib::ollama::Ollama::new(sai_atlas_lib::ports::CtxRef) -> Self
 impl sai_atlas_lib::ports::OllamaPort for sai_atlas_lib::ollama::Ollama
+pub fn sai_atlas_lib::ollama::Ollama::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::ollama::Ollama::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub const sai_atlas_lib::ollama::CHANNELS: &[(&str, sai_atlas_lib::bridge::Scope)]
 pub const sai_atlas_lib::ollama::EMITS: &[&str]
 pub fn sai_atlas_lib::ollama::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, &tauri::app::AppHandle) -> tauri::error::Result<()>
 pub fn sai_atlas_lib::ollama::register(&mut sai_atlas_lib::bridge::Registry)
 impl sai_atlas_lib::ports::OllamaPort for sai_atlas_lib::ollama::Ollama
+pub fn sai_atlas_lib::ollama::Ollama::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::ollama::Ollama::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>

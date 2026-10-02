@@ -6,13 +6,21 @@
 //! Serde types mirror their TypeScript namesakes in `src/shared/ipc-types.ts`
 //! (camelCase on the wire) and keep the TS name where one exists.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use futures_util::future::BoxFuture;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+
+use crate::ctx::AppCtx;
+
+/// How a production port reaches the rest of the application. Every module
+/// constructor takes one (`lib.rs` builds the context with `Arc::new_cyclic`),
+/// and `upgrade()` fails only during shutdown, after the context is gone.
+pub type CtxRef = Weak<AppCtx>;
 
 /// The reserved first argument that turns the GUI binary into a sidecar supervisor.
 pub const SUPERVISOR_ARGV: &str = "--omp-supervise";
@@ -365,7 +373,9 @@ pub struct WindowRecord {
 pub struct SidecarOptions {
     pub binary_path: PathBuf,
     pub cwd: String,
-    /// The user's launch-profile flags, already filtered by the denylist.
+    /// Extra user flags for every spawn. The manager appends the workspace's
+    /// launch profile (`launchProfiles.<cwd>` from prefs, re-read on every
+    /// spawn and restart) and applies the denylist itself.
     pub extra_flags: Vec<String>,
     /// `app.isPackaged`: only a dev tree can act on a build instruction in the missing-binary message.
     pub packaged: bool,
@@ -443,17 +453,20 @@ pub trait SidecarHandle: Send + Sync {
     fn has_rpc_client(&self) -> bool;
     fn start(&self);
     /// Send an RPC command and await its correlated response (`RpcResponse` as JSON).
-    fn request(&self, command: Value, timeout_ms: Option<u64>) -> BoxFuture<'_, Result<Value, SidecarError>>;
+    /// The frame is queued on stdin before this returns, so a handler can call it
+    /// synchronously and hand the future to `Reply::Later`; stdin order equals arrival order.
+    fn request(&self, command: Value, timeout_ms: Option<u64>) -> BoxFuture<'static, Result<Value, SidecarError>>;
     /// Write a side-channel frame (extension UI response, host tool result) to stdin.
     fn send_side_channel(&self, frame: Value);
     fn mark_unhealthy(&self, reason: &str);
     /// Remember a new cwd without restarting; true when it changed.
     fn adopt_cwd(&self, cwd: &str) -> bool;
     fn restart(&self, cwd: Option<&str>, resume_session_path: Option<&str>);
-    /// Stop the child through its supervisor; returns when the supervisor has exited.
-    fn kill(&self) -> BoxFuture<'_, ()>;
+    /// Stop the child through its supervisor; the stop is initiated before this
+    /// returns and the future resolves when the supervisor has exited.
+    fn kill(&self) -> BoxFuture<'static, ()>;
     /// `kill` plus no further restarts or events.
-    fn dispose(&self) -> BoxFuture<'_, ()>;
+    fn dispose(&self) -> BoxFuture<'static, ()>;
 }
 
 /// Flush callback for an [`EventBatcher`].
@@ -464,6 +477,8 @@ pub const BATCH_INTERVAL_MS: u64 = 32;
 pub const MAX_BUFFER_SIZE: usize = 1000;
 
 /// `EventBatcher` from `event-batcher.ts`; constructed through [`OmpPort::new_event_batcher`].
+/// The sidecar manager batches its own `SidecarEvent::Events` with one of these,
+/// so the pool forwards those batches as they are; this is for other streams.
 pub trait EventBatcher: Send + Sync {
     fn push(&self, event: Value);
     /// Flush immediately (e.g. on sidecar disconnect).
@@ -473,6 +488,9 @@ pub trait EventBatcher: Send + Sync {
 
 /// Module `omp`: child processes of the agent.
 pub trait OmpPort: Send + Sync {
+    /// The concrete module struct, so the module's own handlers reach its state
+    /// (`ctx.omp.as_any().downcast_ref::<…>()`).
+    fn as_any(&self) -> &dyn Any;
     /// Create (not start) a sidecar manager and the stream of its events.
     fn new_sidecar(&self, options: SidecarOptions) -> (Arc<dyn SidecarHandle>, SidecarEvents);
     fn new_event_batcher(&self, flush: FlushCallback) -> Box<dyn EventBatcher>;
@@ -526,6 +544,9 @@ pub type WindowTabsChangedListener = Box<dyn Fn(WindowId, Option<PersistedTabLay
 
 /// Module `tabs`: the sidecar pool and tab routing.
 pub trait TabsPort: Send + Sync {
+    /// The concrete module struct, so the module's own handlers reach its state
+    /// (`ctx.tabs.as_any().downcast_ref::<…>()`).
+    fn as_any(&self) -> &dyn Any;
     /// Reserve a slot and spawn (or defer) a sidecar for a tab; the minted tab id, or `None` at the cap.
     fn acquire(&self, options: AcquireOptions) -> Option<String>;
     fn size(&self) -> usize;
@@ -534,7 +555,8 @@ pub trait TabsPort: Send + Sync {
     fn sidecar_for_tab(&self, win_id: WindowId, tab_id: &str) -> Option<Arc<dyn SidecarHandle>>;
     fn active_tab_for_window(&self, win_id: WindowId) -> Option<String>;
     /// Send a command to the live, idle owner of a session file; `None` when it has none.
-    fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'_, Option<Value>>;
+    /// The command is queued on that sidecar's stdin before this returns.
+    fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'static, Option<Value>>;
     fn set_active_tab(&self, win_id: WindowId, tab_id: &str) -> bool;
     fn set_tab_view(&self, win_id: WindowId, focused_tab_id: &str, visible_tab_ids: &[String], split: Option<IpcTabViewSplit>) -> bool;
     fn release_tab(&self, tab_id: &str) -> bool;
@@ -568,6 +590,9 @@ pub type WindowClosedListener = Box<dyn Fn(&WindowRecord) + Send + Sync>;
 
 /// Module `desktop`: windows and OS-facing surfaces.
 pub trait DesktopPort: Send + Sync {
+    /// The concrete module struct, so the module's own handlers reach its state
+    /// (`ctx.desktop.as_any().downcast_ref::<…>()`).
+    fn as_any(&self) -> &dyn Any;
     /// Open a chat window with its own sidecar; `None` when the pool is at its cap.
     fn spawn_window(&self, cwd: Option<String>, pending_session_path: Option<String>, kind: Option<SessionKind>) -> Option<WindowId>;
     fn records(&self) -> Vec<WindowRecord>;
@@ -589,6 +614,13 @@ pub trait DesktopPort: Send + Sync {
     /// A second instance started with `argv` in `cwd`: focus, open a link or a path.
     fn on_second_instance(&self, argv: Vec<String>, cwd: Option<String>);
     fn request_quit(&self);
+    /// `RunEvent::ExitRequested`: `code` is `None` for a user-initiated exit (last
+    /// window closed, OS quit). Return `true` to keep the app running
+    /// (`api.prevent_exit()`; e.g. macOS keeps running without windows, or the
+    /// quit guard asks first); `false` lets the frozen shutdown order run.
+    fn on_exit_requested(&self, code: Option<i32>) -> bool;
+    /// macOS `RunEvent::Reopen` (dock click).
+    fn on_reopen(&self, has_visible_windows: bool);
     /// Set the quitting latch without starting a quit (the exit path already began).
     fn mark_quitting(&self);
     fn is_quitting(&self) -> bool;
@@ -614,6 +646,9 @@ pub enum ServiceError {
 
 /// Module `services`: sessions, files, dialogs, system actions, host tools.
 pub trait ServicesPort: Send + Sync {
+    /// The concrete module struct, so the module's own handlers reach its state
+    /// (`ctx.services.as_any().downcast_ref::<…>()`).
+    fn as_any(&self) -> &dyn Any;
     fn sessions_list(&self, scope: SessionScope, cwd: Option<String>) -> BoxFuture<'_, Result<Vec<SessionInfo>, ServiceError>>;
     /// The kind stamped in a session file's header (agent for legacy files).
     fn session_kind_for(&self, session_path: &str) -> BoxFuture<'_, SessionKind>;
@@ -635,15 +670,24 @@ pub trait ServicesPort: Send + Sync {
 
 /// Module `ollama`: nothing else calls it besides shutdown.
 pub trait OllamaPort: Send + Sync {
+    /// The concrete module struct, so the module's own handlers reach its state
+    /// (`ctx.ollama.as_any().downcast_ref::<…>()`).
+    fn as_any(&self) -> &dyn Any;
     fn shutdown(&self) -> BoxFuture<'_, ()>;
 }
 
 /// Module `updater`.
 pub trait UpdaterPort: Send + Sync {
+    /// The concrete module struct, so the module's own handlers reach its state
+    /// (`ctx.updater.as_any().downcast_ref::<…>()`).
+    fn as_any(&self) -> &dyn Any;
     /// The menu's "Check for Updates…".
     fn check_now(&self);
     /// The current `UpdateStatus` (replayed to the renderer on `updater:getStatus`).
     fn status(&self) -> Value;
+    /// Part of the frozen shutdown order, after every sidecar stopped: install a
+    /// downloaded update when `installsOnQuit` holds, otherwise do nothing.
+    fn shutdown(&self) -> BoxFuture<'_, ()>;
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +772,10 @@ pub trait Host: Send + Sync {
     fn system_locale(&self) -> Option<String>;
     /// Exit through Tauri's exit path, so the frozen shutdown order runs.
     fn exit(&self, code: i32);
+    /// Start `program` with no arguments once this process has exited (after the
+    /// single-instance name is released), for the updater's relaunch. A launch
+    /// link or workspace is deliberately not replayed.
+    fn relaunch_after_exit(&self, program: PathBuf);
 }
 
 #[cfg(test)]

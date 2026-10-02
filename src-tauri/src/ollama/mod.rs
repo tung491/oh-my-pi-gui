@@ -3,6 +3,7 @@
 
 pub mod ipc;
 
+use std::any::Any;
 use std::sync::Arc;
 
 use futures_util::future::BoxFuture;
@@ -10,7 +11,7 @@ use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::OllamaPort;
+use crate::ports::{CtxRef, OllamaPort};
 
 pub const CHANNELS: &[(&str, Scope)] = &[
     ("ollama:status", Scope::Main),
@@ -39,24 +40,28 @@ pub fn register(reg: &mut Registry) {
 
 /// Production `OllamaPort`.
 pub struct Ollama {
-    _private: (),
+    ctx: CtxRef,
 }
 
 impl Ollama {
-    pub fn new() -> Self {
-        Self { _private: () }
+    pub fn new(ctx: CtxRef) -> Self {
+        Self { ctx }
     }
-}
 
-impl Default for Ollama {
-    fn default() -> Self {
-        Self::new()
+    /// The application context; `None` only while the process shuts down.
+    fn ctx(&self) -> Option<Arc<AppCtx>> {
+        self.ctx.upgrade()
     }
 }
 
 impl OllamaPort for Ollama {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn shutdown(&self) -> BoxFuture<'_, ()> {
         // No pull or remedy runs yet; the port cancels them here.
+        let _ = self.ctx();
         Box::pin(std::future::ready(()))
     }
 }

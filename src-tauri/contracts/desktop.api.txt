@@ -14,15 +14,18 @@ pub fn sai_atlas_lib::desktop::ipc::quick_entry_submit(&alloc::rcs::arc::Arc<sai
 pub fn sai_atlas_lib::desktop::ipc::tray_state_push(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub struct sai_atlas_lib::desktop::Desktop
 impl sai_atlas_lib::desktop::Desktop
-pub fn sai_atlas_lib::desktop::Desktop::new(tauri::app::AppHandle) -> Self
+pub fn sai_atlas_lib::desktop::Desktop::new(tauri::app::AppHandle, sai_atlas_lib::ports::CtxRef) -> Self
 impl sai_atlas_lib::ports::DesktopPort for sai_atlas_lib::desktop::Desktop
 pub fn sai_atlas_lib::desktop::Desktop::approve_quit_before_install(&self) -> futures_core::future::BoxFuture<'_, bool>
+pub fn sai_atlas_lib::desktop::Desktop::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::desktop::Desktop::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::desktop::Desktop::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::is_main_owned_pref_key(&self, &str) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::is_quitting(&self) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
 pub fn sai_atlas_lib::desktop::Desktop::mark_quitting(&self)
+pub fn sai_atlas_lib::desktop::Desktop::on_exit_requested(&self, core::option::Option<i32>) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::on_reopen(&self, bool)
 pub fn sai_atlas_lib::desktop::Desktop::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
 pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
 pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
@@ -42,12 +45,15 @@ pub fn sai_atlas_lib::desktop::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::Ap
 pub fn sai_atlas_lib::desktop::register(&mut sai_atlas_lib::bridge::Registry)
 impl sai_atlas_lib::ports::DesktopPort for sai_atlas_lib::desktop::Desktop
 pub fn sai_atlas_lib::desktop::Desktop::approve_quit_before_install(&self) -> futures_core::future::BoxFuture<'_, bool>
+pub fn sai_atlas_lib::desktop::Desktop::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::desktop::Desktop::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::desktop::Desktop::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::is_main_owned_pref_key(&self, &str) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::is_quitting(&self) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
 pub fn sai_atlas_lib::desktop::Desktop::mark_quitting(&self)
+pub fn sai_atlas_lib::desktop::Desktop::on_exit_requested(&self, core::option::Option<i32>) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::on_reopen(&self, bool)
 pub fn sai_atlas_lib::desktop::Desktop::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
 pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
 pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk

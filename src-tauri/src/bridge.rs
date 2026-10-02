@@ -268,6 +268,24 @@ impl std::fmt::Debug for Bridge {
     }
 }
 
+/// Spawn on the runtime that is driving the caller when there is one (a Tauri
+/// async command, or a test runtime with paused time); otherwise on Tauri's
+/// own runtime, because a synchronous command runs on the main thread where
+/// `tokio::spawn` would panic.
+fn spawn_task<F>(future: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            handle.spawn(future);
+        }
+        Err(_) => {
+            tauri::async_runtime::spawn(future);
+        }
+    }
+}
+
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     // The bridge holds no user data that a poisoned lock could corrupt; a panic
     // in another thread must not take every window's IPC down with it.
@@ -476,7 +494,7 @@ impl Bridge {
     fn start_gap_timer(&self, ctx: &Arc<AppCtx>, caller: Caller, gen: String, missing: u64, first_pending: u64) {
         let state = Arc::clone(&self.state);
         let ctx = Arc::clone(ctx);
-        tokio::spawn(async move {
+        spawn_task(async move {
             tokio::time::sleep(GAP_TIMEOUT).await;
             let skipped = {
                 let mut guard = lock(&state);
@@ -517,7 +535,7 @@ impl Bridge {
                 let _ = reply.send(result);
             }
             Reply::Later(future) => {
-                tokio::spawn(async move {
+                spawn_task(async move {
                     let _ = reply.send(future.await);
                 });
             }
@@ -763,8 +781,10 @@ pub async fn omp_quick_entry_invoke(
     ctx.bridge.invoke(ctx.inner(), caller, invoke.gen, invoke.seq, invoke.channel, invoke.args).await
 }
 
+/// Async so it runs on Tauri's runtime: attaching replays buffered calls, whose
+/// `Later` replies and gap timers are spawned as tasks.
 #[tauri::command]
-pub fn omp_attach(
+pub async fn omp_attach(
     window: tauri::WebviewWindow,
     ctx: tauri::State<'_, Arc<AppCtx>>,
     gen: String,

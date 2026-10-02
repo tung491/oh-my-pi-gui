@@ -4,6 +4,7 @@
 
 pub mod ipc;
 
+use std::any::Any;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -12,7 +13,7 @@ use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::{DesktopPort, QuitRisk, RunProgressState, SessionKind, WindowClosedListener, WindowId, WindowKind, WindowRecord};
+use crate::ports::{CtxRef, DesktopPort, QuitRisk, RunProgressState, SessionKind, WindowClosedListener, WindowId, WindowKind, WindowRecord};
 use crate::product;
 use crate::webview::{self, WindowSpec};
 
@@ -57,16 +58,26 @@ pub fn register(reg: &mut Registry) {
 /// Production `DesktopPort`.
 pub struct Desktop {
     app: AppHandle,
+    ctx: CtxRef,
     quitting: AtomicBool,
 }
 
 impl Desktop {
-    pub fn new(app: AppHandle) -> Self {
-        Self { app, quitting: AtomicBool::new(false) }
+    pub fn new(app: AppHandle, ctx: CtxRef) -> Self {
+        Self { app, ctx, quitting: AtomicBool::new(false) }
+    }
+
+    /// The application context; `None` only while the process shuts down.
+    fn ctx(&self) -> Option<Arc<AppCtx>> {
+        self.ctx.upgrade()
     }
 }
 
 impl DesktopPort for Desktop {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn spawn_window(&self, cwd: Option<String>, pending_session_path: Option<String>, kind: Option<SessionKind>) -> Option<WindowId> {
         let _ = (cwd, pending_session_path, kind);
         todo!()
@@ -133,6 +144,16 @@ impl DesktopPort for Desktop {
     fn request_quit(&self) {
         self.quitting.store(true, Ordering::SeqCst);
         self.app.exit(0);
+    }
+
+    fn on_exit_requested(&self, code: Option<i32>) -> bool {
+        // Until the lifecycle port lands, every exit request runs the shutdown order.
+        let _ = (code, self.ctx());
+        false
+    }
+
+    fn on_reopen(&self, has_visible_windows: bool) {
+        let _ = has_visible_windows;
     }
 
     fn mark_quitting(&self) {

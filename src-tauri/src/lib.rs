@@ -28,7 +28,7 @@ pub mod updater;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures_util::future::BoxFuture;
 use serde_json::json;
@@ -52,9 +52,13 @@ const STARTUP_FAILURE_EXIT_CODE: u8 = 1;
 // Production Host
 // ---------------------------------------------------------------------------
 
+/// A program to start after this process exits (the updater's relaunch).
+type PendingRelaunch = Arc<Mutex<Option<PathBuf>>>;
+
 /// OS services through the Tauri plugins. Modules never call a plugin directly.
 struct TauriHost {
     app: AppHandle,
+    relaunch: PendingRelaunch,
 }
 
 impl TauriHost {
@@ -222,6 +226,23 @@ impl Host for TauriHost {
     fn exit(&self, code: i32) {
         self.app.exit(code);
     }
+
+    fn relaunch_after_exit(&self, program: PathBuf) {
+        *self.relaunch.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(program);
+    }
+}
+
+/// Start the pending relaunch, if any. Runs in the `RunEvent::Exit` arm, after
+/// the plugins' own exit hooks released the single-instance D-Bus name.
+fn start_pending_relaunch(relaunch: &PendingRelaunch) {
+    let Some(program) = relaunch.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() else { return };
+    let spawned = tauri::async_runtime::block_on(async {
+        tokio::process::Command::new(&program).env_remove("APPIMAGE_EXIT_AFTER_INSTALL").spawn()
+    });
+    match spawned {
+        Ok(_child) => runtime_log::note("unknown", format!("relaunching {}", program.display()), json!({ "program": program.display().to_string() })),
+        Err(error) => runtime_log::note("main-uncaught", format!("relaunch of {} failed: {error}", program.display()), json!({})),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -240,23 +261,24 @@ fn registry() -> Registry {
     registry
 }
 
-fn build_ctx(app: &AppHandle) -> Arc<AppCtx> {
-    let host: Arc<dyn Host> = Arc::new(TauriHost { app: app.clone() });
+fn build_ctx(app: &AppHandle, relaunch: PendingRelaunch) -> Arc<AppCtx> {
+    let host: Arc<dyn Host> = Arc::new(TauriHost { app: app.clone(), relaunch });
     let prefs = JsonStore::open(paths::user_data_dir().join("prefs.json"));
     let window_state = JsonStore::open(paths::user_data_dir().join("window-state.json"));
     let i18n = MainI18n::new(prefs.clone(), host.system_locale());
-    Arc::new(AppCtx {
+    // Every production port holds a `Weak` back-reference to the context it lives in.
+    Arc::new_cyclic(|ctx| AppCtx {
         host,
         bridge: Bridge::new(registry()),
         prefs,
         window_state,
         i18n,
-        omp: Arc::new(omp::Omp::new()),
-        tabs: Arc::new(tabs::Tabs::new()),
-        desktop: Arc::new(desktop::Desktop::new(app.clone())),
-        services: Arc::new(services::Services::new()),
-        ollama: Arc::new(ollama::Ollama::new()),
-        updater: Arc::new(updater::Updater::new()),
+        omp: Arc::new(omp::Omp::new(ctx.clone())),
+        tabs: Arc::new(tabs::Tabs::new(ctx.clone())),
+        desktop: Arc::new(desktop::Desktop::new(app.clone(), ctx.clone())),
+        services: Arc::new(services::Services::new(ctx.clone())),
+        ollama: Arc::new(ollama::Ollama::new(ctx.clone())),
+        updater: Arc::new(updater::Updater::new(ctx.clone())),
     })
 }
 
@@ -268,16 +290,18 @@ fn shutdown(ctx: &Arc<AppCtx>, done: &AtomicBool, reason: &str) {
     runtime_log::note(
         "unknown",
         format!("shutdown started ({reason})"),
-        json!({ "order": "mark_quitting, tabs.dispose_all, omp.shutdown, services.shutdown, desktop.shutdown" }),
+        json!({ "order": "mark_quitting, tabs.dispose_all, omp.shutdown, services.shutdown, ollama.shutdown, updater.shutdown, desktop.shutdown" }),
     );
     ctx.desktop.mark_quitting();
     tauri::async_runtime::block_on(async {
         ctx.tabs.dispose_all().await;
         ctx.omp.shutdown().await;
         ctx.services.shutdown().await;
+        ctx.ollama.shutdown().await;
+        ctx.updater.shutdown().await;
         ctx.desktop.shutdown().await;
     });
-    runtime_log::note("unknown", "shutdown finished", json!({ "steps": 5 }));
+    runtime_log::note("unknown", "shutdown finished", json!({ "steps": 7 }));
 }
 
 /// A plain SIGTERM would end the process without Tauri's exit path; route it
@@ -333,6 +357,8 @@ pub fn run() -> ExitCode {
     }
 
     let done = Arc::new(AtomicBool::new(false));
+    let relaunch: PendingRelaunch = Arc::new(Mutex::new(None));
+    let relaunch_for_setup = relaunch.clone();
     let app = tauri::Builder::default()
         .plugin(
             tauri_plugin_single_instance::Builder::new()
@@ -351,9 +377,9 @@ pub fn run() -> ExitCode {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![bridge::omp_invoke, bridge::omp_quick_entry_invoke, bridge::omp_attach])
-        .setup(|app| {
+        .setup(move |app| {
             let handle = app.handle().clone();
-            let ctx = build_ctx(&handle);
+            let ctx = build_ctx(&handle, relaunch_for_setup);
             app.manage(ctx.clone());
             omp::init(&ctx, &handle)?;
             services::init(&ctx, &handle)?;
@@ -372,14 +398,24 @@ pub fn run() -> ExitCode {
     };
 
     app.run(move |handle, event| match event {
-        RunEvent::ExitRequested { code, .. } => {
-            if let Some(ctx) = handle.try_state::<Arc<AppCtx>>() {
-                shutdown(ctx.inner(), &done, &format!("exit requested, code {code:?}"));
+        RunEvent::ExitRequested { code, api, .. } => {
+            let Some(ctx) = handle.try_state::<Arc<AppCtx>>() else { return };
+            if ctx.desktop.on_exit_requested(code) {
+                api.prevent_exit();
+                return;
             }
+            shutdown(ctx.inner(), &done, &format!("exit requested, code {code:?}"));
         }
         RunEvent::Exit => {
             if let Some(ctx) = handle.try_state::<Arc<AppCtx>>() {
                 shutdown(ctx.inner(), &done, "exit");
+            }
+            start_pending_relaunch(&relaunch);
+        }
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { has_visible_windows, .. } => {
+            if let Some(ctx) = handle.try_state::<Arc<AppCtx>>() {
+                ctx.desktop.on_reopen(has_visible_windows);
             }
         }
         _ => {}

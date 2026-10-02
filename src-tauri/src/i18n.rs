@@ -1,7 +1,8 @@
 //! Main-process strings, ported from `src/main/i18n.ts`. The language comes
 //! from the `language` pref, then the system locale, then English. Keys are
-//! typed so a missing translation is a compile error, and a test keeps the
-//! table identical to the TypeScript source while Electron still ships.
+//! typed so a missing translation is a compile error, and a test keeps every
+//! TypeScript entry mirrored while Electron still ships (the shell adds the
+//! few keys its own menus need).
 
 use crate::prefs::JsonStore;
 
@@ -83,6 +84,7 @@ main_text! {
     MenuCloseWindow => "menu.closeWindow", "Close Window", "Đóng cửa sổ";
     MenuCommandCenter => "menu.commandCenter", "Command Center", "Trung tâm lệnh";
     MenuCapabilities => "menu.capabilities", "Capabilities", "Khả năng";
+    MenuCheckForUpdates => "menu.checkForUpdates", "Check for Updates…", "Kiểm tra cập nhật…";
     MenuImportSession => "menu.importSession", "Import Session", "Nhập phiên";
     MenuBranchPicker => "menu.branchPicker", "Branch from Message", "Tạo nhánh từ tin nhắn";
     MenuSessionTree => "menu.sessionTree", "Session Tree", "Cây phiên";
@@ -225,10 +227,16 @@ mod tests {
         pattern.captures_iter(&MAIN_I18N_TS[start..]).map(|c| (c[1].to_string(), c[2].to_string(), c[3].to_string())).collect()
     }
 
+    /// Keys the Tauri shell needs that the Electron table never had (its menu has no such item).
+    const RUST_ONLY_KEYS: &[MainTextKey] = &[MainTextKey::MenuCheckForUpdates];
+
     #[test]
     fn mirrors_every_text_key_in_the_typescript_table() {
         let entries = ts_entries();
-        assert_eq!(entries.len(), MainTextKey::ALL.len());
+        assert_eq!(entries.len() + RUST_ONLY_KEYS.len(), MainTextKey::ALL.len());
+        for key in RUST_ONLY_KEYS {
+            assert!(entries.iter().all(|(name, _, _)| name != key.key()), "{} is in the TS table too", key.key());
+        }
         for (key, en, vi) in entries {
             let typed = MainTextKey::from_key(&key).unwrap_or_else(|| panic!("{key} is missing from MainTextKey"));
             assert_eq!(main_t(typed, MainLanguage::En, &[]), en, "{key} (en)");

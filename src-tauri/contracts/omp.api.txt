@@ -6,10 +6,9 @@ pub mod sai_atlas_lib::omp::supervisor
 pub fn sai_atlas_lib::omp::supervisor::run(alloc::vec::Vec<std::ffi::os_str::OsString>) -> std::process::ExitCode
 pub struct sai_atlas_lib::omp::Omp
 impl sai_atlas_lib::omp::Omp
-pub fn sai_atlas_lib::omp::Omp::new() -> Self
-impl core::default::Default for sai_atlas_lib::omp::Omp
-pub fn sai_atlas_lib::omp::Omp::default() -> Self
+pub fn sai_atlas_lib::omp::Omp::new(sai_atlas_lib::ports::CtxRef) -> Self
 impl sai_atlas_lib::ports::OmpPort for sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::omp::Omp::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
 pub fn sai_atlas_lib::omp::Omp::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
 pub fn sai_atlas_lib::omp::Omp::resolve_editor_command(&self) -> futures_core::future::BoxFuture<'_, core::option::Option<alloc::string::String>>
@@ -20,6 +19,7 @@ pub const sai_atlas_lib::omp::EMITS: &[&str]
 pub fn sai_atlas_lib::omp::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, &tauri::app::AppHandle) -> tauri::error::Result<()>
 pub fn sai_atlas_lib::omp::register(&mut sai_atlas_lib::bridge::Registry)
 impl sai_atlas_lib::ports::OmpPort for sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::omp::Omp::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
 pub fn sai_atlas_lib::omp::Omp::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
 pub fn sai_atlas_lib::omp::Omp::resolve_editor_command(&self) -> futures_core::future::BoxFuture<'_, core::option::Option<alloc::string::String>>

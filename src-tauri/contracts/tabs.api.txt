@@ -2,8 +2,9 @@ impl sai_atlas_lib::ports::TabsPort for sai_atlas_lib::tabs::Tabs
 pub fn sai_atlas_lib::tabs::Tabs::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::tabs::Tabs::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::tabs::Tabs::adopt_session_cwd(&self, &str, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::tabs::Tabs::at_cap(&self) -> bool
-pub fn sai_atlas_lib::tabs::Tabs::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'_, core::option::Option<serde_json::value::Value>>
+pub fn sai_atlas_lib::tabs::Tabs::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'static, core::option::Option<serde_json::value::Value>>
 pub fn sai_atlas_lib::tabs::Tabs::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::tabs::Tabs::dispose_all(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub fn sai_atlas_lib::tabs::Tabs::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
@@ -44,15 +45,14 @@ pub fn sai_atlas_lib::tabs::ipc::tab_set_view(&alloc::rcs::arc::Arc<sai_atlas_li
 pub fn sai_atlas_lib::tabs::ipc::tab_spawn(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub struct sai_atlas_lib::tabs::Tabs
 impl sai_atlas_lib::tabs::Tabs
-pub fn sai_atlas_lib::tabs::Tabs::new() -> Self
-impl core::default::Default for sai_atlas_lib::tabs::Tabs
-pub fn sai_atlas_lib::tabs::Tabs::default() -> Self
+pub fn sai_atlas_lib::tabs::Tabs::new(sai_atlas_lib::ports::CtxRef) -> Self
 impl sai_atlas_lib::ports::TabsPort for sai_atlas_lib::tabs::Tabs
 pub fn sai_atlas_lib::tabs::Tabs::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::tabs::Tabs::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::tabs::Tabs::adopt_session_cwd(&self, &str, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::tabs::Tabs::at_cap(&self) -> bool
-pub fn sai_atlas_lib::tabs::Tabs::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'_, core::option::Option<serde_json::value::Value>>
+pub fn sai_atlas_lib::tabs::Tabs::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'static, core::option::Option<serde_json::value::Value>>
 pub fn sai_atlas_lib::tabs::Tabs::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::tabs::Tabs::dispose_all(&self) -> futures_core::future::BoxFuture<'_, ()>
 pub fn sai_atlas_lib::tabs::Tabs::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>

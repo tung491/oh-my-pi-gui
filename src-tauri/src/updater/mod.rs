@@ -3,14 +3,17 @@
 
 pub mod ipc;
 
+use std::any::Any;
 use std::sync::Arc;
+
+use futures_util::future::BoxFuture;
 
 use serde_json::Value;
 use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::UpdaterPort;
+use crate::ports::{CtxRef, UpdaterPort};
 
 pub const CHANNELS: &[(&str, Scope)] = &[
     ("updater:check", Scope::Main),
@@ -34,28 +37,37 @@ pub fn register(reg: &mut Registry) {
 
 /// Production `UpdaterPort`.
 pub struct Updater {
-    _private: (),
+    ctx: CtxRef,
 }
 
 impl Updater {
-    pub fn new() -> Self {
-        Self { _private: () }
+    pub fn new(ctx: CtxRef) -> Self {
+        Self { ctx }
     }
-}
 
-impl Default for Updater {
-    fn default() -> Self {
-        Self::new()
+    /// The application context; `None` only while the process shuts down.
+    fn ctx(&self) -> Option<Arc<AppCtx>> {
+        self.ctx.upgrade()
     }
 }
 
 impl UpdaterPort for Updater {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn check_now(&self) {
         todo!()
     }
 
     fn status(&self) -> Value {
         todo!()
+    }
+
+    fn shutdown(&self) -> BoxFuture<'_, ()> {
+        // Nothing was downloaded yet; the port installs a pending update here.
+        let _ = self.ctx();
+        Box::pin(std::future::ready(()))
     }
 }
 
