@@ -4,9 +4,7 @@
 //! Electron's caller is the window spawn path in `index.ts`, which the `desktop`
 //! module owns in the Tauri core and resolves through its own code (cross-module
 //! calls go through the frozen ports only). Nothing in this module calls it, so
-//! outside tests it is the tested reference port and would otherwise trip the
-//! dead-code lint.
-#![cfg_attr(not(test), allow(dead_code))]
+//! `tabs/mod.rs` compiles it only for tests: it is the tested reference port.
 
 use crate::ports::SessionKind;
 

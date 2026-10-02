@@ -1,8 +1,12 @@
 //! Module `tabs`: the sidecar pool, tab routing and the tab/RPC/sidecar
-//! handlers. The bodies below are the stubs the port replaces.
+//! handlers (ports of `sidecar-pool.ts`, `tab-spawn.ts`, `snowflake.ts`, the
+//! pool factory and ready health check in `index.ts:356-399`, and the tab,
+//! RPC and sidecar handlers in `ipc.ts`).
 
 pub mod ipc;
+mod pool;
 mod snowflake;
+#[cfg(test)]
 mod window_spawn_target;
 
 use std::any::Any;
@@ -14,10 +18,15 @@ use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::{CtxRef, 
-    AcquireOptions, Caller, IpcSessionOwner, IpcTabInfo, IpcTabViewSplit, PersistedTabLayout, SidecarHandle, TabsPort,
-    WindowId, WindowTabFact, WindowTabsChangedListener,
+use crate::ports::{
+    AcquireOptions, Caller, CtxRef, IpcSessionOwner, IpcTabInfo, IpcTabViewSplit, PersistedTabLayout, SidecarHandle, TabsPort, WindowId,
+    WindowTabFact, WindowTabsChangedListener,
 };
+
+use pool::SidecarPool;
+
+/// The pool's hard cap, counted over tabs across every window.
+const MAX_TABS: usize = 10;
 
 pub const CHANNELS: &[(&str, Scope)] = &[
     ("rpc:command", Scope::Main),
@@ -82,11 +91,20 @@ pub fn register(reg: &mut Registry) {
 /// Production `TabsPort`.
 pub struct Tabs {
     ctx: CtxRef,
+    pool: SidecarPool,
 }
 
 impl Tabs {
     pub fn new(ctx: CtxRef) -> Self {
-        Self { ctx }
+        let pool = SidecarPool::new(ctx.clone(), MAX_TABS);
+        Self { ctx, pool }
+    }
+
+    /// A pool with a different cap, for tests of the cap itself.
+    #[cfg(test)]
+    fn with_max(ctx: CtxRef, max: usize) -> Self {
+        let pool = SidecarPool::new(ctx.clone(), max);
+        Self { ctx, pool }
     }
 
     /// The application context; `None` only while the process shuts down.
@@ -95,132 +113,140 @@ impl Tabs {
     }
 }
 
+/// `command_for_idle_session` resolves `None` exactly where TS returned `null`
+/// (no owner, a run or compaction in flight, not ready, no RPC client). A
+/// delivery failure resolves `Some({ "type": "response", "success": false,
+/// "error": <message> })`, so a caller that throws `response.error` on
+/// `!success` reports the same message the TS rejection carried.
 impl TabsPort for Tabs {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn acquire(&self, options: AcquireOptions) -> Option<String> {
-        let _ = options;
-        todo!()
+        self.pool.acquire(options)
     }
 
     fn size(&self) -> usize {
-        todo!()
+        self.pool.size()
     }
 
     fn at_cap(&self) -> bool {
-        todo!()
+        self.pool.at_cap()
     }
 
     fn sidecar_for_window(&self, win_id: WindowId) -> Option<Arc<dyn SidecarHandle>> {
-        let _ = win_id;
-        todo!()
+        self.pool.sidecar_for_window(win_id)
     }
 
     fn sidecar_for_tab(&self, win_id: WindowId, tab_id: &str) -> Option<Arc<dyn SidecarHandle>> {
-        let _ = (win_id, tab_id);
-        todo!()
+        self.pool.sidecar_for_tab(win_id, tab_id)
     }
 
     fn active_tab_for_window(&self, win_id: WindowId) -> Option<String> {
-        let _ = win_id;
-        todo!()
+        self.pool.active_tab_for_window(win_id)
     }
 
     fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'static, Option<Value>> {
-        let _ = (session_path, command);
-        todo!()
+        self.pool.command_for_idle_session(session_path, command)
     }
 
     fn set_active_tab(&self, win_id: WindowId, tab_id: &str) -> bool {
-        let _ = (win_id, tab_id);
-        todo!()
+        self.pool.set_active_tab(win_id, tab_id)
     }
 
     fn set_tab_view(&self, win_id: WindowId, focused_tab_id: &str, visible_tab_ids: &[String], split: Option<IpcTabViewSplit>) -> bool {
-        let _ = (win_id, focused_tab_id, visible_tab_ids, split);
-        todo!()
+        self.pool.set_tab_view(win_id, focused_tab_id, visible_tab_ids, split)
     }
 
     fn release_tab(&self, tab_id: &str) -> bool {
-        let _ = tab_id;
-        todo!()
+        self.pool.release_tab(tab_id)
     }
 
     fn release_window(&self, win_id: WindowId) {
-        let _ = win_id;
-        todo!()
+        self.pool.release_window(win_id);
     }
 
     fn session_owner(&self, session_path: &str) -> Option<IpcSessionOwner> {
-        let _ = session_path;
-        todo!()
+        self.pool.session_owner(session_path)
     }
 
     fn session_owner_is_live(&self, session_path: &str) -> bool {
-        let _ = session_path;
-        todo!()
+        self.pool.session_owner_is_live(session_path)
     }
 
     fn foreign_session_owner(&self, tab_id: Option<&str>, session_path: &str) -> Option<IpcSessionOwner> {
-        let _ = (tab_id, session_path);
-        todo!()
+        self.pool.foreign_session_owner(tab_id, session_path)
     }
 
     fn note_session_file(&self, tab_id: &str, session_file: Option<&str>) {
-        let _ = (tab_id, session_file);
-        todo!()
+        self.pool.note_session_file(tab_id, session_file);
     }
 
     fn adopt_session_cwd(&self, tab_id: &str, cwd: &str) -> bool {
-        let _ = (tab_id, cwd);
-        todo!()
+        self.pool.adopt_session_cwd(tab_id, cwd)
     }
 
     fn route_side_channel(&self, id: &str, frame: Value, is_final: bool) -> bool {
-        let _ = (id, frame, is_final);
-        todo!()
+        self.pool.route_side_channel(id, frame, is_final)
     }
 
     fn tabs_for_window(&self, win_id: WindowId) -> Vec<IpcTabInfo> {
-        let _ = win_id;
-        todo!()
+        self.pool.tabs_for_window(win_id)
     }
 
     fn tab_inventory(&self) -> Vec<WindowTabFact> {
-        todo!()
+        self.pool.tab_inventory()
     }
 
     fn tab_layout_for_window(&self, win_id: WindowId) -> Option<PersistedTabLayout> {
-        let _ = win_id;
-        todo!()
+        self.pool.tab_layout_for_window(win_id)
     }
 
     fn restore_layout(&self, win_id: WindowId, layout: PersistedTabLayout) -> usize {
-        let _ = (win_id, layout);
-        todo!()
+        self.pool.restore_layout(win_id, layout)
     }
 
     fn dispose_all(&self) -> BoxFuture<'_, ()> {
-        // No sidecars exist yet; the port stops every supervisor here.
-        let _ = self.ctx();
-        Box::pin(std::future::ready(()))
+        self.pool.dispose_all()
     }
 
     fn on_window_tabs_changed(&self, listener: WindowTabsChangedListener) {
-        let _ = listener;
-        todo!()
+        self.pool.on_window_tabs_changed(listener);
     }
 
+    /// The tab's cwd when `tab_id` is given (and non-empty); otherwise the
+    /// window's sidecar cwd, else the cwd its window record was created with.
     fn cwd_for(&self, caller: Caller, tab_id: Option<&str>) -> Option<String> {
-        let _ = (caller, tab_id);
-        todo!()
+        if let Some(tab_id) = tab_id.filter(|tab_id| !tab_id.is_empty()) {
+            return self.pool.sidecar_for_tab(caller.win_id, tab_id).map(|sidecar| sidecar.cwd());
+        }
+        if let Some(sidecar) = self.pool.sidecar_for_window(caller.win_id) {
+            return Some(sidecar.cwd());
+        }
+        self.ctx()?.desktop.record(caller.win_id).map(|record| record.cwd)
     }
 }
 
-/// Start the module's background work (ready health checks, window-closed release).
+/// Start the module's background work: the ready health check of every pooled
+/// sidecar, and releasing a closed window's tabs.
 pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
-    let _ = (ctx, app);
+    let _ = app;
+    install(ctx);
     Ok(())
+}
+
+/// The runtime-free part of `init`, so tests can wire it over fakes.
+fn install(ctx: &Arc<AppCtx>) {
+    if let Some(tabs) = ctx.tabs.as_any().downcast_ref::<Tabs>() {
+        tabs.pool.enable_health_check();
+    }
+    // The listener holds a `Weak`: an `Arc<AppCtx>` inside a port of that same
+    // context would keep it alive forever.
+    let weak = Arc::downgrade(ctx);
+    ctx.desktop.on_window_closed(Box::new(move |record| {
+        if let Some(ctx) = weak.upgrade() {
+            ctx.tabs.release_window(record.id);
+        }
+    }));
 }
