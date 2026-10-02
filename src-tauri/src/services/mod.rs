@@ -4,6 +4,7 @@
 pub mod ipc;
 
 mod dialog_memory;
+mod fs;
 mod models_config;
 mod open_path_target;
 mod provider_cleanup;

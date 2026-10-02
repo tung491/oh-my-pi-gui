@@ -2,13 +2,25 @@
 //! `not_ported` stub; the module's port replaces them and `check-module.sh`
 //! fails while any stub remains.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use base64::Engine;
 use serde_json::{json, Value};
 
 use crate::bridge::{IpcError, Reply};
 use crate::ctx::AppCtx;
 use crate::ports::{Caller, SessionScope};
+
+use super::fs as workspace_fs;
+
+/// `~/` expands against the home directory; everything else passes through unchanged.
+fn expand_home(path: &str) -> String {
+    match path.strip_prefix("~/") {
+        Some(rest) => dirs::home_dir().map(|home| home.join(rest).to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string()),
+        None => path.to_string(),
+    }
+}
 
 /// `runtime:error-report`
 pub fn runtime_error_report(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
@@ -242,28 +254,176 @@ pub fn provider_cleanup_config(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Valu
     Reply::err(IpcError::not_ported("provider-cleanup:config"))
 }
 
-/// `fs:list`
+/// `fs:list`: node:fs-equivalent workspace listing, rooted at the calling
+/// tab's cwd. Never fails the call; a problem comes back as `ok: false`.
 pub fn fs_list(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("fs:list"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let tab_id = payload.get("tabId").and_then(Value::as_str);
+    let Some(root) = ctx.tabs.cwd_for(caller, tab_id) else {
+        return Reply::ok(json!({ "ok": false, "entries": [], "truncated": false, "error": "No workspace" }));
+    };
+    let root_abs = PathBuf::from(root);
+    let prefix_raw = payload.get("path").and_then(Value::as_str).unwrap_or("");
+    let prefix = prefix_raw.replace('\\', "/");
+    let prefix = prefix.strip_prefix("./").unwrap_or(&prefix).trim_matches('/').to_string();
+    let Some(dir_abs) = workspace_fs::resolve_within(&root_abs, &prefix) else {
+        return Reply::ok(json!({ "ok": false, "entries": [], "truncated": false, "error": "Path escapes the workspace" }));
+    };
+    let max_depth = workspace_fs::clamp_int(
+        payload.get("maxDepth").and_then(Value::as_i64),
+        1,
+        workspace_fs::FS_LIST_MAX_DEPTH,
+        workspace_fs::FS_LIST_DEFAULT_DEPTH,
+    );
+    let max_files = workspace_fs::clamp_int(
+        payload.get("maxEntries").and_then(Value::as_i64),
+        1,
+        workspace_fs::FS_LIST_MAX_FILES_CAP,
+        workspace_fs::FS_LIST_DEFAULT_MAX_FILES,
+    );
+    let mut state =
+        workspace_fs::WalkState { rules: workspace_fs::load_ignore_rules(&root_abs), max_depth, max_files, file_count: 0, truncated: false };
+    match std::fs::metadata(&dir_abs) {
+        Ok(metadata) if metadata.is_dir() => {
+            let entries = workspace_fs::walk_workspace(&dir_abs, &prefix, 0, &mut state);
+            Reply::ok(json!({ "ok": true, "entries": entries, "truncated": state.truncated }))
+        }
+        Ok(_) => Reply::ok(json!({ "ok": false, "entries": [], "truncated": false, "error": "Not a directory" })),
+        Err(error) => Reply::ok(json!({ "ok": false, "entries": [], "truncated": state.truncated, "error": error.to_string() })),
+    }
 }
 
-/// `fs:read`
+/// `fs:read`: workspace-confined for a relative path, read as given for an
+/// absolute or `~/` one (see `fs.rs`'s trust-contract note).
 pub fn fs_read(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("fs:read"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let fail = |error: String| Reply::ok(json!({ "ok": false, "content": "", "truncated": false, "binary": false, "size": 0, "error": error }));
+    let Some(path) = payload.get("path").and_then(Value::as_str).filter(|path| !path.is_empty()) else {
+        return fail("Invalid path".into());
+    };
+    let raw = expand_home(path);
+    let abs = if Path::new(&raw).is_absolute() {
+        PathBuf::from(&raw)
+    } else {
+        let tab_id = payload.get("tabId").and_then(Value::as_str);
+        let Some(cwd) = ctx.tabs.cwd_for(caller, tab_id) else { return fail("No workspace".into()) };
+        match workspace_fs::resolve_within(Path::new(&cwd), &raw) {
+            Some(within) => within,
+            None => return fail("Path escapes the workspace".into()),
+        }
+    };
+    let max_bytes = workspace_fs::clamp_int(
+        payload.get("maxBytes").and_then(Value::as_i64),
+        1,
+        workspace_fs::FS_READ_MAX_BYTES_CAP,
+        workspace_fs::FS_READ_DEFAULT_MAX_BYTES,
+    ) as u64;
+    match workspace_fs::read_file_capped(&abs, max_bytes) {
+        Ok(result) => {
+            Reply::ok(json!({ "ok": true, "content": result.content, "truncated": result.truncated, "binary": result.binary, "size": result.size }))
+        }
+        Err(error) => fail(error.to_string()),
+    }
 }
 
-/// `fs:read-plan`
+fn stat_file(abs: &Path) -> Option<PathBuf> {
+    std::fs::metadata(abs).ok().filter(std::fs::Metadata::is_file).map(|_| abs.to_path_buf())
+}
+
+/// Newest top-level `*plan.md` (case-insensitive) in `dir_abs`, mirroring the
+/// agent-side fallback (the agent names its own `local://<slug>-plan.md`, so
+/// the configured path alone often misses it).
+fn newest_plan_file(dir_abs: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir_abs).ok()?;
+    let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
+    for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else { continue };
+        if !file_type.is_file() {
+            continue;
+        }
+        if !entry.file_name().to_string_lossy().to_lowercase().ends_with("plan.md") {
+            continue;
+        }
+        let Ok(modified) = entry.metadata().and_then(|metadata| metadata.modified()) else { continue };
+        if best.as_ref().is_none_or(|(_, best_mtime)| modified > *best_mtime) {
+            best = Some((entry.path(), modified));
+        }
+    }
+    best.map(|(path, _)| path)
+}
+
+/// `fs:read-plan`: deliberately off the RPC bus (reading a plan via the
+/// agent's bash RPC injected it into the model context on every poll). Reads
+/// the configured path, else the newest `*plan.md` in the session-local root.
+/// Confined to the workspace and the sessions dir (plan artifacts live there).
 pub fn fs_read_plan(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("fs:read-plan"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let fail = |error: &str| Reply::ok(json!({ "ok": false, "path": Value::Null, "content": Value::Null, "error": error }));
+    let Some(fs_path) = payload.get("fsPath").and_then(Value::as_str).filter(|path| !path.is_empty()) else {
+        return fail("Invalid path");
+    };
+    let tab_id = payload.get("tabId").and_then(Value::as_str);
+    let Some(cwd) = ctx.tabs.cwd_for(caller, tab_id) else { return fail("No workspace") };
+    let sessions_dir = ctx.services.sessions_dir();
+    let within_allowed_roots =
+        |value: &str| workspace_fs::resolve_within(Path::new(&cwd), value).or_else(|| workspace_fs::resolve_within(&sessions_dir, value));
+    let Some(target) = within_allowed_roots(fs_path) else { return fail("Path escapes allowed roots") };
+    let local_root = match payload.get("localRoot").and_then(Value::as_str).filter(|value| !value.is_empty()) {
+        Some(value) => match within_allowed_roots(value) {
+            Some(path) => Some(path),
+            None => return fail("Path escapes allowed roots"),
+        },
+        None => None,
+    };
+    let picked = stat_file(&target).or_else(|| local_root.as_deref().and_then(newest_plan_file));
+    match picked {
+        None => Reply::ok(json!({ "ok": true, "path": Value::Null, "content": Value::Null })),
+        Some(path) => match std::fs::read_to_string(&path) {
+            Ok(content) => Reply::ok(json!({ "ok": true, "path": path.to_string_lossy(), "content": content })),
+            Err(error) => fail(&error.to_string()),
+        },
+    }
 }
 
-/// `fs:read-image`
+/// `fs:read-image`: markdown-image read. Relative paths stay
+/// workspace-confined; absolute and `~` paths are readable because the bytes
+/// never leave the local `<img>`, but the file must sniff as a real image
+/// type and fit under the size cap.
 pub fn fs_read_image(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let _ = (ctx, caller, args);
-    Reply::err(IpcError::not_ported("fs:read-image"))
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let fail = |error: String| Reply::ok(json!({ "ok": false, "dataUrl": Value::Null, "mime": Value::Null, "size": 0, "error": error }));
+    let Some(path) = payload.get("path").and_then(Value::as_str).filter(|path| !path.is_empty()) else {
+        return fail("Invalid path".into());
+    };
+    let raw = expand_home(path);
+    let abs = if Path::new(&raw).is_absolute() {
+        PathBuf::from(&raw)
+    } else {
+        let tab_id = payload.get("tabId").and_then(Value::as_str);
+        let Some(cwd) = ctx.tabs.cwd_for(caller, tab_id) else { return fail("No workspace".into()) };
+        match workspace_fs::resolve_within(Path::new(&cwd), &raw) {
+            Some(within) => within,
+            None => return fail("Path escapes the workspace".into()),
+        }
+    };
+    let metadata = match std::fs::metadata(&abs) {
+        Ok(metadata) => metadata,
+        Err(error) => return fail(error.to_string()),
+    };
+    if !metadata.is_file() {
+        return fail("Not a file".into());
+    }
+    if metadata.len() > workspace_fs::FS_IMAGE_MAX_BYTES {
+        return fail("Image too large".into());
+    }
+    let bytes = match std::fs::read(&abs) {
+        Ok(bytes) => bytes,
+        Err(error) => return fail(error.to_string()),
+    };
+    let header_len = bytes.len().min(512);
+    let Some(mime) = workspace_fs::sniff_image_mime(&bytes[..header_len]) else { return fail("Not a supported image".into()) };
+    let data_url = format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
+    Reply::ok(json!({ "ok": true, "dataUrl": data_url, "mime": mime, "size": metadata.len() }))
 }
 
 /// `editor:open-external`
