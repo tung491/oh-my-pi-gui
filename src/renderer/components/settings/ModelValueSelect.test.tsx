@@ -2,8 +2,8 @@
  * Tests for the model/provider-referencing setting dropdown: path
  * classification (which string settings become dropdowns), the closed-state
  * trigger contract (current value shown, unset placeholder, listbox
- * semantics), and the open panel's rule that a provider the catalog reports as
- * disabled cannot be chosen.
+ * semantics), and the open panel's rules that a provider the catalog reports as
+ * disabled cannot be chosen and that only providers the GUI offers are listed.
  */
 
 import { parseHTML } from "linkedom";
@@ -32,13 +32,16 @@ function provider(id: string, disabled: boolean): ProviderInfo {
 	return { id, name: id, authenticated: true, loginAvailable: false, disabled, modelCount: 1 };
 }
 
+const DEFAULT_PROVIDERS = [provider("ollama", false), provider("anthropic", false)];
+let catalogProviders: ProviderInfo[] = DEFAULT_PROVIDERS;
+
 const command = vi.fn(
 	async (): Promise<RpcResponse> => ({
 		type: "response",
 		command: "get_providers",
 		success: true,
 		data: {
-			providers: [provider("live-one", false), provider("off-one", true)],
+			providers: catalogProviders,
 			models: [],
 			discoveryStates: [],
 			refreshPending: false,
@@ -89,6 +92,7 @@ afterEach(async () => {
 	while (document.body.firstChild) document.body.removeChild(document.body.firstChild);
 	useModelStore.getState().reset();
 	command.mockClear();
+	catalogProviders = DEFAULT_PROVIDERS;
 });
 
 describe("settingRefKind", () => {
@@ -151,13 +155,20 @@ describe("ModelValueSelect", () => {
 		expect(html).not.toContain('role="listbox"');
 	});
 
-	it("will not offer a provider the catalog reports as disabled", async () => {
+	it("lists only Ollama when the catalog reports other providers too", async () => {
 		await openDropdown();
 
-		expect(rowFor("live-one").hasAttribute("disabled")).toBe(false);
+		expect(rowFor("ollama").hasAttribute("disabled")).toBe(false);
+		expect(optionRows().some(row => (row.textContent ?? "").includes("anthropic"))).toBe(false);
+	});
+
+	it("will not offer a provider the catalog reports as disabled", async () => {
+		catalogProviders = [provider("ollama", true)];
+		await openDropdown();
+
 		// A disabled provider is listed for recognition only: committing it as a
 		// `*Provider` setting value fails at call time, far from this row.
-		expect(rowFor("off-one").hasAttribute("disabled")).toBe(true);
-		expect(rowFor("off-one").textContent).toContain("(disabled)");
+		expect(rowFor("ollama").hasAttribute("disabled")).toBe(true);
+		expect(rowFor("ollama").textContent).toContain("(disabled)");
 	});
 });

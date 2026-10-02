@@ -50,7 +50,6 @@ const baseCtx: CommandRegistryContext = {
 	openPrCenter: () => {},
 	openHotkeys: () => {},
 	openImportDialog: () => {},
-	openProviderConfig: () => {},
 	focusDockCard: () => {},
 	retryTurn: async () => {},
 	retryLastTurn: async () => {},
@@ -246,5 +245,33 @@ describe("one-shot action wiring", () => {
 		await affordance.run();
 		expect(sidecarRestart).not.toHaveBeenCalled();
 		expect(lastToast()?.variant).toBe("warning");
+	});
+});
+
+describe("provider commands", () => {
+	it("offers the Ollama window and no sign-in, sign-out or custom-provider entry", () => {
+		const opened: string[] = [];
+		const items = buildCommandMenu({
+			...ctx,
+			openProviders: () => opened.push("providers"),
+			availableCommands: [
+				{ name: "login", description: "Login", source: "builtin", textModeExecutable: false },
+				{ name: "logout", description: "Logout", source: "builtin" },
+				{ name: "review", description: "Review", source: "builtin" },
+			],
+		});
+		const names = items.map(item => item.name);
+
+		for (const removed of ["login", "logout", "add-provider", "provider-config", "custom-provider"]) {
+			expect(names).not.toContain(removed);
+		}
+		// An unrelated sidecar command still merges in, so only the account commands are held back.
+		expect(names).toContain("review");
+
+		const providers = items.find(item => item.name === "providers");
+		expect(providers?.label).toBe(translate("cmd.providers"));
+		if (providers?.affordance.kind !== "window") throw new Error("expected window");
+		providers.affordance.open();
+		expect(opened).toEqual(["providers"]);
 	});
 });

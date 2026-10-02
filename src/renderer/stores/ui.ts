@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CustomProviderView, SessionInfo } from "../../shared/ipc-types";
+import type { SessionInfo } from "../../shared/ipc-types";
 import type { SidecarRestartProgress } from "../../shared/rpc-types";
 import { KEYMAP_ACTIONS, type KeymapOverrides, sanitizeOverrides } from "../lib/keymap";
 import { readPrepaintThemeMode, type ThemeMode } from "../lib/theme";
@@ -37,6 +37,8 @@ interface UiStore {
 	settingsTab: string;
 	usageOpen: boolean;
 	providersOpen: boolean;
+	/** The local-model welcome screen (first run, or reopened from Settings › Ollama). */
+	welcomeOpen: boolean;
 	modelRolesOpen: boolean;
 	statsDashboardOpen: boolean;
 	modelCompareOpen: boolean;
@@ -67,8 +69,6 @@ interface UiStore {
 	liveOpen: boolean;
 	composerEditorOpen: boolean;
 	composerEditorInitial: string | null;
-	providerConfigOpen: boolean;
-	providerConfigEdit: CustomProviderView | null;
 	renameDialogOpen: boolean;
 	/** Worktree-create dialog (plan/20): non-null opens it; baseCwd pins the
 	 * repo when invoked from a Sidebar group (default = active session cwd). */
@@ -133,6 +133,8 @@ interface UiStore {
 	closeUsage: () => void;
 	openProviders: () => void;
 	closeProviders: () => void;
+	openWelcome: () => void;
+	closeWelcome: () => void;
 	openModelRoles: () => void;
 	closeModelRoles: () => void;
 	openStatsDashboard: () => void;
@@ -181,8 +183,6 @@ interface UiStore {
 	closeLive: () => void;
 	openComposerEditor: (initial: string) => void;
 	closeComposerEditor: () => void;
-	openProviderConfig: (editProvider?: CustomProviderView | null) => void;
-	closeProviderConfig: () => void;
 	openRenameDialog: () => void;
 	closeRenameDialog: () => void;
 	openWorktreeDialog: (context?: { baseCwd?: string }) => void;
@@ -294,6 +294,9 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	closeUsage: () => set({ usageOpen: false }),
 	openProviders: () => set({ providersOpen: true }),
 	closeProviders: () => set({ providersOpen: false }),
+	welcomeOpen: false,
+	openWelcome: () => set({ welcomeOpen: true }),
+	closeWelcome: () => set({ welcomeOpen: false }),
 	modelRolesOpen: false,
 	openModelRoles: () => set({ modelRolesOpen: true }),
 	closeModelRoles: () => set({ modelRolesOpen: false }),
@@ -372,10 +375,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	composerEditorInitial: null,
 	openComposerEditor: initial => set({ composerEditorOpen: true, composerEditorInitial: initial }),
 	closeComposerEditor: () => set({ composerEditorOpen: false, composerEditorInitial: null }),
-	providerConfigOpen: false,
-	providerConfigEdit: null as CustomProviderView | null,
-	openProviderConfig: editProvider => set({ providerConfigOpen: true, providerConfigEdit: editProvider ?? null }),
-	closeProviderConfig: () => set({ providerConfigOpen: false, providerConfigEdit: null }),
 	renameDialogOpen: false,
 	openRenameDialog: () => set({ renameDialogOpen: true }),
 	closeRenameDialog: () => set({ renameDialogOpen: false }),

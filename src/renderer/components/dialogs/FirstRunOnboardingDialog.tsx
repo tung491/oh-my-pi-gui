@@ -1,37 +1,40 @@
-import { Bot, Check, Cpu, FileCode2, FolderOpen, RefreshCw, SlidersHorizontal } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+/**
+ * The local-model welcome screen, ported from sai-welcome's first screen: what
+ * this machine has, whether Ollama answers (and the fix when it does not), and
+ * three model cards sized for the machine. Continue makes the picked model the
+ * default and records that setup is done.
+ *
+ * It opens on its own once per launch while setup is incomplete, and whenever
+ * `useUiStore().welcomeOpen` is set ("Run setup again").
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CustomProviderView } from "../../../shared/ipc-types";
+import type {
+	ModelChoice,
+	ModelScreen,
+	OllamaRemedyId,
+	OllamaStatus,
+	PullProgress,
+} from "../../../shared/ollama-types";
+import { isAllowedProvider } from "../../../shared/provider-policy";
 import type { ProviderInfo } from "../../../shared/rpc-types";
 import { useT } from "../../lib/i18n";
-import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
-import { loginProvider } from "../../lib/provider-login";
 import { useTabRpc } from "../../lib/tab-rpc";
+import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useUiStore } from "../../stores/ui";
-import { Badge, Button, Modal, SaiAtlasLogo, StepList } from "../common";
-import { RadioGroup } from "../settings/editors/RadioGroup";
-import { WorkspaceDialog } from "./WorkspaceDialog";
+import { Button, Modal, SaiAtlasLogo } from "../common";
+import { MachineFacts } from "../onboarding/MachineFacts";
+import { ModelCard, ModelCardSkeleton } from "../onboarding/ModelCard";
+import { OllamaRow } from "../onboarding/OllamaRow";
+import "../onboarding/welcome-screen.css";
 
-const CUSTOM_PROVIDER_EXAMPLE = `providers:
-  my-provider:
-    api: openai-completions
-    baseUrl: https://api.example.com/v1
-    apiKey: \${MY_PROVIDER_API_KEY}
-    models:
-      - id: model-id
-        name: My Model
-        contextWindow: 128000
-        maxTokens: 8192`;
+/** Main prefs key holding the ISO time setup finished; set only after the model handoff succeeded. */
+export const WELCOME_COMPLETED_PREF = "welcome.completed";
 
-const STEP_KEYS = ["welcome", "provider", "models", "workspace", "ready"] as const;
-const PROVIDER_STEP = 1;
-const MODELS_STEP = 2;
-const LAST_STEP = STEP_KEYS.length - 1;
-
-/** Provider-step choices besides one "sign in" option per OAuth-capable provider. */
-const PROVIDERS_OPTION = "providers";
-const CUSTOM_OPTION = "custom";
-const OAUTH_PREFIX = "oauth:";
+/** Skeleton cards drawn while the model screen loads: one per tier, the count the grid settles into. */
+const SKELETON_CARDS = 3;
 
 function isProviderInfo(value: unknown): value is ProviderInfo {
 	if (!value || typeof value !== "object") return false;
@@ -51,448 +54,455 @@ function isProviderInfo(value: unknown): value is ProviderInfo {
 	);
 }
 
-/** A usable setup needs both a model and a non-disabled credential/config path. */
+/**
+ * A usable setup needs an allowed (Ollama) provider with both a model and a
+ * non-disabled credential/config path. Other providers never count, even if
+ * leftovers from an earlier version are still signed in.
+ */
 export function hasUsableModelProvider(
 	providers: readonly ProviderInfo[],
 	configs: readonly CustomProviderView[],
 ): boolean {
-	if (providers.some(provider => provider.authenticated && !provider.disabled && provider.modelCount > 0)) {
+	const allowed = providers.filter(provider => isAllowedProvider(provider.id));
+	if (allowed.some(provider => provider.authenticated && !provider.disabled && provider.modelCount > 0)) {
 		return true;
 	}
 
-	const providerById = new Map(providers.map(provider => [provider.id, provider]));
+	const providerById = new Map(allowed.map(provider => [provider.id, provider]));
 	return configs.some(config => {
+		if (!isAllowedProvider(config.id)) return false;
 		const provider = providerById.get(config.id);
 		return config.auth === "none" && provider !== undefined && !provider.disabled && provider.modelCount > 0;
 	});
+}
+
+/**
+ * The model Continue uses when the user has not picked one: the current model
+ * if it is downloaded, then the recommended tier, then the first downloaded
+ * card (sai-welcome's `refreshModels` rule — never silently move a machine off
+ * the model it already runs).
+ */
+export function defaultPick(choices: readonly ModelChoice[], currentTag: string | null): string | null {
+	const installed = choices.filter(choice => choice.installed === true);
+	const ready =
+		installed.find(choice => choice.tag === currentTag) ??
+		installed.find(choice => choice.tiers.includes("recommended")) ??
+		installed[0];
+	return ready?.tag ?? null;
+}
+
+function errorText(cause: unknown): string {
+	return cause instanceof Error ? cause.message : String(cause);
+}
+
+/** The local frame a Download click shows before Ollama reports anything. */
+function startingFrame(tag: string): PullProgress {
+	return { tag, status: "", completed: 0, total: 0, percent: -1, done: false };
+}
+
+function withoutTag(pulls: Record<string, PullProgress>, tag: string): Record<string, PullProgress> {
+	const { [tag]: _removed, ...rest } = pulls;
+	return rest;
 }
 
 export function FirstRunOnboardingDialog() {
 	const tabRpc = useTabRpc();
 	const t = useT();
 	const sidecarStatus = useSessionStore(state => state.status);
-	const cwd = useSessionStore(state => state.cwd);
-	const openProviders = useUiStore(state => state.openProviders);
-	const openProviderConfig = useUiStore(state => state.openProviderConfig);
-	const openModelRoles = useUiStore(state => state.openModelRoles);
-	const openModelPicker = useUiStore(state => state.openModelPicker);
-	const providersOpen = useUiStore(state => state.providersOpen);
-	const providerConfigOpen = useUiStore(state => state.providerConfigOpen);
-	const checkedThisLaunch = useRef(false);
-	const requestVersion = useRef(0);
-	// Skip, Escape, backdrop and Finish all dismiss for the rest of the launch;
-	// no readiness check may reopen the wizard after that.
-	const dismissed = useRef(false);
-	const loginInFlight = useRef(false);
-	const headingRef = useRef<HTMLHeadingElement>(null);
-	const shownStep = useRef(0);
-	const [open, setOpen] = useState(false);
-	const [checking, setChecking] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [knownProviders, setKnownProviders] = useState<ProviderInfo[]>([]);
-	const [ready, setReady] = useState(false);
-	const [step, setStep] = useState(0);
-	const [selection, setSelection] = useState<string>(PROVIDERS_OPTION);
-	const [busy, setBusy] = useState(false);
-	const [workspaceOpen, setWorkspaceOpen] = useState(false);
-	const [guiVersion, setGuiVersion] = useState<string | null>(null);
+	const welcomeOpen = useUiStore(state => state.welcomeOpen);
+	const closeWelcome = useUiStore(state => state.closeWelcome);
+	const refreshAvailableModels = useModelStore(state => state.refreshAvailableModels);
 
-	const checkReadiness = useCallback(
-		async (manual: boolean) => {
-			if (sidecarStatus !== "ready") {
-				setError(t("common.notConnected"));
-				return;
-			}
-			const version = ++requestVersion.current;
-			setChecking(true);
-			if (manual) setError(null);
+	const checkedThisLaunch = useRef(false);
+	// "Set up later", Escape and backdrop close for the rest of the launch: no
+	// readiness check may reopen the screen after that. "Run setup again" can.
+	const dismissed = useRef(false);
+	const loadVersion = useRef(0);
+	const warmed = useRef<string | null>(null);
+	// Tags whose download this screen cancelled: their late frames are dropped.
+	const cancelledTags = useRef(new Set<string>());
+	// Tags whose download this screen started and that have not settled yet. Main
+	// broadcasts every pull, so frames for anything else (a Settings › Ollama
+	// download, a stale frame) must not reach the cards or block Download.
+	const startedTags = useRef(new Set<string>());
+
+	const [autoOpen, setAutoOpen] = useState(false);
+	const [status, setStatus] = useState<OllamaStatus | null>(null);
+	const [statusError, setStatusError] = useState<string | null>(null);
+	// undefined while loading; null when the model screen could not be read.
+	const [screen, setScreen] = useState<ModelScreen | null | undefined>(undefined);
+	const [currentTag, setCurrentTag] = useState<string | null>(null);
+	const [pulls, setPulls] = useState<Record<string, PullProgress>>({});
+	const [pulledTags, setPulledTags] = useState<ReadonlySet<string>>(() => new Set());
+	const [picked, setPicked] = useState<string | null>(null);
+	const [remedyBusy, setRemedyBusy] = useState<OllamaRemedyId | null>(null);
+	const [remedyNotice, setRemedyNotice] = useState<string | null>(null);
+	const [continuing, setContinuing] = useState(false);
+	const [continueError, setContinueError] = useState<string | null>(null);
+
+	const open = welcomeOpen || autoOpen;
+
+	// Startup gate: once per launch, after the sidecar is ready.
+	useEffect(() => {
+		if (sidecarStatus !== "ready" || checkedThisLaunch.current) return;
+		checkedThisLaunch.current = true;
+		let cancelled = false;
+		void (async () => {
 			try {
+				const completed = await window.omp.prefs.get(WELCOME_COMPLETED_PREF).catch(() => null);
+				if (typeof completed === "string" && completed.length > 0) return;
 				const [providerResult, configResult] = await Promise.allSettled([
 					tabRpc.getProviders(),
 					window.omp.models.listProviders(),
 				]);
-				if (version !== requestVersion.current) return;
+				if (cancelled) return;
 				if (providerResult.status === "rejected") throw providerResult.reason;
 				if (!providerResult.value.success) throw new Error(providerResult.value.error);
-
 				const data = providerResult.value.data;
-				if (
-					!data ||
-					typeof data !== "object" ||
-					!("providers" in data) ||
-					!Array.isArray(data.providers) ||
-					!data.providers.every(isProviderInfo)
-				) {
-					throw new Error(t("onboarding.invalidResponse"));
-				}
-				const providers = data.providers;
+				const providers =
+					data &&
+					typeof data === "object" &&
+					"providers" in data &&
+					Array.isArray(data.providers) &&
+					data.providers.every(isProviderInfo)
+						? data.providers
+						: [];
 				const configs = configResult.status === "fulfilled" ? configResult.value : [];
-				setKnownProviders(providers);
-				// Deterministic outcomes latch the once-per-launch gate. A thrown
-				// error is transient (sidecar/transport) — leave it unlatched so the
-				// next ready transition retries instead of abandoning first-run users.
-				checkedThisLaunch.current = true;
-				if (hasUsableModelProvider(providers, configs)) {
-					setReady(true);
-					setError(null);
-					// Move an open wizard past the provider step; only the user closes it.
-					setStep(current => Math.max(current, MODELS_STEP));
-					return;
-				}
-				setReady(false);
-
+				if (hasUsableModelProvider(providers, configs)) return;
 				// A slow startup check must not cover a page the user already opened.
-				if (!manual && document.querySelector('[role="dialog"]')) return;
-				// A check that started before a dismissal must not reopen the wizard.
-				if (!dismissed.current) setOpen(true);
-				setError(
-					configResult.status === "rejected"
-						? t("onboarding.configReadFailed")
-						: manual
-							? t("onboarding.stillMissing")
-							: null,
-				);
+				if (document.querySelector('[role="dialog"]')) return;
+				if (!dismissed.current) setAutoOpen(true);
 			} catch (cause) {
-				if (version !== requestVersion.current || !manual) return;
-				setReady(false);
-				if (!dismissed.current) setOpen(true);
-				setError(t("onboarding.checkFailed", { error: cause instanceof Error ? cause.message : String(cause) }));
-			} finally {
-				if (version === requestVersion.current) setChecking(false);
+				// Transient sidecar/transport failure: retry on the next ready transition.
+				checkedThisLaunch.current = false;
+				console.warn("[welcome] readiness check failed:", errorText(cause));
 			}
-		},
-		[sidecarStatus, t, tabRpc.getProviders],
-	);
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [sidecarStatus, tabRpc.getProviders]);
 
-	useEffect(() => {
-		if (sidecarStatus !== "ready" || checkedThisLaunch.current) return;
-		void checkReadiness(false);
-	}, [sidecarStatus, checkReadiness]);
-
-	// Finishing setup in Providers & Login or the custom-provider editor happens
-	// in a window stacked over the wizard: re-check once when either one closes.
-	const overlaysOpen = useRef({ providers: providersOpen, config: providerConfigOpen });
-	useEffect(() => {
-		const previous = overlaysOpen.current;
-		overlaysOpen.current = { providers: providersOpen, config: providerConfigOpen };
-		const closed = (previous.providers && !providersOpen) || (previous.config && !providerConfigOpen);
-		if (closed && open && !dismissed.current) void checkReadiness(true);
-	}, [providersOpen, providerConfigOpen, open, checkReadiness]);
-
-	useEffect(() => {
-		if (!open || guiVersion !== null) return;
-		let cancelled = false;
+	const refreshStatus = useCallback(async (version: number) => {
 		try {
-			window.omp.updater
-				.version()
-				.then(value => {
-					if (!cancelled && typeof value === "string" && value.length > 0) setGuiVersion(value);
+			const next = await window.omp.ollama.status();
+			if (version !== loadVersion.current) return;
+			setStatus(next);
+			setStatusError(null);
+		} catch (cause) {
+			if (version !== loadVersion.current) return;
+			setStatusError(errorText(cause));
+		}
+	}, []);
+
+	const refreshScreen = useCallback(async (version: number) => {
+		try {
+			const next = await window.omp.ollama.modelScreen();
+			if (version !== loadVersion.current) return;
+			setScreen(next);
+		} catch (cause) {
+			if (version !== loadVersion.current) return;
+			console.warn("[welcome] model screen failed:", errorText(cause));
+			setScreen(null);
+		}
+	}, []);
+
+	/** Both fetches start together so the cheap Ollama probe never waits behind the hardware read. */
+	const load = useCallback(() => {
+		const version = ++loadVersion.current;
+		void refreshStatus(version);
+		void refreshScreen(version);
+	}, [refreshScreen, refreshStatus]);
+
+	useEffect(() => {
+		if (!open) return;
+		setRemedyNotice(null);
+		setContinueError(null);
+		load();
+		let cancelled = false;
+		if (sidecarStatus === "ready") {
+			tabRpc
+				.getState()
+				.then(response => {
+					if (cancelled || !response.success) return;
+					const model = (response.data as { model?: { provider?: unknown; id?: unknown } | null } | undefined)
+						?.model;
+					setCurrentTag(model?.provider === "ollama" && typeof model.id === "string" ? model.id : null);
 				})
-				// The version line is decorative: without an answer it stays empty.
+				// The current model only ranks the default pick; without it the recommended tier wins.
 				.catch(() => {});
-		} catch {
-			// A preload without the updater bridge shows no version line.
 		}
 		return () => {
 			cancelled = true;
 		};
-	}, [open, guiVersion]);
+	}, [open, load, sidecarStatus, tabRpc.getState]);
 
-	// Land on the new step's heading so it is announced, and recover focus that a
-	// control dropped by disabling itself. Never pull focus out of a dialog that
-	// is stacked above the wizard.
+	/**
+	 * Force the agent to re-run discovery. Its catalog was read when the sidecar
+	 * started, so a model pulled since then is unknown to `set_model` until this.
+	 */
+	const refreshCatalog = useCallback(async () => {
+		try {
+			await refreshAvailableModels(true);
+		} catch (cause) {
+			// set_model reports a model the agent still cannot find, so this only logs.
+			console.warn("[welcome] model catalog refresh failed:", errorText(cause));
+		}
+	}, [refreshAvailableModels]);
+
+	const markInstalled = useCallback(
+		(tag: string) => {
+			setPulledTags(previous => new Set(previous).add(tag));
+			setPulls(previous => withoutTag(previous, tag));
+			load();
+			void refreshCatalog();
+		},
+		[load, refreshCatalog],
+	);
+
+	// Progress streams from main for as long as this component lives, so a pull
+	// started before the screen closed keeps updating when it reopens.
 	useEffect(() => {
-		if (!open || busy || checking) return;
-		const stepChanged = shownStep.current !== step;
-		shownStep.current = step;
-		const heading = headingRef.current;
-		if (!heading) return;
-		const active = document.activeElement;
-		const dropped = !active || active === document.body;
-		if (dropped || (stepChanged && heading.closest('[role="dialog"]')?.contains(active))) heading.focus();
-	}, [open, step, busy, checking]);
+		const ollama = window.omp?.ollama;
+		if (!ollama) return;
+		return ollama.onPullProgress(frame => {
+			if (!startedTags.current.has(frame.tag) || cancelledTags.current.has(frame.tag)) return;
+			if (frame.done && !frame.error) {
+				markInstalled(frame.tag);
+				return;
+			}
+			// Main's error frames say done: false, but nothing follows them.
+			setPulls(previous => ({ ...previous, [frame.tag]: frame.error ? { ...frame, done: true } : frame }));
+		});
+	}, [markInstalled]);
 
-	const dismiss = () => {
-		dismissed.current = true;
-		setOpen(false);
+	const pick = useCallback((tag: string) => {
+		setPicked(tag);
+		setContinueError(null);
+		// Start loading the model now, a whole screen before the first prompt.
+		if (warmed.current === tag) return;
+		warmed.current = tag;
+		window.omp.ollama.warm(tag).catch(cause => console.warn("[welcome] warm failed:", errorText(cause)));
+	}, []);
+
+	const choices: ModelChoice[] = (screen?.choices ?? []).map(choice =>
+		pulledTags.has(choice.tag) ? { ...choice, installed: true } : choice,
+	);
+	const pickedChoice = choices.find(choice => choice.tag === picked && choice.installed === true);
+	const fallbackTag = defaultPick(choices, currentTag);
+	const continueTag = pickedChoice?.tag ?? fallbackTag;
+
+	// Settle on a default as soon as one is on the machine, and warm it, as sai-welcome does.
+	useEffect(() => {
+		if (open && picked === null && fallbackTag !== null) pick(fallbackTag);
+	}, [open, picked, fallbackTag, pick]);
+
+	const pullRunning = Object.values(pulls).some(frame => !frame.done && !frame.error);
+
+	const download = async (tag: string) => {
+		if (pullRunning) return;
+		cancelledTags.current.delete(tag);
+		startedTags.current.add(tag);
+		setPulls(previous => ({ ...previous, [tag]: startingFrame(tag) }));
+		let final: PullProgress;
+		try {
+			final = await window.omp.ollama.pull(tag);
+		} catch (cause) {
+			final = { ...startingFrame(tag), done: true, error: errorText(cause) };
+		} finally {
+			startedTags.current.delete(tag);
+		}
+		if (cancelledTags.current.has(tag)) return;
+		if (final.done && !final.error) {
+			markInstalled(tag);
+			return;
+		}
+		// An error frame, including "another download is running", stays on the card as a notice.
+		setPulls(previous => ({ ...previous, [tag]: { ...final, tag, done: true } }));
 	};
 
-	const oauthProviders = knownProviders.filter(
-		provider => provider.loginAvailable && !provider.disabled && !provider.authenticated,
-	);
-	const providerOptions = [
-		...oauthProviders.map(provider => ({
-			value: `${OAUTH_PREFIX}${provider.id}`,
-			label: t("onboarding.wizard.oauth", { provider: provider.name }),
-			badge: <Badge>{t("providers.badge.oauth")}</Badge>,
-		})),
-		{
-			value: PROVIDERS_OPTION,
-			label: t("onboarding.provider.action"),
-			badge: <Badge>{t("onboarding.badge.apiKey")}</Badge>,
-		},
-		{
-			value: CUSTOM_OPTION,
-			label: t("onboarding.custom.title"),
-			description: t("onboarding.custom.description"),
-			badge: <Badge>{t("onboarding.badge.advanced")}</Badge>,
-		},
-	];
-	// A provider that signed in elsewhere drops out of the list; fall back to the
-	// Providers window instead of pointing at an option that no longer renders.
-	const choice = providerOptions.some(option => option.value === selection) ? selection : PROVIDERS_OPTION;
+	const cancel = (tag: string) => {
+		cancelledTags.current.add(tag);
+		setPulls(previous => withoutTag(previous, tag));
+		window.omp.ollama.cancelPull().catch(cause => console.warn("[welcome] cancel failed:", errorText(cause)));
+	};
+
+	const runRemedy = async (id: OllamaRemedyId) => {
+		setRemedyBusy(id);
+		setRemedyNotice(null);
+		try {
+			const result = await window.omp.ollama.runRemedy(id);
+			switch (result.outcome) {
+				case "applied":
+					setStatus(result.status);
+					setStatusError(null);
+					void refreshScreen(loadVersion.current);
+					break;
+				case "cancelled":
+					break;
+				case "unavailable":
+					setRemedyNotice(t("welcome.ollama.remedyUnavailable"));
+					break;
+				case "failed":
+					setStatus(result.status);
+					setRemedyNotice(
+						t("welcome.ollama.remedyFailed", { error: result.fault ?? result.status.fault ?? result.outcome }),
+					);
+					break;
+			}
+		} catch (cause) {
+			setRemedyNotice(t("welcome.ollama.remedyFailed", { error: errorText(cause) }));
+			// Main refuses a fix the current state no longer offers; show that state.
+			void refreshStatus(loadVersion.current);
+		} finally {
+			setRemedyBusy(null);
+		}
+	};
+
+	const openDownload = () => {
+		window.omp.ollama
+			.openDownload()
+			.catch(cause => setRemedyNotice(t("welcome.ollama.remedyFailed", { error: errorText(cause) })));
+	};
+
+	const close = () => {
+		dismissed.current = true;
+		setAutoOpen(false);
+		closeWelcome();
+	};
 
 	const handleContinue = async () => {
-		if (loginInFlight.current) return;
-		if (step === LAST_STEP) {
-			dismiss();
-			return;
-		}
-		// A provider is already usable (the user came Back from model choice), so
-		// the provider step has nothing left to do: advance instead of acting on a
-		// choice that may have fallen back once its sign-in option dropped out.
-		if (step !== PROVIDER_STEP || ready) {
-			setStep(step + 1);
-			return;
-		}
-		if (choice === PROVIDERS_OPTION) {
-			openProviders();
-			return;
-		}
-		if (choice === CUSTOM_OPTION) {
-			openProviderConfig();
-			return;
-		}
-		const target = oauthProviders.find(provider => `${OAUTH_PREFIX}${provider.id}` === choice);
-		if (!target) return;
-		loginInFlight.current = true;
-		setBusy(true);
+		if (!continueTag || continuing) return;
+		const tag = continueTag;
+		setContinuing(true);
+		setContinueError(null);
 		try {
-			await loginProvider(tabRpc, target.id, target.name, t, () => checkReadiness(true));
-		} finally {
-			loginInFlight.current = false;
-			setBusy(false);
+			await refreshCatalog();
+			const model = await tabRpc.setModel("ollama", tag);
+			if (!model.success) throw new Error(model.error);
+			const role = await tabRpc.setModelRole("default", `ollama/${tag}`);
+			if (!role.success) throw new Error(role.error);
+		} catch (cause) {
+			setContinueError(t("welcome.error.setModel", { tag, error: errorText(cause) }));
+			setContinuing(false);
+			return;
 		}
+		try {
+			await window.omp.prefs.set(WELCOME_COMPLETED_PREF, new Date().toISOString());
+		} catch (cause) {
+			// The model handoff already succeeded, and a usable Ollama model keeps the
+			// screen closed next launch, so a lost marker is not worth blocking on.
+			console.warn("[welcome] could not record completion:", errorText(cause));
+		}
+		setContinuing(false);
+		close();
 	};
 
-	const heading = (text: string) => (
-		<h2 className="mt-2 font-display text-omp-xl font-semibold text-(--omp-text)" ref={headingRef} tabIndex={-1}>
-			{text}
-		</h2>
-	);
-	const description = (text: string) => <p className="mt-2 text-omp-md leading-relaxed text-(--omp-muted)">{text}</p>;
-	const warning = (text: string) => (
-		<div className="mt-4 rounded-lg border border-[color-mix(in_srgb,var(--omp-warning)_40%,transparent)] px-3 py-2 text-omp-sm text-(--omp-warning)">
-			{text}
-		</div>
-	);
-
-	let content: ReactNode;
-	if (step === 0) {
-		content = (
-			<>
-				{heading(t("onboarding.heading"))}
-				{description(t("onboarding.description"))}
-				<div className="mt-4">
-					<Badge variant="warning">{t("onboarding.setupRequired")}</Badge>
-				</div>
-			</>
-		);
-	} else if (step === PROVIDER_STEP) {
-		content = (
-			<>
-				{heading(t("onboarding.provider.title"))}
-				{description(t("onboarding.provider.description"))}
-				<p className="mt-1 text-omp-sm leading-relaxed text-(--omp-dim)">
-					{t("onboarding.provider.location", { chord: displayShortcut("⌘K", currentKeyboardPlatform()) })}
-				</p>
-				<div className="mt-5">
-					<RadioGroup
-						label={t("onboarding.provider.title")}
-						name="onboarding-provider"
-						onChange={setSelection}
-						options={providerOptions}
-						value={choice}
-						variant="card"
-					/>
-				</div>
-				{choice === CUSTOM_OPTION && (
-					<details className="mt-3 rounded-xl border border-(--omp-border-muted) p-4">
-						<summary className="cursor-pointer text-omp-lg font-semibold text-(--omp-text)">
-							{t("onboarding.parameters.title")}
-						</summary>
-						<p className="mb-3 text-omp-sm leading-relaxed text-(--omp-dim)">
-							{t("onboarding.parameters.description")}
-						</p>
-						<div className="grid gap-x-5 gap-y-2 text-omp-sm md:grid-cols-2">
-							<div>
-								<code className="font-mono text-(--omp-text)">id</code>
-								<span className="ml-2 text-(--omp-muted)">{t("onboarding.parameters.id")}</span>
-							</div>
-							<div>
-								<code className="font-mono text-(--omp-text)">api</code>
-								<span className="ml-2 text-(--omp-muted)">{t("onboarding.parameters.api")}</span>
-							</div>
-							<div>
-								<code className="font-mono text-(--omp-text)">baseUrl</code>
-								<span className="ml-2 text-(--omp-muted)">{t("onboarding.parameters.baseUrl")}</span>
-							</div>
-							<div>
-								<code className="font-mono text-(--omp-text)">apiKey / auth</code>
-								<span className="ml-2 text-(--omp-muted)">{t("onboarding.parameters.auth")}</span>
-							</div>
-							<div>
-								<code className="font-mono text-(--omp-text)">models[].id</code>
-								<span className="ml-2 text-(--omp-muted)">{t("onboarding.parameters.modelId")}</span>
-							</div>
-							<div>
-								<code className="font-mono text-(--omp-text)">contextWindow / maxTokens</code>
-								<span className="ml-2 text-(--omp-muted)">{t("onboarding.parameters.limits")}</span>
-							</div>
-						</div>
-						<div className="mt-4">
-							<div className="mb-1.5 text-omp-sm font-medium text-(--omp-text)">{t("onboarding.example")}</div>
-							<pre className="overflow-x-auto rounded-lg border border-(--omp-border-muted) bg-(--omp-code-bg) p-3 font-mono text-omp-xs leading-[1.55] text-(--omp-muted)">
-								{CUSTOM_PROVIDER_EXAMPLE}
-							</pre>
-						</div>
-					</details>
-				)}
-				{error && warning(error)}
-				<div className="mt-4 flex flex-wrap gap-2">
-					<Button icon={<Bot size={14} />} onClick={openProviders} size="sm">
-						{t("onboarding.provider.action")}
-					</Button>
-					<Button icon={<FileCode2 size={14} />} onClick={() => openProviderConfig()} size="sm">
-						{t("onboarding.custom.action")}
-					</Button>
-					<Button
-						disabled={sidecarStatus !== "ready"}
-						icon={<RefreshCw size={13} />}
-						loading={checking}
-						onClick={() => void checkReadiness(true)}
-						size="sm"
-						title={sidecarStatus !== "ready" ? t("common.notConnected") : undefined}
-						variant="ghost"
-					>
-						{t("onboarding.recheck")}
-					</Button>
-				</div>
-			</>
-		);
-	} else if (step === MODELS_STEP) {
-		content = (
-			<>
-				{heading(t("onboarding.wizard.steps.models"))}
-				{description(t("onboarding.models.description"))}
-				<div className="mt-5 flex flex-wrap gap-2">
-					<Button icon={<SlidersHorizontal size={14} />} onClick={openModelRoles}>
-						{t("onboarding.models.assignRoles")}
-					</Button>
-					<Button icon={<Cpu size={14} />} onClick={openModelPicker}>
-						{t("input.model")}
-					</Button>
-				</div>
-			</>
-		);
-	} else if (step < LAST_STEP) {
-		content = (
-			<>
-				{heading(t("onboarding.wizard.steps.workspace"))}
-				{description(t("onboarding.workspace.description"))}
-				{cwd && (
-					<p
-						className="mt-4 truncate rounded-lg border border-(--omp-border-muted) px-3 py-2 font-mono text-omp-sm text-(--omp-text)"
-						title={cwd}
-					>
-						{cwd}
-					</p>
-				)}
-				<div className="mt-4">
-					<Button icon={<FolderOpen size={14} />} onClick={() => setWorkspaceOpen(true)}>
-						{t("onboarding.workspace.choose")}
-					</Button>
-				</div>
-			</>
-		);
-	} else {
-		content = (
-			<>
-				{heading(t("onboarding.ready.title"))}
-				{ready ? (
-					<p className="mt-4 flex items-center gap-2 text-omp-md text-(--omp-success)">
-						<Check aria-hidden="true" size={16} />
-						{t("onboarding.ready.provider")}
-					</p>
-				) : (
-					warning(error ?? t("onboarding.stillMissing"))
-				)}
-			</>
-		);
-	}
+	const emptyReason = screen === null ? "unreadable" : screen?.emptyReason;
 
 	return (
-		<>
-			<Modal
-				ariaLabel={t("onboarding.title")}
-				backdrop={
-					<>
-						<SaiAtlasLogo kind="lockup" surface="sidebar" height={32} className="absolute top-6 left-8" />
-						<span className="absolute bottom-6 left-1/2 -translate-x-1/2 font-mono text-omp-xs text-(--omp-sidebar-muted)">
-							{guiVersion && t("onboarding.wizard.version", { version: guiVersion })}
-						</span>
-					</>
-				}
-				bodyClassName="flex p-0"
-				chromeless
-				onClose={dismiss}
-				open={open}
-				overlayClassName="omp-onboarding-backdrop"
-				panelClassName="omp-onboarding-panel"
-			>
-				<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-					<div className="flex min-h-0 flex-1">
-						<div className="flex w-[232px] shrink-0 flex-col bg-(--omp-btn-primary-bg) text-(--omp-btn-primary-text)">
-							<div className="omp-eyebrow px-4 pt-6 pb-2 text-(--omp-btn-primary-text)">
-								{t("onboarding.wizard.eyebrow")}
-							</div>
-							<StepList
-								ariaLabel={t("onboarding.wizard.stepsAria")}
-								className="px-2"
-								current={step}
-								steps={STEP_KEYS.map(key => t(`onboarding.wizard.steps.${key}`))}
-							/>
-							<p className="mt-auto p-4 font-mono text-omp-xs leading-snug">{t("onboarding.wizard.footnote")}</p>
-						</div>
-						<div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-12 pt-9 pb-5">
-							<div className="omp-eyebrow text-(--omp-accent)">
-								{t("onboarding.wizard.stepOf", { current: step + 1, total: STEP_KEYS.length })}
-							</div>
-							{content}
-						</div>
+		<Modal
+			ariaLabel={t("welcome.title")}
+			bodyClassName="flex min-h-0 flex-1 flex-col p-0"
+			chromeless
+			onClose={close}
+			open={open}
+			overlayClassName="omp-onboarding-backdrop"
+			panelClassName="omp-welcome-panel"
+			size="full"
+		>
+			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 pt-8 pb-6">
+				<header className="flex items-start gap-4">
+					<SaiAtlasLogo height={44} kind="icon" surface="page" />
+					<div className="min-w-0">
+						<h2 className="font-display text-omp-xl font-semibold text-(--omp-text)">{t("welcome.title")}</h2>
+						<p className="mt-1 text-omp-md leading-relaxed text-(--omp-text-secondary)">
+							{t("welcome.subtitle")}
+						</p>
 					</div>
-					<div
-						className="flex h-[68px] shrink-0 items-center gap-3 border-t border-(--omp-border-muted) bg-(--omp-bg-secondary) px-6" // surface-ok: wizard footer
-					>
-						<Button onClick={dismiss} variant="ghost">
-							{t("onboarding.later")}
-						</Button>
-						<span className="flex-1" />
-						<Button disabled={step === 0} onClick={() => setStep(step - 1)} variant="secondary">
-							{t("onboarding.wizard.back")}
-						</Button>
-						<Button
-							disabled={busy || checking}
-							loading={busy}
-							onClick={() => void handleContinue()}
-							variant="primary"
-						>
-							{step === LAST_STEP ? t("onboarding.wizard.finish") : t("onboarding.wizard.continue")}
-						</Button>
-					</div>
+				</header>
+				<div className="mt-6">
+					<MachineFacts machine={screen === undefined ? undefined : (screen?.machine ?? null)} />
 				</div>
-			</Modal>
-			{workspaceOpen && <WorkspaceDialog onClose={() => setWorkspaceOpen(false)} open />}
-		</>
+				<div className="mt-4 flex flex-col gap-2">
+					{statusError !== null && status === null ? (
+						<div
+							className="omp-ollama-row flex flex-wrap items-center gap-2 px-3 py-2.5 text-omp-md"
+							data-state="unreachable"
+							role="alert"
+						>
+							<span className="min-w-0 flex-1">{t("welcome.ollama.remedyFailed", { error: statusError })}</span>
+							<Button data-action="check-again" onClick={load} size="sm" variant="ghost">
+								{t("welcome.ollama.checkAgain")}
+							</Button>
+						</div>
+					) : (
+						<OllamaRow
+							busy={remedyBusy}
+							onCheckAgain={load}
+							onOpenDownload={openDownload}
+							onRemedy={id => void runRemedy(id)}
+							status={status}
+						/>
+					)}
+					{remedyNotice !== null && (
+						<p className="text-omp-sm text-(--omp-warning)" data-notice="remedy" role="alert">
+							{remedyNotice}
+						</p>
+					)}
+				</div>
+				<h3 className="mt-6 mb-3 text-omp-lg font-semibold text-(--omp-text)">{t("welcome.pickHeading")}</h3>
+				{screen === undefined ? (
+					<div aria-busy="true" className="omp-welcome-cards">
+						{Array.from({ length: SKELETON_CARDS }, (_, index) => (
+							<ModelCardSkeleton key={index} />
+						))}
+					</div>
+				) : choices.length > 0 ? (
+					<div className="omp-welcome-cards">
+						{choices.map(choice => (
+							<ModelCard
+								choice={choice}
+								downloadDisabled={pullRunning}
+								key={choice.tag}
+								onCancel={cancel}
+								onDownload={tag => void download(tag)}
+								onUse={pick}
+								picked={choice.tag === continueTag}
+								progress={pulls[choice.tag] ?? null}
+							/>
+						))}
+					</div>
+				) : (
+					<p className="text-omp-md text-(--omp-text-secondary)" data-empty={emptyReason ?? "unreadable"}>
+						{emptyReason === "too-small" ? t("welcome.empty.tooSmall") : t("welcome.empty.unreadable")}
+					</p>
+				)}
+			</div>
+			<footer className="flex shrink-0 flex-col gap-2 border-t border-(--omp-border-muted) px-8 py-4">
+				{continueError !== null && (
+					<p className="text-omp-sm text-(--omp-error)" data-error="continue" role="alert">
+						{continueError}
+					</p>
+				)}
+				<div className="flex items-center gap-3">
+					<Button data-action="skip" onClick={close} variant="ghost">
+						{t("welcome.skip")}
+					</Button>
+					<span className="min-w-0 flex-1 truncate text-center text-omp-sm text-(--omp-text-secondary)">
+						{continueTag !== null && t("welcome.footNote", { tag: continueTag })}
+					</span>
+					<Button
+						data-action="continue"
+						disabled={continueTag === null || continuing}
+						loading={continuing}
+						onClick={() => void handleContinue()}
+						variant="primary"
+					>
+						{t("welcome.continue")}
+					</Button>
+				</div>
+			</footer>
+		</Modal>
 	);
 }

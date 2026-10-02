@@ -1,28 +1,20 @@
 /**
- * Read/write the agent's `models.yml` for third-party provider configuration.
+ * Read the agent's `models.yml` for provider configuration.
  *
  * The file lives in the agent dir (models.yml preferred, models.yaml
- * fallback) and is parsed with the `yaml` package — the agent watches the
- * file and live-reloads providers on save.
- *
- * Field coverage mirrors the agent's ModelsConfigSchema
- * (coding-agent/src/config/models-config-schema-bundle.ts): every field the
- * GUI renders is written through, and every field it does NOT render
- * (compat beyond extraBody, remoteCompaction, modelOverrides, effortMap,
- * contextPromotionTarget, compactionModel…) is PRESERVED verbatim on save —
- * upserts merge over the existing entry instead of replacing it, so a rich
- * hand-written config never loses data to a GUI edit.
+ * fallback) and is parsed with the `yaml` package. The GUI no longer writes
+ * provider entries; the one-time Ollama-only cleanup in `provider-cleanup.ts`
+ * edits the document itself after a backup.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";
-import { type Document, parseDocument } from "yaml";
+import { parseDocument } from "yaml";
 import {
 	CUSTOM_MODEL_EFFORTS,
 	CUSTOM_PROVIDER_APIS,
 	type CustomModelEffort,
 	type CustomProviderApi,
 	type CustomProviderDiscovery,
-	type CustomProviderInput,
 	type CustomProviderModelCost,
 	type CustomProviderModelInput,
 	type CustomProviderModelThinking,
@@ -30,20 +22,18 @@ import {
 } from "../shared/ipc-types";
 import { agentDir } from "./agent-paths";
 
-export type { CustomProviderInput, CustomProviderModelInput, CustomProviderView };
-
 const MASK_PREVIEW_LEN = 4;
 
 /**
  * Provider ids the agent already knows — a `models.yml` entry under one of
- * these is an *override* of the built-in, not a custom provider, so the GUI
- * must neither create nor delete it.
+ * these is an *override* of the built-in, not a custom provider, and the
+ * listing flags it as `builtin`.
  *
  * Union of `KnownProvider` and `AuthProviderId`, generated from
  * `packages/catalog/src/compat/{provider-ids,auth-ids}.ts` by
  * `bun run gen:compat` in the monorepo. The GUI has no catalog dependency, so
  * this is a checked-in copy: when the catalog adds a provider, a missing id
- * here lets the GUI write a silent override.
+ * here lists its override as a custom provider.
  */
 const BUILTIN_PROVIDERS: ReadonlySet<string> = new Set([
 	"abliteration",
@@ -164,44 +154,15 @@ export function modelsPath(): string {
 	return existsSync(legacy) ? legacy : yml;
 }
 
-interface ModelsFile {
-	/** The live document: an edit mutates this, and a save writes it back. */
-	doc: Document;
-	providers: Record<string, unknown>;
-}
-
-function readModelsFile(): ModelsFile {
+function readModelsProviders(): Record<string, unknown> {
 	const file = modelsPath();
-	if (!existsSync(file)) return { doc: parseDocument(""), providers: {} };
+	if (!existsSync(file)) return {};
 	const doc = parseDocument(readFileSync(file, "utf8"));
 	const issue = doc.errors[0] ?? doc.warnings[0];
 	if (doc.errors.length > 0) throw new Error(`${file}: ${issue?.message ?? "invalid YAML"}`);
 	const contents = doc.toJS();
 	const providers = contents?.providers;
-	return {
-		doc,
-		providers: typeof providers === "object" && providers !== null ? (providers as Record<string, unknown>) : {},
-	};
-}
-
-let tmpCounter = 0;
-
-/**
- * Swap the file in one step. The agent watches this path and live-reloads it,
- * so a truncate-then-write leaves a window where a concurrent read sees an empty
- * or half-written config — and a crash inside it destroys every provider.
- */
-function writeModelsFile(doc: Document): void {
-	const file = modelsPath();
-	mkdirSync(path.dirname(file), { recursive: true });
-	const tmp = `${file}.tmp-${process.pid}-${tmpCounter++}`;
-	try {
-		writeFileSync(tmp, String(doc), "utf8");
-		renameSync(tmp, file);
-	} catch (error) {
-		rmSync(tmp, { force: true });
-		throw error;
-	}
+	return typeof providers === "object" && providers !== null ? (providers as Record<string, unknown>) : {};
 }
 
 function maskApiKey(key: unknown): { hasApiKey: boolean; apiKeyPreview?: string } {
@@ -372,116 +333,9 @@ function toView(id: string, raw: unknown): CustomProviderView & { apiKey?: strin
 
 /** List configured providers (custom + user overrides), apiKey masked. */
 export function listModelsProviders(): CustomProviderView[] {
-	const { providers } = readModelsFile();
+	const providers = readModelsProviders();
 	return Object.entries(providers).map(([id, raw]) => {
 		const { apiKey: _secret, ...view } = toView(id, raw);
 		return view;
 	});
 }
-
-// ============================================================================
-// File ← wire writing (upsert): merge over the existing entry. Rendered
-// fields are set-or-deleted from the input; unrendered fields (compat minus
-// extraBody, remoteCompaction, modelOverrides, effortMap,
-// contextPromotionTarget, compactionModel) survive verbatim.
-// ============================================================================
-
-function setOrDelete(entry: Record<string, unknown>, key: string, value: unknown): void {
-	if (value === undefined || value === "") delete entry[key];
-	else entry[key] = value;
-}
-
-function mergeModel(existingModels: unknown, input: CustomProviderModelInput): Record<string, unknown> {
-	const existing = Array.isArray(existingModels)
-		? (existingModels.find(m => m && typeof m === "object" && (m as Record<string, unknown>).id === input.id) as
-				| Record<string, unknown>
-				| undefined)
-		: undefined;
-	const merged: Record<string, unknown> = { ...(existing ?? {}) };
-	setOrDelete(merged, "name", input.name);
-	setOrDelete(merged, "api", input.api);
-	setOrDelete(merged, "baseUrl", input.baseUrl);
-	setOrDelete(merged, "reasoning", input.reasoning);
-	// thinking: merge over the existing object so unrendered keys (effortMap,
-	// requiresEffort) survive a GUI edit of the efforts list.
-	if (input.thinking) {
-		const base =
-			existing?.thinking && typeof existing.thinking === "object"
-				? (existing.thinking as Record<string, unknown>)
-				: {};
-		// The legacy range keys are the ladder this view already renders as
-		// `efforts`, so they are a second source of truth rather than an
-		// unrendered field: a later edit that shortens the ladder would leave a
-		// stale `levels`/`minLevel`+`maxLevel` claiming the old range.
-		const unrendered = { ...base };
-		delete unrendered.levels;
-		delete unrendered.minLevel;
-		delete unrendered.maxLevel;
-		merged.thinking = { ...unrendered, ...input.thinking };
-	} else {
-		delete merged.thinking;
-	}
-	setOrDelete(merged, "input", input.input && input.input.length > 0 ? input.input : undefined);
-	setOrDelete(merged, "supportsTools", input.supportsTools);
-	setOrDelete(merged, "cost", input.cost && Object.keys(input.cost).length > 0 ? input.cost : undefined);
-	setOrDelete(merged, "premiumMultiplier", input.premiumMultiplier);
-	setOrDelete(merged, "contextWindow", input.contextWindow);
-	setOrDelete(merged, "maxTokens", input.maxTokens);
-	setOrDelete(merged, "omitMaxOutputTokens", input.omitMaxOutputTokens);
-	setOrDelete(merged, "headers", input.headers && Object.keys(input.headers).length > 0 ? input.headers : undefined);
-	return { id: input.id, ...merged };
-}
-
-/** Insert or update a custom provider. Keeps the stored apiKey unless the input
- * re-supplies one or sets `clearApiKey`. */
-export function upsertModelsProvider(input: CustomProviderInput): void {
-	if (BUILTIN_PROVIDERS.has(input.id)) {
-		throw new Error(`"${input.id}" is a built-in provider id; choose a distinct custom id.`);
-	}
-	const data = readModelsFile();
-	const existingRaw = data.providers[input.id];
-	const existing = toView(input.id, existingRaw);
-	const apiKey = input.clearApiKey
-		? undefined
-		: input.apiKey && input.apiKey.trim().length > 0
-			? input.apiKey.trim()
-			: existing.apiKey;
-	const entry: Record<string, unknown> =
-		existingRaw && typeof existingRaw === "object" ? { ...(existingRaw as Record<string, unknown>) } : {};
-	entry.baseUrl = input.baseUrl;
-	entry.api = input.api;
-	setOrDelete(entry, "apiKey", apiKey);
-	setOrDelete(entry, "auth", input.auth);
-	setOrDelete(entry, "authHeader", input.authHeader);
-	setOrDelete(entry, "headers", input.headers && Object.keys(input.headers).length > 0 ? input.headers : undefined);
-	setOrDelete(entry, "discovery", input.discovery);
-	setOrDelete(entry, "disableStrictTools", input.disableStrictTools);
-	setOrDelete(entry, "transport", input.transport);
-	// compat: merge extraBody into the existing compat object (other flags survive).
-	const compat =
-		entry.compat && typeof entry.compat === "object" ? { ...(entry.compat as Record<string, unknown>) } : {};
-	setOrDelete(
-		compat,
-		"extraBody",
-		input.extraBody && Object.keys(input.extraBody).length > 0 ? input.extraBody : undefined,
-	);
-	if (Object.keys(compat).length > 0) entry.compat = compat;
-	else delete entry.compat;
-	entry.models = input.models.map(m => mergeModel(entry.models, m));
-	data.doc.setIn(["providers", input.id], entry);
-	writeModelsFile(data.doc);
-}
-
-/** Delete a custom provider entry (built-ins cannot be removed here). */
-export function deleteModelsProvider(id: string): void {
-	if (BUILTIN_PROVIDERS.has(id)) {
-		throw new Error(`"${id}" is a built-in provider and cannot be removed from the GUI.`);
-	}
-	const data = readModelsFile();
-	if (!(id in data.providers)) return;
-	data.doc.deleteIn(["providers", id]);
-	writeModelsFile(data.doc);
-}
-
-/** Protocol options for the add-provider form (ApiSchema in models-config-schema). */
-export const PROVIDER_PROTOCOLS = CUSTOM_PROVIDER_APIS;

@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, test } from "@playwright/test";
 import { _electron as electron } from "playwright";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 test("streaming with 50k history preserves the reading anchor, supports five tasks, and recovers a draft after restart", async () => {
 	test.setTimeout(180_000);
@@ -11,7 +12,7 @@ test("streaming with 50k history preserves the reading anchor, supports five tas
 		agent = path.join(profile, "agent"),
 		project = path.join(profile, "project");
 	await Promise.all([fs.mkdir(desktop), fs.mkdir(agent), fs.mkdir(project)]);
-	await fs.writeFile(path.join(desktop, "prefs.json"), JSON.stringify({ language: "en" }));
+	await writeDesktopPrefs(desktop, { language: "en" });
 	const env = {
 		...process.env,
 		PI_CODING_AGENT_DIR: agent,
@@ -133,7 +134,7 @@ test("an older real core reports unavailable capabilities and retains the editab
 		agent = path.join(profile, "agent"),
 		project = path.join(profile, "project");
 	await Promise.all([fs.mkdir(desktop), fs.mkdir(agent), fs.mkdir(project)]);
-	await fs.writeFile(path.join(desktop, "prefs.json"), JSON.stringify({ language: "en" }));
+	await writeDesktopPrefs(desktop, { language: "en" });
 	const env = {
 		...process.env,
 		PI_CODING_AGENT_DIR: agent,

@@ -179,10 +179,10 @@ describe("ModelCompare", () => {
 
 // ---------------------------------------------------------------------------
 // What a row may commit. The matrix sets the session model with a single click
-// anywhere on the row, so a provider that cannot serve — switched off, or
-// known to hold no credential — must not be selectable, while a row whose auth
-// merely failed to load stays usable: a degraded read is not evidence of no
-// access.
+// anywhere on the row, so a provider that is switched off must not be
+// selectable. Ollama is keyless — the agent reports it as unauthenticated with
+// no auth kind — so missing auth never blocks a row, and neither does a
+// provider list that failed to describe it.
 // ---------------------------------------------------------------------------
 
 function providerInfo(id: string, overrides: Partial<ProviderInfo> = {}): ProviderInfo {
@@ -193,28 +193,22 @@ function ok(command: string, data?: unknown): RpcResponse {
 	return { type: "response", command, success: true, data };
 }
 
+interface CatalogFixture {
+	providers: ProviderInfo[];
+	models: ModelInfo[];
+}
+
+/** Implicit Ollama exactly as the agent reports it: keyless, so never "authenticated". */
+const KEYLESS_OLLAMA = providerInfo("ollama", { name: "Ollama", authenticated: false, authKind: undefined });
+
+let catalog: CatalogFixture = { providers: [KEYLESS_OLLAMA], models: [{ provider: "ollama", id: "qwen3:8b" }] };
+
 const command = vi.fn(
 	async (req: RpcCommand): Promise<RpcResponse> =>
 		ok(
 			req.type,
 			req.type === "get_providers"
-				? {
-						providers: [
-							providerInfo("serving"),
-							providerInfo("noauth", { authenticated: false }),
-							providerInfo("off", { disabled: true }),
-						],
-						// "unlisted" is deliberately absent from the provider rows above.
-						models: [
-							{ provider: "serving", id: "serving-model" },
-							{ provider: "noauth", id: "noauth-model" },
-							{ provider: "off", id: "off-model" },
-							{ provider: "unlisted", id: "unlisted-model" },
-						],
-						discoveryStates: [],
-						refreshPending: false,
-						generation: 1,
-					}
+				? { ...catalog, discoveryStates: [], refreshPending: false, generation: 1 }
 				: undefined,
 		),
 );
@@ -274,51 +268,53 @@ afterEach(async () => {
 	useToastStore.setState({ toasts: [] });
 	command.mockClear();
 	setModel.mockClear();
+	catalog = { providers: [KEYLESS_OLLAMA], models: [{ provider: "ollama", id: "qwen3:8b" }] };
 });
 
 describe("ModelCompare row availability", () => {
-	it("will not point the session at a provider that is off or signed out", async () => {
+	it("will not point the session at an Ollama provider that is switched off", async () => {
+		catalog = {
+			providers: [providerInfo("ollama", { authenticated: false, disabled: true })],
+			models: [{ provider: "ollama", id: "qwen3:8b" }],
+		};
 		await mountMatrix();
+		const row = rowFor("qwen3:8b");
+		if (!row) throw new Error("no row for qwen3:8b");
 
-		for (const [modelId, reason] of [
-			["noauth-model", "modelCompare.blockedNoAuth"],
-			["off-model", "modelCompare.blockedDisabled"],
-		] as const) {
-			const row = rowFor(modelId);
-			if (!row) throw new Error(`no row for ${modelId}`);
-			expect(buttonOfRow(row)?.hasAttribute("disabled"), `${modelId} Use`).toBe(true);
-			expect(row.getAttribute("title")).toBe(translate(reason));
-			await act(async () => {
-				row.click();
-			});
-		}
-
-		expect(setModel).not.toHaveBeenCalled();
-	});
-
-	it("switches the session model when the row itself is clicked", async () => {
-		await mountMatrix();
-		const row = rowFor("serving-model");
-		if (!row) throw new Error("no row for serving-model");
-
+		expect(buttonOfRow(row)?.hasAttribute("disabled")).toBe(true);
+		expect(row.getAttribute("title")).toBe(translate("modelCompare.blockedDisabled"));
 		await act(async () => {
 			row.click();
 		});
 
-		expect(row.getAttribute("title")).toBe(translate("modelCompare.useHint"));
-		expect(setModel).toHaveBeenCalledWith("serving", "serving-model");
+		expect(setModel).not.toHaveBeenCalled();
 	});
 
-	it("keeps a row usable when the provider list simply did not describe it", async () => {
+	it("switches the session to a keyless Ollama model when the row itself is clicked", async () => {
 		await mountMatrix();
-		const row = rowFor("unlisted-model");
-		if (!row) throw new Error("no row for unlisted-model");
+		const row = rowFor("qwen3:8b");
+		if (!row) throw new Error("no row for qwen3:8b");
 
 		expect(buttonOfRow(row)?.hasAttribute("disabled")).toBe(false);
 		await act(async () => {
 			row.click();
 		});
 
-		expect(setModel).toHaveBeenCalledWith("unlisted", "unlisted-model");
+		expect(row.getAttribute("title")).toBe(translate("modelCompare.useHint"));
+		expect(setModel).toHaveBeenCalledWith("ollama", "qwen3:8b");
+	});
+
+	it("keeps an Ollama row usable when the provider list simply did not describe it", async () => {
+		catalog = { providers: [], models: [{ provider: "ollama", id: "qwen3:8b" }] };
+		await mountMatrix();
+		const row = rowFor("qwen3:8b");
+		if (!row) throw new Error("no row for qwen3:8b");
+
+		expect(buttonOfRow(row)?.hasAttribute("disabled")).toBe(false);
+		await act(async () => {
+			row.click();
+		});
+
+		expect(setModel).toHaveBeenCalledWith("ollama", "qwen3:8b");
 	});
 });

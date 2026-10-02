@@ -1,469 +1,349 @@
-import { useTabRpc } from "../../lib/tab-rpc";
 /**
- * Providers window: lists all configured providers with auth status,
- * login/logout for OAuth providers, model counts, and base URL overrides.
- * Login triggers the existing extension_ui open_url flow via rpc.login().
+ * The Ollama window (opened by `openProviders`, so every former "Providers"
+ * entry point lands here): whether the local daemon answers and how to fix it,
+ * the endpoint the agent uses, the installed models with "Use as default", a
+ * tag-based download, and a way back into the welcome screen. Ollama is the
+ * only provider the GUI offers, so there is no sign-in or custom provider here.
  */
 
-import { Edit, ExternalLink, Globe, LogIn, LogOut, Plus, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { CustomProviderView } from "../../../shared/ipc-types";
-import type { ProviderDiscoveryState, ProviderInfo, ProvidersResult } from "../../../shared/rpc-types";
+import { Check, Download, RefreshCw, RotateCcw } from "lucide-react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { OllamaRemedyId, OllamaStatus, PullProgress } from "../../../shared/ollama-types";
+import { applyModelInfo } from "../../hooks/use-rpc-events";
 import { useT } from "../../lib/i18n";
-import { loginProvider } from "../../lib/provider-login";
+import { useTabRpc } from "../../lib/tab-rpc";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
+import { useRuntimeTabId } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
-import { Badge, Button, ConfirmDialog, Modal, Spinner } from "../common";
+import { Button, Input, Modal } from "../common";
+import { WELCOME_COMPLETED_PREF } from "../dialogs/FirstRunOnboardingDialog";
+import { OllamaRow } from "../onboarding/OllamaRow";
+import { PullBar } from "../onboarding/PullBar";
 
-function AuthBadge({ provider, t }: { provider: ProviderInfo; t: (k: string) => string }) {
-	if (!provider.authenticated) return <Badge variant="muted">{t("providers.badge.noAuth")}</Badge>;
-	if (provider.authKind === "oauth")
-		return (
-			<Badge variant="success" dot>
-				{t("providers.badge.oauth")}
-			</Badge>
-		);
-	if (provider.authKind === "env") return <Badge variant="info">{t("providers.badge.env")}</Badge>;
-	return (
-		<Badge variant="success" dot>
-			{t("providers.badge.apikey")}
-		</Badge>
-	);
+/** Main answers a second concurrent pull with this status: the single download slot is taken. */
+const PULL_BUSY_STATUS = "busy";
+
+/** What `ollama pull` accepts as a tag: no whitespace, no option-looking prefix, bounded length. */
+export function normalizePullTag(input: string): string | null {
+	const tag = input.trim();
+	if (tag.length === 0 || tag.length > 200 || tag.startsWith("-") || /\s/.test(tag)) return null;
+	return tag;
 }
 
-type ProviderEditAction = { kind: "login" } | { kind: "config"; provider: CustomProviderView } | null;
-
-/**
- * Resolve the provider's editable resource: registered credential flow first,
- * then a user-owned models.yml entry. Catalog-only providers are read-only.
- */
-export function resolveProviderEditAction(
-	provider: ProviderInfo,
-	customConfigs: CustomProviderView[],
-): ProviderEditAction {
-	if (provider.loginAvailable) return { kind: "login" };
-	const config = customConfigs.find(candidate => candidate.id === provider.id);
-	return config && !config.builtin ? { kind: "config", provider: config } : null;
+/** A pull frame with nothing downloaded yet. */
+function emptyFrame(tag: string, status: string): PullProgress {
+	return { tag, status, completed: 0, total: 0, percent: -1, done: false };
 }
 
-/** Only user-required discovery failures should become settings errors. */
-export function providerDiscoveryErrors(states: readonly ProviderDiscoveryState[], fallbackMessage: string): string[] {
-	return states
-		.filter(state => state.status === "unavailable" && !state.optional)
-		.map(state => `${state.provider}: ${state.error ?? fallbackMessage}`);
-}
-export function ProviderRow({
-	provider,
-	customConfigs,
-	onLogin,
-	onLogout,
-	onEdit,
-	busy,
-	sidecarReady = true,
-	t,
-}: {
-	provider: ProviderInfo;
-	customConfigs: CustomProviderView[];
-	onLogin: (id: string) => void;
-	onLogout: (id: string) => void;
-	onEdit: (id: string) => void;
-	busy: boolean;
-	sidecarReady?: boolean;
-	t: (k: string, p?: Record<string, string | number>) => string;
-}) {
-	const editAction = resolveProviderEditAction(provider, customConfigs);
-	const showEdit = editAction?.kind === "config" || (editAction?.kind === "login" && provider.authenticated);
-	// A key written in models.yml is reinstalled by every catalog reload, so
-	// signing out clears a credential the provider never used: the row would stay
-	// authenticated and the button would look broken. Editing the entry is the
-	// action that actually removes it.
-	const showLogout =
-		provider.authenticated && !customConfigs.some(config => config.id === provider.id && config.hasApiKey);
-	return (
-		<div className="flex items-center gap-3 rounded-lg border border-[var(--omp-border-muted)] px-3 py-2.5">
-			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-				<div className="flex items-center gap-2">
-					<span className="text-omp-lg font-medium text-[var(--omp-text)]">{provider.name}</span>
-					<AuthBadge provider={provider} t={t} />
-					{provider.disabled && <Badge variant="warning">{t("providers.badge.disabled")}</Badge>}
-				</div>
-				<div className="flex items-center gap-3 text-omp-sm text-[var(--omp-dim)]">
-					{provider.account && <span>{provider.account}</span>}
-					{provider.modelCount > 0 && <span>{t("providers.models", { count: provider.modelCount })}</span>}
-					{provider.baseUrl && (
-						<span className="flex items-center gap-1">
-							<Globe size={10} />
-							{provider.baseUrl}
-						</span>
-					)}
-				</div>
-			</div>
-			<div className="flex shrink-0 items-center gap-1.5">
-				{showEdit && editAction && (
-					<Button
-						size="sm"
-						variant="ghost"
-						icon={<Edit size={12} />}
-						onClick={() => onEdit(provider.id)}
-						aria-label={
-							editAction.kind === "login"
-								? t("providers.updateCredentials", { provider: provider.name })
-								: t("providers.edit")
-						}
-						disabled={busy || (editAction.kind === "login" && !sidecarReady)}
-						title={!sidecarReady && editAction.kind === "login" ? t("providers.notConnected") : undefined}
-					/>
-				)}
-				{/* Login: any unauthenticated provider with a registered credential flow. */}
-				{provider.loginAvailable && !provider.authenticated && (
-					<Button
-						size="sm"
-						variant="primary"
-						icon={<LogIn size={12} />}
-						disabled={busy || !sidecarReady}
-						onClick={() => onLogin(provider.id)}
-						title={!sidecarReady ? t("providers.notConnected") : undefined}
-					>
-						{t("providers.login")}
-					</Button>
-				)}
-				{showLogout && (
-					<Button
-						size="sm"
-						variant="ghost"
-						icon={<LogOut size={12} />}
-						disabled={busy || !sidecarReady}
-						onClick={() => onLogout(provider.id)}
-						title={!sidecarReady ? t("providers.notConnected") : undefined}
-					>
-						{t("providers.logout")}
-					</Button>
-				)}
-			</div>
-		</div>
-	);
+function messageOf(cause: unknown): string {
+	return cause instanceof Error ? cause.message : String(cause);
 }
 
-export function ProvidersWindow({ pollMs = 2_500 }: { pollMs?: number }) {
+export function ProvidersWindow() {
 	const tabRpc = useTabRpc();
+	const tabId = useRuntimeTabId();
 	const t = useT();
 	const open = useUiStore(s => s.providersOpen);
 	const close = useUiStore(s => s.closeProviders);
-	const openProviderConfig = useUiStore(s => s.openProviderConfig);
-	const providerConfigOpen = useUiStore(s => s.providerConfigOpen);
+	const openWelcome = useUiStore(s => s.openWelcome);
 	const sidecarReady = useSessionStore(s => s.status) === "ready";
-	const providers = useModelStore(s => s.providers);
-	const discoveryStates = useModelStore(s => s.discoveryStates);
-	const refreshPending = useModelStore(s => s.catalogRefreshPending);
-	const refreshProviders = useModelStore(s => s.refreshProviders);
-	const [customConfigs, setCustomConfigs] = useState<CustomProviderView[]>([]);
-	const [configError, setConfigError] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(false);
-	const [busyProvider, setBusyProvider] = useState<string | null>(null);
-	const [pendingLogout, setPendingLogout] = useState<{ id: string; name: string } | null>(null);
-	const requestVersion = useRef(0);
+	const current = useModelStore(s => s.model);
+	const refreshAvailableModels = useModelStore(s => s.refreshAvailableModels);
 
-	// The provider list is catalog state, not window state: a `get_providers` read
-	// and a tab-routed `model_catalog_update` push describe the same catalog
-	// generation, so only the store's guard may decide which one wins. What stays
-	// here is what no read carries — the editable models.yml entries — plus this
-	// window's own transient flags.
-	const load = useCallback(
-		async (forceRefresh = false): Promise<ProvidersResult | undefined> => {
-			const version = ++requestVersion.current;
-			setLoading(true);
-			setError(null);
-			if (!sidecarReady) {
-				setError(t("providers.notConnected"));
-				setLoading(false);
-				return undefined;
+	const [status, setStatus] = useState<OllamaStatus | null>(null);
+	const [loading, setLoading] = useState(false);
+	const [loadError, setLoadError] = useState<string | null>(null);
+	const [remedyBusy, setRemedyBusy] = useState<OllamaRemedyId | null>(null);
+	const [remedyHint, setRemedyHint] = useState<string | null>(null);
+	const [defaultBusy, setDefaultBusy] = useState<string | null>(null);
+	const [tagInput, setTagInput] = useState("");
+	const [progress, setProgress] = useState<PullProgress | null>(null);
+	const [pullNotice, setPullNotice] = useState<string | null>(null);
+	/** The tag this window is downloading; null when idle or after its own cancel. */
+	const pullingTag = useRef<string | null>(null);
+	const statusVersion = useRef(0);
+
+	const loadStatus = useCallback(async (): Promise<void> => {
+		const version = ++statusVersion.current;
+		setLoading(true);
+		try {
+			const next = await window.omp.ollama.status();
+			if (version !== statusVersion.current) return;
+			setStatus(next);
+			setLoadError(null);
+		} catch (cause) {
+			if (version === statusVersion.current) setLoadError(messageOf(cause));
+		} finally {
+			if (version === statusVersion.current) setLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (!open) return;
+		setRemedyHint(null);
+		void loadStatus();
+	}, [open, loadStatus]);
+
+	// Subscribed for the component's lifetime, not just while open: closing the
+	// window does not stop a download, and reopening must still show it. Frames
+	// for any other tag belong to the welcome screen's download.
+	useEffect(
+		() =>
+			window.omp.ollama.onPullProgress(frame => {
+				if (frame.tag === pullingTag.current) setProgress(frame);
+			}),
+		[],
+	);
+
+	const runRemedy = async (id: OllamaRemedyId) => {
+		setRemedyBusy(id);
+		setRemedyHint(null);
+		try {
+			const result = await window.omp.ollama.runRemedy(id);
+			switch (result.outcome) {
+				case "applied":
+					setStatus(result.status);
+					break;
+				case "cancelled":
+					break;
+				case "unavailable":
+					setRemedyHint(t("welcome.ollama.remedyUnavailable"));
+					break;
+				case "failed":
+					setRemedyHint(t("welcome.ollama.remedyFailed", { error: result.fault ?? "" }));
+					break;
+			}
+		} catch (cause) {
+			setRemedyHint(t("welcome.ollama.remedyFailed", { error: messageOf(cause) }));
+			// Main rejects a remedy that no longer matches the daemon's state; re-read it
+			// so a stale button goes away.
+			void loadStatus();
+		} finally {
+			setRemedyBusy(null);
+		}
+	};
+
+	const openDownload = () => {
+		void window.omp.ollama.openDownload().catch(cause => {
+			toast({ variant: "error", message: messageOf(cause) });
+		});
+	};
+
+	const makeDefault = async (tag: string) => {
+		if (!sidecarReady || defaultBusy !== null) return;
+		setDefaultBusy(tag);
+		const toastFailure = (error: string) => {
+			toast({ variant: "error", message: t("welcome.error.setModel", { tag, error }) });
+		};
+		try {
+			const response = await tabRpc.setModel("ollama", tag);
+			if (!response.success) {
+				toastFailure(response.error);
+				return;
+			}
+			// The response carries the sidecar's live model; applying it covers a
+			// re-pick of the current model, which emits no model_changed event.
+			applyModelInfo(response.data, tabId);
+			// Same handoff as the welcome screen's Continue: the default role makes the
+			// pick stick for new sessions, and the completion marker stops the welcome
+			// screen reopening for someone who set Ollama up here.
+			const role = await tabRpc.setModelRole("default", `ollama/${tag}`);
+			if (!role.success) {
+				toastFailure(role.error);
+				return;
 			}
 			try {
-				const [providerResult, configsResult] = await Promise.allSettled([
-					refreshProviders(forceRefresh),
-					window.omp.models.listProviders(),
-				]);
-				if (version !== requestVersion.current) return undefined;
-				if (configsResult.status === "fulfilled") {
-					setCustomConfigs(configsResult.value);
-					setConfigError(null);
-				} else {
-					setConfigError(t("providers.configFailed", { details: String(configsResult.reason) }));
-				}
-				if (providerResult.status === "rejected") {
-					const cause = providerResult.reason;
-					setError(cause instanceof Error ? cause.message : String(cause));
-				}
-				return providerResult.status === "fulfilled" ? providerResult.value : undefined;
-			} finally {
-				if (version === requestVersion.current) setLoading(false);
+				await window.omp.prefs.set(WELCOME_COMPLETED_PREF, new Date().toISOString());
+			} catch (cause) {
+				// The model is already the default; a lost marker only risks the welcome
+				// screen showing once more, which is not worth failing the action over.
+				console.warn("[providers] could not record welcome completion:", messageOf(cause));
 			}
-		},
-		[refreshProviders, sidecarReady, t],
-	);
-
-	// A read can be superseded by a tab switch; the store guard replaces the list,
-	// so the flags this window owns have to be released the same way.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: tabRpc is the only signal that the task these responses belong to changed.
-	useEffect(() => {
-		requestVersion.current++;
-		setLoading(false);
-		setError(null);
-	}, [tabRpc]);
-
-	useEffect(() => {
-		// ProviderConfigDialog is an independent overlay. Reload when it closes so
-		// the still-open provider window reflects add/edit/delete immediately.
-		if (open && !providerConfigOpen) void load();
-	}, [open, providerConfigOpen, load]);
-
-	useEffect(() => {
-		// `refreshPending` means the sidecar gave up waiting on discovery for this
-		// read. Nothing pushes the answer into a settings window, so keep asking —
-		// each poll is a cheap cache-aware read that reports the flag back.
-		if (!open || !refreshPending) return;
-		const timer = setInterval(() => {
-			void load();
-		}, pollMs);
-		return () => clearInterval(timer);
-	}, [open, refreshPending, load, pollMs]);
-
-	const handleLogin = async (providerId: string) => {
-		const name = providers.find(p => p.id === providerId)?.name ?? providerId;
-		setBusyProvider(providerId);
-		try {
-			await loginProvider(tabRpc, providerId, name, t, async () => {
-				await load(true);
-			});
-		} finally {
-			setBusyProvider(null);
-		}
-	};
-
-	const handleLogout = async (providerId: string) => {
-		setPendingLogout(null);
-		const name = providers.find(p => p.id === providerId)?.name ?? providerId;
-		setBusyProvider(providerId);
-		try {
-			const res = await tabRpc.logout(providerId);
-			if (!res.success) {
-				toast({ variant: "error", title: t("providers.logoutFailed"), message: res.error });
-				return;
-			}
-			// Non-forced is answered from a cache row that is still fresh, which is
-			// how a signed-out provider used to keep showing as authenticated.
-			const fresh = await load(true);
-			toast({ variant: "success", message: t("providers.logoutSuccess", { provider: name }) });
-			if (fresh?.providers.some(provider => provider.id === providerId && provider.authenticated)) {
-				toast({ variant: "warning", message: t("providers.logoutKept", { provider: name }) });
-			}
+			toast({ variant: "success", message: t("modelCompare.setSuccess", { model: `ollama/${tag}` }) });
 		} catch (cause) {
-			toast({ variant: "error", title: t("providers.logoutFailed"), message: String(cause) });
+			toastFailure(messageOf(cause));
 		} finally {
-			setBusyProvider(null);
+			setDefaultBusy(null);
 		}
 	};
 
-	const requestLogout = (providerId: string) => {
-		// Signing out destroys a credential that only an interactive re-login can
-		// restore, so the row asks first — the same distance deleting the whole
-		// provider already has.
-		const provider = providers.find(candidate => candidate.id === providerId);
-		setPendingLogout({ id: providerId, name: provider?.name ?? providerId });
-	};
-
-	const handleEdit = async (providerId: string) => {
-		setBusyProvider(providerId);
+	const pull = async (event: FormEvent) => {
+		event.preventDefault();
+		const tag = normalizePullTag(tagInput);
+		if (!tag || pullingTag.current !== null) return;
+		pullingTag.current = tag;
+		setPullNotice(null);
+		setProgress(emptyFrame(tag, ""));
+		let final: PullProgress;
 		try {
-			const provider = providers.find(p => p.id === providerId);
-			if (!provider) return;
-			const action = resolveProviderEditAction(provider, customConfigs);
-			if (!action) return;
-			if (action.kind === "config") {
-				openProviderConfig(action.provider);
-				return;
-			}
-			await handleLogin(providerId);
+			final = await window.omp.ollama.pull(tag);
 		} catch (cause) {
-			toast({ variant: "error", title: t("providers.editFailed"), message: String(cause) });
-		} finally {
-			setBusyProvider(null);
+			// pull() resolves with its final frame by contract; an IPC failure is the
+			// only way here, and it reads the same as a failed download.
+			final = { ...emptyFrame(tag, "error"), error: messageOf(cause) };
+		}
+		// Our own cancel already cleared the bar; main sends nothing after it.
+		if (pullingTag.current !== tag) return;
+		pullingTag.current = null;
+		if (final.error && final.status === PULL_BUSY_STATUS) {
+			setProgress(null);
+			setPullNotice(final.error);
+			return;
+		}
+		if (final.error) {
+			setProgress(final);
+			return;
+		}
+		setProgress(null);
+		setTagInput("");
+		await loadStatus();
+		if (sidecarReady) {
+			// The picker reads the catalog again whenever it opens, so a failed
+			// forced refresh here only delays the new model by one open.
+			await refreshAvailableModels(true).catch(() => undefined);
 		}
 	};
 
-	const authenticated = providers.filter(p => p.authenticated);
-	const unauthenticated = providers.filter(p => !p.authenticated);
-	const discoveryErrors = providerDiscoveryErrors(discoveryStates, t("providers.discoveryUnavailable"));
-	const unlistedConfigs = customConfigs.filter(
-		config => !config.builtin && !providers.some(provider => provider.id === config.id),
-	);
+	const cancelPull = () => {
+		pullingTag.current = null;
+		setProgress(null);
+		void window.omp.ollama.cancelPull().catch(cause => {
+			toast({ variant: "error", message: messageOf(cause) });
+		});
+	};
+
+	const pulling = progress !== null && !progress.done && !progress.error;
+	const running = status?.state === "ok";
+	const pullTag = normalizePullTag(tagInput);
+	const installed = status?.installedTags ?? [];
 
 	return (
-		<>
-			<Modal open={open} onClose={close} title={t("providers.title")} size="lg">
-				<div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
-					<div className="flex items-center justify-between">
-						<span className="text-omp-sm font-semibold uppercase tracking-wider text-[var(--omp-muted)]">
-							{t("providers.authenticated")}
-						</span>
-						<div className="flex items-center gap-1.5">
-							<Button size="sm" variant="ghost" icon={<Plus size={12} />} onClick={() => openProviderConfig()}>
-								{t("providerCfg.list.add")}
-							</Button>
-							<Button
-								size="sm"
-								variant="ghost"
-								icon={<ExternalLink size={12} />}
-								onClick={() => {
-									void window.omp.models.openConfig().catch(cause => {
-										toast({ variant: "error", title: t("providers.editConfig"), message: String(cause) });
-									});
-								}}
-							>
-								{t("providers.editConfig")}
-							</Button>
-							<Button
-								size="sm"
-								variant="ghost"
-								icon={<RefreshCw size={12} />}
-								onClick={() => void load(true)}
-								disabled={!sidecarReady}
-								loading={loading}
-								title={!sidecarReady ? t("providers.notConnected") : t("providers.refresh")}
-							>
-								{t("providers.refresh")}
-							</Button>
-						</div>
+		<Modal open={open} onClose={close} title={t("ollama.settings.title")} size="lg">
+			<div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
+				<div className="flex items-center justify-between gap-3">
+					<div className="flex min-w-0 items-center gap-2 text-omp-md">
+						<span className="shrink-0 text-(--omp-muted)">{t("ollama.settings.endpoint")}</span>
+						<code className="truncate font-mono text-omp-sm text-(--omp-text)" data-ollama-endpoint>
+							{status?.baseUrl ?? "—"}
+						</code>
 					</div>
-
-					{configError && (
-						<div
-							role="alert"
-							className="rounded-md bg-[var(--omp-tool-error-bg)] px-3 py-2 text-omp-md text-[var(--omp-error)]"
+					<div className="flex shrink-0 items-center gap-1.5">
+						<Button
+							size="sm"
+							variant="ghost"
+							icon={<RefreshCw size={12} />}
+							loading={loading}
+							onClick={() => void loadStatus()}
 						>
-							{configError}
-						</div>
-					)}
-					{/* Whether rows are on screen decides the claim: stale catalog, or nothing loaded. */}
-					{error && (
-						<div
-							role="alert"
-							className="rounded-md bg-[var(--omp-tool-error-bg)] px-3 py-2 text-omp-md text-[var(--omp-error)]"
+							{t("ollama.settings.refresh")}
+						</Button>
+						<Button
+							size="sm"
+							variant="ghost"
+							icon={<RotateCcw size={12} />}
+							onClick={() => {
+								close();
+								openWelcome();
+							}}
 						>
-							<span className="font-semibold">
-								{providers.length > 0 ? t("providers.stale") : t("providers.loadFailed")}
-							</span>{" "}
-							{error}
-						</div>
-					)}
-					{discoveryErrors.length > 0 && (
-						<div className="rounded-md bg-[var(--omp-tool-error-bg)] px-3 py-2 text-omp-md text-[var(--omp-error)]">
-							{t("providers.discoveryFailed", { details: discoveryErrors.join("; ") })}
-						</div>
-					)}
-					{refreshPending && (
-						<div
-							className="flex items-center gap-2 rounded-md bg-[var(--omp-bg-tertiary)] px-3 py-2 text-omp-md text-[var(--omp-muted)]" // surface-ok: transient discovery status banner
-						>
-							<Spinner size="sm" />
-							{t("providers.refreshPending")}
-						</div>
-					)}
-					{loading && providers.length === 0 && (
-						<div className="flex items-center justify-center py-8">
-							<Spinner />
-						</div>
-					)}
-
-					{!loading && !error && authenticated.length === 0 && (
-						<div className="rounded-md border border-[var(--omp-border-muted)] px-3 py-4 text-center text-omp-md text-[var(--omp-dim)]">
-							{t("providers.noAuth")}
-						</div>
-					)}
-
-					{authenticated.length > 0 && (
-						<div className="flex flex-col gap-2">
-							{authenticated.map(p => (
-								<ProviderRow
-									key={p.id}
-									provider={p}
-									customConfigs={customConfigs}
-									onLogin={handleLogin}
-									onLogout={requestLogout}
-									onEdit={handleEdit}
-									busy={busyProvider === p.id}
-									sidecarReady={sidecarReady}
-									t={t}
-								/>
-							))}
-						</div>
-					)}
-
-					{unauthenticated.length > 0 && (
-						<>
-							<span className="text-omp-sm font-semibold uppercase tracking-wider text-[var(--omp-muted)]">
-								{t("providers.available")}
-							</span>
-							<div className="flex flex-col gap-2">
-								{unauthenticated.map(p => (
-									<ProviderRow
-										key={p.id}
-										provider={p}
-										customConfigs={customConfigs}
-										onLogin={handleLogin}
-										onLogout={requestLogout}
-										onEdit={handleEdit}
-										busy={busyProvider === p.id}
-										sidecarReady={sidecarReady}
-										t={t}
-									/>
-								))}
-							</div>
-						</>
-					)}
-
-					<div className="rounded-md border border-[var(--omp-border-muted)] px-3 py-2.5">
-						<div className="mb-1 text-omp-sm font-semibold text-[var(--omp-text)]">
-							{t("providers.customTitle")}
-						</div>
-						<div className="text-omp-xs leading-[1.5] text-[var(--omp-muted)]">
-							{t("providers.customHelp", {
-								file: "~/.omp/agent/models.yml",
-								baseUrl: "baseUrl",
-								apiKey: "apiKey",
-								models: "models",
-							})}
-						</div>
-						<div className="mt-1 text-omp-xs leading-[1.5] text-[var(--omp-dim)]">
-							{t("providers.customRouteHint")}
-						</div>
-						{/* A provider the session lists no models for is absent from the rows above,
-						which reads as "the add did nothing". Name it and say why. */}
-						{!loading && providers.length > 0 && unlistedConfigs.length > 0 && (
-							<div className="mt-2 text-omp-xs leading-[1.5] text-[var(--omp-warning)]">
-								{t("providers.customWithoutModels", {
-									ids: unlistedConfigs.map(config => config.id).join(", "),
-								})}
-							</div>
-						)}
+							{t("ollama.settings.runSetup")}
+						</Button>
 					</div>
 				</div>
-			</Modal>
-			<ConfirmDialog
-				open={pendingLogout !== null}
-				title={t("providers.logoutTitle", { provider: pendingLogout?.name ?? "" })}
-				message={t("providers.logoutBody", { provider: pendingLogout?.name ?? "" })}
-				warning={t("providers.logoutWarning")}
-				confirmLabel={t("providers.logoutConfirm")}
-				busy={pendingLogout !== null && busyProvider === pendingLogout.id}
-				onCancel={() => setPendingLogout(null)}
-				onConfirm={() => {
-					if (pendingLogout) void handleLogout(pendingLogout.id);
-				}}
-			/>
-		</>
+
+				{loadError ? (
+					<div
+						role="alert"
+						className="rounded-md bg-(--omp-tool-error-bg) px-3 py-2 text-omp-md text-(--omp-error)"
+					>
+						{loadError}
+					</div>
+				) : (
+					<OllamaRow
+						busy={remedyBusy}
+						onCheckAgain={() => void loadStatus()}
+						onOpenDownload={openDownload}
+						onRemedy={id => void runRemedy(id)}
+						status={status}
+					/>
+				)}
+				{remedyHint && (
+					<p className="text-omp-sm text-(--omp-warning)" data-remedy-hint role="alert">
+						{remedyHint}
+					</p>
+				)}
+
+				<section className="flex flex-col gap-2" aria-label={t("ollama.settings.models")}>
+					<span className="text-omp-sm font-semibold uppercase tracking-wider text-(--omp-muted)">
+						{t("ollama.settings.models")}
+					</span>
+					{status && installed.length === 0 && (
+						<div className="rounded-md border border-(--omp-border-muted) px-3 py-4 text-center text-omp-md text-(--omp-dim)">
+							{t("ollama.settings.noModels")}
+						</div>
+					)}
+					{installed.map(tag => {
+						const isCurrent = current?.provider === "ollama" && current.id === tag;
+						return (
+							<div
+								className="flex items-center gap-3 rounded-lg border border-(--omp-border-muted) px-3 py-2.5"
+								data-installed-tag={tag}
+								key={tag}
+							>
+								<span className="min-w-0 flex-1 truncate font-mono text-omp-md text-(--omp-text)">{tag}</span>
+								{isCurrent ? (
+									<Check aria-hidden="true" className="shrink-0 text-(--omp-accent)" size={16} />
+								) : (
+									<Button
+										data-action="use-as-default"
+										disabled={!sidecarReady || defaultBusy !== null}
+										loading={defaultBusy === tag}
+										onClick={() => void makeDefault(tag)}
+										size="sm"
+										title={!sidecarReady ? t("modelPicker.notConnected") : undefined}
+										variant="secondary"
+									>
+										{t("ollama.settings.useAsDefault")}
+									</Button>
+								)}
+							</div>
+						);
+					})}
+				</section>
+
+				<form className="flex flex-col gap-2" onSubmit={event => void pull(event)}>
+					<div className="flex items-end gap-2">
+						<div className="min-w-0 flex-1">
+							<Input
+								aria-label={t("ollama.settings.pullPlaceholder")}
+								disabled={pulling || !running}
+								mono
+								onChange={event => setTagInput(event.target.value)}
+								placeholder={t("ollama.settings.pullPlaceholder")}
+								value={tagInput}
+							/>
+						</div>
+						<Button
+							data-action="pull"
+							disabled={pulling || !running || pullTag === null}
+							icon={<Download size={14} />}
+							size="sm"
+							type="submit"
+							variant="primary"
+						>
+							{t("ollama.settings.pull")}
+						</Button>
+					</div>
+					{pullNotice && (
+						<p className="text-omp-sm text-(--omp-muted)" data-pull-notice role="status">
+							{pullNotice}
+						</p>
+					)}
+					<PullBar onCancel={cancelPull} progress={progress} />
+				</form>
+			</div>
+		</Modal>
 	);
 }

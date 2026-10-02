@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, test } from "@playwright/test";
 import { _electron as electron } from "playwright";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 test("bounded history rendering and input responsiveness across 5k, 20k and 50k messages", async () => {
 	test.skip(process.env.OMP_GUI_PERFORMANCE !== "1", "Explicit local performance audit");
@@ -20,10 +21,7 @@ test("bounded history rendering and input responsiveness across 5k, 20k and 50k 
 					desktop = path.join(profile, "desktop"),
 					agent = path.join(profile, "agent");
 				await Promise.all([fs.mkdir(project), fs.mkdir(desktop), fs.mkdir(agent)]);
-				await fs.writeFile(
-					path.join(desktop, "prefs.json"),
-					JSON.stringify({ language: "en", firstRunComplete: true }),
-				);
+				await writeDesktopPrefs(desktop, { language: "en", firstRunComplete: true });
 				const env = {
 					...process.env,
 					PI_CODING_AGENT_DIR: agent,

@@ -5,7 +5,7 @@ import {
 	sessionRuntimeStore,
 	withSessionRuntime,
 } from "../stores/session-runtime-context";
-import { createTabRpc } from "./tab-rpc";
+import { createTabRpc, type TabRpc } from "./tab-rpc";
 
 /**
  * Declarative command registry: maps every known slash command to a typed
@@ -23,8 +23,9 @@ import { createTabRpc } from "./tab-rpc";
  */
 
 import type { SessionKind } from "../../shared/ipc-types";
+import { HIDDEN_ACCOUNT_COMMANDS } from "../../shared/provider-policy";
 import type { AvailableCommand, CopyTarget, RpcResponse } from "../../shared/rpc-types";
-import { hydrateSession, hydrateTabSession } from "../hooks/use-rpc-events";
+import { applyModelInfo, hydrateSession, hydrateTabSession } from "../hooks/use-rpc-events";
 import { newSessionNow } from "../hooks/use-session-switch";
 import { openHandoffDialog } from "../stores/fork-handoff";
 import { useModelStore } from "../stores/model";
@@ -128,7 +129,6 @@ export interface CommandRegistryContext {
 	openPrCenter: () => void;
 	openHotkeys: () => void;
 	openImportDialog: () => void;
-	openProviderConfig: () => void;
 	/** Deep-link a center-dock card (todo/plan/agents): expand + flash. */
 	focusDockCard: (id: DockCardId) => void;
 	/** Retry the last failed turn server-side (retry RPC). */
@@ -206,6 +206,34 @@ export async function runSessionCommand(
 	} catch (cause) {
 		toast({ variant: "error", title, message: String(cause) });
 	}
+}
+
+/**
+ * Step the focused tab to the next (or previous) model in the store's catalog,
+ * wrapping at either end. The agent's own `cycle_model` walks every provider
+ * it has credentials for, so the GUI cycles over the allowed list itself and
+ * switches with `set_model`. With nothing else to move to it does nothing, as
+ * `cycle_model` does; a failed switch toasts under `palette.failed`.
+ */
+export async function cycleAllowedModel(
+	rpc: Pick<TabRpc, "setModel">,
+	direction: "forward" | "backward" = "forward",
+): Promise<void> {
+	const { availableModels: models, model: current } = useModelStore.getState();
+	if (models.length === 0) return;
+	const index = current
+		? models.findIndex(model => model.provider === current.provider && model.id === current.id)
+		: -1;
+	const step = direction === "forward" ? 1 : -1;
+	const next =
+		index < 0
+			? models[direction === "forward" ? 0 : models.length - 1]
+			: models[(index + step + models.length) % models.length];
+	if (!next || (current && next.provider === current.provider && next.id === current.id)) return;
+	const tabId = focusedSessionRuntime()?.tabId ?? null;
+	await runSessionCommand(rpc.setModel(next.provider, next.id), translate("palette.failed"), data =>
+		applyModelInfo(data, tabId),
+	);
 }
 
 /** Restart the focused tab's sidecar without interrupting an active turn. */
@@ -894,33 +922,11 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "window", open: ctx.openProviders },
 	});
 	add({
-		name: "add-provider",
-		label: t("cmd.addProvider"),
-		description: t("cmd.addProvider.desc"),
-		category: "providers",
-		aliases: ["provider-config", "custom-provider"],
-		affordance: { kind: "window", open: ctx.openProviderConfig },
-	});
-	add({
 		name: "usage",
 		label: t("cmd.usage"),
 		description: t("cmd.usage.desc"),
 		category: "providers",
 		affordance: { kind: "window", open: ctx.openUsage },
-	});
-	add({
-		name: "login",
-		label: t("cmd.openLogin"),
-		description: t("cmd.openLogin.desc"),
-		category: "providers",
-		affordance: { kind: "window", open: ctx.openProviders },
-	});
-	add({
-		name: "logout",
-		label: t("cmd.openLogout"),
-		description: t("cmd.openLogout.desc"),
-		category: "providers",
-		affordance: { kind: "window", open: ctx.openProviders },
 	});
 
 	// ═══════════════════════════════════════════════════════════════════
@@ -1447,7 +1453,7 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 	// a native item — as its name OR one of its aliases — is dropped: `/models`
 	// and `/modes` must not appear as dead rows next to the working picker.
 	for (const cmd of ctx.availableCommands) {
-		if (claimed.has(cmd.name)) continue;
+		if (claimed.has(cmd.name) || HIDDEN_ACCOUNT_COMMANDS.has(cmd.name)) continue;
 		// Keep terminal-only commands visible as disabled rows. The palette is
 		// the GUI's command index; hiding a command makes its client limitation opaque.
 		if (cmd.textModeExecutable === false) {
@@ -1758,7 +1764,6 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 		openPrCenter: ui.openPrCenter,
 		openHotkeys: ui.openHotkeys,
 		openImportDialog: ui.openImportDialog,
-		openProviderConfig: ui.openProviderConfig,
 		focusDockCard: ui.focusDockCard,
 		retryTurn: retryFailedTurn,
 		retryLastTurn: () =>
@@ -1788,7 +1793,7 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 			setPrewalk: enabled => rpc.setPrewalk(enabled),
 			exportHtml: path => rpc.exportHtml(path),
 			setSessionName: name => rpc.setSessionName(name),
-			cycleModel: () => rpc.cycleModel(),
+			cycleModel: () => cycleAllowedModel(rpc),
 			cycleThinkingLevel: () => rpc.cycleThinkingLevel(),
 		},
 	});

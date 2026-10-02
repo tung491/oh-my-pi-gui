@@ -143,16 +143,15 @@ export function buildModelRows(input: {
 
 type SortKey = "provider" | "model" | "context" | "cost" | "quota" | "roles";
 
-export type UnusableReason = "disabled" | "no-auth";
+export type UnusableReason = "disabled";
 
 /**
- * Why a row cannot be made the session model. Auth that the catalog simply did
- * not describe is *not* a reason: a degraded `get_providers` read is not
- * evidence of no access, and treating it as one would lock the whole matrix.
+ * Why a row cannot be made the session model. Missing auth is *not* a reason:
+ * Ollama is keyless, so the agent reports it as unauthenticated even though it
+ * works, and a degraded `get_providers` read is not evidence of no access.
  */
 export function unusableReason(row: Row): UnusableReason | null {
 	if (row.disabled) return "disabled";
-	if (row.authKnown && !row.authenticated) return "no-auth";
 	return null;
 }
 
@@ -212,7 +211,8 @@ function SortHeader({
 
 function AuthBadge({ row, t }: { row: Row; t: TFn }) {
 	if (!row.authKnown) return <Badge variant="muted">?</Badge>;
-	if (!row.authenticated) return <Badge variant="muted">{t("providers.badge.noAuth")}</Badge>;
+	// Keyless providers (Ollama) report no credential; there is nothing to badge.
+	if (!row.authenticated) return null;
 	if (row.authKind === "oauth")
 		return (
 			<Badge variant="success" dot>
@@ -266,7 +266,6 @@ export function ModelCompare({ open, onClose }: ModelCompareProps) {
 	const [failedSections, setFailedSections] = useState<string[]>([]);
 	const [query, setQuery] = useState("");
 	const [providerFilter, setProviderFilter] = useState("all");
-	const [authOnly, setAuthOnly] = useState(false);
 	const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "provider", dir: 1 });
 	const [busyKey, setBusyKey] = useState<string | null>(null);
 
@@ -352,7 +351,6 @@ export function ModelCompare({ open, onClose }: ModelCompareProps) {
 	const visibleRows = useMemo(() => {
 		const q = query.trim().toLowerCase();
 		const filtered = rows.filter(row => {
-			if (authOnly && row.authKnown && !row.authenticated) return false;
 			if (providerFilter !== "all" && row.provider !== providerFilter) return false;
 			if (
 				q.length > 0 &&
@@ -369,7 +367,7 @@ export function ModelCompare({ open, onClose }: ModelCompareProps) {
 		});
 		const dir = sort.dir;
 		return [...filtered].sort((a, b) => COMPARATORS[sort.key](a, b, dir));
-	}, [rows, query, authOnly, providerFilter, sort]);
+	}, [rows, query, providerFilter, sort]);
 
 	const isCurrent = useCallback(
 		(row: Row) => current !== null && current.provider === row.provider && current.id === row.id,
@@ -528,15 +526,7 @@ export function ModelCompare({ open, onClose }: ModelCompareProps) {
 									)}
 									key={row.key}
 									onClick={() => void assignSession(row)}
-									title={
-										blocked
-											? t(
-													blocked === "disabled"
-														? "modelCompare.blockedDisabled"
-														: "modelCompare.blockedNoAuth",
-												)
-											: t("modelCompare.useHint")
-									}
+									title={blocked ? t("modelCompare.blockedDisabled") : t("modelCompare.useHint")}
 								>
 									<td
 										className={cx(
@@ -679,20 +669,6 @@ export function ModelCompare({ open, onClose }: ModelCompareProps) {
 							</option>
 						))}
 					</select>
-					<button
-						aria-pressed={authOnly}
-						className={cx(
-							"flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-omp-sm font-medium whitespace-nowrap transition-colors",
-							authOnly
-								? "border-(--omp-accent) bg-(--omp-selected-bg) text-(--omp-text)"
-								: "border-(--omp-border-muted) bg-transparent text-(--omp-muted) hover:text-(--omp-text)",
-						)}
-						onClick={() => setAuthOnly(prev => !prev)}
-						type="button"
-					>
-						{authOnly && <Check size={11} />}
-						{t("modelCompare.authOnly")}
-					</button>
 					<Button
 						disabled={!sidecarReady}
 						icon={<RefreshCw size={12} />}

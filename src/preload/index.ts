@@ -6,7 +6,6 @@
  */
 import { contextBridge, ipcRenderer } from "electron";
 import type {
-	CustomProviderInput,
 	CustomProviderView,
 	DeepLinkPayload,
 	IpcActiveTabEnvelope,
@@ -43,6 +42,14 @@ import type {
 	UpdateStatus,
 } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS } from "../shared/ipc-types";
+import type {
+	ModelScreen,
+	OllamaRemedyId,
+	OllamaRemedyResult,
+	OllamaStatus,
+	ProviderConfigCleanupResult,
+	PullProgress,
+} from "../shared/ollama-types";
 import { createSessionRpcClient, timeoutForCommand } from "../shared/rpc-client";
 import type {
 	AgentSessionEvent,
@@ -327,11 +334,25 @@ const api: OmpApi = {
 
 	models: {
 		listProviders: () => ipcRenderer.invoke(IPC_COMMANDS.MODELS_PROVIDERS_LIST) as Promise<CustomProviderView[]>,
-		upsertProvider: (input: CustomProviderInput) =>
-			ipcRenderer.invoke(IPC_COMMANDS.MODELS_PROVIDER_UPSERT, input) as Promise<void>,
-		deleteProvider: (id: string) => ipcRenderer.invoke(IPC_COMMANDS.MODELS_PROVIDER_DELETE, id) as Promise<void>,
-		openConfig: () =>
-			ipcRenderer.invoke(IPC_COMMANDS.MODELS_CONFIG_OPEN) as Promise<{ path: string; opened: boolean }>,
+	},
+
+	ollama: {
+		status: () => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_STATUS) as Promise<OllamaStatus>,
+		modelScreen: () => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_MODEL_SCREEN) as Promise<ModelScreen>,
+		pull: (tag: string) => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_PULL, { tag }) as Promise<PullProgress>,
+		cancelPull: () => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_PULL_CANCEL) as Promise<void>,
+		warm: (tag: string) => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_WARM, { tag }) as Promise<void>,
+		// Only the id crosses the bridge; main maps it to the command it runs.
+		runRemedy: (id: OllamaRemedyId) =>
+			ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_REMEDY, { id }) as Promise<OllamaRemedyResult>,
+		openDownload: () => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_OPEN_DOWNLOAD) as Promise<void>,
+		onPullProgress: (callback: (progress: PullProgress) => void) =>
+			subscribe<PullProgress>(IPC_EVENTS.OLLAMA_PULL_PROGRESS, callback),
+	},
+
+	providerCleanup: {
+		cleanConfig: () =>
+			ipcRenderer.invoke(IPC_COMMANDS.PROVIDER_CLEANUP_CONFIG) as Promise<ProviderConfigCleanupResult>,
 	},
 
 	fs: {

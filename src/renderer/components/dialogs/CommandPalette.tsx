@@ -16,6 +16,7 @@ import {
 	type CommandAffordance,
 	type CommandMenuItem,
 	commandArgPrefill,
+	cycleAllowedModel,
 	forkSessionFromGui,
 	groupByCategory,
 	prefillComposer,
@@ -161,7 +162,6 @@ export function CommandPalette() {
 	const openPrCenter = useUiStore(state => state.openPrCenter);
 	const openHotkeys = useUiStore(state => state.openHotkeys);
 	const openImportDialog = useUiStore(state => state.openImportDialog);
-	const openProviderConfig = useUiStore(state => state.openProviderConfig);
 	const focusDockCard = useUiStore(state => state.focusDockCard);
 
 	const isStreaming = useSessionStore(s => s.isStreaming);
@@ -329,7 +329,6 @@ export function CommandPalette() {
 				openPrCenter,
 				openHotkeys,
 				openImportDialog,
-				openProviderConfig,
 				focusDockCard,
 				openCommandPalette: () => {},
 				retryTurn,
@@ -349,7 +348,7 @@ export function CommandPalette() {
 					setPrewalk: enabled => tabRpc.setPrewalk(enabled),
 					exportHtml: path => tabRpc.exportHtml(path),
 					setSessionName: name => tabRpc.setSessionName(name),
-					cycleModel: () => tabRpc.cycleModel(),
+					cycleModel: () => cycleAllowedModel({ setModel: tabRpc.setModel }),
 					cycleThinkingLevel: () => tabRpc.cycleThinkingLevel(),
 				},
 			}),
@@ -380,7 +379,6 @@ export function CommandPalette() {
 			retryLastTurn,
 			retryTurn,
 			openModes,
-			openProviderConfig,
 			focusDockCard,
 			openModelCompare,
 			openBenchmark,
@@ -401,7 +399,7 @@ export function CommandPalette() {
 			tabRpc.prompt,
 			tabRpc.setAutoRetry,
 			tabRpc.handoff,
-			tabRpc.cycleModel,
+			tabRpc.setModel,
 			tabRpc.setAutoCompaction,
 			tabRpc.exportHtml,
 			tabRpc.cycleThinkingLevel,

@@ -1,0 +1,80 @@
+/* Shared parts of the local-model onboarding: the Ollama status row and the
+ * model download bar. Theme tokens only (--omp-*). */
+
+.omp-ollama-row {
+	border: 1px solid var(--omp-border);
+	border-radius: 8px;
+	background: var(--omp-bg-secondary);
+	color: var(--omp-text);
+}
+.omp-ollama-row[data-tone="success"] {
+	border-color: color-mix(in srgb, var(--omp-success) 40%, transparent);
+	background: var(--omp-success-dim);
+}
+.omp-ollama-row[data-tone="warning"] {
+	border-color: color-mix(in srgb, var(--omp-warning) 40%, transparent);
+	background: var(--omp-warning-dim);
+}
+.omp-ollama-row[data-tone="error"] {
+	border-color: color-mix(in srgb, var(--omp-error) 40%, transparent);
+	background: var(--omp-error-dim);
+}
+.omp-ollama-row[data-tone="success"] .omp-ollama-row-icon {
+	color: var(--omp-success);
+}
+.omp-ollama-row[data-tone="warning"] .omp-ollama-row-icon {
+	color: var(--omp-warning);
+}
+.omp-ollama-row[data-tone="error"] .omp-ollama-row-icon {
+	color: var(--omp-error);
+}
+.omp-ollama-command {
+	border: 1px solid var(--omp-border-muted);
+	border-radius: 6px;
+	background: var(--omp-code-bg);
+	color: var(--omp-md-code-block);
+	overflow-x: auto;
+	white-space: pre;
+}
+
+.omp-pull-track {
+	position: relative;
+	height: 6px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: var(--omp-bg-tertiary);
+}
+.omp-pull-fill {
+	height: 100%;
+	border-radius: inherit;
+	background: var(--omp-accent);
+	transition: width 300ms ease-out;
+}
+.omp-pull-track[data-indeterminate="true"] .omp-pull-fill {
+	width: 100%;
+	background-image: repeating-linear-gradient(
+		-45deg,
+		var(--omp-accent) 0 8px,
+		color-mix(in srgb, var(--omp-accent) 45%, transparent) 8px 16px
+	);
+	background-size: 22.63px 22.63px;
+	animation: omp-pull-stripes 900ms linear infinite;
+}
+.omp-pull-error {
+	color: var(--omp-error);
+}
+
+@keyframes omp-pull-stripes {
+	to {
+		background-position: 22.63px 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.omp-pull-fill {
+		transition: none;
+	}
+	.omp-pull-track[data-indeterminate="true"] .omp-pull-fill {
+		animation: none;
+	}
+}

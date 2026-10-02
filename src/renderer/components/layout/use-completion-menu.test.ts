@@ -6,7 +6,8 @@
  * apply a stale menu once the caret has moved away from rangeEnd.
  */
 import { describe, expect, it } from "vitest";
-import { applyCompletion, type CompletionItem, type CompletionMenu } from "./use-completion-menu";
+import type { AvailableCommand } from "../../../shared/rpc-types";
+import { applyCompletion, type CompletionItem, type CompletionMenu, slashCommandItems } from "./use-completion-menu";
 
 function menu(rangeStart: number, rangeEnd: number): CompletionMenu {
 	return { source: "model", rangeStart, rangeEnd, items: [], index: 0 };
@@ -27,5 +28,18 @@ describe("applyCompletion", () => {
 
 	it("refuses to apply a stale menu once the caret moved off rangeEnd", () => {
 		expect(applyCompletion("review ^cl", 9, menu(7, 10), item)).toBeNull();
+	});
+});
+
+describe("slashCommandItems", () => {
+	const commands: AvailableCommand[] = [
+		{ name: "login", description: "Sign in", source: "builtin" },
+		{ name: "logout", description: "Sign out", source: "builtin" },
+		{ name: "compact", description: "Compact", source: "builtin" },
+	];
+
+	it("never suggests the account sign-in commands", () => {
+		expect(slashCommandItems(commands, "agent", "").map(item => item.label)).toEqual(["/compact"]);
+		expect(slashCommandItems(commands, "agent", "log")).toEqual([]);
 	});
 });

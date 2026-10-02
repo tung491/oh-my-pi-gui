@@ -1,4 +1,5 @@
 import { createStore } from "zustand/vanilla";
+import { filterAllowedModels, isAllowedProvider } from "../../shared/provider-policy";
 import type {
 	AvailableModelsResult,
 	ModelCatalogUpdateFrame,
@@ -58,6 +59,19 @@ interface CatalogSnapshot {
 	generation: number;
 }
 
+/**
+ * Every catalog read and push passes through here before it reaches the store
+ * or a caller, so no surface can list a model or provider the GUI does not offer.
+ */
+function allowedCatalog(snapshot: CatalogSnapshot): CatalogSnapshot {
+	return {
+		...snapshot,
+		models: snapshot.models && filterAllowedModels(snapshot.models),
+		providers: snapshot.providers?.filter(provider => isAllowedProvider(provider.id)),
+		discoveryStates: snapshot.discoveryStates?.filter(state => isAllowedProvider(state.provider)),
+	};
+}
+
 const initialState = {
 	model: null as ModelInfo | null,
 	thinkingLevel: undefined as ThinkingLevel | undefined,
@@ -98,13 +112,13 @@ export const createModelStore = (command: TabCommand = activeTabCommand) =>
 			const response = await command({ type, forceRefresh });
 			if (!response.success) throw new Error(response.error);
 			const data = response.data as Partial<ProvidersResult> | undefined;
-			return {
+			return allowedCatalog({
 				models: data?.models,
 				providers: data?.providers,
 				discoveryStates: data?.discoveryStates,
 				refreshPending: data?.refreshPending,
 				generation: data?.generation ?? 0,
-			};
+			});
 		};
 		return {
 			...initialState,
@@ -143,13 +157,15 @@ export const createModelStore = (command: TabCommand = activeTabCommand) =>
 				} satisfies ProvidersResult;
 			},
 			applyCatalogUpdate: update =>
-				applyCatalog({
-					models: update.models,
-					providers: update.providers,
-					discoveryStates: update.discoveryStates,
-					refreshPending: update.refreshPending,
-					generation: update.generation,
-				}),
+				applyCatalog(
+					allowedCatalog({
+						models: update.models,
+						providers: update.providers,
+						discoveryStates: update.discoveryStates,
+						refreshPending: update.refreshPending,
+						generation: update.generation,
+					}),
+				),
 			toggleFastMode: async () => {
 				const res = await command({ type: "set_fast_mode", enabled: !get().fastModeEnabled });
 				if (res.success) {

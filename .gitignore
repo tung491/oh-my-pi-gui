@@ -8,6 +8,8 @@ node_modules/
 # Build output
 out/
 dist/
+# TypeScript incremental state (tsconfig.node.json is composite)
+*.tsbuildinfo
 
 # Bundled agent sidecar binaries (build with `bun run build:omp`; >100MB, not committed)
 resources/omp

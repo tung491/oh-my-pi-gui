@@ -739,9 +739,6 @@ export function SettingsWindow() {
 				case "providers":
 					external(() => useUiStore.getState().openProviders());
 					return;
-				case "providerConfig":
-					external(() => useUiStore.getState().openProviderConfig());
-					return;
 				case "usage":
 					external(() => useUiStore.getState().openUsage());
 					return;

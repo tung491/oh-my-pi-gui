@@ -1,7 +1,7 @@
 /**
  * Registers all IPC handlers and wires sidecar events to renderer windows.
  */
-import { type Dirent, existsSync, promises as fsp } from "node:fs";
+import { type Dirent, promises as fsp } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -15,7 +15,6 @@ import {
 } from "electron";
 import Store from "electron-store";
 import type {
-	CustomProviderInput,
 	FsTreeEntry,
 	IpcBenchmarkRunOptions,
 	IpcBenchmarkRunResult,
@@ -61,8 +60,10 @@ import { openInExternalEditor } from "./editor";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
-import { deleteModelsProvider, listModelsProviders, modelsPath, upsertModelsProvider } from "./models-config";
+import { listModelsProviders } from "./models-config";
+import { registerOllamaIpc } from "./ollama/register-ipc";
 import { openPathTarget } from "./open-path-target";
+import { registerProviderCleanupIpc } from "./provider-cleanup";
 import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
 import type { SessionIndex } from "./session-index";
@@ -972,31 +973,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 
 	ipcMain.handle(IPC_COMMANDS.SIDECAR_DEFAULT_WORKSPACE, () => ensureDefaultWorkspace());
 
+	registerOllamaIpc();
+	registerProviderCleanupIpc(ipcMain);
+
 	ipcMain.handle(IPC_COMMANDS.MODELS_PROVIDERS_LIST, () => {
 		return listModelsProviders();
-	});
-
-	ipcMain.handle(IPC_COMMANDS.MODELS_PROVIDER_UPSERT, (_event, input: CustomProviderInput) => {
-		upsertModelsProvider(input);
-	});
-
-	ipcMain.handle(IPC_COMMANDS.MODELS_PROVIDER_DELETE, (_event, id: string) => {
-		deleteModelsProvider(id);
-	});
-
-	// "Edit config" — open the agent's models.yml in the system editor. The
-	// file is created with a minimal skeleton when missing so there is always
-	// something to edit; when no editor association exists, reveal it in the
-	// file manager instead.
-	ipcMain.handle(IPC_COMMANDS.MODELS_CONFIG_OPEN, async () => {
-		const file = modelsPath();
-		if (!existsSync(file)) {
-			await fsp.mkdir(path.dirname(file), { recursive: true });
-			await fsp.writeFile(file, "# Custom model providers.\nproviders: {}\n", "utf8");
-		}
-		const openError = await shell.openPath(file);
-		if (openError) shell.showItemInFolder(file);
-		return { path: file, opened: !openError };
 	});
 
 	// Workspace filesystem — node:fs against the calling window's cwd; works

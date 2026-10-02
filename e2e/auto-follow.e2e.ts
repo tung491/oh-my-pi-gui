@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, test } from "@playwright/test";
 import { _electron as electron } from "playwright";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 /** Distance from the bottom that still counts as "riding the live edge". Row
  * re-measurement during streaming overshoots a few pixels, so this is deliberately
@@ -16,7 +17,7 @@ test("a bottom-pinned transcript rides the stream, and 'jump to latest' re-engag
 		agent = path.join(profile, "agent"),
 		project = path.join(profile, "project");
 	await Promise.all([fs.mkdir(desktop), fs.mkdir(agent), fs.mkdir(project)]);
-	await fs.writeFile(path.join(desktop, "prefs.json"), JSON.stringify({ language: "en" }));
+	await writeDesktopPrefs(desktop, { language: "en" });
 	const env = {
 		...process.env,
 		PI_CODING_AGENT_DIR: agent,

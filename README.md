@@ -47,7 +47,7 @@ The distinctive part is not just a chat window: it is being able to **separate p
 | **Plans, Todos & queues** | Review plans and approvals, queue follow-up messages, and monitor bounded Todos/Agents dock cards. Expand a card for a focused full list. | Compact summaries keep large task lists from taking over the conversation. |
 | **Agent Hub** | Manage agent definitions, enable/disable agents, set model and prewalk overrides, inspect progress/logs, abort work, and wake parked agents. | Available actions follow the agent's current state; role assignments and per-agent overrides serve different purposes. |
 | **Models & roles** | Pick models by provider, assign models to roles, and adjust reasoning/thinking levels. | Reasoning controls appear only for models that support them. |
-| **Providers** | Sign in, add/edit/remove custom providers, and discover models from compatible OpenAI or Anthropic endpoints. | OAuth or API-key support depends on the provider; endpoint compatibility and advertised models vary. |
+| **Local models (Ollama)** | Run every model locally through Ollama: check its status, download models with progress, and pick the default from the Ollama window. | Ollama must be installed and running; model size is limited by this machine's memory. Other providers are not offered. |
 | **Session library** | Search history, explore session trees, branches and forks, organize labels, copy-import Claude/Codex sessions, export HTML, and preview sharing. | Copy import is not live synchronization with another app. Review content before exporting or sharing. |
 | **Context & live accounting** | Inspect context usage and live cost/cache updates; retain measured context usage even when model capacity is unknown. | Measured usage and a model's maximum capacity are different facts. |
 | **Statistics & usage** | Open a private local statistics dashboard and session metrics for requests, tokens, cost, cache, and speed; inspect provider usage/quotas. | Provider quotas depend on API/account availability. Local statistics are not a provider billing statement. |
@@ -59,7 +59,7 @@ The distinctive part is not just a chat window: it is being able to **separate p
 | **Relay collaboration** | Host or join a shared session with edit or read-only access. | Requires a configured relay service; it is not a purely local collaboration mode. |
 | **Settings & control** | Configure GUI/runtime/tool behavior, switch English/Chinese, choose themes, and access approvals and security scans/settings. | Approvals and scans are **not an OS sandbox**; command coverage is not total CLI parity. |
 
-Model requests still go to the providers you configure. The bundled agent removes the separate runtime install, not the need to configure credentials, project dependencies, external Git/OpenSSH/MCP tools, or optional services. Only connect tools and services you trust.
+Model requests go to the local Ollama daemon (`http://127.0.0.1:11434`, or the address in `OLLAMA_BASE_URL` / `OLLAMA_HOST`). The bundled agent removes the separate runtime install, not the need to configure credentials, project dependencies, external Git/OpenSSH/MCP tools, or optional services. Only connect tools and services you trust.
 
 <a id="en-recent"></a>
 ### What's new in 0.9.10
@@ -195,7 +195,15 @@ Open the DMG and drag **Sai ATLAS** into **Applications**. The build is ad-hoc s
 
 Windows packages are currently unsigned. Windows SmartScreen may require **More info → Run anyway** on first launch after confirming the download's source. The installer upgrades an existing omp install in place and keeps its settings; if you pinned omp to the taskbar, pin Sai ATLAS again.
 
-1. **Connect a provider:** open **Providers & login** from the sidebar and use the authentication method it supports.
+Sai ATLAS runs its models locally through [Ollama](https://ollama.com), so install Ollama first. On the first launch a welcome screen shows this machine's memory and graphics, whether Ollama is running, and three model sizes (minimal, recommended and maximum) picked to fit this machine.
+
+- **Ollama not running or not installed:** on Linux the screen shows the exact command and runs it after the system password prompt, either **Start Ollama** (`systemctl start ollama.service`) or **Install Ollama** (the official `ollama.com/install.sh` installer). On macOS and Windows it links to ollama.com/download; start Ollama, then choose **Check again**.
+- **Download** a model on its card and watch the progress bar. **Cancel** stops the download, and a later **Download** resumes it.
+- **Continue to the assistant** makes the chosen model the default for this and new sessions. **Set up later** closes the screen until the next launch; **Run setup again** in the Ollama window reopens it.
+
+Ollama follows `OLLAMA_BASE_URL` or `OLLAMA_HOST` when set, the same rule the agent uses.
+
+1. **Get a local model:** finish the welcome screen, or open **Ollama** from the sidebar to download a model and choose **Use as default**.
 2. **Choose your work:** open a project Agent tab with `⌘T`, or a tool-free Chat with `⇧⌘T`; select an available model.
 3. **Start a conversation:** enter a request. Use `⌘N` when you want a new session, and inspect tool calls and approvals as work proceeds.
 4. **Go parallel:** `⌥T` creates a fresh worktree tab. Use the tab context menu or drag a tab into the workspace for a two-pane split.
@@ -318,7 +326,7 @@ bun scripts/capture-showcase.ts
 
 The capture script renders the actual Electron GUI using a fresh temporary HOME, Electron profile, synthetic `aurora-web` project, and synthetic sidecar—**no live credentials or personal workspace are used**. It writes localized showcase images to `docs/screenshots/en/` and `docs/screenshots/zh/`. Scripted conversations, model lists, agent states, and metrics make the scenes reproducible; they are not provider tests or real usage records. This fixture setup is not an OS sandbox.
 
-Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light theme instead of the default dark theme, `SHOWCASE_OUT=<dir>` writes to `<dir>/en` and `<dir>/zh` instead of `docs/screenshots`, and `SHOWCASE_ONBOARDING=1` also captures the first-run wizard as `00-onboarding.png`. On Linux the script passes the display variables (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) through to Electron.
+Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light theme instead of the default dark theme, `SHOWCASE_OUT=<dir>` writes to `<dir>/en` and `<dir>/zh` instead of `docs/screenshots`, and `SHOWCASE_ONBOARDING=1` also captures the first-run welcome screen as `00-onboarding.png`. On Linux the script passes the display variables (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) through to Electron.
 
 </details>
 
@@ -392,7 +400,7 @@ Sai ATLAS 是 SAI OS 的 AI 助手，一款基于 [omp](https://github.com/can13
 | **计划、待办与队列** | 审查计划与审批、排队发送后续消息，通过有高度约束的 Todos/Agents Dock 卡片查看状态；展开单张卡片查看完整列表。 | 大量任务以紧凑摘要呈现，不占满对话区域。 |
 | **Agent Hub** | 管理 Agent 定义、启用/停用、覆盖模型与 prewalk 设置，查看进度和日志、中止任务、唤醒已停驻的 Agent。 | 可用操作取决于 Agent 当前状态；角色模型分配与单个 Agent 覆盖是不同层次的控制。 |
 | **模型与角色** | 按 Provider 选择模型，为不同角色分配模型，调整推理/思考等级。 | 只有支持的模型才提供推理等级控制。 |
-| **Provider 管理** | 登录，新增/编辑/删除自定义 Provider，从兼容 OpenAI 或 Anthropic 的端点发现模型。 | OAuth 或 API key 支持取决于 Provider；端点兼容程度与返回的模型列表可能不同。 |
+| **本地模型（Ollama）** | 所有模型都通过 Ollama 在本机运行：查看运行状态、带进度下载模型，并在 Ollama 窗口中选择默认模型。 | 需要安装并运行 Ollama；可用模型大小受本机内存限制。不再提供其他 Provider。 |
 | **会话资料库** | 搜索历史、查看会话树、分支与分叉、管理标签，复制导入 Claude/Codex 会话、导出 HTML、预览分享内容。 | 复制导入不是与其他应用实时同步；导出或分享前请检查内容。 |
 | **上下文与实时计量** | 检查上下文用量和实时花费/缓存变化；即使模型容量未知，仍可查看已测得的上下文用量。 | 已测用量与模型最大容量是两件事，不应混为一谈。 |
 | **统计与用量** | 内置私有、本地运行的统计仪表盘，查看请求、token、花费、缓存、速度及会话指标，也可查看 Provider 用量/配额。 | 配额信息取决于 API 与账号可用性；本地统计不等于 Provider 账单。 |
@@ -404,7 +412,7 @@ Sai ATLAS 是 SAI OS 的 AI 助手，一款基于 [omp](https://github.com/can13
 | **Relay 协作** | 主持或加入共享会话，使用可编辑或只读权限。 | 需要已配置的 relay 服务，并非纯本地协作模式。 |
 | **设置与控制** | 配置 GUI、运行时和工具行为，切换中英文与主题，使用审批及安全扫描/设置入口。 | 审批与扫描**不是操作系统沙箱**；GUI 命令覆盖不等于完整 CLI 功能对齐。 |
 
-模型请求仍会发送到你配置的 Provider。内置 Agent 省去了单独安装运行时的步骤，但不替你配置凭据、项目依赖、外部 Git/OpenSSH/MCP 工具或可选服务。请只连接你信任的工具与服务。
+模型请求发送到本机的 Ollama 服务（`http://127.0.0.1:11434`，或 `OLLAMA_BASE_URL` / `OLLAMA_HOST` 指定的地址）。内置 Agent 省去了单独安装运行时的步骤，但不替你配置凭据、项目依赖、外部 Git/OpenSSH/MCP 工具或可选服务。请只连接你信任的工具与服务。
 
 <a id="zh-recent"></a>
 ### 0.9.10 更新内容
@@ -540,7 +548,15 @@ profile sai-atlas-appimage "@{HOME}/Applications/Sai-ATLAS.AppImage" flags=(unco
 
 Windows 包当前未签名。首次启动前请确认下载来源；Windows SmartScreen 可能需要点击**更多信息 → 仍要运行**。安装程序会就地升级已安装的 omp 并保留设置；如果你把 omp 固定在任务栏，请重新固定 Sai ATLAS。
 
-1. **连接 Provider：**从侧栏打开**提供商与登录**，使用该服务支持的认证方式。
+Sai ATLAS 通过 [Ollama](https://ollama.com) 在本机运行模型，请先安装 Ollama。首次启动时会出现欢迎页面，显示本机内存与显卡、Ollama 是否在运行，以及按本机配置挑选的三档模型（最低配置、推荐、最高配置）。
+
+- **Ollama 未运行或未安装：**在 Linux 上，页面会显示完整命令，并在系统密码确认后执行：**启动 Ollama**（`systemctl start ollama.service`）或**安装 Ollama**（官方 `ollama.com/install.sh` 安装脚本）。在 macOS 和 Windows 上会链接到 ollama.com/download；启动 Ollama 后选择**重新检查**。
+- 在模型卡片上**下载**模型并查看进度条。**取消**会停止下载，之后再次**下载**会继续。
+- **继续前往助手**会把所选模型设为当前及新会话的默认模型。**稍后设置**会关闭页面直到下次启动；Ollama 窗口中的**重新运行设置**可再次打开它。
+
+设置了 `OLLAMA_BASE_URL` 或 `OLLAMA_HOST` 时，Ollama 地址按与 Agent 相同的规则取用。
+
+1. **准备本地模型：**完成欢迎页面，或从侧栏打开 **Ollama 设置**下载模型并选择**设为默认**。
 2. **选择工作方式：**`⌘T` 新建项目 Agent 标签页，或 `⇧⌘T` 打开无工具 Chat；选择可用模型。
 3. **开始对话：**输入请求。需要新会话时使用 `⌘N`，执行过程中检查工具调用并处理审批。
 4. **并行推进：**`⌥T` 新建 worktree 标签页；使用标签右键菜单，或把标签拖入工作区，打开双面板分屏。
@@ -663,7 +679,7 @@ bun scripts/capture-showcase.ts
 
 截图脚本使用全新的临时 HOME、Electron 配置目录、合成 `aurora-web` 项目与合成 sidecar，渲染真实 Electron GUI，**不使用真实凭据或个人工作区**。本地化图片输出到 `docs/screenshots/en/` 与 `docs/screenshots/zh/`。对话、模型列表、Agent 状态和指标由脚本构造，便于复现；它们不是 Provider 测试或真实使用记录。这套展示数据环境不是操作系统沙箱。
 
-可选环境变量：`SHOWCASE_THEME=light` 截取 VIF 浅色主题（默认深色）；`SHOWCASE_OUT=<目录>` 输出到 `<目录>/en` 与 `<目录>/zh`，不写入 `docs/screenshots`；`SHOWCASE_ONBOARDING=1` 额外截取首次运行向导 `00-onboarding.png`。在 Linux 上，脚本会把显示相关变量（`DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`）传给 Electron。
+可选环境变量：`SHOWCASE_THEME=light` 截取 VIF 浅色主题（默认深色）；`SHOWCASE_OUT=<目录>` 输出到 `<目录>/en` 与 `<目录>/zh`，不写入 `docs/screenshots`；`SHOWCASE_ONBOARDING=1` 额外截取首次运行欢迎页面 `00-onboarding.png`。在 Linux 上，脚本会把显示相关变量（`DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`）传给 Electron。
 
 </details>
 
