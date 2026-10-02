@@ -4,12 +4,13 @@
  * two differ only in which module `@boot` resolves to and in how the CSP is
  * delivered, so everything else lives here once.
  */
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import type { UserConfig } from "vite";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
-const resolveFromRoot = (...parts: string[]): string => [ROOT.replace(/\/$/, ""), ...parts].join("/");
+const resolveFromRoot = (...parts: string[]): string => path.resolve(ROOT, ...parts);
 
 /**
  * Heavy renderer vendor libs split out of the eager main chunk. Patterns match
