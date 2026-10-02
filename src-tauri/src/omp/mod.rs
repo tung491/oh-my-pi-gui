@@ -2,8 +2,10 @@
 //! NDJSON bridge, the stats server and the benchmark runner are ported here;
 //! the bodies below are the stubs the port replaces.
 
+mod event_batcher;
 pub mod ipc;
 mod rpc_bridge;
+mod rpc_client;
 pub mod supervisor;
 
 use std::collections::HashMap;
@@ -60,8 +62,7 @@ impl OmpPort for Omp {
     }
 
     fn new_event_batcher(&self, flush: FlushCallback) -> Box<dyn EventBatcher> {
-        let _ = flush;
-        todo!()
+        Box::new(event_batcher::Batcher::new(flush))
     }
 
     fn spawn_env(&self) -> BoxFuture<'_, HashMap<String, String>> {
