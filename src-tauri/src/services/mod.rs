@@ -3,6 +3,20 @@
 
 pub mod ipc;
 
+mod dialog_memory;
+mod dialogs;
+mod editor;
+mod fs;
+mod host_tools;
+mod legacy_storage;
+mod log_watcher;
+mod models_config;
+mod open_path_target;
+mod provider_cleanup;
+mod session_cache;
+mod session_index;
+mod system;
+
 use std::path::PathBuf;
 use std::any::Any;
 use std::sync::Arc;
@@ -14,6 +28,8 @@ use tauri::AppHandle;
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
 use crate::ports::{CtxRef, Caller, ServiceError, ServicesPort, SessionInfo, SessionKind, SessionScope};
+use log_watcher::LogWatcher;
+use session_index::SessionIndex;
 
 pub const CHANNELS: &[(&str, Scope)] = &[
     ("runtime:error-report", Scope::Main),
@@ -77,11 +93,27 @@ pub fn register(reg: &mut Registry) {
 /// Production `ServicesPort`.
 pub struct Services {
     ctx: CtxRef,
+    index: Arc<SessionIndex>,
+    pub(crate) log_watcher: Arc<LogWatcher>,
+    pub(crate) dialog_memory: dialogs::DialogMemory,
+    pub(crate) notify_dedupe: system::NotifyDedupe,
 }
 
 impl Services {
     pub fn new(ctx: CtxRef) -> Self {
-        Self { ctx }
+        let agent_dir = crate::paths::agent_dir();
+        let sessions_dir = agent_dir.join("sessions");
+        let logs_dir = agent_dir.join("..").join("logs");
+        // Almost every caller passes its own cwd (`ctx.tabs.cwd_for`); this is
+        // only the fallback for a "local" scope query with no caller cwd at all.
+        let default_cwd = String::new();
+        Self {
+            ctx,
+            index: Arc::new(SessionIndex::new(sessions_dir, default_cwd)),
+            log_watcher: Arc::new(LogWatcher::new(logs_dir)),
+            dialog_memory: dialogs::DialogMemory::new(),
+            notify_dedupe: system::NotifyDedupe::new(),
+        }
     }
 
     /// The application context; `None` only while the process shuts down.
@@ -96,47 +128,51 @@ impl ServicesPort for Services {
     }
 
     fn sessions_list(&self, scope: SessionScope, cwd: Option<String>) -> BoxFuture<'_, Result<Vec<SessionInfo>, ServiceError>> {
-        let _ = (scope, cwd);
-        todo!()
+        let result = self.index.list(scope, cwd.as_deref());
+        Box::pin(std::future::ready(result))
     }
 
     fn session_kind_for(&self, session_path: &str) -> BoxFuture<'_, SessionKind> {
-        let _ = session_path;
-        todo!()
+        let result = self.index.kind_for(session_path);
+        Box::pin(std::future::ready(result))
     }
 
     fn session_delete(&self, session_path: &str) -> BoxFuture<'_, Result<(), ServiceError>> {
-        let _ = session_path;
-        todo!()
+        let result = self.index.delete_session(session_path);
+        Box::pin(std::future::ready(result))
     }
 
     fn session_search(&self, query: &str, candidate_paths: Vec<String>) -> BoxFuture<'_, Vec<String>> {
-        let _ = (query, candidate_paths);
-        todo!()
+        let result = self.index.search_content(query, &candidate_paths);
+        Box::pin(std::future::ready(result))
     }
 
     fn sessions_dir(&self) -> PathBuf {
-        todo!()
+        self.index.sessions_dir().to_path_buf()
     }
 
     fn on_sessions_changed(&self, listener: Box<dyn Fn() + Send + Sync>) {
-        let _ = listener;
-        todo!()
+        self.index.on_change(listener);
     }
 
     fn execute_host_tool(&self, caller: Caller, name: &str, args: Value) -> Option<BoxFuture<'static, Result<Value, String>>> {
-        let _ = (caller, name, args);
-        todo!()
+        let _ = caller;
+        let ctx = self.ctx()?;
+        host_tools::execute(&ctx, name, &args)
     }
 
     fn import_legacy_renderer_storage(&self) -> BoxFuture<'_, ()> {
-        // The port imports Chromium localStorage here, before any window exists.
+        // Runs before any window exists; `services::init` awaits it synchronously.
+        if let Some(ctx) = self.ctx() {
+            legacy_storage::import(&ctx.prefs, crate::paths::user_data_dir());
+        }
         Box::pin(std::future::ready(()))
     }
 
     fn shutdown(&self) -> BoxFuture<'_, ()> {
-        // No watchers run yet; the port stops the session and log watchers here.
         let _ = self.ctx();
+        self.index.stop();
+        self.log_watcher.stop();
         Box::pin(std::future::ready(()))
     }
 }
@@ -145,5 +181,32 @@ impl ServicesPort for Services {
 pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
     let _ = app;
     tauri::async_runtime::block_on(ctx.services.import_legacy_renderer_storage());
+    if let Some(services) = ctx.services.as_any().downcast_ref::<Services>() {
+        let weak_ctx = Arc::downgrade(ctx);
+        services.index.on_change(Box::new(move || {
+            if let Some(ctx) = weak_ctx.upgrade() {
+                ctx.bridge.broadcast_main("sessions:changed", Value::Null);
+            }
+        }));
+        services.index.start();
+
+        let weak_ctx = Arc::downgrade(ctx);
+        let log_watcher = services.log_watcher.clone();
+        services.log_watcher.on_lines(Box::new(move |lines| {
+            if let Some(ctx) = weak_ctx.upgrade() {
+                let snapshot = log_watcher.snapshot();
+                ctx.bridge.broadcast_main("log:line", serde_json::json!({ "lines": lines, "nextSequence": snapshot.next_sequence }));
+            }
+        }));
+        services.log_watcher.start();
+    }
+    let weak_ctx = Arc::downgrade(ctx);
+    ctx.desktop.on_window_closed(Box::new(move |record| {
+        if let Some(ctx) = weak_ctx.upgrade() {
+            if let Some(services) = ctx.services.as_any().downcast_ref::<Services>() {
+                services.dialog_memory.forget(record.id);
+            }
+        }
+    }));
     Ok(())
 }
