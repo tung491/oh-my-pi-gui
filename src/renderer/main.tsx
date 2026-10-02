@@ -1,3 +1,4 @@
+import "@boot";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { RootErrorBoundary } from "./components/common/RootErrorBoundary";

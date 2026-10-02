@@ -1,3 +1,4 @@
+import "@boot";
 import { createRoot } from "react-dom/client";
 import { I18nProvider } from "../lib/i18n";
 import { QuickEntryBar } from "./QuickEntryBar";
