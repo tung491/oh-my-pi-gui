@@ -44,6 +44,7 @@ import type {
 import { IPC_COMMANDS, IPC_EVENTS } from "../shared/ipc-types";
 import type {
 	ModelScreen,
+	OllamaInstallProgress,
 	OllamaRemedyId,
 	OllamaRemedyResult,
 	OllamaStatus,
@@ -348,6 +349,8 @@ const api: OmpApi = {
 		openDownload: () => ipcRenderer.invoke(IPC_COMMANDS.OLLAMA_OPEN_DOWNLOAD) as Promise<void>,
 		onPullProgress: (callback: (progress: PullProgress) => void) =>
 			subscribe<PullProgress>(IPC_EVENTS.OLLAMA_PULL_PROGRESS, callback),
+		onInstallProgress: (callback: (progress: OllamaInstallProgress) => void) =>
+			subscribe<OllamaInstallProgress>(IPC_EVENTS.OLLAMA_INSTALL_PROGRESS, callback),
 	},
 
 	providerCleanup: {

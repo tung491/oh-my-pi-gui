@@ -3,8 +3,14 @@
  * main: the renderer names an `OllamaRemedyId` and can never supply a command.
  * Linux only, authorised through polkit (`pkexec`).
  */
-import { execFile } from "node:child_process";
-import type { OllamaRemedyId, OllamaRemedyResult, OllamaStatus } from "../../shared/ollama-types";
+import { spawn } from "node:child_process";
+import type {
+	OllamaInstallProgress,
+	OllamaRemedyId,
+	OllamaRemedyResult,
+	OllamaStatus,
+} from "../../shared/ollama-types";
+import { createInstallProgressParser, initialInstallProgress } from "./install-progress";
 
 /**
  * The official installer. It downloads and runs remote code as root; that is
@@ -36,31 +42,64 @@ export interface ExecError extends Error {
 	signal?: NodeJS.Signals | null;
 }
 
-export type ExecFileFn = (
+/** What a spawned command reports back: output as it arrives, then exactly one exit or spawn error. */
+export interface SpawnHandlers {
+	onOutput(stream: "stdout" | "stderr", chunk: string): void;
+	onExit(code: number | null, signal: NodeJS.Signals | null): void;
+	/** The process could not be started (or failed outright), e.g. `ENOENT` for a missing `pkexec`. */
+	onError(error: ExecError): void;
+}
+
+/** Start `file`; the returned `kill` signals the child (the timeout's SIGTERM). */
+export type SpawnFn = (
 	file: string,
 	args: readonly string[],
-	options: { timeout: number },
-	callback: (error: ExecError | null, stdout: string, stderr: string) => void,
-) => void;
+	handlers: SpawnHandlers,
+) => { kill(signal: NodeJS.Signals): void };
 
-const nodeExecFile: ExecFileFn = (file, args, options, callback) => {
-	execFile(file, [...args], { timeout: options.timeout, encoding: "utf8", maxBuffer: 4 * 1024 * 1024 }, callback);
+const nodeSpawn: SpawnFn = (file, args, handlers) => {
+	const child = spawn(file, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+	child.stdout.setEncoding("utf8");
+	child.stderr.setEncoding("utf8");
+	child.stdout.on("data", (chunk: string) => handlers.onOutput("stdout", chunk));
+	child.stderr.on("data", (chunk: string) => handlers.onOutput("stderr", chunk));
+	child.on("error", handlers.onError);
+	// `close` rather than `exit`, so the last output has been read.
+	child.on("close", handlers.onExit);
+	return {
+		kill: signal => {
+			child.kill(signal);
+		},
+	};
 };
 
 export interface RemedyDeps {
 	platform: NodeJS.Platform;
-	execFile: ExecFileFn;
+	spawn: SpawnFn;
 	probe: () => Promise<OllamaStatus>;
 	/** After a successful remedy the daemon may need a moment to listen; how often and how long to re-probe. */
 	settleIntervalMs: number;
 	settleAttempts: number;
+	/**
+	 * Installer progress, for `linux-install` only: an indeterminate frame before
+	 * the polkit dialog, frames parsed from its output, then a `done` frame just
+	 * before the result resolves, whatever the outcome.
+	 */
+	onProgress?: (frame: OllamaInstallProgress) => void;
 }
 
 const STDERR_TAIL = 500;
+/** Enough stderr kept for `tail` after trimming curl's trailing bar redraws. */
+const STDERR_KEEP = 16 * STDERR_TAIL;
 const NO_AUTH_AGENT = /no authentication agent/i;
 
 function tail(text: string): string {
-	const trimmed = text.trim();
+	// Each `\r` redraw replaces the line it is on, as a terminal would show it.
+	const trimmed = text
+		.split("\n")
+		.map(line => line.slice(line.lastIndexOf("\r") + 1))
+		.join("\n")
+		.trim();
 	return trimmed.length > STDERR_TAIL ? trimmed.slice(-STDERR_TAIL) : trimmed;
 }
 
@@ -80,14 +119,55 @@ export function classifyExit(error: ExecError | null, stderr: string, file: stri
 	return { outcome: "failed", fault: tail(stderr) || error.message };
 }
 
-function run(deps: RemedyDeps, command: RemedyCommand): Promise<Attempt> {
+/** The error `execFile` would report for this exit, so `classifyExit` reads both the same way. */
+function exitError(
+	file: string,
+	code: number | null,
+	signal: NodeJS.Signals | null,
+	killed: boolean,
+): ExecError | null {
+	if (code === 0 && !signal && !killed) return null;
+	const reason = signal ? `signal ${signal}` : `code ${code}`;
+	return Object.assign(new Error(`${file} exited with ${reason}`), { code, signal, killed });
+}
+
+function run(deps: RemedyDeps, command: RemedyCommand, onStderr: ((chunk: string) => void) | null): Promise<Attempt> {
 	return new Promise(resolve => {
+		let stderr = "";
+		let timedOut = false;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let settled = false;
+		const finish = (attempt: Attempt) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			resolve(attempt);
+		};
 		try {
-			deps.execFile(command.file, command.args, { timeout: command.timeoutMs }, (error, _stdout, stderr) =>
-				resolve(classifyExit(error, stderr ?? "", command.file)),
-			);
+			const child = deps.spawn(command.file, command.args, {
+				onOutput: (stream, chunk) => {
+					if (settled || stream !== "stderr") return;
+					stderr = (stderr + chunk).slice(-STDERR_KEEP);
+					onStderr?.(chunk);
+				},
+				onExit: (code, signal) =>
+					finish(classifyExit(exitError(command.file, code, signal, timedOut), stderr, command.file)),
+				onError: error => {
+					// Once authorised, pkexec has become the root command, which this process may not signal.
+					// It keeps running, so its own exit decides the outcome rather than the failed kill.
+					if (timedOut && error.code === "EPERM") {
+						timedOut = false;
+						return;
+					}
+					finish(classifyExit(error, stderr, command.file));
+				},
+			});
+			timer = setTimeout(() => {
+				timedOut = true;
+				child.kill("SIGTERM");
+			}, command.timeoutMs);
 		} catch (error) {
-			resolve({ outcome: "failed", fault: error instanceof Error ? error.message : String(error) });
+			finish({ outcome: "failed", fault: error instanceof Error ? error.message : String(error) });
 		}
 	});
 }
@@ -133,7 +213,7 @@ export async function runRemedy(
 ): Promise<OllamaRemedyResult> {
 	const deps: RemedyDeps = {
 		platform: process.platform,
-		execFile: nodeExecFile,
+		spawn: nodeSpawn,
 		settleIntervalMs: 500,
 		settleAttempts: 10,
 		...overrides,
@@ -141,7 +221,31 @@ export async function runRemedy(
 	if (!isRemedyId(id)) throw new Error(`Unknown Ollama remedy: ${String(id)}`);
 	if (deps.platform !== "linux") throw new Error(`Ollama remedies run on Linux only, not ${deps.platform}`);
 
-	const attempt = await run(deps, REMEDY_COMMANDS[id]);
+	const onProgress = id === "linux-install" ? deps.onProgress : undefined;
+	if (!onProgress) return settle(deps, await run(deps, REMEDY_COMMANDS[id], null));
+
+	const report = (frame: OllamaInstallProgress) => {
+		try {
+			onProgress(frame);
+		} catch (error) {
+			console.warn(`[ollama] install progress listener failed: ${error instanceof Error ? error.message : error}`);
+		}
+	};
+	const parser = createInstallProgressParser();
+	report(initialInstallProgress());
+	try {
+		const attempt = await run(deps, REMEDY_COMMANDS[id], chunk => {
+			const frame = parser.push(chunk);
+			if (frame) report(frame);
+		});
+		return await settle(deps, attempt);
+	} finally {
+		report(parser.final());
+	}
+}
+
+/** Re-probe after the command, waiting for the daemon when the command succeeded. */
+async function settle(deps: RemedyDeps, attempt: Attempt): Promise<OllamaRemedyResult> {
 	let status = await deps.probe();
 	if (attempt.outcome === "applied") {
 		for (let i = 1; i < deps.settleAttempts && status.state !== "ok"; i++) {

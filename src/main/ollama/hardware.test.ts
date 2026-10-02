@@ -8,6 +8,7 @@ function deps(over: Partial<HardwareDeps>): Partial<HardwareDeps> {
 		platform: "linux",
 		arch: "x64",
 		totalmem: () => 32 * GIB,
+		availableParallelism: () => 8,
 		nvidiaSmi: async () => null,
 		gpuInfo: async () => null,
 		timeoutMs: 50,
@@ -57,6 +58,7 @@ describe("readMachine", () => {
 			vramBytes: 24564 * 1024 * 1024,
 			gpuName: "NVIDIA GeForce RTX 4090",
 			unifiedMemory: false,
+			threads: 8,
 		});
 	});
 
@@ -64,7 +66,13 @@ describe("readMachine", () => {
 		const machine = await readMachine(
 			deps({ gpuInfo: async () => ({ gpuDevice: [{ deviceString: "Intel Iris" }] }) }),
 		);
-		expect(machine).toEqual({ ramBytes: 32 * GIB, vramBytes: null, gpuName: "Intel Iris", unifiedMemory: false });
+		expect(machine).toEqual({
+			ramBytes: 32 * GIB,
+			vramBytes: null,
+			gpuName: "Intel Iris",
+			unifiedMemory: false,
+			threads: 8,
+		});
 	});
 
 	it("marks Apple Silicon as unified memory and skips nvidia-smi", async () => {
@@ -93,8 +101,24 @@ describe("readMachine", () => {
 				},
 			}),
 		);
-		expect(machine).toEqual({ ramBytes: 32 * GIB, vramBytes: null, gpuName: null, unifiedMemory: false });
+		expect(machine).toEqual({
+			ramBytes: 32 * GIB,
+			vramBytes: null,
+			gpuName: null,
+			unifiedMemory: false,
+			threads: 8,
+		});
 		expect(Date.now() - started).toBeLessThan(1_000);
+	});
+
+	it("counts at least one thread when the count is unreadable or nonsensical", async () => {
+		const throwing = () => {
+			throw new Error("EPERM");
+		};
+		for (const availableParallelism of [() => 0, () => Number.NaN, throwing]) {
+			expect(await readMachine(deps({ availableParallelism }))).toMatchObject({ threads: 1 });
+		}
+		expect(await readMachine(deps({ availableParallelism: () => 12 }))).toMatchObject({ threads: 12 });
 	});
 
 	it("returns null when RAM is unreadable", async () => {

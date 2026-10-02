@@ -195,7 +195,7 @@ Open the DMG and drag **Sai ATLAS** into **Applications**. The build is ad-hoc s
 
 Windows packages are currently unsigned. Windows SmartScreen may require **More info → Run anyway** on first launch after confirming the download's source. The installer upgrades an existing omp install in place and keeps its settings; if you pinned omp to the taskbar, pin Sai ATLAS again.
 
-Sai ATLAS runs its models locally through [Ollama](https://ollama.com), so install Ollama first. On the first launch a welcome screen shows this machine's memory and graphics, whether Ollama is running, and three model sizes (minimal, recommended and maximum) picked to fit this machine.
+Sai ATLAS runs its models locally through [Ollama](https://ollama.com), so install Ollama first. On the first launch a welcome screen shows this machine's memory and graphics, whether Ollama is running, and up to three Gemma 4 models (E2B, E4B and 26B A4B, labelled minimal, recommended and maximum) picked to fit this machine.
 
 - **Ollama not running or not installed:** on Linux the screen shows the exact command and runs it after the system password prompt, either **Start Ollama** (`systemctl start ollama.service`) or **Install Ollama** (the official `ollama.com/install.sh` installer). On macOS and Windows it links to ollama.com/download; start Ollama, then choose **Check again**.
 - **Download** a model on its card and watch the progress bar. **Cancel** stops the download, and a later **Download** resumes it.

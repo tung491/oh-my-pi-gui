@@ -8,7 +8,12 @@ import { parseHTML } from "linkedom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import type { OllamaRemedyResult, OllamaStatus, PullProgress } from "../../../shared/ollama-types";
+import type {
+	OllamaInstallProgress,
+	OllamaRemedyResult,
+	OllamaStatus,
+	PullProgress,
+} from "../../../shared/ollama-types";
 import type { RpcResponse } from "../../../shared/rpc-types";
 import { I18nProvider, translate } from "../../lib/i18n";
 import { useModelStore } from "../../stores/model";
@@ -44,6 +49,7 @@ function ollamaStatus(overrides: Partial<OllamaStatus> = {}): OllamaStatus {
 }
 
 const STOPPED = ollamaStatus({ state: "stopped", modelCount: 0, installedTags: [], remedy: "linux-start" });
+const ABSENT = ollamaStatus({ state: "absent", modelCount: 0, installedTags: [], remedy: "linux-install" });
 
 let ollama: {
 	status: Mock<() => Promise<OllamaStatus>>;
@@ -52,15 +58,18 @@ let ollama: {
 	runRemedy: Mock<(id: string) => Promise<OllamaRemedyResult>>;
 	openDownload: Mock<() => Promise<void>>;
 	onPullProgress: Mock<(callback: (progress: PullProgress) => void) => () => void>;
+	onInstallProgress: Mock<(callback: (progress: OllamaInstallProgress) => void) => () => void>;
 };
 let rpc: Record<string, Mock>;
 let prefs: { get: Mock; set: Mock<(key: string, value: unknown) => Promise<void>> };
 let emitProgress: (progress: PullProgress) => void;
+let emitInstall: (progress: OllamaInstallProgress) => void;
 
 const ok = (data?: unknown): RpcResponse => ({ type: "response", command: "x", success: true, data });
 
 beforeEach(() => {
 	emitProgress = () => {};
+	emitInstall = () => {};
 	ollama = {
 		status: vi.fn(async () => ollamaStatus()),
 		pull: vi.fn(),
@@ -71,6 +80,12 @@ beforeEach(() => {
 			emitProgress = callback;
 			return () => {
 				emitProgress = () => {};
+			};
+		}),
+		onInstallProgress: vi.fn(callback => {
+			emitInstall = callback;
+			return () => {
+				emitInstall = () => {};
 			};
 		}),
 	};
@@ -412,6 +427,76 @@ describe("ProvidersWindow (Ollama)", () => {
 
 		expect(text()).toContain(translate("welcome.ollama.stopped.linux"));
 		expect(document.body.querySelector("[data-remedy-hint]")).toBeNull();
+	});
+
+	it("shows an install another window started from its broadcast frames", async () => {
+		ollama.status.mockResolvedValue(ABSENT);
+		await mountOpen();
+		const bar = () => document.body.querySelector("[data-install-progress]");
+		expect(bar()).toBeNull();
+
+		await act(async () => emitInstall({ stage: "Downloading ollama...", percent: 42, done: false }));
+		expect(ollama.runRemedy).not.toHaveBeenCalled();
+		expect(bar()?.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("42");
+		expect(bar()?.textContent).toContain("Downloading ollama...");
+		expect(bar()?.querySelector("button")).toBeNull();
+
+		await act(async () => emitInstall({ stage: "Install complete.", percent: -1, done: true }));
+		expect(bar()).toBeNull();
+	});
+
+	it("re-reads Ollama when another window's install ends", async () => {
+		ollama.status.mockResolvedValue(ABSENT);
+		await mountOpen();
+		const probes = ollama.status.mock.calls.length;
+		ollama.status.mockResolvedValue(ollamaStatus());
+		await act(async () => emitInstall({ stage: "Install complete.", percent: -1, done: true }));
+		await settle();
+		expect(ollama.status.mock.calls.length).toBe(probes + 1);
+		expect(document.body.querySelector('.omp-ollama-row[data-state="ok"]')).not.toBeNull();
+	});
+
+	it("keeps the running install's stage when it joins that install", async () => {
+		ollama.status.mockResolvedValue(ABSENT);
+		ollama.runRemedy.mockReturnValue(new Promise<OllamaRemedyResult>(() => {}));
+		await mountOpen();
+		await act(async () => emitInstall({ stage: "Downloading ollama...", percent: 42, done: false }));
+
+		await act(async () => {
+			(document.body.querySelector('[data-action="remedy"]') as HTMLButtonElement)?.click();
+		});
+		await settle();
+		const bar = document.body.querySelector("[data-install-progress]");
+		expect(bar?.textContent).toContain("Downloading ollama...");
+		expect(bar?.textContent).not.toContain(translate("welcome.install.waiting"));
+	});
+
+	it("ignores install frames once the row no longer offers the install", async () => {
+		ollama.status.mockResolvedValue(STOPPED);
+		await mountOpen();
+		await act(async () => emitInstall({ stage: "Downloading ollama...", percent: 42, done: false }));
+		expect(document.body.querySelector("[data-install-progress]")).toBeNull();
+	});
+
+	it("shows the waiting state for its own install until the remedy result arrives", async () => {
+		ollama.status.mockResolvedValue(ABSENT);
+		const remedy = Promise.withResolvers<OllamaRemedyResult>();
+		ollama.runRemedy.mockReturnValue(remedy.promise);
+		await mountOpen();
+
+		await act(async () => {
+			(document.body.querySelector('[data-action="remedy"]') as HTMLButtonElement)?.click();
+		});
+		await settle();
+		const bar = () => document.body.querySelector("[data-install-progress]");
+		expect(bar()?.textContent).toContain(translate("welcome.install.waiting"));
+
+		await act(async () => emitInstall({ stage: "Installing ollama to /usr/local", percent: -1, done: false }));
+		expect(bar()?.textContent).toContain("Installing ollama to /usr/local");
+
+		await act(async () => remedy.resolve({ outcome: "cancelled", status: ABSENT }));
+		await settle();
+		expect(bar()).toBeNull();
 	});
 
 	it("explains an unavailable or failed remedy inline", async () => {

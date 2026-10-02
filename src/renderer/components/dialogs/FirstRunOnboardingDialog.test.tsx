@@ -6,6 +6,7 @@ import type { CustomProviderView } from "../../../shared/ipc-types";
 import type {
 	ModelChoice,
 	ModelScreen,
+	OllamaInstallProgress,
 	OllamaRemedyId,
 	OllamaRemedyResult,
 	OllamaStatus,
@@ -49,8 +50,11 @@ interface FakeOllama {
 	runRemedy: Mock<(id: OllamaRemedyId) => Promise<OllamaRemedyResult>>;
 	openDownload: Mock<() => Promise<void>>;
 	onPullProgress: Mock<(callback: (progress: PullProgress) => void) => () => void>;
+	onInstallProgress: Mock<(callback: (progress: OllamaInstallProgress) => void) => () => void>;
 	/** Push a progress frame as main would. */
 	emit: (frame: PullProgress) => void;
+	/** Push an install progress frame as main would. */
+	emitInstall: (frame: OllamaInstallProgress) => void;
 	/** Settle the pull currently awaited by the screen. */
 	finishPull: (frame: PullProgress) => void;
 }
@@ -91,19 +95,21 @@ function choice(overrides: Partial<ModelChoice> & { tag: string }): ModelChoice 
 	return {
 		label: overrides.tag,
 		params: 8,
+		activeParams: 8,
 		sizeBytes: 5.2e9,
 		needBytes: 7.6e9,
 		fit: "vram",
 		speed: "fast",
 		tiers: ["recommended"],
 		installed: false,
+		tight: false,
 		...overrides,
 	};
 }
 
 function modelScreen(choices: ModelChoice[]): ModelScreen {
 	return {
-		machine: { ramBytes: 32e9, vramBytes: 12e9, gpuName: "RTX 4070", unifiedMemory: false },
+		machine: { ramBytes: 32e9, vramBytes: 12e9, gpuName: "RTX 4070", unifiedMemory: false, threads: 8 },
 		choices,
 	};
 }
@@ -127,6 +133,7 @@ function installFakeOmp(options: FakeOptions = {}): FakeOmp {
 	const screens = [...(options.screens ?? [modelScreen(DEFAULT_CHOICES)])];
 	const next = <T,>(queue: T[]): T => (queue.length > 1 ? (queue.shift() as T) : queue[0]);
 	const listeners = new Set<(progress: PullProgress) => void>();
+	const installListeners = new Set<(progress: OllamaInstallProgress) => void>();
 	let pending: PromiseWithResolvers<PullProgress> | null = null;
 
 	const ollama: FakeOllama = {
@@ -144,8 +151,15 @@ function installFakeOmp(options: FakeOptions = {}): FakeOmp {
 			listeners.add(callback);
 			return () => listeners.delete(callback);
 		}),
+		onInstallProgress: vi.fn(callback => {
+			installListeners.add(callback);
+			return () => installListeners.delete(callback);
+		}),
 		emit: frame => {
 			for (const listener of listeners) listener(frame);
+		},
+		emitInstall: frame => {
+			for (const listener of installListeners) listener(frame);
 		},
 		finishPull: frame => pending?.resolve(frame),
 	};
@@ -430,6 +444,49 @@ describe("FirstRunOnboardingDialog", () => {
 		expect(document.querySelector('.omp-ollama-row[data-state="ok"]')?.textContent).toContain(
 			"Ollama is running (0 models)",
 		);
+	});
+
+	it("streams install progress under the row and drops it when the install ends", async () => {
+		const absent = status({ state: "absent", remedy: "linux-install", modelCount: 0, installedTags: [] });
+		const omp = installFakeOmp({ statuses: [absent] });
+		const remedy = Promise.withResolvers<OllamaRemedyResult>();
+		omp.ollama.runRemedy.mockReturnValue(remedy.promise);
+		await mountReady();
+		const bar = () => document.querySelector("[data-install-progress]");
+		expect(bar()).toBeNull();
+
+		await click(action("remedy"));
+		expect(bar()?.textContent).toContain("Waiting for authorization…");
+		expect(bar()?.querySelector('[role="progressbar"]')?.getAttribute("data-indeterminate")).toBe("true");
+
+		await act(async () => omp.ollama.emitInstall({ stage: "Downloading ollama...", percent: 42, done: false }));
+		expect(bar()?.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("42");
+		expect(bar()?.textContent).toContain("Downloading ollama...");
+		expect(bar()?.textContent).toContain("42%");
+		expect(bar()?.querySelector("button")).toBeNull();
+
+		await act(async () => omp.ollama.emitInstall({ stage: "Install complete.", percent: -1, done: true }));
+		expect(bar()).toBeNull();
+
+		await act(async () => remedy.resolve({ outcome: "applied", status: status({ modelCount: 0 }) }));
+		await flush();
+		expect(bar()).toBeNull();
+		expect(document.querySelector('.omp-ollama-row[data-state="ok"]')).not.toBeNull();
+	});
+
+	it("clears a held install frame when the install call fails", async () => {
+		const absent = status({ state: "absent", remedy: "linux-install", modelCount: 0, installedTags: [] });
+		const omp = installFakeOmp({ statuses: [absent] });
+		const remedy = Promise.withResolvers<OllamaRemedyResult>();
+		omp.ollama.runRemedy.mockReturnValue(remedy.promise);
+		await mountReady();
+		await click(action("remedy"));
+		await act(async () => omp.ollama.emitInstall({ stage: "Downloading ollama...", percent: 10, done: false }));
+		expect(document.querySelector("[data-install-progress]")).not.toBeNull();
+
+		await act(async () => remedy.reject(new Error("install exited 1")));
+		await flush();
+		expect(document.querySelector("[data-install-progress]")).toBeNull();
 	});
 
 	it("leaves the row untouched when the authorization prompt is dismissed", async () => {

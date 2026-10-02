@@ -51,6 +51,8 @@ export function ModelCard({ choice, progress, picked, downloadDisabled, onUse, o
 			<dl className="omp-model-specs">
 				<dt>{t("welcome.card.params")}</dt>
 				<dd>{`${choice.params}B`}</dd>
+				<dt>{t("welcome.card.active")}</dt>
+				<dd>{`${choice.activeParams}B`}</dd>
 				<dt>{t("welcome.card.download")}</dt>
 				<dd>{formatGigabytes(choice.sizeBytes)}</dd>
 				<dt>{t("welcome.card.needs")}</dt>
@@ -60,6 +62,11 @@ export function ModelCard({ choice, progress, picked, downloadDisabled, onUse, o
 				<dt>{t("welcome.card.speed")}</dt>
 				<dd>{t(`welcome.card.speed.${choice.speed}`)}</dd>
 			</dl>
+			{choice.tight && (
+				<p className="text-omp-sm text-(--omp-warning)" data-tight="true">
+					{t("welcome.card.tight")}
+				</p>
+			)}
 			<div className="omp-model-state">
 				{choice.installed === true ? (
 					<div className="flex items-center gap-2 text-(--omp-success)">
@@ -114,7 +121,7 @@ export function ModelCardSkeleton() {
 			<span className="omp-skeleton omp-welcome-wait" style={{ width: "5rem" }} />
 			<span className="omp-skeleton omp-welcome-wait omp-welcome-wait-lg" style={{ width: "70%" }} />
 			<span className="omp-skeleton omp-welcome-wait" style={{ width: "45%" }} />
-			{[0, 1, 2, 3, 4].map(row => (
+			{[0, 1, 2, 3, 4, 5].map(row => (
 				<span className="omp-skeleton omp-welcome-wait" key={row} style={{ width: "100%" }} />
 			))}
 		</div>

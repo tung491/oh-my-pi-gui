@@ -3,18 +3,32 @@
  * Electron (`ipcMain`, `app`, `shell`, `webContents`); the rest is plain Node
  * so it can be unit-tested against a fake daemon.
  */
-import { app, ipcMain, shell, type WebContents } from "electron";
+import { app, ipcMain, shell, type WebContents, webContents } from "electron";
 import { IPC_COMMANDS, IPC_EVENTS } from "../../shared/ipc-types";
 import { chooseModels, OLLAMA_CATALOG } from "../../shared/ollama-catalog";
-import type { ModelScreen, OllamaRemedyResult, OllamaStatus, PullProgress } from "../../shared/ollama-types";
+import type {
+	ModelScreen,
+	OllamaInstallProgress,
+	OllamaRemedyResult,
+	OllamaStatus,
+	PullProgress,
+} from "../../shared/ollama-types";
 import { resolveOllamaBaseUrl } from "./base-url";
 import { readMachine } from "./hardware";
+import { throttleInstallProgress } from "./install-progress";
 import { isRecord, probeOllama } from "./probe";
 import { isValidModelTag, OllamaPuller, type PullListener } from "./pull";
 import { createRemedyGate, isRemedyId, runRemedy } from "./remedy";
 import { warmModel } from "./warm";
 
 export const OLLAMA_DOWNLOAD_URL = "https://ollama.com/download";
+
+/** Every live window hears the install: the welcome screen and Settings may both be watching one run. */
+function broadcastInstallProgress(frame: OllamaInstallProgress): void {
+	for (const contents of webContents.getAllWebContents()) {
+		if (!contents.isDestroyed()) contents.send(IPC_EVENTS.OLLAMA_INSTALL_PROGRESS, frame);
+	}
+}
 
 function tagOf(payload: unknown): unknown {
 	return isRecord(payload) ? payload.tag : undefined;
@@ -68,7 +82,9 @@ export function registerOllamaIpc(): void {
 
 	const remedy = createRemedyGate(
 		() => probeOllama(),
-		id => runRemedy(id, { probe: () => probeOllama() }),
+		// The gate joins repeat requests to one run, so each run gets one throttled broadcaster.
+		id =>
+			runRemedy(id, { probe: () => probeOllama(), onProgress: throttleInstallProgress(broadcastInstallProgress) }),
 	);
 	ipcMain.handle(IPC_COMMANDS.OLLAMA_REMEDY, (_event, payload: unknown): Promise<OllamaRemedyResult> => {
 		const id = isRecord(payload) ? payload.id : undefined;

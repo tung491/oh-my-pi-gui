@@ -54,12 +54,14 @@ function choice(overrides: Partial<ModelChoice> = {}): ModelChoice {
 		tag: "qwen3:8b",
 		label: "Qwen3 8B",
 		params: 8,
+		activeParams: 4.5,
 		sizeBytes: 5.2e9,
 		needBytes: 7.6e9,
 		fit: "vram",
 		speed: "fast",
 		tiers: ["recommended", "maximum"],
 		installed: false,
+		tight: false,
 		...overrides,
 	};
 }
@@ -104,8 +106,16 @@ describe("ModelCard", () => {
 		expect(container.textContent).toContain("qwen3:8b");
 		const terms = container.querySelectorAll("dt").map(term => term.textContent);
 		const values = container.querySelectorAll("dd").map(value => value.textContent);
-		expect(terms).toEqual(["Parameters", "Download", "Needs", "Runs in", "Speed"]);
-		expect(values).toEqual(["8B", "5.2 GB", "7.6 GB", "Graphics memory", "Fast"]);
+		expect(terms).toEqual(["Parameters", "Active per token", "Download", "Needs", "Runs in", "Speed"]);
+		expect(values).toEqual(["8B", "4.5B", "5.2 GB", "7.6 GB", "Graphics memory", "Fast"]);
+		expect(container.querySelector("[data-tight]")).toBeNull();
+	});
+
+	it("warns when the model is offered only as a tight fit", async () => {
+		await render({ choice: choice({ tight: true, fit: "ram", speed: "slow", tiers: ["minimal"] }) });
+		expect(container.querySelector("[data-tight]")?.textContent).toBe(
+			"Tight fit: this machine may slow down while the model runs.",
+		);
 	});
 
 	it("offers Download for a model that is not on the machine", async () => {
@@ -168,19 +178,25 @@ describe("MachineFacts", () => {
 
 	it("reports memory and a discrete GPU", async () => {
 		await mount(
-			<MachineFacts machine={{ ramBytes: 16e9, vramBytes: 8e9, gpuName: "RTX 3070", unifiedMemory: false }} />,
+			<MachineFacts
+				machine={{ ramBytes: 16e9, vramBytes: 8e9, gpuName: "RTX 3070", unifiedMemory: false, threads: 8 }}
+			/>,
 		);
 		expect(container.textContent).toContain("Memory: 16.0 GB");
 		expect(container.textContent).toContain("Graphics: RTX 3070, 8.0 GB");
 	});
 
 	it("reports shared memory on Apple Silicon and no GPU elsewhere", async () => {
-		await mount(<MachineFacts machine={{ ramBytes: 16e9, vramBytes: null, gpuName: "M2", unifiedMemory: true }} />);
+		await mount(
+			<MachineFacts machine={{ ramBytes: 16e9, vramBytes: null, gpuName: "M2", unifiedMemory: true, threads: 8 }} />,
+		);
 		expect(container.textContent).toContain("Graphics: M2, sharing system memory");
 		await act(async () => {
 			root.render(
 				<I18nProvider>
-					<MachineFacts machine={{ ramBytes: 8e9, vramBytes: null, gpuName: null, unifiedMemory: false }} />
+					<MachineFacts
+						machine={{ ramBytes: 8e9, vramBytes: null, gpuName: null, unifiedMemory: false, threads: 8 }}
+					/>
 				</I18nProvider>,
 			);
 		});

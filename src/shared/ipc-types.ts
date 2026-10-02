@@ -6,6 +6,7 @@
 import type { LaunchProfile } from "./launch-profile";
 import type {
 	ModelScreen,
+	OllamaInstallProgress,
 	OllamaRemedyId,
 	OllamaRemedyResult,
 	OllamaStatus,
@@ -99,6 +100,8 @@ export const IPC_EVENTS = {
 	QUICK_ENTRY_STATE: "quick-entry:state",
 	/** Main → renderer: progress of the running Ollama model download (PullProgress) */
 	OLLAMA_PULL_PROGRESS: "ollama:pull-progress",
+	/** Main → every window: progress of the running Linux Ollama install (OllamaInstallProgress) */
+	OLLAMA_INSTALL_PROGRESS: "ollama:install-progress",
 } as const;
 
 // ============================================================================
@@ -1338,6 +1341,8 @@ export interface OmpApi {
 		runRemedy(id: OllamaRemedyId): Promise<OllamaRemedyResult>;
 		openDownload(): Promise<void>;
 		onPullProgress(callback: (progress: PullProgress) => void): () => void;
+		/** Frames of the Linux install remedy; every window receives the same run. */
+		onInstallProgress(callback: (progress: OllamaInstallProgress) => void): () => void;
 	};
 	providerCleanup: {
 		cleanConfig(): Promise<ProviderConfigCleanupResult>;

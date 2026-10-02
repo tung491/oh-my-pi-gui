@@ -1,5 +1,6 @@
-/* Shared parts of the local-model onboarding: the Ollama status row and the
- * model download bar. Theme tokens only (--omp-*). */
+/* Shared parts of the local-model onboarding: the Ollama status row, the
+ * model download bar and the Ollama install bar (both bars share the
+ * .omp-pull-* track). Theme tokens only (--omp-*). */
 
 .omp-ollama-row {
 	border: 1px solid var(--omp-border);

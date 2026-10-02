@@ -8,7 +8,7 @@
 
 import { Check, Download, RefreshCw, RotateCcw } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import type { OllamaRemedyId, OllamaStatus, PullProgress } from "../../../shared/ollama-types";
+import type { OllamaInstallProgress, OllamaRemedyId, OllamaStatus, PullProgress } from "../../../shared/ollama-types";
 import { applyModelInfo } from "../../hooks/use-rpc-events";
 import { useT } from "../../lib/i18n";
 import { useTabRpc } from "../../lib/tab-rpc";
@@ -57,6 +57,7 @@ export function ProvidersWindow() {
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [remedyBusy, setRemedyBusy] = useState<OllamaRemedyId | null>(null);
 	const [remedyHint, setRemedyHint] = useState<string | null>(null);
+	const [installProgress, setInstallProgress] = useState<OllamaInstallProgress | null>(null);
 	const [defaultBusy, setDefaultBusy] = useState<string | null>(null);
 	const [tagInput, setTagInput] = useState("");
 	const [progress, setProgress] = useState<PullProgress | null>(null);
@@ -97,9 +98,24 @@ export function ProvidersWindow() {
 		[],
 	);
 
+	// Main runs one install for every window and broadcasts its frames, so this
+	// window shows an install the welcome screen started, too. The done frame
+	// re-reads Ollama, since only the window that ran the install gets its result.
+	useEffect(
+		() =>
+			window.omp.ollama.onInstallProgress(frame => {
+				setInstallProgress(frame);
+				if (frame.done) void loadStatus();
+			}),
+		[loadStatus],
+	);
+
 	const runRemedy = async (id: OllamaRemedyId) => {
 		setRemedyBusy(id);
 		setRemedyHint(null);
+		// A done frame held from an earlier run would hide this run's waiting state; a live one
+		// belongs to the run this call joins, so it stays.
+		setInstallProgress(held => (held?.done ? null : held));
 		try {
 			const result = await window.omp.ollama.runRemedy(id);
 			switch (result.outcome) {
@@ -122,6 +138,7 @@ export function ProvidersWindow() {
 			void loadStatus();
 		} finally {
 			setRemedyBusy(null);
+			setInstallProgress(null);
 		}
 	};
 
@@ -263,6 +280,7 @@ export function ProvidersWindow() {
 				) : (
 					<OllamaRow
 						busy={remedyBusy}
+						installProgress={installProgress}
 						onCheckAgain={() => void loadStatus()}
 						onOpenDownload={openDownload}
 						onRemedy={id => void runRemedy(id)}

@@ -2,7 +2,7 @@ import { parseHTML } from "linkedom";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import type { OllamaRemedyId, OllamaStatus } from "../../../shared/ollama-types";
+import type { OllamaInstallProgress, OllamaRemedyId, OllamaStatus } from "../../../shared/ollama-types";
 import { I18nProvider } from "../../lib/i18n";
 import { OllamaRow } from "./OllamaRow";
 
@@ -66,11 +66,16 @@ interface Calls {
 	downloads: number;
 }
 
-async function render(value: OllamaStatus | null, busy: OllamaRemedyId | null = null): Promise<Calls> {
+async function render(
+	value: OllamaStatus | null,
+	busy: OllamaRemedyId | null = null,
+	installProgress: OllamaInstallProgress | null = null,
+): Promise<Calls> {
 	const calls: Calls = { remedies: [], checks: 0, downloads: 0 };
 	await mount(
 		<OllamaRow
 			busy={busy}
+			installProgress={installProgress}
 			onCheckAgain={() => calls.checks++}
 			onOpenDownload={() => calls.downloads++}
 			onRemedy={id => calls.remedies.push(id)}
@@ -152,5 +157,44 @@ describe("OllamaRow", () => {
 		expect(button("remedy")?.disabled).toBe(true);
 		expect(button("check-again")?.disabled).toBe(true);
 		expect(button("open-download")?.disabled).toBe(true);
+	});
+
+	it("shows the waiting install state while its own install has no frame yet", async () => {
+		await render(status({ state: "absent", remedy: "linux-install" }), "linux-install");
+		const bar = container.querySelector("[data-install-progress]");
+		expect(bar?.textContent).toContain("Waiting for authorization…");
+		expect(bar?.querySelector("button")).toBeNull();
+		// The bar sits under the remedy buttons, leaving the command block in place.
+		expect(container.querySelector(".omp-ollama-command")).not.toBeNull();
+	});
+
+	it("shows a live install frame even when another window started the install", async () => {
+		await render(status({ state: "absent", remedy: "linux-install" }), null, {
+			stage: "Downloading ollama...",
+			percent: 42,
+			done: false,
+		});
+		expect(container.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("42");
+		expect(button("remedy")?.disabled).toBe(false);
+	});
+
+	it("hides the install bar on a done frame or when the install is no longer offered", async () => {
+		// Busy too: the done frame lands just before this window's remedy result.
+		await render(status({ state: "absent", remedy: "linux-install" }), "linux-install", {
+			stage: "Install complete.",
+			percent: -1,
+			done: true,
+		});
+		expect(container.querySelector("[data-install-progress]")).toBeNull();
+		await act(async () => {
+			root.unmount();
+		});
+		container.remove();
+		await render(status({ state: "stopped", remedy: "linux-start" }), "linux-start", {
+			stage: "Downloading ollama...",
+			percent: 42,
+			done: false,
+		});
+		expect(container.querySelector("[data-install-progress]")).toBeNull();
 	});
 });

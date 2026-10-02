@@ -123,6 +123,8 @@ test("a fresh profile downloads a model on the welcome screen and does not see i
 		await expect(downloadable).toBeVisible();
 		const tag = await downloadable.getAttribute("data-tag");
 		if (!tag) throw new Error("model card has no data-tag");
+		// Gemma refs carry Ollama's own `:latest`, so the pulled tag is the one /api/tags lists.
+		expect(tag).toMatch(/^hf\.co\/google\/gemma-4-[\w-]+-it-qat-q4_0-gguf:latest$/);
 		// Pinned by tag: the Download button, and with it the :has() match, goes away once the pull starts.
 		const card = welcome.locator(`article[data-tag="${tag}"]`);
 		const download = card.locator('[data-action="download-model"]');

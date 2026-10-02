@@ -5,9 +5,15 @@
  */
 
 import { AlertTriangle, CheckCircle2, Download, ExternalLink, Play, RefreshCw, XCircle } from "lucide-react";
-import { OLLAMA_REMEDY_COMMANDS, type OllamaRemedyId, type OllamaStatus } from "../../../shared/ollama-types";
+import {
+	OLLAMA_REMEDY_COMMANDS,
+	type OllamaInstallProgress,
+	type OllamaRemedyId,
+	type OllamaStatus,
+} from "../../../shared/ollama-types";
 import { useT } from "../../lib/i18n";
 import { Button, Spinner } from "../common";
+import { InstallProgressBar } from "./InstallProgressBar";
 import "./onboarding.css";
 
 export interface OllamaRowProps {
@@ -18,6 +24,30 @@ export interface OllamaRowProps {
 	onRemedy: (id: OllamaRemedyId) => void;
 	onCheckAgain: () => void;
 	onOpenDownload: () => void;
+	/**
+	 * Latest frame of the Linux install, from this window or another one (main
+	 * broadcasts a shared run to every window); a held `done` frame hides the
+	 * bar. null when no frame of the current run has arrived.
+	 */
+	installProgress?: OllamaInstallProgress | null;
+}
+
+/** Shown while this window's install runs but the installer has not printed anything yet. */
+const WAITING_FRAME: OllamaInstallProgress = { stage: null, percent: -1, done: false };
+
+/**
+ * The install frame to draw while the row still offers the install: a held
+ * live frame, nothing once a held frame says the run is done, else the
+ * waiting state while this window's own install runs with no frame yet.
+ */
+function visibleInstallFrame(
+	status: OllamaStatus,
+	busy: OllamaRemedyId | null,
+	progress: OllamaInstallProgress | null,
+): OllamaInstallProgress | null {
+	if (status.remedy !== "linux-install") return null;
+	if (progress) return progress.done ? null : progress;
+	return busy === "linux-install" ? WAITING_FRAME : null;
 }
 
 const REMEDY_LABEL_KEYS: Record<OllamaRemedyId, string> = {
@@ -32,7 +62,14 @@ function messageKey(status: OllamaStatus): string {
 	return status.remedy === "linux-start" ? "welcome.ollama.stopped.linux" : "welcome.ollama.stopped.manual";
 }
 
-export function OllamaRow({ status, busy, onRemedy, onCheckAgain, onOpenDownload }: OllamaRowProps) {
+export function OllamaRow({
+	status,
+	busy,
+	onRemedy,
+	onCheckAgain,
+	onOpenDownload,
+	installProgress = null,
+}: OllamaRowProps) {
 	const t = useT();
 
 	if (!status) {
@@ -61,6 +98,7 @@ export function OllamaRow({ status, busy, onRemedy, onCheckAgain, onOpenDownload
 	const showCommand = remedy !== null && status.platform === "linux";
 	const anyBusy = busy !== null;
 	const Icon = status.state === "absent" ? XCircle : AlertTriangle;
+	const installFrame = visibleInstallFrame(status, busy, installProgress);
 
 	return (
 		<div
@@ -116,6 +154,7 @@ export function OllamaRow({ status, busy, onRemedy, onCheckAgain, onOpenDownload
 					{t("welcome.ollama.checkAgain")}
 				</Button>
 			</div>
+			{installFrame && <InstallProgressBar progress={installFrame} />}
 		</div>
 	);
 }

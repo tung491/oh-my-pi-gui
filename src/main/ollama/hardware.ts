@@ -18,6 +18,8 @@ export interface HardwareDeps {
 	platform: NodeJS.Platform;
 	arch: string;
 	totalmem(): number;
+	/** Hardware threads the model runtime can use; read once per probe. */
+	availableParallelism(): number;
 	/** Raw `nvidia-smi` CSV, or null when it is missing or failed. */
 	nvidiaSmi(timeoutMs: number): Promise<string | null>;
 	/** Electron's `app.getGPUInfo("complete")`; injected so this module stays Electron-free. */
@@ -40,6 +42,8 @@ const defaultDeps: HardwareDeps = {
 	platform: process.platform,
 	arch: process.arch,
 	totalmem: () => os.totalmem(),
+	// `availableParallelism` is newer than `cpus`; an empty `cpus()` (some sandboxes) still counts as one thread.
+	availableParallelism: () => os.availableParallelism?.() ?? os.cpus().length,
 	nvidiaSmi: runNvidiaSmi,
 	gpuInfo: async () => null,
 	timeoutMs: HARDWARE_PROBE_TIMEOUT_MS,
@@ -93,6 +97,16 @@ export function gpuNameFromInfo(info: unknown): string | null {
 	return isRecord(info.auxAttributes) ? nonEmpty(info.auxAttributes.glRenderer) : null;
 }
 
+/** Threads as a positive integer; an unreadable or nonsensical count means one. */
+function readThreads(deps: HardwareDeps): number {
+	try {
+		const threads = Math.floor(deps.availableParallelism());
+		return Number.isFinite(threads) && threads >= 1 ? threads : 1;
+	} catch {
+		return 1;
+	}
+}
+
 /** Machine facts for model sizing, or null when RAM itself cannot be read. Never rejects. */
 export async function readMachine(overrides: Partial<HardwareDeps> = {}): Promise<MachineFacts | null> {
 	const deps = { ...defaultDeps, ...overrides };
@@ -104,12 +118,13 @@ export async function readMachine(overrides: Partial<HardwareDeps> = {}): Promis
 	}
 	if (!Number.isFinite(ramBytes) || ramBytes <= 0) return null;
 
+	const threads = readThreads(deps);
 	const unifiedMemory = deps.platform === "darwin" && deps.arch === "arm64";
 	if (!unifiedMemory && (deps.platform === "linux" || deps.platform === "win32")) {
 		const csv = await settle(() => deps.nvidiaSmi(deps.timeoutMs), null, deps.timeoutMs);
 		const gpu = csv ? parseNvidiaSmi(csv) : null;
-		if (gpu) return { ramBytes, vramBytes: gpu.vramBytes, gpuName: gpu.name, unifiedMemory: false };
+		if (gpu) return { ramBytes, vramBytes: gpu.vramBytes, gpuName: gpu.name, unifiedMemory: false, threads };
 	}
 	const info = await settle(() => deps.gpuInfo(), null, deps.timeoutMs);
-	return { ramBytes, vramBytes: null, gpuName: gpuNameFromInfo(info), unifiedMemory };
+	return { ramBytes, vramBytes: null, gpuName: gpuNameFromInfo(info), unifiedMemory, threads };
 }

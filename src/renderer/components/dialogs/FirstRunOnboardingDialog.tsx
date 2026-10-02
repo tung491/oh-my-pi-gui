@@ -13,6 +13,7 @@ import type { CustomProviderView } from "../../../shared/ipc-types";
 import type {
 	ModelChoice,
 	ModelScreen,
+	OllamaInstallProgress,
 	OllamaRemedyId,
 	OllamaStatus,
 	PullProgress,
@@ -137,6 +138,7 @@ export function FirstRunOnboardingDialog() {
 	const [picked, setPicked] = useState<string | null>(null);
 	const [remedyBusy, setRemedyBusy] = useState<OllamaRemedyId | null>(null);
 	const [remedyNotice, setRemedyNotice] = useState<string | null>(null);
+	const [installProgress, setInstallProgress] = useState<OllamaInstallProgress | null>(null);
 	const [continuing, setContinuing] = useState(false);
 	const [continueError, setContinueError] = useState<string | null>(null);
 
@@ -276,6 +278,20 @@ export function FirstRunOnboardingDialog() {
 		});
 	}, [markInstalled]);
 
+	// Main runs one install for every window and broadcasts its frames, so a
+	// screen opened mid-install picks the run up from its next frame. The done
+	// frame re-reads Ollama, since only the window that ran the install gets its result.
+	useEffect(() => {
+		const ollama = window.omp?.ollama;
+		if (!ollama) return;
+		return ollama.onInstallProgress(frame => {
+			setInstallProgress(frame);
+			if (!frame.done) return;
+			void refreshStatus(loadVersion.current);
+			void refreshScreen(loadVersion.current);
+		});
+	}, [refreshStatus, refreshScreen]);
+
 	const pick = useCallback((tag: string) => {
 		setPicked(tag);
 		setContinueError(null);
@@ -330,6 +346,9 @@ export function FirstRunOnboardingDialog() {
 	const runRemedy = async (id: OllamaRemedyId) => {
 		setRemedyBusy(id);
 		setRemedyNotice(null);
+		// A done frame held from an earlier run would hide this run's waiting state; a live one
+		// belongs to the run this call joins, so it stays.
+		setInstallProgress(held => (held?.done ? null : held));
 		try {
 			const result = await window.omp.ollama.runRemedy(id);
 			switch (result.outcome) {
@@ -356,6 +375,7 @@ export function FirstRunOnboardingDialog() {
 			void refreshStatus(loadVersion.current);
 		} finally {
 			setRemedyBusy(null);
+			setInstallProgress(null);
 		}
 	};
 
@@ -439,6 +459,7 @@ export function FirstRunOnboardingDialog() {
 					) : (
 						<OllamaRow
 							busy={remedyBusy}
+							installProgress={installProgress}
 							onCheckAgain={load}
 							onOpenDownload={openDownload}
 							onRemedy={id => void runRemedy(id)}

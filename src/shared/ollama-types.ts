@@ -38,8 +38,10 @@ export interface MachineFacts {
 	/** Dedicated GPU memory; null when there is no discrete GPU or it cannot be read. */
 	vramBytes: number | null;
 	gpuName: string | null;
-	/** GPU and CPU share RAM (Apple Silicon), so RAM is the GPU budget. */
+	/** GPU and CPU share RAM (Apple Silicon); sizing counts it as RAM only. */
 	unifiedMemory: boolean;
+	/** Logical CPU count, at least 1; decides CPU-path speed. */
+	threads: number;
 }
 
 export type ModelTier = "minimal" | "recommended" | "maximum";
@@ -56,6 +58,8 @@ export interface ModelChoice {
 	label: string;
 	/** Parameter count in billions. */
 	params: number;
+	/** Parameters active per token, in billions (lower than `params` for mixture-of-experts models). */
+	activeParams: number;
 	/** Download size. */
 	sizeBytes: number;
 	/** Estimated resident footprint at the catalog context length; what decides `fit`. */
@@ -66,11 +70,15 @@ export interface ModelChoice {
 	tiers: ModelTier[];
 	/** null when Ollama did not answer, so whether it is downloaded is unknown. */
 	installed: boolean | null;
+	/** Offered only because nothing else fits: the machine will be short of memory while it runs. */
+	tight: boolean;
 }
 
 export interface ModelScreen {
 	machine: MachineFacts | null;
 	choices: ModelChoice[];
+	/** `recommended-omitted`: cards exist, but none runs well enough to recommend. */
+	status?: "ok" | "recommended-omitted";
 	emptyReason?: "too-small" | "unreadable";
 }
 
@@ -86,7 +94,16 @@ export interface PullProgress {
 	error?: string;
 }
 
-/** Outcome of removing non-Ollama providers from `models.yml`. */
+/** One frame of the Linux Ollama installer's progress, parsed from its output. */
+export interface OllamaInstallProgress {
+	/** Latest `>>> …` stage text from the installer, without the `>>> ` prefix; null before the first one. */
+	stage: string | null;
+	/** 0–100 for the current download; -1 while no percentage is known (polkit dialog, non-download stage). */
+	percent: number;
+	/** True on the final frame, sent just before the remedy result resolves. */
+	done: boolean;
+}
+
 /**
  * What happened when a remedy ran. `applied` means the command exited 0, not that
  * Ollama now answers: `status.state` says that. `cancelled` is a dismissed polkit
@@ -102,6 +119,7 @@ export interface OllamaRemedyResult {
 	fault?: string;
 }
 
+/** Outcome of removing non-Ollama providers from `models.yml`. */
 export interface ProviderConfigCleanupResult {
 	/** Where the previous `models.yml` was copied, or null when nothing needed removing. */
 	backupPath: string | null;
