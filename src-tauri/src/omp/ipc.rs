@@ -96,7 +96,6 @@ mod tests {
     use crate::bridge::{dispatch_for_test, Registry};
     use crate::ports::{WindowId, WindowRecord};
     use crate::testing::{fake_ctx_cyclic, Fakes};
-    use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
     use std::time::Duration;
 
@@ -191,8 +190,7 @@ mod tests {
         Omp::register_listeners(&ctx);
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("fake-bench.sh");
-        std::fs::write(&script, "#!/bin/sh\nexec /usr/bin/sleep 600\n").unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&script, "#!/bin/sh\nexec /usr/bin/sleep 600\n");
         module(&ctx).unwrap().set_binary_for_test(Some(script));
         fakes.tabs.cwds.lock().unwrap().insert(WindowId(1), dir.path().to_string_lossy().into_owned());
         fakes.desktop.add_record(WindowRecord { id: WindowId(1), cwd: dir.path().to_string_lossy().into_owned(), pending_session_path: None });
@@ -219,8 +217,7 @@ mod tests {
         let ctx = ctx_with_omp(&fakes);
         let dir = tempfile::tempdir().unwrap();
         let script = dir.path().join("fake-bench.sh");
-        std::fs::write(&script, "#!/bin/sh\nprintf '%s' '{\"runs\":1,\"models\":[],\"failures\":0}'\n").unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&script, "#!/bin/sh\nprintf '%s' '{\"runs\":1,\"models\":[],\"failures\":0}'\n");
         module(&ctx).unwrap().set_binary_for_test(Some(script));
         fakes.tabs.cwds.lock().unwrap().insert(WindowId(1), dir.path().to_string_lossy().into_owned());
         let result = dispatch_for_test(&ctx, caller(), "bench:run", vec![json!({ "models": ["m"], "profile": "chat", "runs": 1, "parallel": 1 })]).await.unwrap();

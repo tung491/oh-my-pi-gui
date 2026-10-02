@@ -235,7 +235,6 @@ mod tests {
 
     /// Fake login shell: optional rc noise around a marker-wrapped `env` dump.
     fn write_fake_shell(dir: &Path, entries: &[(&str, &str)], noisy: bool) -> String {
-        use std::os::unix::fs::PermissionsExt;
         let mut body = String::from("#!/bin/sh\n");
         if noisy {
             body.push_str("printf 'rc-banner-noise\\n'\n");
@@ -249,8 +248,7 @@ mod tests {
             body.push_str("printf 'trailing-noise\\n'\n");
         }
         let path = dir.join("fake-shell");
-        std::fs::write(&path, body).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::omp::test_support::write_executable(&path, &body);
         path.to_string_lossy().into_owned()
     }
 
