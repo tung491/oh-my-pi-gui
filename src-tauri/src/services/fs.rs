@@ -12,7 +12,6 @@
 //! This is not tightened or loosened here; any change is a product decision.
 
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use regex::Regex;
 use serde::Serialize;
@@ -319,9 +318,8 @@ pub fn sniff_image_mime(header: &[u8]) -> Option<&'static str> {
     if header.len() >= 4 && header[0..4] == [0x00, 0x00, 0x01, 0x00] {
         return Some("image/x-icon");
     }
-    static SVG_PROLOG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)^\s{0,512}(<svg|<\?xml[^>]*>?\s*<svg)").unwrap());
-    let text = String::from_utf8_lossy(&header[..header.len().min(512)]);
-    if SVG_PROLOG.is_match(&text) {
+    let text = String::from_utf8_lossy(&header[..header.len().min(512)]).trim_start().to_lowercase();
+    if text.starts_with("<svg") || (text.starts_with("<?xml") && text.contains("<svg")) {
         return Some("image/svg+xml");
     }
     None

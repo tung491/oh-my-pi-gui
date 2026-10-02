@@ -92,11 +92,15 @@ impl<V> StampedLru<V> {
         self.used = 0;
     }
 
+    // Exercised by this module's own tests; kept for parity with `StampedLru`'s
+    // TS `size`/`used` getters even though no production caller reads them yet.
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         self.entries.len()
     }
 
     /// Weight currently held, in the unit the capacity was given in.
+    #[allow(dead_code)]
     pub fn used(&self) -> usize {
         self.used
     }
@@ -131,6 +135,9 @@ mod tests {
         assert_eq!(cache.get("c", "s"), Some(&"C".to_string()));
     }
 
+    // The `V = String` weight closure must take `&String` to match
+    // `with_size_of`'s `Fn(&V) -> usize` bound exactly.
+    #[allow(clippy::ptr_arg)]
     fn bytes(value: &String) -> usize {
         value.len()
     }

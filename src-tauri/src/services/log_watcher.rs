@@ -84,10 +84,13 @@ pub struct LogSnapshot {
     pub next_sequence: u64,
 }
 
+/// The flush callback: one batch of complete lines.
+type LinesCallback = Box<dyn Fn(Vec<String>) + Send + Sync>;
+
 pub struct LogWatcher {
     logs_dir: PathBuf,
     state: Mutex<State>,
-    on_lines: Mutex<Option<Box<dyn Fn(Vec<String>) + Send + Sync>>>,
+    on_lines: Mutex<Option<LinesCallback>>,
     running: AtomicBool,
 }
 
@@ -96,7 +99,7 @@ impl LogWatcher {
         Self { logs_dir, state: Mutex::new(State::new()), on_lines: Mutex::new(None), running: AtomicBool::new(false) }
     }
 
-    pub fn on_lines(&self, callback: Box<dyn Fn(Vec<String>) + Send + Sync>) {
+    pub fn on_lines(&self, callback: LinesCallback) {
         *lock(&self.on_lines) = Some(callback);
     }
 

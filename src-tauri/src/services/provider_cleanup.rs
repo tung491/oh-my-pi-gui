@@ -13,10 +13,8 @@
 //! racing the first.
 
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
-use regex::Regex;
 use serde_yml::Value;
 
 use super::models_config::{list_models_providers, models_path, ModelsConfigError};
@@ -92,8 +90,17 @@ fn back_up(file: &Path, expected_bytes: u64, now: NaiveDateTime) -> Result<PathB
 /// alias is resolved away by parsing, so this is refused up front rather than
 /// silently producing a document that does not match the source anymore.
 fn top_level_providers_is_alias(source: &str) -> bool {
-    static PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^providers:[ \t]*(\*\S+)[ \t]*$").unwrap());
-    PATTERN.is_match(source)
+    // `strip_prefix` only succeeds when the line starts with "providers:" at
+    // column 0 (no leading whitespace), which is what anchors this to a
+    // true top-level key rather than a nested one.
+    source
+        .lines()
+        .find_map(|line| line.strip_prefix("providers:"))
+        .map(|rest| {
+            let trimmed = rest.trim();
+            trimmed.starts_with('*') && trimmed.len() > 1
+        })
+        .unwrap_or(false)
 }
 
 /// The leading contiguous run of blank and `#` comment lines, kept verbatim

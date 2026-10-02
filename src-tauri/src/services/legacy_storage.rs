@@ -48,6 +48,9 @@ const KEY_PREFIX: &[u8] = b"_file://\x00\x01";
 
 /// Chromium's value encoding: a one-byte format tag, then the payload.
 /// `0x01` is Latin-1 (each byte is already its Unicode code point), `0x00` is UTF-16LE.
+// `slice::as_chunks` (clippy's suggested replacement) is nightly-only; this
+// crate targets stable.
+#[allow(clippy::chunks_exact_to_as_chunks)]
 fn decode_value(raw: &[u8]) -> Option<String> {
     let (format_byte, payload) = raw.split_first()?;
     match *format_byte {
@@ -86,9 +89,8 @@ fn read_renderer_storage(leveldb_dir: &Path) -> Result<BTreeMap<String, String>,
     let temp = TempCopy::new().map_err(|error| error.to_string())?;
     let copy_path = temp.path().join("leveldb");
     copy_dir(leveldb_dir, &copy_path).map_err(|error| error.to_string())?;
-    let mut options = Options::default();
     // The copy either holds a real database or it does not; never invent one.
-    options.create_if_missing = false;
+    let options = Options { create_if_missing: false, ..Options::default() };
     let mut db = DB::open(&copy_path, options).map_err(|error| error.to_string())?;
     let mut iter = db.new_iter().map_err(|error| error.to_string())?;
     let mut found = BTreeMap::new();
@@ -164,8 +166,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let leveldb_path = dir.path().join("Local Storage").join("leveldb");
         std::fs::create_dir_all(leveldb_path.parent().unwrap()).unwrap();
-        let mut options = Options::default();
-        options.create_if_missing = true;
+        let options = Options { create_if_missing: true, ..Options::default() };
         let mut db = DB::open(&leveldb_path, options).unwrap();
         for (key, value) in entries {
             db.put(key, value).unwrap();

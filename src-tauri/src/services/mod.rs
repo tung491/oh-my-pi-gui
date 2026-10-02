@@ -157,7 +157,7 @@ impl ServicesPort for Services {
 
     fn execute_host_tool(&self, caller: Caller, name: &str, args: Value) -> Option<BoxFuture<'static, Result<Value, String>>> {
         let _ = caller;
-        let Some(ctx) = self.ctx() else { return None };
+        let ctx = self.ctx()?;
         host_tools::execute(&ctx, name, &args)
     }
 
