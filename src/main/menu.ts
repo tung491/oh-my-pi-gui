@@ -295,7 +295,7 @@ export function createMenu(windowManager: WindowManager, spawnWindow: SpawnWindo
 				},
 				{
 					label: mainT("menu.documentation", language),
-					click: () => void shell.openExternal("https://github.com/nornzach/oh-my-pi-gui"),
+					click: () => void shell.openExternal("https://github.com/tung491/oh-my-pi-gui"),
 				},
 			],
 		},

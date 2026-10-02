@@ -68,7 +68,7 @@ if (!existsSync(compileBinaryModulePath) || !existsSync(path.join(nativesDir, "s
 			"",
 			"    git clone https://github.com/can1357/oh-my-pi.git omp-monorepo",
 			"    cd omp-monorepo && bun install",
-			"    cd packages && git clone https://github.com/nornzach/oh-my-pi-gui.git gui",
+			"    cd packages && git clone https://github.com/tung491/oh-my-pi-gui.git gui",
 			"    cd gui && bun install",
 			"",
 			"  To package WITHOUT the monorepo, copy a prebuilt sidecar into resources/omp",

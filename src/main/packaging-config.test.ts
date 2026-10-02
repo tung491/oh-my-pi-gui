@@ -215,8 +215,8 @@ describe("Linux package config", () => {
 		expect(config.linux?.syncDesktopName).toBe(true);
 		expect(config.deb?.packageName).toBe("sai-atlas");
 		expect(config.linux?.desktop?.entry?.StartupWMClass).toBeUndefined();
-		expect(config.linux?.maintainer).toBe("nornzach <287694139+nornzach@users.noreply.github.com>");
-		expect(config.extraMetadata?.homepage).toBe("https://github.com/nornzach/oh-my-pi-gui");
+		expect(config.linux?.maintainer).toBe("Tung Son Do <dosontung007@gmail.com>");
+		expect(config.extraMetadata?.homepage).toBe("https://github.com/tung491/oh-my-pi-gui");
 	});
 
 	it("names the Linux desktop identity after the app id", () => {

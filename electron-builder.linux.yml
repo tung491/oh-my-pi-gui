@@ -25,7 +25,7 @@ compression: maximum
 # The deb target requires homepage, which would otherwise come from the git
 # remote of whichever fork runs the build.
 extraMetadata:
-  homepage: https://github.com/nornzach/oh-my-pi-gui
+  homepage: https://github.com/tung491/oh-my-pi-gui
 # The static AppImage runtime needs no libfuse2 and writes no --no-sandbox
 # into Exec; see README → Linux for the AppArmor profile it relies on.
 toolsets:
@@ -37,8 +37,8 @@ linux:
   syncDesktopName: true
   icon: resources/icons
   category: Development
-  # Matches the git authorship of the release commits (user-confirmed 2026-09-29).
-  maintainer: "nornzach <287694139+nornzach@users.noreply.github.com>"
+  # Matches the git authorship of the release commits.
+  maintainer: "Tung Son Do <dosontung007@gmail.com>"
   target:
     - target: AppImage
       arch: [x64]
