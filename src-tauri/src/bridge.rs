@@ -1023,6 +1023,11 @@ mod tests {
         Reply::ok(json!({ "winId": caller.win_id, "args": args }))
     }
 
+    /// Answers with the error a module's not-yet-ported handler gives, without depending on which channels a module still stubs.
+    fn stubbed(_: &Arc<AppCtx>, _: Caller, _: Vec<Value>) -> Reply {
+        Reply::err(IpcError::new("not ported: test:stub"))
+    }
+
     fn never_resolves(_: &Arc<AppCtx>, _: Caller, _: Vec<Value>) -> Reply {
         Reply::Later(Box::pin(std::future::pending()))
     }
@@ -1324,8 +1329,15 @@ mod tests {
         let report = json!({ "source": "window-error", "message": "boom" });
         let ack = dispatch_for_test(&ctx, main_caller(), "runtime:error-report", vec![report]).await.unwrap();
         assert_eq!(ack, Value::Null);
-        let unknown = dispatch_for_test(&ctx, main_caller(), "fs:read", vec![json!({ "path": "x" })]).await;
-        assert_eq!(unknown, Err(IpcError::new("not ported: fs:read")));
+    }
+
+    #[tokio::test]
+    async fn a_stub_handler_error_reaches_the_caller() {
+        let mut registry = Registry::new();
+        registry.register("test:stub", Scope::Main, stubbed);
+        let ctx = fake_ctx(registry);
+        let unknown = dispatch_for_test(&ctx, main_caller(), "test:stub", vec![json!({ "path": "x" })]).await;
+        assert_eq!(unknown, Err(IpcError::new("not ported: test:stub")));
     }
 
     #[test]
