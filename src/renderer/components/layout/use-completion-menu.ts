@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import type { SessionKind } from "../../../shared/ipc-types";
+import { filterAllowedModels, HIDDEN_ACCOUNT_COMMANDS } from "../../../shared/provider-policy";
 import type { AvailableCommand, AvailableModelsResult, ModelInfo } from "../../../shared/rpc-types";
 import { isCommandAvailable } from "../../lib/command-availability";
 import { getEmojiSuggestions } from "../../lib/emoji";
@@ -39,6 +40,32 @@ export function applyCompletion(text: string, cursor: number, menu: CompletionMe
 		text: `${text.slice(0, menu.rangeStart)}${item.value}${text.slice(cursor)}`,
 		caret: menu.rangeStart + item.value.length,
 	};
+}
+
+/** Slash-command name suggestions for `query` (already lower-cased, without the slash). */
+export function slashCommandItems(
+	commands: readonly AvailableCommand[],
+	tabKind: SessionKind,
+	query: string,
+): CompletionItem[] {
+	return commands
+		.filter(
+			command =>
+				// Every surface shares one availability rule: never offer a command
+				// that does nothing in this tab kind, or an account command the
+				// Ollama-only GUI does not offer.
+				isCommandAvailable(tabKind, command.name) &&
+				!HIDDEN_ACCOUNT_COMMANDS.has(command.name) &&
+				(!query ||
+					command.name.toLowerCase().includes(query) ||
+					command.aliases?.some(alias => alias.toLowerCase().includes(query))),
+		)
+		.slice(0, MAX_MENU_ITEMS)
+		.map(command => ({
+			value: `/${command.name} `,
+			label: `/${command.name}`,
+			description: command.description,
+		}));
 }
 
 export function useCompletionMenu({
@@ -193,22 +220,7 @@ export function useCompletionMenu({
 		const cmdMatch = /(^|\s)\/([a-z-]*)$/i.exec(before);
 		if (cmdMatch) {
 			const query = (cmdMatch[2] ?? "").toLowerCase();
-			const items = commands
-				.filter(
-					command =>
-						// Every surface shares one availability rule: never offer a command
-						// that does nothing in this tab kind.
-						isCommandAvailable(tabKind, command.name) &&
-						(!query ||
-							command.name.toLowerCase().includes(query) ||
-							command.aliases?.some(alias => alias.toLowerCase().includes(query))),
-				)
-				.slice(0, MAX_MENU_ITEMS)
-				.map(command => ({
-					value: `/${command.name} `,
-					label: `/${command.name}`,
-					description: command.description,
-				}));
+			const items = slashCommandItems(commands, tabKind, query);
 			apply({ source: "command", rangeStart: cursor - query.length - 1, items });
 			return () => {
 				cancelled = true;
@@ -271,13 +283,15 @@ export function useCompletionMenu({
 				apply(null);
 				timer = window.setTimeout(() => {
 					// Forced: a non-forced read is answered by a still-fresh cache row,
-					// which hides the model a just-added provider contributed.
+					// which hides the model a just-added provider contributed. Read
+					// directly, not through the store: committing an empty catalog would
+					// re-run this effect and refresh again. Filter it the way the store does.
 					void rpc
 						.getAvailableModels(true)
 						.then(response => {
 							if (cancelled) return;
 							const data = response.success ? (response.data as AvailableModelsResult | undefined) : undefined;
-							showModels(data?.models ?? []);
+							showModels(filterAllowedModels(data?.models ?? []));
 						})
 						.catch(() => {
 							if (!cancelled) apply(null);

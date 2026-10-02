@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { IpcBenchmarkModelReport, IpcBenchmarkProfile, IpcBenchmarkRunResult } from "../../../shared/ipc-types";
+import { isAllowedProvider } from "../../../shared/provider-policy";
 import { formatUsd } from "../../lib/chart";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
@@ -32,7 +33,10 @@ export function BenchmarkDialog({ open, onClose }: { open: boolean; onClose: () 
 
 	useEffect(() => {
 		if (!open || models) return;
-		if (activeModel) setModels(`${activeModel.provider}/${activeModel.id}`);
+		// The picker below lists only offered providers; a session still on a
+		// removed provider must not seed the run with a model it cannot offer.
+		if (activeModel && isAllowedProvider(activeModel.provider))
+			setModels(`${activeModel.provider}/${activeModel.id}`);
 	}, [activeModel, models, open]);
 
 	const close = () => {

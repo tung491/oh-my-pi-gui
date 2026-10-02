@@ -1,7 +1,7 @@
 import { useTabRpc } from "../../../lib/tab-rpc";
 /**
- * Add-server wizard for MCP servers (C1). Single-form dialog following the
- * ProviderConfigDialog pattern (NOT stepped): transport picker cards
+ * Add-server wizard for MCP servers (C1). A single-form dialog, not a
+ * stepped one: transport picker cards
  * (stdio/http/sse), per-transport fields, name, scope, and an optional
  * "test connection" pre-check that probes the assembled config via
  * window.omp.rpc.mcpTest without persisting anything.

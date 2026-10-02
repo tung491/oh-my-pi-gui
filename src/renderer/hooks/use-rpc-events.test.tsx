@@ -874,10 +874,10 @@ describe("useRpcEvents non-transcript frames", () => {
 		await act(async () => {
 			emitModelCatalogUpdate({
 				type: "model_catalog_update",
-				models: [{ provider: "custom", id: "new-model" }],
+				models: [{ provider: "ollama", id: "qwen3:8b" }],
 				providers: [],
 				discoveryStates: [
-					{ provider: "custom", status: "ok", optional: false, stale: false, models: ["new-model"] },
+					{ provider: "ollama", status: "ok", optional: false, stale: false, models: ["qwen3:8b"] },
 				],
 				refreshPending: false,
 				generation: 2,
@@ -885,7 +885,7 @@ describe("useRpcEvents non-transcript frames", () => {
 		});
 
 		expect(useModelStore.getState()).toMatchObject({
-			availableModels: [{ provider: "custom", id: "new-model" }],
+			availableModels: [{ provider: "ollama", id: "qwen3:8b" }],
 			catalogRefreshPending: false,
 			catalogGeneration: 2,
 		});

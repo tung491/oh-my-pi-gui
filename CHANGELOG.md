@@ -7,6 +7,7 @@
 - **Quick entry**: press `Control+Shift+Space` in any app to open a small bar, type a request, and send it as a new Chat or Agent tab in the main window. Unsent text stays in the bar. Rebind the chord or turn it off in Keyboard Shortcuts; `sai-atlas --quick-entry` opens the bar from a terminal or a desktop shortcut.
 - **Linux x64 packages**: an AppImage and a `.deb` for Ubuntu 24.04+, with the bundled sidecar, `omp://` links, the tray and window icon, and `latest-linux.yml` update metadata.
 - **Linux CI**: type checks, unit tests and the GUI build run on Ubuntu for every push and pull request.
+- **Local-model welcome screen**: the first launch shows one screen with this machine's memory and graphics, the Ollama status, and three model sizes that fit the machine. Download a model with a progress bar (Cancel stops it, Download again resumes), then **Continue to the assistant** to make it the default. When Ollama is stopped or missing, Linux offers **Start Ollama** and **Install Ollama** through the system password prompt, and macOS and Windows link to ollama.com/download with **Check again**. **Run setup again** in the Ollama window reopens the screen.
 
 ### Changed
 
@@ -17,7 +18,13 @@
 - **Sai ATLAS**: the GUI is now Sai ATLAS, the AI assistant for SAI OS; the bundled agent is still omp, and settings and sessions carry over. Installers are named `Sai-ATLAS-…`, and the Linux package and launcher are `sai-atlas`. The app id is now `vn.io.vif.saiatlas`, so macOS asks for microphone and notification access again, while the Windows installer upgrades an existing omp install in place (pin Sai ATLAS to the taskbar again if you had pinned omp). On macOS, quit omp before installing, then move `omp.app` to the Trash. Source-built Linux installs remove the old `omp` package first.
 - **Icon generation**: `bun run gen:icons` no longer writes `resources/icon.icns`; the mac bundles take `resources/icon.png`, which electron-builder converts on any build host. The tray mark is generated from the Sai ATLAS artwork into `src/main/tray-mark.ts`.
 - **Ctrl shortcuts on Linux and Windows**: ⌘-only shortcuts gain Ctrl twins and every chord displays as text, such as `Ctrl+Shift+T`. macOS is unchanged. On Windows, `Ctrl+T` now opens a tab and `Ctrl+W` closes one; thinking has no default key there and can be bound in Hotkeys.
-- **VIF redesign**: the interface moves to the VIF design system. VIF Light and VIF Navy replace Porcelain and Graphite as the default light and dark themes, with a navy sidebar, Poppins headings, a five-step first-run wizard, and a refreshed palette, model picker, workspace panel, settings, statistics, and Agent Hub. Other named themes remain available.
+- **VIF redesign**: the interface moves to the VIF design system. VIF Light and VIF Navy replace Porcelain and Graphite as the default light and dark themes, with a navy sidebar, Poppins headings, and a refreshed palette, model picker, workspace panel, settings, statistics, and Agent Hub. Other named themes remain available.
+- **Ollama only**: Sai ATLAS runs its models locally through Ollama, and the Providers window is now the Ollama window (status, installed models, **Use as default**, download by tag). The model picker, model roles, settings model fields, command palette and benchmark list only Ollama models. Ollama is found at `OLLAMA_BASE_URL` or `OLLAMA_HOST`, as in the agent, and defaults to `http://127.0.0.1:11434`.
+
+### Removed
+
+- **Other model providers**: on the first launch after upgrading, Sai ATLAS signs out of every OAuth provider through the agent's logout and removes non-Ollama providers from `models.yml`, after backing the file up beside it as `models.yml.bak-<timestamp>` (`models.yaml.bak-<timestamp>` for the legacy name). A one-line notice says what changed. API keys, whether stored by the agent or set through environment variables, stay in place but are hidden. A session that was using a non-Ollama model keeps it until you choose an Ollama model with **Continue to the assistant** or **Use as default**.
+- **Custom provider editor**: the add, edit and delete provider dialog, its login and logout commands, and the "Add provider" entry in settings are gone.
 
 ### Fixed
 

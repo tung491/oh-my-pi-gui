@@ -44,10 +44,11 @@ const ROLES = [
 		color: "success",
 		section: "chat",
 		source: "settings",
-		model: "anthropic/claude",
+		model: "ollama/qwen3:8b",
 		candidates: [
+			{ provider: "ollama", id: "qwen3:8b", name: "Qwen3 8B", kind: "chat" },
 			{ provider: "anthropic", id: "claude", name: "Claude", kind: "chat" },
-			{ provider: "openai", id: "gpt", name: "GPT", kind: "chat" },
+			{ provider: "ollama", id: "gemma3:4b", name: "Gemma 3 4B", kind: "chat" },
 		],
 	},
 	{
@@ -57,7 +58,10 @@ const ROLES = [
 		color: "accent",
 		section: "kind",
 		source: "default",
-		candidates: [{ provider: "openai", id: "dalle", name: "DALL·E", kind: "image" }],
+		candidates: [
+			{ provider: "openai", id: "dalle", name: "DALL·E", kind: "image" },
+			{ provider: "ollama", id: "llava:7b", name: "LLaVA 7B", kind: "image" },
+		],
 	},
 	{ id: "secret", name: "Hidden role", section: "chat", source: "settings", hidden: true, candidates: [] },
 ];
@@ -133,14 +137,17 @@ describe("ModelRolesWindow", () => {
 		const trigger = [...document.body.querySelectorAll("button")].find(
 			button => button.getAttribute("aria-label") === "Model for Default",
 		);
-		expect(trigger?.textContent).toContain("Claude — anthropic/claude");
+		expect(trigger?.textContent).toContain("Qwen3 8B — ollama/qwen3:8b");
 		await act(async () => trigger?.click());
 
 		const listbox = document.body.querySelector('[role="listbox"]');
 		expect(listbox).not.toBeNull();
 		expect(listbox?.textContent).toContain("Chat");
-		expect(listbox?.textContent).toContain("Claude");
-		expect(listbox?.textContent).toContain("openai/gpt");
+		expect(listbox?.textContent).toContain("Qwen3 8B");
+		expect(listbox?.textContent).toContain("ollama/gemma3:4b");
+		// Candidates from providers the GUI does not offer never reach the picker.
+		expect(listbox?.textContent).not.toContain("Claude");
+		expect(listbox?.textContent).not.toContain("anthropic/");
 	});
 
 	it("says why the list cannot refresh instead of claiming no roles are configured", async () => {
@@ -232,11 +239,11 @@ describe("ModelRolesWindow", () => {
 		);
 		await act(async () => trigger?.click());
 		const option = [...document.body.querySelectorAll('[role="option"]')].find(button =>
-			(button.textContent ?? "").includes("openai/gpt"),
+			(button.textContent ?? "").includes("ollama/gemma3:4b"),
 		);
 		expect(option).toBeDefined();
 		await act(async () => option?.dispatchEvent(new Event("click", { bubbles: true })));
 
-		expect(setModelRole).toHaveBeenCalledWith("default", "openai/gpt");
+		expect(setModelRole).toHaveBeenCalledWith("default", "ollama/gemma3:4b");
 	});
 });

@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { expect, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron, type Page } from "playwright";
 import type { RpcSessionState } from "../src/shared/rpc-types";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 const executablePath = process.env.OMP_GUI_TEST_APP;
 /** XWayland on Linux, so no case asks the developer's desktop to bind global shortcuts through the portal. */
@@ -46,10 +47,7 @@ async function createProfile(): Promise<Profile> {
 	const agent = path.join(root, "agent");
 	await Promise.all([fs.mkdir(project), fs.mkdir(otherProject), fs.mkdir(desktop), fs.mkdir(agent)]);
 	const quiet = { noExtensions: true, noSkills: true, noRules: true };
-	await fs.writeFile(
-		path.join(desktop, "prefs.json"),
-		JSON.stringify({ language: "en", launchProfiles: { [project]: quiet, [otherProject]: quiet } }),
-	);
+	await writeDesktopPrefs(desktop, { language: "en", launchProfiles: { [project]: quiet, [otherProject]: quiet } });
 	const env = buildEnv(agent, root);
 	for (const key of ["ELECTRON_RUN_AS_NODE", "OMP_SIDECAR", "OMP_BUNDLED_OMP"]) Reflect.deleteProperty(env, key);
 	return { root, project, otherProject, desktop, env };

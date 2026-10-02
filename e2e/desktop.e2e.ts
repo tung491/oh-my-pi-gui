@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron, type Locator, type Page } from "playwright";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 let app: ElectronApplication;
 let page: Page;
@@ -32,7 +33,7 @@ test.beforeAll(async () => {
 	const agent = path.join(profile, "agent");
 	await Promise.all([fs.mkdir(project), fs.mkdir(userData), fs.mkdir(agent)]);
 	record = path.join(profile, "rpc.jsonl");
-	await fs.writeFile(path.join(userData, "prefs.json"), JSON.stringify({ language: "en", firstRunComplete: true }));
+	await writeDesktopPrefs(userData, { language: "en", firstRunComplete: true });
 	const fixture = path.resolve("e2e/sidecar-fixture.ts");
 	await fs.chmod(fixture, 0o755);
 	const env = {

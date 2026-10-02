@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
 import { _electron as electron } from "playwright";
 import type { RpcSessionState } from "../src/shared/rpc-types";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 test("real bundled sidecar persists settings and sessions and serves every stats route", async () => {
 	test.setTimeout(180_000);
@@ -13,15 +14,12 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 	const desktop = path.join(profile, "desktop");
 	const agent = path.join(profile, "agent");
 	await Promise.all([fs.mkdir(project), fs.mkdir(desktop), fs.mkdir(agent)]);
-	await fs.writeFile(
-		path.join(desktop, "prefs.json"),
-		JSON.stringify({
-			language: "en",
-			launchProfiles: {
-				[project]: { noExtensions: true, noSkills: true, noRules: true },
-			},
-		}),
-	);
+	await writeDesktopPrefs(desktop, {
+		language: "en",
+		launchProfiles: {
+			[project]: { noExtensions: true, noSkills: true, noRules: true },
+		},
+	});
 	await fs.writeFile(path.join(project, "README.md"), "# Local ARM audit\n");
 	const env = {
 		...process.env,

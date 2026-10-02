@@ -5,6 +5,14 @@
 
 import type { LaunchProfile } from "./launch-profile";
 import type {
+	ModelScreen,
+	OllamaRemedyId,
+	OllamaRemedyResult,
+	OllamaStatus,
+	ProviderConfigCleanupResult,
+	PullProgress,
+} from "./ollama-types";
+import type {
 	AgentSessionEvent,
 	AvailableCommand,
 	CommandOutputFrame,
@@ -89,6 +97,8 @@ export const IPC_EVENTS = {
 	UPDATER_STATUS: "updater:status",
 	/** Main → quick-entry bar: the state for this show (QuickEntryBarState) */
 	QUICK_ENTRY_STATE: "quick-entry:state",
+	/** Main → renderer: progress of the running Ollama model download (PullProgress) */
+	OLLAMA_PULL_PROGRESS: "ollama:pull-progress",
 } as const;
 
 // ============================================================================
@@ -156,12 +166,22 @@ export const IPC_COMMANDS = {
 	SIDECAR_DEFAULT_WORKSPACE: "sidecar:default-workspace",
 	/** List custom models.yml providers */
 	MODELS_PROVIDERS_LIST: "models:providers-list",
-	/** Upsert a custom provider into models.yml */
-	MODELS_PROVIDER_UPSERT: "models:provider-upsert",
-	/** Delete a custom provider from models.yml */
-	MODELS_PROVIDER_DELETE: "models:provider-delete",
-	/** Open the agent's models.yml in the system editor (created when missing; falls back to revealing it in the file manager) */
-	MODELS_CONFIG_OPEN: "models:config-open",
+	/** Probe the local Ollama daemon (OllamaStatus) */
+	OLLAMA_STATUS: "ollama:status",
+	/** Machine facts plus the catalog sized against them (ModelScreen) */
+	OLLAMA_MODEL_SCREEN: "ollama:model-screen",
+	/** Download a model tag; progress streams on IPC_EVENTS.OLLAMA_PULL_PROGRESS */
+	OLLAMA_PULL: "ollama:pull",
+	/** Cancel the running download (a later pull resumes it) */
+	OLLAMA_PULL_CANCEL: "ollama:pull-cancel",
+	/** Load a model into memory so the first prompt does not wait for it */
+	OLLAMA_WARM: "ollama:warm",
+	/** Run a privileged remedy by OllamaRemedyId; main owns the command */
+	OLLAMA_REMEDY: "ollama:remedy",
+	/** Open the Ollama download page in the browser */
+	OLLAMA_OPEN_DOWNLOAD: "ollama:open-download",
+	/** Back up models.yml and remove every non-Ollama provider from it */
+	PROVIDER_CLEANUP_CONFIG: "provider-cleanup:config",
 	/** List workspace files as a tree (main-process readdir, no sidecar needed) */
 	FS_LIST: "fs:list",
 	/** Read a workspace file with a byte cap */
@@ -627,27 +647,6 @@ export interface CustomProviderModelInput {
 	maxTokens?: number;
 	omitMaxOutputTokens?: boolean;
 	headers?: Record<string, string>;
-}
-
-export interface CustomProviderInput {
-	id: string;
-	api: CustomProviderApi;
-	baseUrl: string;
-	apiKey?: string;
-	/** Erase the stored key. Blank `apiKey` alone cannot mean "delete": the field
-	 * is masked, so an untouched edit submits empty and must keep the secret. */
-	clearApiKey?: boolean;
-	auth?: "apiKey" | "none" | "oauth";
-	/** Send the key in an Authorization header instead of the provider default. */
-	authHeader?: boolean;
-	headers?: Record<string, string>;
-	discovery?: CustomProviderDiscovery;
-	disableStrictTools?: boolean;
-	/** Route every model through the auth-gateway's /v1/pi/stream endpoint. */
-	transport?: "pi-native";
-	/** compat.extraBody — extra request-body parameters merged into every call. */
-	extraBody?: Record<string, unknown>;
-	models: CustomProviderModelInput[];
 }
 
 /** A provider entry as shown in the GUI (apiKey masked, never the real value). */
@@ -1327,9 +1326,21 @@ export interface OmpApi {
 	};
 	models: {
 		listProviders(): Promise<CustomProviderView[]>;
-		upsertProvider(input: CustomProviderInput): Promise<void>;
-		deleteProvider(id: string): Promise<void>;
-		openConfig(): Promise<{ path: string; opened: boolean }>;
+	};
+	ollama: {
+		status(): Promise<OllamaStatus>;
+		modelScreen(): Promise<ModelScreen>;
+		/** Resolves with the final frame (done, or carrying `error`); progress also streams to onPullProgress. */
+		pull(tag: string): Promise<PullProgress>;
+		cancelPull(): Promise<void>;
+		warm(tag: string): Promise<void>;
+		/** Runs the remedy main maps to this id, then resolves with a fresh status. */
+		runRemedy(id: OllamaRemedyId): Promise<OllamaRemedyResult>;
+		openDownload(): Promise<void>;
+		onPullProgress(callback: (progress: PullProgress) => void): () => void;
+	};
+	providerCleanup: {
+		cleanConfig(): Promise<ProviderConfigCleanupResult>;
 	};
 	fs: {
 		list(path?: string, maxDepth?: number, maxEntries?: number, tabId?: string): Promise<IpcFsListResult>;

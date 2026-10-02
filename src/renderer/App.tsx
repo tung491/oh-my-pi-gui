@@ -44,7 +44,7 @@ import { useRpcEvents } from "./hooks/use-rpc-events";
 import { newSessionNow, requestSessionSwitch } from "./hooks/use-session-switch";
 import { useSidebarRecency } from "./hooks/use-sidebar-recency";
 import { useTraySync } from "./hooks/use-tray-sync";
-import { restartSidecarFromGui, retryFailedTurn, runSessionCommand } from "./lib/command-registry";
+import { cycleAllowedModel, restartSidecarFromGui, retryFailedTurn, runSessionCommand } from "./lib/command-registry";
 import {
 	hydrateDisplayPreferences,
 	readDisplayPreference,
@@ -65,6 +65,7 @@ import {
 } from "./lib/keymap";
 import { abortActiveTurn, restoreQueuedMessages } from "./lib/messages";
 import { watchPluginActivation } from "./lib/plugin-activation";
+import { useProviderCleanup } from "./lib/provider-cleanup";
 import { drainQuickEntry } from "./lib/quick-entry-delivery";
 import { whenSidecarReady } from "./lib/sidecar-ready";
 import { closeActiveTab } from "./lib/tab-close";
@@ -120,9 +121,6 @@ const AgentHubWindow = lazy(() =>
 const PrCenterWindow = lazy(() =>
 	import("./components/panels/PrCenterWindow").then(m => ({ default: m.PrCenterWindow })),
 );
-const ProviderConfigDialog = lazy(() =>
-	import("./components/settings/ProviderConfigDialog").then(m => ({ default: m.ProviderConfigDialog })),
-);
 const UsageWindow = lazy(() => import("./components/settings/UsageWindow").then(m => ({ default: m.UsageWindow })));
 const ModelRolesWindow = lazy(() =>
 	import("./components/settings/ModelRolesWindow").then(m => ({ default: m.ModelRolesWindow })),
@@ -177,6 +175,8 @@ export function App() {
 	useExtensionUi();
 	// Session tabs: GET_TABS boot reconciliation + TAB_STATUS subscription.
 	useSessionTabs();
+	// Once per profile: sign out of and remove providers outside the allow-list.
+	useProviderCleanup();
 	// Quick-entry prompts queued before this renderer loaded (cold start, reload).
 	useEffect(() => {
 		void drainQuickEntry();
@@ -207,9 +207,6 @@ export function App() {
 	const hotkeysOpen = useUiStore(s => s.hotkeysOpen);
 	const importDialogOpen = useUiStore(s => s.importDialogOpen);
 	const composerEditorOpen = useUiStore(s => s.composerEditorOpen);
-	const providerConfigOpen = useUiStore(s => s.providerConfigOpen);
-	const providerConfigEdit = useUiStore(s => s.providerConfigEdit);
-	const closeProviderConfig = useUiStore(s => s.closeProviderConfig);
 	const activeTabId = useTabsStore(s => s.activeTabId);
 	const activeTabStatus = useTabsStore(s => s.tabs.find(tab => tab.id === s.activeTabId)?.status);
 	const themeSidecarReady = activeTabStatus === "ready" || activeTabStatus === "running";
@@ -413,13 +410,12 @@ export function App() {
 			const ui = useUiStore.getState();
 			switch (actionId) {
 				case "model.cycleForward":
-					// ⌃P — cycle to the next model (TUI parity).
-					void runSessionCommand(focusedTabRpc().cycleModel(), t("palette.failed"));
+					// ⌃P — cycle to the next model (TUI parity), over the allowed catalog only.
+					void cycleAllowedModel(focusedTabRpc());
 					return;
 				case "model.cycleBackward":
-					// ⇧⌃P — cycle model backward (TUI app.model.cycleBackward), via the
-					// cycle_model direction arg (A1 RPC).
-					void runSessionCommand(focusedTabRpc().cycleModel("backward"), t("palette.failed"));
+					// ⇧⌃P — cycle model backward (TUI app.model.cycleBackward).
+					void cycleAllowedModel(focusedTabRpc(), "backward");
 					return;
 				case "retry":
 					// ⌥R — retry the last failed turn (TUI app.retry) via the retry RPC.
@@ -808,11 +804,6 @@ export function App() {
 				<ModesPanel open={modesOpen} onClose={closeModes} initialTab={modesTab} />
 				<AgentHubWindow open={agentHubOpen} onClose={closeAgentHub} initialTab={agentHubTab} />
 				<PrCenterWindow />
-				<ProviderConfigDialog
-					open={providerConfigOpen}
-					editProvider={providerConfigEdit}
-					onClose={closeProviderConfig}
-				/>
 			</Suspense>
 			<ThemePickerDialog />
 			<PlanApprovalDialog />

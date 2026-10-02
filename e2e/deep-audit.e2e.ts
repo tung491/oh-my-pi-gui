@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron } from "playwright";
 import type { SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
+import { writeDesktopPrefs } from "./desktop-prefs";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -603,14 +604,11 @@ async function launchAuditApp(
 	desktop: string,
 	agent: string,
 ): Promise<ElectronApplication> {
-	await fs.writeFile(
-		path.join(desktop, "prefs.json"),
-		JSON.stringify({
-			language: "en",
-			firstRunComplete: true,
-			launchProfiles: { [project]: { noRules: true, noLsp: true } },
-		}),
-	);
+	await writeDesktopPrefs(desktop, {
+		language: "en",
+		firstRunComplete: true,
+		launchProfiles: { [project]: { noRules: true, noLsp: true } },
+	});
 	const env = {
 		...process.env,
 		PI_CODING_AGENT_DIR: agent,

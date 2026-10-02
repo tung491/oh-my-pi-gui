@@ -267,7 +267,7 @@ describe("Sidebar menus and pinned ordering", () => {
 			"Commands",
 			"Start with what makes OMP different",
 			"Agent Hub",
-			"Providers & login",
+			"Ollama",
 			"Usage & quotas",
 			"Session stats",
 			"PR Center",
@@ -828,13 +828,7 @@ describe("Sidebar VIF rail", () => {
 		const navigation = container.querySelector("[data-sidebar-navigation]");
 		if (!navigation) throw new Error("sidebar navigation missing");
 		const navButtons = navigation.querySelectorAll("button");
-		for (const [index, label] of [
-			"Commands",
-			"Agent Hub",
-			"PR Center",
-			"Session stats",
-			"Providers & login",
-		].entries()) {
+		for (const [index, label] of ["Commands", "Agent Hub", "PR Center", "Session stats", "Ollama"].entries()) {
 			expect((navButtons[index]?.textContent ?? "").startsWith(label), `navigation item ${index}: ${label}`).toBe(
 				true,
 			);

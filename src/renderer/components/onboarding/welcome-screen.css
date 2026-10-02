@@ -1,0 +1,128 @@
+/* The local-model welcome screen: header, machine facts, model cards and the
+ * footer. Theme tokens only (--omp-*). */
+
+.omp-welcome-panel {
+	max-width: 960px;
+}
+
+.omp-welcome-facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 24px;
+	min-height: 20px;
+	color: var(--omp-text-secondary);
+}
+.omp-welcome-fact {
+	display: flex;
+	align-items: center;
+	min-height: 20px;
+}
+
+.omp-welcome-wait {
+	display: block;
+	height: 12px;
+}
+.omp-welcome-wait-lg {
+	height: 18px;
+}
+
+.omp-welcome-cards {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 12px;
+}
+@media (max-width: 720px) {
+	.omp-welcome-cards {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.omp-model-card {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 320px;
+	padding: 16px;
+	border: 1px solid var(--omp-border);
+	border-radius: 10px;
+	background: var(--omp-bg-secondary);
+	transition: border-color var(--omp-motion-fast) var(--omp-ease), box-shadow var(--omp-motion-fast) var(--omp-ease);
+}
+.omp-model-card-picked {
+	border-color: var(--omp-accent);
+	box-shadow: 0 0 0 1px var(--omp-accent), var(--omp-shadow-sm);
+}
+
+.omp-model-tier {
+	padding: 1px 8px;
+	border: 1px solid var(--omp-border);
+	border-radius: 999px;
+	color: var(--omp-text-secondary);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+.omp-model-tier[data-tier="recommended"] {
+	border-color: color-mix(in srgb, var(--omp-accent) 45%, transparent);
+	background: var(--omp-accent-dim);
+	color: var(--omp-accent);
+}
+
+.omp-model-specs {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 4px 12px;
+	margin: 0;
+	font-size: 12px;
+}
+.omp-model-specs dt {
+	color: var(--omp-text-secondary);
+}
+.omp-model-specs dd {
+	margin: 0;
+	color: var(--omp-text);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.omp-model-state {
+	font-size: 12px;
+}
+.omp-model-ready-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 999px;
+	background: var(--omp-success);
+	color: var(--omp-bg-primary);
+	animation: omp-welcome-pop 320ms var(--omp-ease-spring) both;
+}
+
+@keyframes omp-welcome-pop {
+	0% {
+		transform: scale(0.4);
+		opacity: 0;
+	}
+	70% {
+		transform: scale(1.15);
+		opacity: 1;
+	}
+	100% {
+		transform: scale(1);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.omp-model-card {
+		transition: none;
+	}
+	.omp-model-ready-badge {
+		animation: none;
+	}
+	.omp-welcome-wait {
+		animation: none;
+	}
+}

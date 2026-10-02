@@ -50,7 +50,6 @@ const ctx: CommandRegistryContext = {
 	openPrCenter: () => {},
 	openHotkeys: () => {},
 	openImportDialog: () => {},
-	openProviderConfig: () => {},
 	focusDockCard: () => {},
 	retryTurn: async () => {},
 	retryLastTurn: async () => {},

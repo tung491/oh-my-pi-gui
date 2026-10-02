@@ -1,7 +1,8 @@
 import { useTabRpc } from "../../lib/tab-rpc";
 /**
- * Model picker: grouped-by-provider dropdown with search, auth status from
- * login providers, current model highlighted. Selection calls set_model.
+ * Model picker: one searchable list of the local Ollama models, current model
+ * highlighted. Selection calls set_model. Ollama needs no sign-in, so the list
+ * carries no provider headers or account state.
  */
 
 import { Check, Cpu, Search, TriangleAlert } from "lucide-react";
@@ -14,7 +15,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type { LoginProvider, ModelInfo } from "../../../shared/rpc-types";
+import type { ModelInfo } from "../../../shared/rpc-types";
 import { applyModelInfo, hydrateSession } from "../../hooks/use-rpc-events";
 import { formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
@@ -54,7 +55,6 @@ export function ModelPicker() {
 
 	const [query, setQuery] = useState("");
 	const [filter, setFilter] = useState<ModelFilter>("all");
-	const [providers, setProviders] = useState<LoginProvider[]>([]);
 	const [switching, setSwitching] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -65,10 +65,10 @@ export function ModelPicker() {
 
 	const requestVersion = useRef(0);
 
-	/** Login flows are the picker's own concern, but the model list is shared
-	 * catalog state: it commits through the store's generation guard, so a
-	 * `model_catalog_update` that lands mid-read can never be reverted by this
-	 * response. `forceRefresh` belongs to the retry path, where the user is
+	/** The model list is shared catalog state: it commits through the store's
+	 * generation guard (which also drops every provider the GUI does not offer),
+	 * so a `model_catalog_update` that lands mid-read can never be reverted by
+	 * this response. `forceRefresh` belongs to the retry path, where the user is
 	 * disputing what the list shows. */
 	const load = useCallback(
 		async (forceRefresh: boolean, failedCopy?: string): Promise<void> => {
@@ -80,28 +80,18 @@ export function ModelPicker() {
 				setLoading(false);
 				return;
 			}
-			const [providersResult, modelsResult] = await Promise.allSettled([
-				tabRpc.getLoginProviders(),
-				refreshAvailableModels(forceRefresh),
-			]);
-			if (version !== requestVersion.current) return;
-			setLoading(false);
-			const providersOk = providersResult.status === "fulfilled" && providersResult.value.success;
-			if (providersOk) {
-				const data = providersResult.value.data as { providers?: LoginProvider[] } | undefined;
-				setProviders(data?.providers ?? []);
-				return;
+			try {
+				await refreshAvailableModels(forceRefresh);
+				if (version !== requestVersion.current) return;
+				setLoading(false);
+			} catch (cause) {
+				if (version !== requestVersion.current) return;
+				setLoading(false);
+				const reason = cause instanceof Error ? cause.message : String(cause);
+				setError(failedCopy ?? (reason || t("modelPicker.notResponding")));
 			}
-			if (modelsResult.status === "fulfilled") return;
-			const reason = (settled: PromiseSettledResult<unknown>): string | null => {
-				if (settled.status === "rejected") {
-					return settled.reason instanceof Error ? settled.reason.message : String(settled.reason);
-				}
-				return (settled.value as { error?: string } | undefined)?.error ?? null;
-			};
-			setError(failedCopy ?? reason(providersResult) ?? reason(modelsResult) ?? t("modelPicker.notResponding"));
 		},
-		[refreshAvailableModels, sidecarReady, t, tabRpc],
+		[refreshAvailableModels, sidecarReady, t],
 	);
 
 	useEffect(() => {
@@ -116,12 +106,6 @@ export function ModelPicker() {
 		};
 	}, [open, load]);
 
-	const authByProvider = useMemo(() => {
-		const map = new Map<string, LoginProvider>();
-		for (const provider of providers) map.set(provider.id, provider);
-		return map;
-	}, [providers]);
-
 	const filters = useMemo(() => availableFilters(availableModels), [availableModels]);
 	// A catalog refresh can drop the last reasoning model; fall back to All
 	// instead of filtering on a tag that is no longer offered.
@@ -130,26 +114,21 @@ export function ModelPicker() {
 		if (activeFilter !== filter) setFilter(activeFilter);
 	}, [activeFilter, filter]);
 
-	const groups = useMemo(() => {
-		const filtered = filterModels(availableModels, { query, filter: activeFilter });
-		const map = new Map<string, ModelInfo[]>();
-		for (const model of filtered) {
-			const list = map.get(model.provider) ?? [];
-			list.push(model);
-			map.set(model.provider, list);
-		}
-		return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-	}, [activeFilter, availableModels, query]);
+	const visibleModels = useMemo(
+		() => filterModels(availableModels, { query, filter: activeFilter }),
+		[activeFilter, availableModels, query],
+	);
 
-	// Flat row order (group order → in-group order) for keyboard navigation.
+	// Row order for keyboard navigation is the catalog order.
 	const flatOptions = useMemo(
 		() =>
-			groups.flatMap(([provider, models]) =>
-				models.map(model => ({ provider, modelId: model.id, key: `${provider}/${model.id}` })),
-			),
-		[groups],
+			visibleModels.map(model => ({
+				provider: model.provider,
+				modelId: model.id,
+				key: `${model.provider}/${model.id}`,
+			})),
+		[visibleModels],
 	);
-	const indexByKey = useMemo(() => new Map(flatOptions.map((option, index) => [option.key, index])), [flatOptions]);
 
 	// Clamp the highlight when the visible list shrinks (search, reload).
 	useEffect(() => {
@@ -235,7 +214,11 @@ export function ModelPicker() {
 
 	// role="listbox" only when option rows actually render (loading / error /
 	// empty states are plain status blocks, not listbox children).
-	const showOptions = !error && !loading && groups.length > 0;
+	const showOptions = !error && !loading && visibleModels.length > 0;
+	const openOllama = () => {
+		close();
+		openProviders();
+	};
 
 	return (
 		<Modal
@@ -310,139 +293,104 @@ export function ModelPicker() {
 							<span className="text-xs text-(--omp-dim)">{t("modelPicker.loading")}</span>
 						</div>
 					) : availableModels.length === 0 ? (
-						<div className="py-10 text-center text-xs text-(--omp-dim)">{t("modelPicker.empty")}</div>
-					) : groups.length === 0 ? (
+						<div className="flex flex-col items-center gap-3 py-10" data-model-picker-empty>
+							<span className="text-xs text-(--omp-dim)">{t("modelPicker.emptyLocal")}</span>
+							<Button onClick={openOllama} size="sm" variant="secondary">
+								{t("modelPicker.openOllama")}
+							</Button>
+						</div>
+					) : visibleModels.length === 0 ? (
 						<div className="py-10 text-center text-xs text-(--omp-dim)">
 							{query.trim().length > 0
 								? t("modelPicker.noMatch", { query })
 								: t("modelPicker.count", { count: 0, plural: "s" })}
 						</div>
 					) : (
-						groups.map(([provider, models]) => {
-							const auth = authByProvider.get(provider);
+						visibleModels.map((model, optionIndex) => {
+							const isCurrent = current?.provider === model.provider && current.id === model.id;
+							const key = `${model.provider}/${model.id}`;
+							const isActive = optionIndex === activeIndex;
+							const over = !isCurrent && isOverContext(model);
 							return (
-								<section aria-label={provider} className="mb-1" key={provider} role="group">
-									<div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
-										<span className="omp-eyebrow text-(--omp-dim)">{provider}</span>
-										{auth && (
-											<Badge variant={auth.authenticated ? "success" : auth.available ? "warning" : "muted"}>
-												{auth.authenticated
-													? t("modelPicker.auth.authenticated")
-													: auth.available
-														? t("modelPicker.auth.notSignedIn")
-														: t("modelPicker.auth.unavailable")}
-											</Badge>
-										)}
-										{auth?.available && !auth.authenticated && (
-											<button
-												type="button"
-												className="rounded px-1.5 py-0.5 text-omp-xxs font-medium text-(--omp-accent) hover:bg-(--omp-selected-bg)"
-												onClick={() => {
-													close();
-													openProviders();
-												}}
+								<button
+									aria-selected={isCurrent}
+									className={`flex min-h-[58px] w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
+										isActive ? "bg-(--omp-selected-bg)" : "hover:bg-(--omp-bg-tertiary)"
+									}`}
+									data-option-index={optionIndex}
+									disabled={switching !== null || !sidecarReady}
+									title={!sidecarReady ? t("modelPicker.notConnected") : undefined}
+									id={`${listboxId}-option-${optionIndex}`}
+									key={key}
+									onClick={() => void select(model.provider, model.id)}
+									onMouseEnter={() => setActiveIndex(optionIndex)}
+									role="option"
+									type="button"
+								>
+									<span aria-hidden="true" className={isCurrent ? TILE_CURRENT : TILE_OTHER}>
+										<Cpu size={15} />
+									</span>
+									<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+										<div className="flex min-w-0 items-center gap-2">
+											<span
+												className={`truncate text-omp-lg font-semibold ${isCurrent ? "text-(--omp-accent)" : over ? "text-(--omp-dim)" : "text-(--omp-text)"}`}
 											>
-												{t("providers.login")}
-											</button>
+												{model.name || model.id}
+											</span>
+											{model.isRecommended && (
+												<Badge className="px-1.5 text-omp-xxs leading-3" variant="success">
+													{t("modelPicker.badge.recommended")}
+												</Badge>
+											)}
+											{model.isNew && (
+												<Badge className="px-1.5 text-omp-xxs leading-3" variant="info">
+													{t("modelPicker.badge.new")}
+												</Badge>
+											)}
+											{model.isBeta && (
+												<Badge className="px-1.5 text-omp-xxs leading-3" variant="warning">
+													{t("modelPicker.badge.beta")}
+												</Badge>
+											)}
+										</div>
+										{((model.name && model.name !== model.id) || model.description) && (
+											<span
+												className="truncate font-mono text-omp-sm text-(--omp-muted)"
+												title={model.description}
+											>
+												{[model.name && model.name !== model.id ? model.id : null, model.description]
+													.filter(Boolean)
+													.join(" · ")}
+											</span>
 										)}
-										<span className="ml-auto font-mono text-omp-xxs tabular-nums text-(--omp-dim)">
-											{models.length}
-										</span>
 									</div>
-									{models.map(model => {
-										const isCurrent = current?.provider === provider && current.id === model.id;
-										const key = `${provider}/${model.id}`;
-										const optionIndex = indexByKey.get(key) ?? 0;
-										const isActive = optionIndex === activeIndex;
-										const over = !isCurrent && isOverContext(model);
-										return (
-											<button
-												aria-selected={isCurrent}
-												className={`flex min-h-[58px] w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
-													isActive ? "bg-(--omp-selected-bg)" : "hover:bg-(--omp-bg-tertiary)"
-												}`}
-												data-option-index={optionIndex}
-												disabled={switching !== null || !sidecarReady}
-												title={!sidecarReady ? t("modelPicker.notConnected") : undefined}
-												id={`${listboxId}-option-${optionIndex}`}
-												key={key}
-												onClick={() => void select(provider, model.id)}
-												onMouseEnter={() => setActiveIndex(optionIndex)}
-												role="option"
-												type="button"
-											>
-												<span aria-hidden="true" className={isCurrent ? TILE_CURRENT : TILE_OTHER}>
-													<Cpu size={15} />
-												</span>
-												<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-													<div className="flex min-w-0 items-center gap-2">
-														<span
-															className={`truncate text-omp-lg font-semibold ${isCurrent ? "text-(--omp-accent)" : over ? "text-(--omp-dim)" : "text-(--omp-text)"}`}
-														>
-															{model.name || model.id}
-														</span>
-														{model.isRecommended && (
-															<Badge className="px-1.5 text-omp-xxs leading-3" variant="success">
-																{t("modelPicker.badge.recommended")}
-															</Badge>
-														)}
-														{model.isNew && (
-															<Badge className="px-1.5 text-omp-xxs leading-3" variant="info">
-																{t("modelPicker.badge.new")}
-															</Badge>
-														)}
-														{model.isBeta && (
-															<Badge className="px-1.5 text-omp-xxs leading-3" variant="warning">
-																{t("modelPicker.badge.beta")}
-															</Badge>
-														)}
-													</div>
-													{((model.name && model.name !== model.id) || model.description) && (
-														<span
-															className="truncate font-mono text-omp-sm text-(--omp-muted)"
-															title={model.description}
-														>
-															{[
-																model.name && model.name !== model.id ? model.id : null,
-																model.description,
-															]
-																.filter(Boolean)
-																.join(" · ")}
-														</span>
-													)}
-												</div>
-												{model.int != null && Number.isFinite(model.int) && (
-													<span className="shrink-0 font-mono text-omp-sm text-(--omp-muted)">
-														{t("modelPicker.intelligence", { value: Math.round(model.int) })}
-													</span>
-												)}
-												{model.tps != null && Number.isFinite(model.tps) && model.tps > 0 && (
-													<span className="shrink-0 font-mono text-omp-sm font-medium text-(--omp-text)">
-														{t("modelPicker.speed", {
-															value: model.tps >= 10 ? Math.round(model.tps) : model.tps.toFixed(1),
-														})}
-													</span>
-												)}
-												{over && (
-													<span
-														className="flex shrink-0 items-center gap-1 text-(--omp-warning)"
-														title={t("modelPicker.overContextHint", {
-															current: formatTokens(contextUsage?.tokens),
-															limit: formatTokens(model.contextWindow),
-														})}
-													>
-														<TriangleAlert size={12} />
-														<span className="text-omp-xxs font-medium">
-															{t("modelPicker.overContext")}
-														</span>
-													</span>
-												)}
-												{switching === key && <Spinner size="sm" />}
-												{isCurrent && <Check className="shrink-0 text-(--omp-accent)" size={16} />}
-											</button>
-										);
-									})}
-								</section>
+									{model.int != null && Number.isFinite(model.int) && (
+										<span className="shrink-0 font-mono text-omp-sm text-(--omp-muted)">
+											{t("modelPicker.intelligence", { value: Math.round(model.int) })}
+										</span>
+									)}
+									{model.tps != null && Number.isFinite(model.tps) && model.tps > 0 && (
+										<span className="shrink-0 font-mono text-omp-sm font-medium text-(--omp-text)">
+											{t("modelPicker.speed", {
+												value: model.tps >= 10 ? Math.round(model.tps) : model.tps.toFixed(1),
+											})}
+										</span>
+									)}
+									{over && (
+										<span
+											className="flex shrink-0 items-center gap-1 text-(--omp-warning)"
+											title={t("modelPicker.overContextHint", {
+												current: formatTokens(contextUsage?.tokens),
+												limit: formatTokens(model.contextWindow),
+											})}
+										>
+											<TriangleAlert size={12} />
+											<span className="text-omp-xxs font-medium">{t("modelPicker.overContext")}</span>
+										</span>
+									)}
+									{switching === key && <Spinner size="sm" />}
+									{isCurrent && <Check className="shrink-0 text-(--omp-accent)" size={16} />}
+								</button>
 							);
 						})
 					)}
@@ -462,15 +410,8 @@ export function ModelPicker() {
 					>
 						{t("modelPicker.footer.assignRoles")}
 					</Button>
-					<Button
-						onClick={() => {
-							close();
-							openProviders();
-						}}
-						size="sm"
-						variant="secondary"
-					>
-						{t("modelPicker.footer.manageProviders")}
+					<Button onClick={openOllama} size="sm" variant="secondary">
+						{t("modelPicker.openOllama")}
 					</Button>
 				</div>
 			</div>

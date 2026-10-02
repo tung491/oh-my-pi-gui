@@ -1,14 +1,14 @@
 /**
- * ModelPicker contracts: the filter tags are real toggles backed only by data
- * the picker already loads (login-provider auth state and the catalog's
- * `reasoning` flag), the caption counts what the list shows, and the footer
- * hands off to the existing model-roles and providers windows.
+ * ModelPicker contracts: only Ollama models are listed, with no provider
+ * headers or sign-in state; the filter tags are real toggles backed by the
+ * catalog's `reasoning` flag; the caption counts what the list shows; and the
+ * footer and empty state hand off to the model-roles and Ollama windows.
  */
 import { parseHTML } from "linkedom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
-import type { LoginProvider, ModelInfo } from "../../../shared/rpc-types";
+import type { ModelInfo } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
@@ -41,19 +41,15 @@ interface TestElement {
 
 const ok = (data?: unknown) => ({ type: "response" as const, command: "x", success: true as const, data });
 
+const QWEN: ModelInfo = { provider: "ollama", id: "qwen3:8b", name: "Qwen3 8B", reasoning: true };
+const GEMMA: ModelInfo = { provider: "ollama", id: "gemma3:4b", name: "Gemma 3 4B", reasoning: false };
+const LLAMA: ModelInfo = { provider: "ollama", id: "llama3.2:3b", name: "Llama 3.2 3B", reasoning: false };
 const SONNET: ModelInfo = {
 	provider: "anthropic",
 	id: "claude-sonnet-4-5",
 	name: "Claude Sonnet 4.5",
 	reasoning: true,
 };
-const HAIKU: ModelInfo = { provider: "anthropic", id: "claude-haiku-4-5", name: "Claude Haiku 4.5", reasoning: false };
-const GEMINI: ModelInfo = { provider: "google", id: "gemini-3-pro", name: "Gemini 3 Pro", reasoning: false };
-
-const PROVIDERS: LoginProvider[] = [
-	{ id: "anthropic", name: "Anthropic", available: true, authenticated: true },
-	{ id: "google", name: "Google", available: true, authenticated: false },
-];
 let container: TestElement;
 let root: Root;
 let rpc: Record<string, Mock>;
@@ -132,9 +128,8 @@ function optionNames(): string[] {
 }
 
 beforeEach(() => {
-	catalog = [SONNET, HAIKU, GEMINI];
+	catalog = [QWEN, GEMMA, LLAMA];
 	rpc = {
-		getLoginProviders: vi.fn(async () => ok({ providers: PROVIDERS })),
 		getAvailableModels: vi.fn(async () => ok({ models: catalog, generation: 1 })),
 	};
 	(window as unknown as { omp: { rpc: Record<string, Mock> } }).omp = { rpc };
@@ -171,13 +166,13 @@ describe("filters and count", () => {
 		expect(tag("All").getAttribute("aria-pressed")).toBe("false");
 		const names = optionNames();
 		expect(names).toHaveLength(1);
-		expect(names[0]).toContain("Claude Sonnet 4.5");
+		expect(names[0]).toContain("Qwen3 8B");
 		expect(body().textContent).toContain("1 model");
 		expect(body().textContent).not.toContain("1 models");
 	});
 
 	it("offers no filter tags when no model reports reasoning, and still shows the count", async () => {
-		catalog = [HAIKU, GEMINI];
+		catalog = [GEMMA, LLAMA];
 		await mount();
 		expect(body().querySelector('[role="group"][aria-label="Filter models"]')).toBeNull();
 		expect(body().textContent).toContain("2 models");
@@ -205,10 +200,59 @@ describe("footer", () => {
 		expect(useUiStore.getState().modelPickerOpen).toBe(false);
 	});
 
-	it("Manage providers closes the picker and opens the providers window", async () => {
+	it("Open Ollama settings closes the picker and opens the Ollama window", async () => {
 		await mount();
-		await click(button("Manage providers"));
+		await click(button("Open Ollama settings"));
 		expect(useUiStore.getState().providersOpen).toBe(true);
+		expect(useUiStore.getState().modelPickerOpen).toBe(false);
+	});
+});
+
+describe("Ollama only", () => {
+	it("lists only the Ollama models when other providers arrive in the catalog", async () => {
+		catalog = [SONNET, QWEN, { provider: "openai", id: "gpt-5", name: "GPT-5" }, GEMMA];
+		await mount();
+
+		const names = optionNames();
+		expect(names).toHaveLength(2);
+		expect(names[0]).toContain("Qwen3 8B");
+		expect(names[1]).toContain("Gemma 3 4B");
+		const text = body().textContent ?? "";
+		expect(text).not.toContain("Claude Sonnet 4.5");
+		expect(text).not.toContain("GPT-5");
+		expect(text).toContain("2 models");
+		// No provider header and no sign-in state on a local-only list.
+		expect(body().querySelector('section[role="group"]')).toBeNull();
+		expect(text).not.toContain("authenticated");
+		expect(text).not.toContain("not signed in");
+		expect(rpc.getLoginProviders).toBeUndefined();
+	});
+
+	it("shows the empty local state with a way into Ollama settings when only remote models arrive", async () => {
+		catalog = [SONNET];
+		await mount();
+
+		const empty = body().querySelector("[data-model-picker-empty]");
+		expect(empty?.textContent).toContain("No local models yet");
+		const open = empty?.querySelector("button");
+		expect(open?.textContent?.trim()).toBe("Open Ollama settings");
+		if (!open) throw new Error("empty-state button missing");
+		await click(open);
+		expect(useUiStore.getState().providersOpen).toBe(true);
+		expect(useUiStore.getState().modelPickerOpen).toBe(false);
+	});
+
+	it("selects an Ollama model through set_model", async () => {
+		rpc.setModel = vi.fn(async () => ok(QWEN));
+		await mount();
+
+		const option = body()
+			.querySelectorAll('[role="option"]')
+			.find(candidate => candidate.textContent?.includes("Qwen3 8B"));
+		if (!option) throw new Error("option missing");
+		await click(option);
+
+		expect(rpc.setModel).toHaveBeenCalledWith("ollama", "qwen3:8b");
 		expect(useUiStore.getState().modelPickerOpen).toBe(false);
 	});
 });

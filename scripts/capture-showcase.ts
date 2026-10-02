@@ -114,15 +114,18 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 		page.setDefaultTimeout(15_000);
 		await page.setViewportSize({ width: 1440, height: 960 });
 		await expect(page.locator("textarea").first()).toBeVisible();
+		// The fixture has no Ollama model, so the welcome screen opens on the first ready frame.
+		const welcome = page.getByRole("dialog");
+		const skipWelcome = welcome.getByRole("button", { name: t["welcome.skip"], exact: true });
+		await expect(skipWelcome).toBeVisible();
 		if (captureOnboarding) {
-			// One step in: the provider step. A second Continue would open the Providers window.
-			await page.getByRole("button", { name: t["onboarding.wizard.continue"], exact: true }).click();
-			await expect(page.getByRole("dialog")).toContainText(
-				t["onboarding.wizard.stepOf"].replace("{current}", "2").replace("{total}", "5"),
-			);
+			// Wait for the Ollama probe and the machine facts so the shot shows no skeletons.
+			await expect(welcome.locator('.omp-ollama-row:not([data-state="loading"])')).toBeVisible();
+			await expect(welcome.locator('.omp-welcome-facts:not([data-state="loading"])')).toBeVisible();
 			await shot("00-onboarding");
 		}
-		await page.getByRole("button", { name: t["onboarding.later"], exact: true }).click();
+		await skipWelcome.click();
+		await expect(welcome).toBeHidden();
 		await expect(page.getByTitle(t["input.model"], { exact: true })).toBeEnabled();
 		await expect(page.getByText(titles[0], { exact: true }).first()).toBeVisible();
 

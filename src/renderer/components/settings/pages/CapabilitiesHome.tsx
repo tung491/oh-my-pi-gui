@@ -29,7 +29,6 @@ export type CapabilityTarget =
 	| "modelCompare"
 	| "benchmark"
 	| "providers"
-	| "providerConfig"
 	| "usage"
 	| "agents"
 	| "skills"
@@ -334,7 +333,6 @@ export function CapabilitiesHome({
 
 				<CapabilityCard description={t("cmd.providers.desc")} icon={<Plug size={16} />} title={t("cmd.providers")}>
 					<TargetButton label={t("cmd.providers")} onOpen={onOpenTarget} target="providers" variant="secondary" />
-					<TargetButton label={t("cmd.addProvider")} onOpen={onOpenTarget} target="providerConfig" />
 					<TargetButton label={t("cmd.usage")} onOpen={onOpenTarget} target="usage" />
 				</CapabilityCard>
 

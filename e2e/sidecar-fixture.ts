@@ -201,6 +201,33 @@ if (process.argv.includes("stats")) {
 		cost: 0,
 		premiumRequests: 0,
 	};
+	// Like the agent's implicit Ollama discovery: read the daemon's tags at start
+	// and again on every forced catalog read, never in between. Off unless a test
+	// points the fixture at a (fake) daemon.
+	const ollamaUrl = process.env.OMP_GUI_TEST_OLLAMA_URL;
+	let ollamaModels: (typeof model)[] = [];
+	let generation = 1;
+	const discoverOllama = async (): Promise<void> => {
+		if (!ollamaUrl) return;
+		try {
+			const response = await fetch(new URL("/api/tags", ollamaUrl));
+			if (!response.ok) throw new Error(`HTTP ${response.status}`);
+			const body = (await response.json()) as { models?: { name?: unknown }[] };
+			ollamaModels = (body.models ?? [])
+				.map(entry => entry.name)
+				.filter((name): name is string => typeof name === "string")
+				.map(name => ({ ...model, id: name, name, provider: "ollama" }));
+			generation++;
+		} catch (cause) {
+			process.stderr.write(`[fixture] ollama discovery failed: ${String(cause)}\n`);
+		}
+	};
+	let discovery = discoverOllama();
+	const readCatalog = async (forceRefresh: boolean | undefined) => {
+		if (forceRefresh) discovery = discoverOllama();
+		await discovery;
+		return [model, ...ollamaModels];
+	};
 	write({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] });
 	const lines = createInterface({ input: process.stdin });
 	lines.on("line", line => {
@@ -224,16 +251,35 @@ if (process.argv.includes("stats")) {
 				ok({ steering: [], followUp: [], entries: queue });
 				break;
 			case "get_available_models":
-				ok({ models: [model], discoveryStates: [], refreshPending: false, generation: 1 });
+				void readCatalog(command.forceRefresh).then(models =>
+					ok({ models, discoveryStates: [], refreshPending: false, generation }),
+				);
 				break;
 			case "get_providers":
-				ok({
-					providers: [{ id: "fixture", name: "Local fixture", hasAuth: true, authenticated: true, modelCount: 1 }],
-					models: [model],
-					discoveryStates: [],
-					refreshPending: false,
-					generation: 1,
-				});
+				void readCatalog(command.forceRefresh).then(models =>
+					ok({
+						providers: [
+							{ id: "fixture", name: "Local fixture", hasAuth: true, authenticated: true, modelCount: 1 },
+							...(ollamaModels.length > 0
+								? [
+										{
+											id: "ollama",
+											name: "Ollama",
+											hasAuth: true,
+											authenticated: true,
+											loginAvailable: false,
+											disabled: false,
+											modelCount: ollamaModels.length,
+										},
+									]
+								: []),
+						],
+						models,
+						discoveryStates: [],
+						refreshPending: false,
+						generation,
+					}),
+				);
 				break;
 			case "get_login_providers":
 				ok({ providers: [] });
@@ -468,6 +514,28 @@ if (process.argv.includes("stats")) {
 				ok(dashboard);
 				break;
 			}
+			case "set_model": {
+				// The agent only switches to a model its catalog already lists.
+				const found = [model, ...ollamaModels].find(
+					entry => entry.provider === command.provider && entry.id === command.modelId,
+				);
+				if (!found) {
+					write({
+						type: "response",
+						id: command.id,
+						command: command.type,
+						success: false,
+						error: `Model not found: ${command.provider}/${command.modelId}`,
+					});
+					break;
+				}
+				state.model = found;
+				ok(state.model);
+				break;
+			}
+			case "set_model_role":
+				ok({ role: command.role, modelId: command.modelId });
+				break;
 			case "set_subagent_subscription":
 			case "set_host_tools":
 			case "set_host_uri_schemes":

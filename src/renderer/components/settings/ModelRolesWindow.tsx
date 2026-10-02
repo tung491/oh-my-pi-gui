@@ -10,6 +10,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { filterAllowedModels } from "../../../shared/provider-policy";
 import type { ModelRoleCandidate, ModelRoleEntry, ModelRolesResult } from "../../../shared/rpc-types";
 import { useT } from "../../lib/i18n";
 import { useTabRpc } from "../../lib/tab-rpc";
@@ -310,7 +311,14 @@ export function ModelRolesWindow() {
 			// role; get_model_roles returns everything the window renders.
 			const res = await tabRpc.getModelRoles();
 			if (res.success) {
-				setRoles((res.data as ModelRolesResult).roles);
+				// get_model_roles is read here rather than through the model store, so
+				// its candidate pools need the same provider filter the store applies.
+				setRoles(
+					(res.data as ModelRolesResult).roles.map(role => ({
+						...role,
+						candidates: filterAllowedModels(role.candidates ?? []),
+					})),
+				);
 				setError(null);
 			} else {
 				setError(res.error);

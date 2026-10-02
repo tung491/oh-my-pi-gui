@@ -613,7 +613,7 @@ export function Sidebar() {
 		{
 			id: "providers",
 			icon: Plug,
-			label: t("titlebar.providers"),
+			label: t("ollama.settings.title"),
 			onClick: () => useUiStore.getState().openProviders(),
 		},
 	];
