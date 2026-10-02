@@ -291,6 +291,7 @@ impl Desktop {
             desktop_entry_missing,
             xwayland_only: xwayland_only(platform, &env),
             on_activate: Arc::new(move || {
+                runtime_log::note("global-shortcut", "quick entry shortcut activated", json!({ "portal": portal }));
                 if let Some(ctx) = activate_ctx.upgrade() {
                     if let Some(desktop) = Desktop::of(&ctx) {
                         desktop.quick_entry.toggle(&ctx, desktop);
