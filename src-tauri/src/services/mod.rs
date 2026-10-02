@@ -3,6 +3,12 @@
 
 pub mod ipc;
 
+mod dialog_memory;
+mod models_config;
+mod open_path_target;
+mod provider_cleanup;
+mod session_cache;
+
 use std::path::PathBuf;
 use std::any::Any;
 use std::sync::Arc;
