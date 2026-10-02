@@ -2,6 +2,7 @@
 //! port replaces.
 
 pub mod ipc;
+mod state;
 
 use std::any::Any;
 use std::sync::Arc;
