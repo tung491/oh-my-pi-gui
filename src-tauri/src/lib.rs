@@ -18,6 +18,13 @@ pub mod webview;
 #[cfg(test)]
 pub mod testing;
 
+pub mod desktop;
+pub mod ollama;
+pub mod omp;
+pub mod services;
+pub mod tabs;
+pub mod updater;
+
 
 /// Start the application. Wiring lands with the first window.
 pub fn run() {}

@@ -1,0 +1,54 @@
+impl sai_atlas_lib::ports::ServicesPort for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
+pub fn sai_atlas_lib::services::Services::import_legacy_renderer_storage(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::services::Services::on_sessions_changed(&self, alloc::boxed::Box<(dyn core::ops::function::Fn() + core::marker::Send + core::marker::Sync)>)
+pub fn sai_atlas_lib::services::Services::session_delete(&self, &str) -> futures_core::future::BoxFuture<'_, core::result::Result<(), sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::services::Services::session_kind_for(&self, &str) -> futures_core::future::BoxFuture<'_, sai_atlas_lib::ports::SessionKind>
+pub fn sai_atlas_lib::services::Services::session_search(&self, &str, alloc::vec::Vec<alloc::string::String>) -> futures_core::future::BoxFuture<'_, alloc::vec::Vec<alloc::string::String>>
+pub fn sai_atlas_lib::services::Services::sessions_dir(&self) -> std::path::PathBuf
+pub fn sai_atlas_lib::services::Services::sessions_list(&self, sai_atlas_lib::ports::SessionScope, core::option::Option<alloc::string::String>) -> futures_core::future::BoxFuture<'_, core::result::Result<alloc::vec::Vec<sai_atlas_lib::ports::SessionInfo>, sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::services::Services::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub mod sai_atlas_lib::services::ipc
+pub fn sai_atlas_lib::services::ipc::editor_open_external(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_read(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_read_image(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_read_plan(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::log_snapshot(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::models_providers_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::prefs_get(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::prefs_set(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::provider_cleanup_config(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::runtime_error_report(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::runtime_log_path(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::session_consume_pending(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::session_open_new_window(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_delete(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_rename(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_search(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_clipboard_read(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_notify(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_open_dialog(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_open_external(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_open_path(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_save_dialog(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub struct sai_atlas_lib::services::Services
+impl sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::new() -> Self
+impl core::default::Default for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::default() -> Self
+impl sai_atlas_lib::ports::ServicesPort for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
+pub fn sai_atlas_lib::services::Services::import_legacy_renderer_storage(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::services::Services::on_sessions_changed(&self, alloc::boxed::Box<(dyn core::ops::function::Fn() + core::marker::Send + core::marker::Sync)>)
+pub fn sai_atlas_lib::services::Services::session_delete(&self, &str) -> futures_core::future::BoxFuture<'_, core::result::Result<(), sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::services::Services::session_kind_for(&self, &str) -> futures_core::future::BoxFuture<'_, sai_atlas_lib::ports::SessionKind>
+pub fn sai_atlas_lib::services::Services::session_search(&self, &str, alloc::vec::Vec<alloc::string::String>) -> futures_core::future::BoxFuture<'_, alloc::vec::Vec<alloc::string::String>>
+pub fn sai_atlas_lib::services::Services::sessions_dir(&self) -> std::path::PathBuf
+pub fn sai_atlas_lib::services::Services::sessions_list(&self, sai_atlas_lib::ports::SessionScope, core::option::Option<alloc::string::String>) -> futures_core::future::BoxFuture<'_, core::result::Result<alloc::vec::Vec<sai_atlas_lib::ports::SessionInfo>, sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::services::Services::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub const sai_atlas_lib::services::CHANNELS: &[(&str, sai_atlas_lib::bridge::Scope)]
+pub const sai_atlas_lib::services::EMITS: &[&str]
+pub fn sai_atlas_lib::services::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, &tauri::app::AppHandle) -> tauri::error::Result<()>
+pub fn sai_atlas_lib::services::register(&mut sai_atlas_lib::bridge::Registry)
