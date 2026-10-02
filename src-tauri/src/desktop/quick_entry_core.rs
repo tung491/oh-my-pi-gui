@@ -126,6 +126,10 @@ pub(crate) fn resolve_initial_target(saved: Option<&Value>, offered_cwds: &HashS
 }
 
 /// The parts of a key event the chord guard reads.
+/// No Tauri hook sees key events before the page does (Electron's
+/// `before-input-event`), so the guard below is kept for the day one exists
+/// and is exercised by its tests only.
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MenuChordInput {
     /// `keyDown` or `keyUp`.
@@ -137,6 +141,7 @@ pub(crate) struct MenuChordInput {
 }
 
 /// Editing and caret chords the bar's text field needs, plus ⌘Q.
+#[cfg_attr(not(test), allow(dead_code))]
 const MAC_BAR_CHORDS: [&str; 12] =
     ["a", "c", "v", "x", "z", "q", "arrowleft", "arrowright", "arrowup", "arrowdown", "backspace", "delete"];
 
@@ -145,6 +150,7 @@ const MAC_BAR_CHORDS: [&str; 12] =
 /// swallows every other ⌘ chord. Windows and Linux bars have no menu. A Latin
 /// layout is judged by its character, as the menu matches it; a non-Latin
 /// letter by its physical key, so ⌘C copies on a Russian layout.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn is_blocked_menu_chord(platform: Platform, input: &MenuChordInput) -> bool {
     if platform != Platform::Darwin || input.event_type != "keyDown" || !input.meta {
         return false;
@@ -195,6 +201,9 @@ pub(crate) fn ack(queue: &mut QuickEntryQueue, window_id: WindowId, id: &str) {
 }
 
 /// The renderer reloaded: its leases go back to pending, ahead of newer prompts, for the boot drain.
+/// Nothing in this module observes a page reload (the bridge detaches on page
+/// load in the foundation), so this runs in tests only.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn release_leases(queue: &mut QuickEntryQueue, window_id: WindowId) {
     let Some(current) = queue.get_mut(&window_id) else { return };
     if current.leased.is_empty() {
