@@ -307,8 +307,15 @@ fn shutdown(ctx: &Arc<AppCtx>, done: &AtomicBool, reason: &str) {
     runtime_log::note("unknown", "shutdown finished", json!({ "steps": 7 }));
 }
 
+/// How long the graceful exit started by a signal may take before the process exits hard.
+#[cfg(unix)]
+const SIGNAL_EXIT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// A plain SIGTERM would end the process without Tauri's exit path; route it
 /// (and SIGINT) through `AppHandle::exit` so the sidecars get their grace.
+/// Installing the listener replaces the default disposition for good, so a
+/// second signal, or a graceful exit that overruns its deadline, exits hard
+/// with `128 + signo`: `kill` must always work twice.
 #[cfg(unix)]
 fn listen_for_signals(app: AppHandle) {
     use tokio::signal::unix::{signal, SignalKind};
@@ -327,12 +334,23 @@ fn listen_for_signals(app: AppHandle) {
                 return;
             }
         };
-        let which = tokio::select! {
-            _ = term.recv() => "SIGTERM",
-            _ = int.recv() => "SIGINT",
+        let (which, signo) = tokio::select! {
+            _ = term.recv() => ("SIGTERM", SignalKind::terminate().as_raw_value()),
+            _ = int.recv() => ("SIGINT", SignalKind::interrupt().as_raw_value()),
         };
         runtime_log::note("unknown", format!("{which} received; exiting through Tauri"), json!({ "signal": which }));
         app.exit(0);
+        let (reason, code) = tokio::select! {
+            _ = term.recv() => ("second SIGTERM", 128 + SignalKind::terminate().as_raw_value()),
+            _ = int.recv() => ("second SIGINT", 128 + SignalKind::interrupt().as_raw_value()),
+            _ = tokio::time::sleep(SIGNAL_EXIT_DEADLINE) => ("graceful exit overran its deadline", 128 + signo),
+        };
+        runtime_log::note(
+            "unknown",
+            format!("{reason}; exiting hard with code {code}"),
+            json!({ "signal": which, "deadlineSecs": SIGNAL_EXIT_DEADLINE.as_secs() }),
+        );
+        std::process::exit(code);
     });
 }
 
