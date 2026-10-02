@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.15] - 2026-10-02
+
 ### Added
 
 - **Quick entry**: press `Control+Shift+Space` in any app to open a small bar, type a request, and send it as a new Chat or Agent tab in the main window. Unsent text stays in the bar. Rebind the chord or turn it off in Keyboard Shortcuts; `sai-atlas --quick-entry` opens the bar from a terminal or a desktop shortcut.
@@ -14,6 +16,7 @@
 
 ### Changed
 
+- **Update source**: the app checks for and downloads updates from [tung491/oh-my-pi-gui](https://github.com/tung491/oh-my-pi-gui/releases). Builds older than 0.9.15 still look at the old feed, so install this release by hand once.
 - **Electron 44**: the app runs on Electron 44.4.5 (Chromium 152, Node 24).
 - **Native Wayland**: on Linux the app runs natively on Wayland, and global shortcuts go through the desktop's GlobalShortcuts portal (GNOME asks once to allow them). Start it with `--ozone-platform=x11` to use XWayland. The desktop entry is `vn.io.vif.saiatlas.desktop`.
 - **macOS 13 or later**: Electron 44 needs macOS 13, and the updater does not offer this release to macOS 12.

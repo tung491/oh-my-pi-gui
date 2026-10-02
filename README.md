@@ -5,14 +5,14 @@
 **A desktop home for parallel coding agents.**<br>
 **让对话、代码与并行 Agent 工作尽在眼前。**
 
-<a href="https://github.com/nornzach/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/v/release/nornzach/oh-my-pi-gui?style=flat&colorA=222222&colorB=3FB950" alt="Release"></a>
-<a href="https://github.com/nornzach/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/downloads/nornzach/oh-my-pi-gui/total?style=flat&colorA=222222&colorB=58A6FF" alt="Downloads"></a>
-<a href="./LICENSE"><img src="https://img.shields.io/github/license/nornzach/oh-my-pi-gui?style=flat&colorA=222222&colorB=BE185D" alt="License"></a>
+<a href="https://github.com/tung491/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/v/release/tung491/oh-my-pi-gui?style=flat&colorA=222222&colorB=3FB950" alt="Release"></a>
+<a href="https://github.com/tung491/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/downloads/tung491/oh-my-pi-gui/total?style=flat&colorA=222222&colorB=58A6FF" alt="Downloads"></a>
+<a href="./LICENSE"><img src="https://img.shields.io/github/license/tung491/oh-my-pi-gui?style=flat&colorA=222222&colorB=BE185D" alt="License"></a>
 <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-222222?style=flat" alt="Platform: macOS | Windows | Linux">
 <img src="https://img.shields.io/badge/Electron-44-47848F?style=flat&logo=electron&logoColor=white" alt="Electron">
 <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white" alt="React">
 
-[English](#english) · [中文](#中文) · [Releases / 下载](https://github.com/nornzach/oh-my-pi-gui/releases)
+[English](#english) · [中文](#中文) · [Releases / 下载](https://github.com/tung491/oh-my-pi-gui/releases)
 
 </div>
 
@@ -26,7 +26,7 @@ Sai ATLAS is the AI assistant for SAI OS, a desktop GUI built on the [omp](https
 
 [Features](#en-features) · [What's new in 0.9.10](#en-recent) · [Gallery](#en-gallery) · [Install](#en-install) · [Shortcuts](#en-shortcuts) · [Development](#en-development) · [Help](#en-help) · [Releasing](#en-release)
 
-> **v0.9.10 showcase.** The improvements below are included in v0.9.10, with the bundled agent updated to omp 18.3.0. [GitHub Releases](https://github.com/nornzach/oh-my-pi-gui/releases) is authoritative for available downloads and release contents.
+> **v0.9.10 showcase.** The improvements below are included in v0.9.10, with the bundled agent updated to omp 18.3.0. [GitHub Releases](https://github.com/tung491/oh-my-pi-gui/releases) is authoritative for available downloads and release contents.
 
 <img src="docs/screenshots/en/01-conversation.png" alt="English Sai ATLAS conversation in the synthetic aurora-web project" width="100%">
 
@@ -149,7 +149,7 @@ Search with `⌘K`. Supported commands lead to native controls; pass-through and
 <a id="en-install"></a>
 ### Install & start
 
-**Documented install baseline: [v0.9.10](https://github.com/nornzach/oh-my-pi-gui/releases/tag/v0.9.10).** Check [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) for authoritative current downloads and release notes.
+**Documented install baseline: [v0.9.10](https://github.com/nornzach/oh-my-pi-gui/releases/tag/v0.9.10).** Check [Releases](https://github.com/tung491/oh-my-pi-gui/releases) for authoritative current downloads and release notes.
 
 | Mac | v0.9.10 download |
 |---|---|
@@ -165,8 +165,8 @@ Sai ATLAS builds on Electron 44 need macOS 13 or later. The updater does not off
 
 | Linux x64 (Ubuntu 24.04+) | Package |
 |---|---|
-| Debian package (recommended) | `sai-atlas_<version>_amd64.deb` from [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) |
-| AppImage | `Sai-ATLAS-<version>-x86_64.AppImage` from [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) |
+| Debian package (recommended) | `sai-atlas_<version>_amd64.deb` from [Releases](https://github.com/tung491/oh-my-pi-gui/releases) |
+| AppImage | `Sai-ATLAS-<version>-x86_64.AppImage` from [Releases](https://github.com/tung491/oh-my-pi-gui/releases) |
 
 On Linux, `sudo apt install ./sai-atlas_<version>_amd64.deb` installs the app to `/opt/Sai ATLAS`, the `sai-atlas` launcher (the agent CLI keeps the name `omp`), the `omp://` link handler, and an AppArmor profile that keeps Chromium's sandbox working under Ubuntu's user-namespace restriction. Start it from the app grid or with `sai-atlas /abs/project/dir`. No release has shipped a Linux package under the old name, but if you built and installed the `omp` package from source, remove it first with `sudo apt remove omp`.
 
@@ -246,7 +246,7 @@ omp-monorepo/                    # nornzach/oh-my-pi: fork and sidecar build sou
 ├── .git/
 ├── packages/coding-agent/
 ├── packages/natives/
-└── packages/gui/                # nornzach/oh-my-pi-gui: this product repository
+└── packages/gui/                # tung491/oh-my-pi-gui: this product repository
     ├── .git/
     ├── src/
     └── resources/omp*           # ignored, locally built sidecars
@@ -254,7 +254,7 @@ omp-monorepo/                    # nornzach/oh-my-pi: fork and sidecar build sou
 
 | Repository | Responsibility |
 |---|---|
-| [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui) | GUI code, commits, tags, and releases. GUI work goes to this repository's `origin/main`. |
+| [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui) | GUI code, commits, tags, and releases. GUI work goes to this repository's `origin/main`. |
 | [`nornzach/oh-my-pi`](https://github.com/nornzach/oh-my-pi) | Enclosing monorepo fork: agent source, upstream sync, and sidecar builds. Agent changes are committed here and pushed to its `origin`. |
 | [`can1357/oh-my-pi`](https://github.com/can1357/oh-my-pi) | Upstream feature source, fetched through the monorepo's `upstream` remote. **Never push here.** |
 
@@ -270,7 +270,7 @@ git clone https://github.com/nornzach/oh-my-pi.git omp-monorepo
 cd omp-monorepo
 git remote add upstream https://github.com/can1357/oh-my-pi.git
 bun install
-git clone https://github.com/nornzach/oh-my-pi-gui.git packages/gui
+git clone https://github.com/tung491/oh-my-pi-gui.git packages/gui
 cd packages/gui
 bun install
 ```
@@ -357,7 +357,7 @@ Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light th
 <details>
 <summary><b>Sync, build all targets, smoke-test the installers, then publish</b></summary>
 
-Releases belong only to [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui/releases). Preserve the two-repository boundary throughout:
+Releases belong only to [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui/releases). Preserve the two-repository boundary throughout:
 
 1. **Start with clean checkouts and sync upstream.** From the **monorepo root**, run `bash packages/gui/scripts/sync-upstream.sh`. It fetches/merges `upstream/main`, installs dependencies, re-provisions natives, generates the statistics assets, rebuilds/smoke-tests the sidecar, and builds/checks/tests the GUI. If there are conflicts, resolve and commit the monorepo merge, then run `SKIP_MERGE=1 bash packages/gui/scripts/sync-upstream.sh`. Do not substitute a hand-rolled merge. Review and commit any remaining monorepo changes there; push them only to the fork's `origin`.
 2. **Prepare the GUI release.** In `packages/gui/`, bump `package.json`, write the release's `CHANGELOG.md` entry, and update both language sections' install links and source/release notes.
@@ -379,7 +379,7 @@ Sai ATLAS 是 SAI OS 的 AI 助手，一款基于 [omp](https://github.com/can13
 
 [功能全览](#zh-features) · [0.9.10 更新内容](#zh-recent) · [界面导览](#zh-gallery) · [安装](#zh-install) · [快捷键](#zh-shortcuts) · [开发](#zh-development) · [常见问题](#zh-help) · [发布](#zh-release)
 
-> **v0.9.10 功能展示。** 下文改进均纳入 v0.9.10，内置 Agent 更新至 omp 18.3.0。可用下载及实际发布内容以 [GitHub Releases](https://github.com/nornzach/oh-my-pi-gui/releases) 为准。
+> **v0.9.10 功能展示。** 下文改进均纳入 v0.9.10，内置 Agent 更新至 omp 18.3.0。可用下载及实际发布内容以 [GitHub Releases](https://github.com/tung491/oh-my-pi-gui/releases) 为准。
 
 <img src="docs/screenshots/zh/01-conversation.png" alt="中文 Sai ATLAS 中的合成 aurora-web 项目对话" width="100%">
 
@@ -502,7 +502,7 @@ v0.9.10 包含以下 GUI 改进与内置 Agent 更新：
 <a id="zh-install"></a>
 ### 安装与开始使用
 
-**本文安装基线：[v0.9.10](https://github.com/nornzach/oh-my-pi-gui/releases/tag/v0.9.10)。** 最新可下载版本与发布说明以 [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) 为准。
+**本文安装基线：[v0.9.10](https://github.com/nornzach/oh-my-pi-gui/releases/tag/v0.9.10)。** 最新可下载版本与发布说明以 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 为准。
 
 | Mac | v0.9.10 下载 |
 |---|---|
@@ -518,8 +518,8 @@ v0.9.10 包含以下 GUI 改进与内置 Agent 更新：
 
 | Linux x64（Ubuntu 24.04+） | 安装包 |
 |---|---|
-| Debian 包（推荐） | 从 [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) 下载 `sai-atlas_<version>_amd64.deb` |
-| AppImage | 从 [Releases](https://github.com/nornzach/oh-my-pi-gui/releases) 下载 `Sai-ATLAS-<version>-x86_64.AppImage` |
+| Debian 包（推荐） | 从 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 下载 `sai-atlas_<version>_amd64.deb` |
+| AppImage | 从 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 下载 `Sai-ATLAS-<version>-x86_64.AppImage` |
 
 在 Linux 上，`sudo apt install ./sai-atlas_<version>_amd64.deb` 会把应用安装到 `/opt/Sai ATLAS`，并安装 `sai-atlas` 启动命令（Agent CLI 仍叫 `omp`）、`omp://` 链接处理程序，以及一个 AppArmor 配置文件，使 Chromium 沙箱在 Ubuntu 的用户命名空间限制下仍能工作。可从应用列表启动，或运行 `sai-atlas /abs/project/dir`。旧名称的 Linux 包从未正式发布；如果你曾从源码构建并安装 `omp` 包，请先执行 `sudo apt remove omp` 卸载。
 
@@ -599,7 +599,7 @@ omp-monorepo/                    # nornzach/oh-my-pi：fork 与 sidecar 构建�
 ├── .git/
 ├── packages/coding-agent/
 ├── packages/natives/
-└── packages/gui/                # nornzach/oh-my-pi-gui：本产品仓库
+└── packages/gui/                # tung491/oh-my-pi-gui：本产品仓库
     ├── .git/
     ├── src/
     └── resources/omp*           # 本地构建、不入库的 sidecar
@@ -607,7 +607,7 @@ omp-monorepo/                    # nornzach/oh-my-pi：fork 与 sidecar 构建�
 
 | 仓库 | 职责 |
 |---|---|
-| [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui) | GUI 代码、提交、标签与发布；GUI 工作推送到本仓库的 `origin/main`。 |
+| [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui) | GUI 代码、提交、标签与发布；GUI 工作推送到本仓库的 `origin/main`。 |
 | [`nornzach/oh-my-pi`](https://github.com/nornzach/oh-my-pi) | 外层 monorepo fork：提供 Agent 源码、同步上游与构建 sidecar；Agent 改动在这里提交并推送到它的 `origin`。 |
 | [`can1357/oh-my-pi`](https://github.com/can1357/oh-my-pi) | 上游功能来源，通过 monorepo 的 `upstream` 拉取；**绝不向其推送。** |
 
@@ -623,7 +623,7 @@ git clone https://github.com/nornzach/oh-my-pi.git omp-monorepo
 cd omp-monorepo
 git remote add upstream https://github.com/can1357/oh-my-pi.git
 bun install
-git clone https://github.com/nornzach/oh-my-pi-gui.git packages/gui
+git clone https://github.com/tung491/oh-my-pi-gui.git packages/gui
 cd packages/gui
 bun install
 ```
@@ -710,7 +710,7 @@ bun scripts/capture-showcase.ts
 <details>
 <summary><b>同步、构建全部目标、烟测安装包，再发布</b></summary>
 
-发布只属于 [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui/releases)，全程保持两个仓库的边界：
+发布只属于 [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui/releases)，全程保持两个仓库的边界：
 
 1. **从干净检出开始并同步上游。**在 **monorepo 根目录**执行 `bash packages/gui/scripts/sync-upstream.sh`。脚本拉取/合并 `upstream/main`、安装依赖、准备原生插件、生成统计资源、重建并烟测 sidecar，再构建、检查和测试 GUI。冲突需在 monorepo 中解决并提交合并，然后运行 `SKIP_MERGE=1 bash packages/gui/scripts/sync-upstream.sh`。不要用手动拼装的 merge 流程替代。检查并在 monorepo 中提交其余改动，只推送到 fork 的 `origin`。
 2. **准备 GUI 发布。**在 `packages/gui/` 提升 `package.json` 版本，撰写本次发布的 `CHANGELOG.md`，更新两种语言的安装链接与源码/发布说明。
@@ -725,6 +725,6 @@ bun scripts/capture-showcase.ts
 ---
 
 <div align="center">
-Built on <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> · GUI releases at <a href="https://github.com/nornzach/oh-my-pi-gui/releases">nornzach/oh-my-pi-gui</a><br>
+Built on <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> · GUI releases at <a href="https://github.com/tung491/oh-my-pi-gui/releases">tung491/oh-my-pi-gui</a><br>
 基于 oh-my-pi · TUI 与 GUI 共存，共享 <code>~/.omp</code>
 </div>
