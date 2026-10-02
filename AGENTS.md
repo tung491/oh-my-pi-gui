@@ -4,14 +4,14 @@ This file governs the **Sai ATLAS GUI sub-repository**. Read it before any edit 
 
 ## Repository Identity
 
-- **This repo is the real product repo:** [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui). It owns all GUI code, commits, tags, and GitHub Releases.
-- **Remote layout:** `origin` = `nornzach/oh-my-pi-gui` (push here). The surrounding monorepo's remotes are NOT this repo's remotes — never `git push` from inside `packages/gui/` expecting monorepo changes to go anywhere, and never push anything to `can1357`.
+- **This repo is the real product repo:** [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui). It owns all GUI code, commits, tags, and GitHub Releases; the in-app updater and every `electron-builder*.yml` `publish` block read releases from it. [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui) is the upstream GUI repo this fork tracks.
+- **Remote layout:** `origin` = `tung491/oh-my-pi-gui` (push here). The surrounding monorepo's remotes are NOT this repo's remotes — never `git push` from inside `packages/gui/` expecting monorepo changes to go anywhere, and never push anything to `can1357`.
 
 ### The three repos — never confuse them
 
 | Repo | Role | Push? | Pull/sync from? |
 |---|---|---|---|
-| [`nornzach/oh-my-pi-gui`](https://github.com/nornzach/oh-my-pi-gui) | **This repo** — GUI product, releases. | ✅ all GUI work | only own commits |
+| [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui) | **This repo** — GUI product, releases (`nornzach/oh-my-pi-gui` is the upstream GUI repo it tracks). | ✅ all GUI work | only own commits |
 | [`nornzach/oh-my-pi`](https://github.com/nornzach/oh-my-pi) | **Monorepo fork** (`origin` of the enclosing checkout) — agent source; the only sidecar build source, and the monorepo the README's build-from-source flow clones. | ✅ (from the monorepo root, not from here) | only own commits |
 | [`can1357/oh-my-pi`](https://github.com/can1357/oh-my-pi) | **Upstream** (`upstream` of the enclosing checkout) — where new omp features come from. | ❌ **NEVER** | ✅ `scripts/sync-upstream.sh` |
 

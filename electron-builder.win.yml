@@ -46,7 +46,7 @@ portable:
 
 publish:
   provider: github
-  owner: nornzach
+  owner: tung491
   repo: oh-my-pi-gui
 
 # Windows Chromium locale paks are region-tagged (locales/en-US.pak), unlike

@@ -96,7 +96,7 @@ portable:
 
 publish:
   provider: github
-  owner: nornzach
+  owner: tung491
   repo: oh-my-pi-gui
 
 electronLanguages:

@@ -237,7 +237,7 @@ describe("Linux package config", () => {
 	it("keeps a Chromium locale pak and the release owner", () => {
 		const config = read(file);
 		expect(config.electronLanguages).toContain("en-US");
-		expect(config.publish).toEqual({ provider: "github", owner: "nornzach", repo: "oh-my-pi-gui" });
+		expect(config.publish).toEqual({ provider: "github", owner: "tung491", repo: "oh-my-pi-gui" });
 	});
 
 	it("packages Linux only through the Linux config", () => {

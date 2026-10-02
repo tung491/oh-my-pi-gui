@@ -56,7 +56,7 @@ deb:
 
 publish:
   provider: github
-  owner: nornzach
+  owner: tung491
   repo: oh-my-pi-gui
 
 # Linux Chromium locale paks are region-tagged (locales/en-US.pak), as on
