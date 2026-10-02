@@ -104,7 +104,10 @@ enum ExitOutcome {
 /// pkexec's contract: 126 = dialog dismissed / not authorised, 127 = could not authenticate (or no agent).
 fn classify_exit(outcome: &ExitOutcome, stderr: &str, file: &str) -> Attempt {
     match outcome {
-        ExitOutcome::SpawnFailed(_) => Attempt { outcome: OllamaRemedyOutcome::Unavailable, fault: Some(format!("{file} is not installed")) },
+        ExitOutcome::SpawnFailed(message) => {
+            crate::runtime_log::note("ollama", format!("{file} did not start: {message}"), serde_json::json!({}));
+            Attempt { outcome: OllamaRemedyOutcome::Unavailable, fault: Some(format!("{file} is not installed")) }
+        }
         ExitOutcome::Exited { code: Some(0), killed_by_us: false } => Attempt { outcome: OllamaRemedyOutcome::Applied, fault: None },
         ExitOutcome::Exited { code: Some(126), killed_by_us: false } => Attempt { outcome: OllamaRemedyOutcome::Cancelled, fault: None },
         ExitOutcome::Exited { code: Some(127), killed_by_us: false } => {
@@ -514,7 +517,9 @@ mod tests {
         Hang,
     }
 
-    fn fake_spawn(ending: Ending, stderr_chunks: Vec<&'static str>) -> (Spawner, Arc<Mutex<Vec<(&'static str, Vec<String>)>>>, Arc<AtomicU32>) {
+    type SpawnCall = (&'static str, Vec<String>);
+
+    fn fake_spawn(ending: Ending, stderr_chunks: Vec<&'static str>) -> (Spawner, Arc<Mutex<Vec<SpawnCall>>>, Arc<AtomicU32>) {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let kills = Arc::new(AtomicU32::new(0));
         let ending = Arc::new(ending);

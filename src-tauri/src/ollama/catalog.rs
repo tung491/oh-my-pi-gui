@@ -13,12 +13,13 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 /// Machine facts for model sizing (`hardware::read_machine`).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MachineFacts {
     pub ram_bytes: u64,
     /// Dedicated GPU memory; `None` when there is no discrete GPU or it cannot be read.
     pub vram_bytes: Option<u64>,
+    pub gpu_name: Option<String>,
     pub threads: u32,
     /// GPU and CPU share RAM (Apple Silicon); sizing counts it as RAM only.
     pub unified_memory: bool,
@@ -227,6 +228,7 @@ fn installed_name(installed_tags: &[String], tag: &str) -> Option<String> {
     None
 }
 
+#[cfg(test)]
 pub fn is_installed(installed_tags: &[String], tag: &str) -> bool {
     installed_name(installed_tags, tag).is_some()
 }
@@ -338,16 +340,19 @@ pub fn choose_models(
         // Rows that fit but fall under the parameter floor are not "nothing fits".
         if any_fits || smallest.is_none_or(|s| machine.ram_bytes <= s.size_bytes) {
             return ModelScreen {
-                machine: Some(*machine),
+                machine: Some(machine.clone()),
                 choices: Vec::new(),
                 status: None,
                 empty_reason: Some(EmptyReason::TooSmall),
             };
         }
-        let smallest = smallest.expect("checked above: smallest is Some when the too-small branch was skipped");
+        // `smallest` is `Some` here: the branch above returned unless it was `None`.
+        let Some(smallest) = smallest else {
+            return ModelScreen { machine: Some(machine.clone()), choices: Vec::new(), status: None, empty_reason: Some(EmptyReason::TooSmall) };
+        };
         let row = Sized { entry: smallest, need: need_bytes(smallest.size_bytes), fit: ModelFit::Ram, speed: ModelSpeed::Slow };
         return ModelScreen {
-            machine: Some(*machine),
+            machine: Some(machine.clone()),
             choices: vec![to_choice(&row, vec![ModelTier::Minimal], true)],
             status: Some(ModelScreenStatus::RecommendedOmitted),
             empty_reason: None,
@@ -364,11 +369,14 @@ pub fn choose_models(
         }
     }
 
-    let picks: [(ModelTier, Option<Sized>); 3] =
-        [(ModelTier::Minimal, Some(minimal)), (ModelTier::Recommended, recommended.copied()), (ModelTier::Maximum, Some(maximum))];
     let mut choices: Vec<ModelChoice> = Vec::new();
     let mut card_index: HashMap<&'static str, usize> = HashMap::new();
-    for (tier, row) in picks {
+    for tier in MODEL_TIERS {
+        let row = match tier {
+            ModelTier::Minimal => Some(minimal),
+            ModelTier::Recommended => recommended.copied(),
+            ModelTier::Maximum => Some(maximum),
+        };
         let Some(row) = row else { continue };
         if let Some(&index) = card_index.get(row.entry.tag) {
             choices[index].tiers.push(tier);
@@ -379,7 +387,7 @@ pub fn choose_models(
         choices.push(card);
     }
     ModelScreen {
-        machine: Some(*machine),
+        machine: Some(machine.clone()),
         choices,
         status: Some(if recommended.is_some() { ModelScreenStatus::Ok } else { ModelScreenStatus::RecommendedOmitted }),
         empty_reason: None,
@@ -396,7 +404,7 @@ mod tests {
     const A4B: &str = "hf.co/google/gemma-4-26B-A4B-it-qat-q4_0-gguf";
 
     fn machine(ram_bytes: u64, vram_bytes: Option<u64>, unified_memory: bool, threads: u32) -> MachineFacts {
-        MachineFacts { ram_bytes, vram_bytes, unified_memory, threads }
+        MachineFacts { ram_bytes, vram_bytes, gpu_name: None, unified_memory, threads }
     }
 
     fn base_machine() -> MachineFacts {
@@ -488,7 +496,8 @@ mod tests {
         let e2b = format!("{E2B}:latest");
         let e4b = format!("{E4B}:latest");
         let a4b = format!("{A4B}:latest");
-        let cases: [(MachineFacts, Vec<(String, Vec<ModelTier>, ModelSpeed)>); 4] = [
+        type ExpectedCard = (String, Vec<ModelTier>, ModelSpeed);
+        let cases: [(MachineFacts, Vec<ExpectedCard>); 4] = [
             (base_machine(), vec![(e2b.clone(), vec![ModelTier::Minimal], ModelSpeed::Moderate), (e4b.clone(), both.clone(), ModelSpeed::Moderate)]),
             (
                 machine(32 * GIB, None, false, 8),

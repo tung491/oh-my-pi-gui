@@ -251,11 +251,11 @@ pub async fn read_machine(deps: &HardwareDeps) -> Option<MachineFacts> {
     if !unified_memory && matches!(deps.platform, Platform::Linux | Platform::Win32) {
         let csv = settle_option((deps.nvidia_smi)(deps.timeout), deps.timeout).await;
         if let Some(gpu) = csv.and_then(|csv| parse_nvidia_smi(&csv)) {
-            return Some(MachineFacts { ram_bytes, vram_bytes: Some(gpu.vram_bytes), unified_memory: false, threads });
+            return Some(MachineFacts { ram_bytes, vram_bytes: Some(gpu.vram_bytes), gpu_name: Some(gpu.name), unified_memory: false, threads });
         }
     }
-    let _ = settle_result((deps.gpu_name)(), deps.timeout).await;
-    Some(MachineFacts { ram_bytes, vram_bytes: None, unified_memory, threads })
+    let gpu_name = settle_result((deps.gpu_name)(), deps.timeout).await.flatten();
+    Some(MachineFacts { ram_bytes, vram_bytes: None, gpu_name, unified_memory, threads })
 }
 
 /// Machine facts using the real OS probes.
@@ -320,6 +320,7 @@ mod tests {
         let machine = read_machine(&deps).await.expect("machine facts");
         assert_eq!(machine.ram_bytes, 32 * GIB);
         assert_eq!(machine.vram_bytes, Some(24564 * 1024 * 1024));
+        assert_eq!(machine.gpu_name.as_deref(), Some("NVIDIA GeForce RTX 4090"));
         assert!(!machine.unified_memory);
         assert_eq!(machine.threads, 8);
     }
@@ -331,6 +332,7 @@ mod tests {
         let machine = read_machine(&deps).await.expect("machine facts");
         assert_eq!(machine.ram_bytes, 32 * GIB);
         assert_eq!(machine.vram_bytes, None);
+        assert_eq!(machine.gpu_name.as_deref(), Some("Intel Iris"));
         assert!(!machine.unified_memory);
         assert_eq!(machine.threads, 8);
     }
@@ -350,6 +352,7 @@ mod tests {
         assert!(!asked.load(std::sync::atomic::Ordering::SeqCst));
         assert_eq!(machine.vram_bytes, None);
         assert!(machine.unified_memory);
+        assert_eq!(machine.gpu_name, None);
     }
 
     #[tokio::test]
@@ -361,6 +364,7 @@ mod tests {
         let machine = read_machine(&deps).await.expect("machine facts");
         assert_eq!(machine.ram_bytes, 32 * GIB);
         assert_eq!(machine.vram_bytes, None);
+        assert_eq!(machine.gpu_name, None);
         assert!(!machine.unified_memory);
         assert_eq!(machine.threads, 8);
         assert!(started.elapsed() < Duration::from_secs(1));

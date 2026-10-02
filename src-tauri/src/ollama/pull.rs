@@ -126,10 +126,11 @@ impl PullAggregator {
         let done = self.status == "success";
         let percent: i32 = if done {
             100
-        } else if total > 0 {
-            ((completed * 100) / total).min(99) as i32
         } else {
-            -1
+            match (completed * 100).checked_div(total) {
+                Some(p) => p.min(99) as i32,
+                None => -1,
+            }
         };
         PullProgress { tag: self.tag.clone(), status: self.status.clone(), completed, total, percent, done, error: None }
     }
@@ -204,6 +205,7 @@ impl OllamaPuller {
         Self { base_url, interval, progress_sink, active: Mutex::new(None) }
     }
 
+    #[cfg(test)]
     pub fn active_tag(&self) -> Option<String> {
         lock(&self.active).as_ref().map(|active| active.tag.clone())
     }
@@ -300,7 +302,13 @@ impl OllamaPuller {
             .await
         {
             Ok(response) => response,
-            Err(error) => return self.finish(active, { let mut f = lock(&active.last).clone(); f.error = Some(error.to_string()); f }),
+            Err(error) => {
+                return self.finish(active, {
+                    let mut f = lock(&active.last).clone();
+                    f.error = Some(super::probe::fault_text(&error));
+                    f
+                });
+            }
         };
         if !response.status().is_success() {
             let error = response_error(response).await;
@@ -471,9 +479,9 @@ mod tests {
                 write_head_streaming(&mut stream, 200, "application/x-ndjson").await;
                 let text: String = rows.iter().map(|row| format!("{row}\n")).collect();
                 let cut = text.len() / 2;
-                let _ = stream.write_all(text[..cut].as_bytes()).await;
+                let _ = stream.write_all(&text.as_bytes()[..cut]).await;
                 tokio::time::sleep(Duration::from_millis(20)).await;
-                let _ = stream.write_all(text[cut..].as_bytes()).await;
+                let _ = stream.write_all(&text.as_bytes()[cut..]).await;
                 let _ = stream.shutdown().await;
             }
         })

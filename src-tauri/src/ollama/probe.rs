@@ -136,6 +136,7 @@ pub async fn detect_ollama_install(platform: &str, checks: &InstallChecks, local
 }
 
 /// Whether Ollama is installed though not answering.
+#[cfg(test)]
 pub async fn is_ollama_installed(platform: &str, checks: &InstallChecks, local_app_data: Option<&str>) -> bool {
     detect_ollama_install(platform, checks, local_app_data).await.installed
 }
@@ -173,11 +174,11 @@ pub fn fault_text(error: &(dyn std::error::Error + 'static)) -> String {
 }
 
 async fn get_json(client: &reqwest::Client, url: &str, timeout: Duration) -> Result<Value, String> {
-    let response = client.get(url).timeout(timeout).send().await.map_err(|error| error.to_string())?;
+    let response = client.get(url).timeout(timeout).send().await.map_err(|error| fault_text(&error))?;
     if !response.status().is_success() {
         return Err(format!("{url} answered HTTP {}", response.status().as_u16()));
     }
-    response.json::<Value>().await.map_err(|error| error.to_string())
+    response.json::<Value>().await.map_err(|error| fault_text(&error))
 }
 
 /// Probe `/api/version` and `/api/tags`; never hangs the caller past `timeout_ms`.
