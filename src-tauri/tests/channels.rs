@@ -1,3 +1,6 @@
+// Integration tests may panic on unexpected shapes; that is the assertion.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! The Rust side can never drift from `src/shared/ipc-types.ts` unnoticed:
 //! every channel there has exactly one owning module, and every handled
 //! channel is registered with its scope.

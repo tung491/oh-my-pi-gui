@@ -1059,6 +1059,20 @@ mod tests {
         assert!(ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 2, "test:echo".into(), vec![]).await.is_ok());
     }
 
+    #[tokio::test]
+    async fn runtime_log_path_answers_through_the_dispatcher() {
+        let mut registry = Registry::new();
+        crate::services::register(&mut registry);
+        let ctx = fake_ctx(registry);
+        let path = dispatch_for_test(&ctx, main_caller(), "runtime:log-path", vec![]).await.unwrap();
+        assert_eq!(path, json!(crate::runtime_log::path().to_string_lossy()));
+        let report = json!({ "source": "window-error", "message": "boom" });
+        let ack = dispatch_for_test(&ctx, main_caller(), "runtime:error-report", vec![report]).await.unwrap();
+        assert_eq!(ack, Value::Null);
+        let unknown = dispatch_for_test(&ctx, main_caller(), "fs:read", vec![json!({ "path": "x" })]).await;
+        assert_eq!(unknown, Err(IpcError::not_ported("fs:read")));
+    }
+
     #[test]
     fn registry_refuses_a_second_owner() {
         let mut registry = Registry::new();

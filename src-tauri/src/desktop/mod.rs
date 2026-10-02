@@ -72,21 +72,23 @@ impl DesktopPort for Desktop {
         todo!()
     }
 
+    // The read-only queries answer "no window known" until the window manager
+    // exists: the bridge's error reporting and test hooks call them at startup.
     fn records(&self) -> Vec<WindowRecord> {
-        todo!()
+        Vec::new()
     }
 
     fn record(&self, win_id: WindowId) -> Option<WindowRecord> {
         let _ = win_id;
-        todo!()
+        None
     }
 
     fn main_window(&self) -> Option<WindowId> {
-        todo!()
+        None
     }
 
     fn target_window(&self) -> Option<WindowId> {
-        todo!()
+        None
     }
 
     fn focus(&self, win_id: WindowId) -> bool {
