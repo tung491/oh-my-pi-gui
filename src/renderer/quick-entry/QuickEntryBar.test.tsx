@@ -1,6 +1,6 @@
 /**
- * The quick-entry bar sends only what the user meant to send: Enter submits the
- * trimmed text once, Shift+Enter and IME composition never submit, Esc closes,
+ * The quick-entry bar sends only what the user meant to send: Enter or the Send
+ * button submits the trimmed text once, Shift+Enter and IME composition never submit, Esc closes,
  * and a message that came back unsent fills the draft only when nothing would
  * be overwritten.
  */
@@ -174,6 +174,27 @@ describe("QuickEntryBar", () => {
 		expect(bar.submit).toHaveBeenCalledTimes(1);
 		expect(bar.submit).toHaveBeenCalledWith({ text: "hello there", target: { kind: "chat" } });
 		expect(textarea().value).toBe("");
+	});
+
+	it("submits the trimmed text once from the Send button", async () => {
+		await mount();
+		await type("  from the button ");
+		await act(async () => {
+			button(en["input.sendLabel"]).dispatchEvent(new Event("click", { bubbles: true }));
+		});
+
+		expect(bar.submit).toHaveBeenCalledTimes(1);
+		expect(bar.submit).toHaveBeenCalledWith({ text: "from the button", target: { kind: "chat" } });
+		expect(textarea().value).toBe("");
+	});
+
+	it("disables Send until the draft has text", async () => {
+		await mount();
+		expect(button(en["input.sendLabel"]).getAttribute("disabled")).not.toBeNull();
+		await type("   ");
+		expect(button(en["input.sendLabel"]).getAttribute("disabled")).not.toBeNull();
+		await type("ready");
+		expect(button(en["input.sendLabel"]).getAttribute("disabled")).toBeNull();
 	});
 
 	it("leaves Shift+Enter to the textarea as a new line", async () => {

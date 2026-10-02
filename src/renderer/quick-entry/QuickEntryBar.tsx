@@ -1,6 +1,6 @@
 /**
  * The quick-entry bar's page. Type, pick Chat or an Agent workspace, press
- * Enter: main queues the prompt for a new tab in the main window and hides the
+ * Enter (or Send): main queues the prompt for a new tab in the main window and hides the
  * bar. A prompt that never reached a tab comes back here on the next summon.
  * Plain text only: the page has no markdown or HTML sink.
  */
@@ -13,6 +13,7 @@ import type {
 	QuickEntryTarget,
 	QuickEntryWorkspace,
 } from "../../shared/ipc-types";
+import { Button } from "../components/common/Button";
 import { TextArea } from "../components/common/Input";
 import { SegmentedControl } from "../components/common/SegmentedControl";
 import { basename } from "../lib/format";
@@ -224,6 +225,17 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 						{t("quickEntry.hint")}
 					</span>
 				)}
+				<Button
+					aria-keyshortcuts="Enter"
+					className="shrink-0"
+					disabled={draft.trim() === ""}
+					loading={busy}
+					onClick={() => void submit()}
+					size="sm"
+					variant="primary"
+				>
+					{t("input.sendLabel")}
+				</Button>
 			</div>
 		</div>
 	);

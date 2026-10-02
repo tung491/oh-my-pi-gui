@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Send button in quick entry**: the bar has a Send button next to the hints, so a prompt can be sent with the mouse or a screen reader as well as with Enter. It stays disabled until there is text.
+
 ## [0.9.15] - 2026-10-02
 
 ### Added
