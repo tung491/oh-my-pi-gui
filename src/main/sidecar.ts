@@ -326,6 +326,9 @@ export class SidecarManager extends EventEmitter {
 					PI_RPC_EMIT_TITLE: "1",
 					PI_NO_PTY: "1",
 					PI_NOTIFICATIONS: "off",
+					// Ollama's native api carries `num_ctx`; over the OpenAI-compatible one the
+					// server keeps its default context (4096 on most GPUs), below the agent's first request.
+					PI_OLLAMA_API: "ollama-chat",
 				},
 				cwd,
 				windowsHide: true,

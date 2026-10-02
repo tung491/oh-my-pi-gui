@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- **Chat on a default Ollama install**: the assistant now asks Ollama for a 16k context on every request, so the first message no longer fails with "exceeds the available context size" where Ollama defaults to 4096 tokens. Set `OLLAMA_CONTEXT_LENGTH` to use a different size.
 - **Clipboard host tool**: a clipboard read that fails is reported to the agent instead of leaving its call unanswered.
 - **Launch arguments on a cold start**: a workspace path or `omp://` link passed to a packaged Linux or Windows build is honored when the app was not running.
 - **Deb updates**: a deb install runs only when you choose Restart & install, and a cancelled or failed install shows in the update banner.
