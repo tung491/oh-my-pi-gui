@@ -9,7 +9,10 @@
   "scripts": {
     "postinstall": "install-electron",
     "dev": "electron-vite dev",
+    "dev:tauri": "bun scripts/tauri-dev.ts",
     "build": "electron-vite build && bun scripts/check-main-bundle.ts && bun scripts/check-renderer-chunks.ts",
+    "build:renderer:tauri": "vite build --config vite.tauri.config.ts",
+    "build:tauri": "bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --no-bundle'",
     "preview": "electron-vite preview",
     "package": "bun run build && electron-builder",
     "package:mac": "bun run build && electron-builder --mac",

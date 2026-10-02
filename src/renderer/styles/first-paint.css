@@ -1,0 +1,6 @@
+/* Fallback for first launch. pre-paint.js writes the saved scheme inline
+   before this stylesheet is parsed; inline wins until applyTheme clears it
+   (the quick-entry bar re-applies it on every show). */
+html {
+	background: #f7f9fc;
+}
