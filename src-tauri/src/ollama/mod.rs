@@ -52,7 +52,7 @@ pub fn register(reg: &mut Registry) {
     reg.register("ollama:open-download", Scope::Main, ipc::ollama_open_download);
 }
 
-pub const OLLAMA_DOWNLOAD_URL: &str = "https://ollama.com/download";
+pub(crate) const OLLAMA_DOWNLOAD_URL: &str = "https://ollama.com/download";
 
 /// The login-shell environment overlay, process env laid on top (not in
 /// `OVERLAY_DENYLIST`, so `OLLAMA_HOST` and `PATH` both come through).
