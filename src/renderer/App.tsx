@@ -45,6 +45,7 @@ import { newSessionNow, requestSessionSwitch } from "./hooks/use-session-switch"
 import { useSidebarRecency } from "./hooks/use-sidebar-recency";
 import { useTraySync } from "./hooks/use-tray-sync";
 import { cycleAllowedModel, restartSidecarFromGui, retryFailedTurn, runSessionCommand } from "./lib/command-registry";
+import { installContextMenuGuard } from "./lib/context-menu-guard";
 import {
 	hydrateDisplayPreferences,
 	readDisplayPreference,
@@ -177,6 +178,9 @@ export function App() {
 	useSessionTabs();
 	// Once per profile: sign out of and remove providers outside the allow-list.
 	useProviderCleanup();
+	// WebKitGTK and WebView2 show their own context menu outside editable fields; Electron's
+	// main process already suppresses it there, so match that here for every engine.
+	useEffect(() => installContextMenuGuard(document), []);
 	// Quick-entry prompts queued before this renderer loaded (cold start, reload).
 	useEffect(() => {
 		void drainQuickEntry();

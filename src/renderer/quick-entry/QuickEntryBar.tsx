@@ -16,6 +16,7 @@ import type {
 import { Button } from "../components/common/Button";
 import { TextArea } from "../components/common/Input";
 import { SegmentedControl } from "../components/common/SegmentedControl";
+import { installContextMenuGuard } from "../lib/context-menu-guard";
 import { basename } from "../lib/format";
 import { useLang, useT } from "../lib/i18n";
 import { isImeKeyEvent } from "../lib/ime";
@@ -63,6 +64,8 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 	const taken = useRef(new Set<string>());
 
 	useEffect(() => api.onState(setState), [api]);
+	// Match the main window: no default context menu outside the draft textarea.
+	useEffect(() => installContextMenuGuard(document), []);
 
 	const fromMain: RestoreEntry[] = (state?.restored ?? [])
 		.filter(entry => !taken.current.has(entry.id))
