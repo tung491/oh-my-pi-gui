@@ -6,6 +6,10 @@
 
 - **Send button in quick entry**: the bar has a Send button next to the hints, so a prompt can be sent with the mouse or a screen reader as well as with Enter. It stays disabled until there is text.
 
+### Changed
+
+- **Dictation capture**: mic recording for dictation now runs through WebAudio PCM capture instead of the platform's media recorder. Same dictation behavior, but it now works on more rendering engines.
+
 ## [0.9.15] - 2026-10-02
 
 ### Added

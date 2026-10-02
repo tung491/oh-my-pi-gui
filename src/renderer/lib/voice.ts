@@ -3,9 +3,13 @@
  *
  * Mirrors the TUI voice paths:
  * - STT (stt-controller): 16 kHz mono PCM is the pipeline's native rate, so
- *   the MediaRecorder capture is decoded and resampled here, shipped to the
- *   sidecar as a canonical WAV buffer, and transcribed by the worker-based
- *   whisper pipeline (`transcribe_audio` RPC).
+ *   mic audio is captured as raw Float32 PCM through WebAudio (an
+ *   AudioWorklet, or a ScriptProcessorNode where no AudioWorklet is
+ *   available), resampled here, shipped to the sidecar as a canonical WAV
+ *   buffer, and transcribed by the worker-based whisper pipeline
+ *   (`transcribe_audio` RPC). The platform's encoder-backed recording API
+ *   throws `NotSupportedError` for every mime type on some WebKitGTK Linux
+ *   builds, so capture never depends on the platform's media encoders.
  * - Speech (vocalizer/event-controller): `speech.mode` decides what gets
  *   spoken — "assistant" speaks finalized assistant text, "all" also speaks
  *   tool-result text, "yield" speaks only the last assistant message of a
@@ -96,17 +100,16 @@ async function readSetting(path: string): Promise<unknown> {
 // ---------------------------------------------------------------------------
 
 interface ActiveVoiceRecording {
-	recorder: MediaRecorder;
 	stream: MediaStream;
-	chunks: Blob[];
 	cancelled: boolean;
+	stop: () => void;
 }
 
 let activeRecording: ActiveVoiceRecording | null = null;
 
 /** Stop the active recording; the pending {@link recordAndTranscribe} then resolves with the transcript. */
 export function stopVoiceRecording(): void {
-	if (activeRecording && activeRecording.recorder.state !== "inactive") activeRecording.recorder.stop();
+	activeRecording?.stop();
 }
 
 /** Abort the active recording without transcribing (composer unmount). */
@@ -114,6 +117,33 @@ export function cancelVoiceRecording(): void {
 	if (!activeRecording) return;
 	activeRecording.cancelled = true;
 	stopVoiceRecording();
+}
+
+/** Minimal shape {@link chooseCaptureBackend} needs — matches `AudioContext` and a plain test fixture alike. */
+export interface CaptureBackendContext {
+	readonly audioWorklet?: unknown;
+}
+
+/**
+ * The worklet runs capture on the audio thread and survives long main-thread
+ * tasks (e.g. streaming markdown); `ScriptProcessorNode` is the fallback for
+ * an engine without `audioWorklet` (kept while Electron still ships one).
+ */
+export function chooseCaptureBackend(context: CaptureBackendContext): "worklet" | "script-processor" {
+	return context.audioWorklet ? "worklet" : "script-processor";
+}
+
+/** Concatenate captured PCM blocks, in arrival order, into one buffer. */
+export function concatFloat32(blocks: readonly Float32Array[]): Float32Array<ArrayBuffer> {
+	let total = 0;
+	for (const block of blocks) total += block.length;
+	const result = new Float32Array(total);
+	let offset = 0;
+	for (const block of blocks) {
+		result.set(block, offset);
+		offset += block.length;
+	}
+	return result;
 }
 
 /**
@@ -132,42 +162,85 @@ export async function recordAndTranscribe(): Promise<{ text: string } | { error:
 	} catch (cause) {
 		return { error: cause instanceof Error ? cause.message : String(cause) };
 	}
-	const recorder = new MediaRecorder(stream);
-	const state: ActiveVoiceRecording = { recorder, stream, chunks: [], cancelled: false };
-	activeRecording = state;
+	const context = new AudioContext();
+	// Registered before any await, so a stop or cancel during setup is not lost.
 	const stopped = Promise.withResolvers<void>();
-	recorder.ondataavailable = event => {
-		if (event.data.size > 0) state.chunks.push(event.data);
+	const state: ActiveVoiceRecording = { stream, cancelled: false, stop: () => stopped.resolve() };
+	activeRecording = state;
+	const abandon = (): void => {
+		for (const track of stream.getTracks()) track.stop();
+		void context.close();
+		if (activeRecording === state) activeRecording = null;
 	};
-	recorder.onerror = () => stopped.resolve();
-	recorder.onstop = () => stopped.resolve();
-	recorder.start();
+	const source = context.createMediaStreamSource(stream);
+	const backend = chooseCaptureBackend(context);
+	const blocks: Float32Array[] = [];
+	let captureNode: AudioWorkletNode | ScriptProcessorNode;
+	if (backend === "worklet") {
+		try {
+			await context.audioWorklet.addModule(new URL("./pcm-capture-worklet.js", document.baseURI).href);
+		} catch (cause) {
+			abandon();
+			return { error: cause instanceof Error ? cause.message : String(cause) };
+		}
+		if (state.cancelled) {
+			abandon();
+			return { error: "" };
+		}
+		const node = new AudioWorkletNode(context, "pcm-capture");
+		node.port.onmessage = event => {
+			// The worklet posts one Float32Array per 128-frame render quantum;
+			// MessageEvent.data is typed `any` by lib.dom.
+			blocks.push(event.data as Float32Array);
+		};
+		captureNode = node;
+	} else {
+		const node = context.createScriptProcessor(4096, 1, 1);
+		node.onaudioprocess = event => {
+			blocks.push(event.inputBuffer.getChannelData(0).slice());
+		};
+		captureNode = node;
+	}
+	// Pull the capture node through a silent path; nothing should play back.
+	const silentGain = context.createGain();
+	silentGain.gain.value = 0;
+	source.connect(captureNode);
+	captureNode.connect(silentGain);
+	silentGain.connect(context.destination);
+	// An engine's autoplay policy may create the context suspended after the awaits above.
+	if (context.state === "suspended") await context.resume();
+
+	// A device that disappears mid-capture (unplugged, revoked) stops the
+	// recording instead of hanging forever.
+	const [track] = stream.getAudioTracks();
+	if (track) track.onended = () => stopped.resolve();
 	await stopped.promise;
-	for (const track of stream.getTracks()) track.stop();
+
+	source.disconnect();
+	captureNode.disconnect();
+	silentGain.disconnect();
+	const sampleRate = context.sampleRate;
+	for (const mediaTrack of stream.getTracks()) mediaTrack.stop();
+	await context.close();
 	if (activeRecording === state) activeRecording = null;
 	if (state.cancelled) return { error: "" };
-	if (state.chunks.length === 0) return { error: translate("voice.mic.empty") };
+	const samples = concatFloat32(blocks);
+	if (samples.length === 0) return { error: translate("voice.mic.empty") };
 	try {
-		const encoded = await new Blob(state.chunks, { type: recorder.mimeType || "audio/webm" }).arrayBuffer();
-		const context = new AudioContext();
-		let wav: Uint8Array;
-		try {
-			const decoded = await context.decodeAudioData(encoded);
-			// Offline render resamples whatever the mic produced to 16 kHz mono.
-			const offline = new OfflineAudioContext(
-				1,
-				Math.max(1, Math.ceil(decoded.duration * STT_SAMPLE_RATE)),
-				STT_SAMPLE_RATE,
-			);
-			const source = offline.createBufferSource();
-			source.buffer = decoded;
-			source.connect(offline.destination);
-			source.start(0);
-			const rendered = await offline.startRendering();
-			wav = encodeWavPcm16(rendered.getChannelData(0), STT_SAMPLE_RATE);
-		} finally {
-			void context.close();
-		}
+		const buffer = new AudioBuffer({ length: samples.length, numberOfChannels: 1, sampleRate });
+		buffer.copyToChannel(samples, 0);
+		// Offline render resamples whatever the mic produced to 16 kHz mono.
+		const offline = new OfflineAudioContext(
+			1,
+			Math.max(1, Math.ceil(buffer.duration * STT_SAMPLE_RATE)),
+			STT_SAMPLE_RATE,
+		);
+		const bufferSource = offline.createBufferSource();
+		bufferSource.buffer = buffer;
+		bufferSource.connect(offline.destination);
+		bufferSource.start(0);
+		const rendered = await offline.startRendering();
+		const wav = encodeWavPcm16(rendered.getChannelData(0), STT_SAMPLE_RATE);
 		const response = await window.omp.rpc.transcribeAudio(bytesToBase64(wav), "audio/wav");
 		if (!response.success) return { error: response.error };
 		return { text: (response.data as TranscribeAudioResult | undefined)?.text ?? "" };
