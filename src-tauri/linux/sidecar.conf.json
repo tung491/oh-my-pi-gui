@@ -1,0 +1,7 @@
+{
+  "bundle": {
+    "resources": {
+      "binaries/omp-x86_64-unknown-linux-gnu": "omp"
+    }
+  }
+}
