@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { _electron as electron, expect, type Page } from "@playwright/test";
 import { en } from "../src/renderer/locales/en";
-import { zh } from "../src/renderer/locales/zh";
+import { vi } from "../src/renderer/locales/vi";
 import { projectFiles, showcaseTimestamp } from "./showcase-data";
 
 const root = path.resolve(import.meta.dir, "..");
@@ -19,8 +19,8 @@ const displayEnv = Object.fromEntries(
 	),
 );
 
-async function captureLocale(language: "en" | "zh"): Promise<void> {
-	const t = language === "zh" ? zh : en;
+async function captureLocale(language: "en" | "vi"): Promise<void> {
+	const t = language === "vi" ? vi : en;
 	const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "omp-showcase-"));
 	const home = path.join(temporary, "home");
 	const project = path.join(home, "projects", "aurora-web");
@@ -43,8 +43,13 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 		JSON.stringify({ name: "aurora-web", private: true, scripts: { test: "bun test" } }, null, 2),
 	);
 	const titles =
-		language === "zh"
-			? ["构建无障碍设置页", "优化搜索交互", "检查主题对比度", "规划组件库"]
+		language === "vi"
+			? [
+					"Xây dựng trang cài đặt trợ năng",
+					"Tối ưu hóa tương tác tìm kiếm",
+					"Kiểm tra độ tương phản chủ đề",
+					"Lập kế hoạch thư viện thành phần",
+				]
 			: [
 					"Build accessible settings",
 					"Refine search interactions",
@@ -103,7 +108,7 @@ async function captureLocale(language: "en" | "zh"): Promise<void> {
 		});
 		const page = await app.firstWindow();
 		const cdp = await app.context().newCDPSession(page);
-		await cdp.send("Emulation.setLocaleOverride", { locale: language === "en" ? "en-US" : "zh-CN" });
+		await cdp.send("Emulation.setLocaleOverride", { locale: language === "en" ? "en-US" : "vi-VN" });
 		await page.clock.install({ time: showcaseTimestamp });
 		page.on("pageerror", error => errors.push(error.message));
 		page.setDefaultTimeout(15_000);
@@ -245,4 +250,4 @@ async function captureSplit(page: Page, t: Record<string, string>): Promise<void
 	await expect(page.locator("textarea")).toHaveCount(2);
 }
 
-for (const language of ["en", "zh"] as const) await captureLocale(language);
+for (const language of ["en", "vi"] as const) await captureLocale(language);

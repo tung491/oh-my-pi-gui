@@ -6,7 +6,7 @@ import { GUI_DISPLAY_LEGACY_PATHS } from "../../lib/display-preferences";
  */
 
 import type { SettingEntry } from "../../../shared/rpc-types";
-import { ZH_SETTINGS } from "./schema-zh";
+import { VI_SETTINGS } from "./schema-vi";
 
 /**
  * Client-evaluable visibility gates, mirroring the TUI's CONDITIONS table
@@ -125,10 +125,10 @@ export function resolveSettingsTarget(target: string | null | undefined): {
 	return { tab: RESOURCES_TAB_ID, resourceTab };
 }
 
-/** Search the displayed Chinese labels as well as wire paths and English metadata. */
+/** Search the displayed Vietnamese labels as well as wire paths and English metadata. */
 export function matchesSettingSearch(entry: SettingEntry, query: string): boolean {
-	const zh = ZH_SETTINGS[entry.path];
-	const haystack = [entry.path, entry.label, entry.description, zh?.label, zh?.description]
+	const vi = VI_SETTINGS[entry.path];
+	const haystack = [entry.path, entry.label, entry.description, vi?.label, vi?.description]
 		.join(" ")
 		.normalize("NFKC")
 		.toLowerCase();

@@ -1,17 +1,17 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { en } from "../locales/en";
-import { zh } from "../locales/zh";
+import { vi } from "../locales/vi";
 
 export type Locale = Record<string, string>;
-export type Lang = "en" | "zh";
+export type Lang = "en" | "vi";
 
-const LOCALES: Record<Lang, Locale> = { en, zh };
+const LOCALES: Record<Lang, Locale> = { en, vi };
 const LANG_KEY = "omp.lang";
 
 function readStoredLanguage(): Lang | undefined {
 	try {
 		const stored = localStorage.getItem(LANG_KEY);
-		return stored === "zh" || stored === "en" ? stored : undefined;
+		return stored === "vi" || stored === "en" ? stored : undefined;
 	} catch {
 		return undefined;
 	}
@@ -29,7 +29,7 @@ export function getCurrentLanguage(): Lang {
 	const stored = readStoredLanguage();
 	if (stored) return stored;
 	const nav = typeof navigator !== "undefined" ? (navigator.language ?? "en") : "en";
-	return nav.startsWith("zh") ? "zh" : "en";
+	return nav.startsWith("vi") ? "vi" : "en";
 }
 
 function translateForLang(lang: Lang, key: string, params?: Record<string, string | number>): string {
@@ -73,7 +73,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 			.get("language")
 			.then(value => {
 				if (cancelled || userSelected.current) return;
-				if (value === "en" || value === "zh") {
+				if (value === "en" || value === "vi") {
 					storeLanguage(value);
 					setLangState(value);
 				} else if (stored) {

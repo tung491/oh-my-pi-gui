@@ -586,7 +586,7 @@ export function App() {
 				return;
 			}
 			if (action === "toggle-language") {
-				setLang(lang === "zh" ? "en" : "zh");
+				setLang(lang === "vi" ? "en" : "vi");
 				return;
 			}
 			// New tab actions never touch the live run — they must stay OUT of the

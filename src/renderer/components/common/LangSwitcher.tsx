@@ -1,9 +1,9 @@
 /**
  * Language switcher: compact globe button that toggles the UI between
- * English and 中文. Reads and persists the active language through useLang()
+ * English and Tiếng Việt. Reads and persists the active language through useLang()
  * (localStorage LANG_KEY inside I18nProvider), so no extra wiring is needed —
  * mount it anywhere under the provider. Rendered label shows the CURRENT
- * language autonym ("EN" / "中文"), matching OS-language-picker convention.
+ * language autonym ("EN" / "VI"), matching OS-language-picker convention.
  *
  * Mount points (wired by the shell owner): TitleBar trailing icon row and the
  * Settings window GUI tab.
@@ -30,7 +30,7 @@ const TONE_CLASSES: Record<LangSwitcherTone, string> = {
 export function LangSwitcher({ className, tone = "default" }: LangSwitcherProps) {
 	const { lang, setLang } = useLang();
 	const t = useT();
-	const next = lang === "en" ? "zh" : "en";
+	const next = lang === "en" ? "vi" : "en";
 	return (
 		<button
 			type="button"
@@ -45,7 +45,7 @@ export function LangSwitcher({ className, tone = "default" }: LangSwitcherProps)
 			data-tone={tone}
 		>
 			<Globe size={16} />
-			<span>{lang === "en" ? "EN" : "中文"}</span>
+			<span>{lang === "en" ? "EN" : "VI"}</span>
 		</button>
 	);
 }

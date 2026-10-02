@@ -357,7 +357,7 @@ export interface QuickEntryReturned extends QuickEntryPrompt {
 
 /** Main → bar on every show (IPC_EVENTS.QUICK_ENTRY_STATE). */
 export interface QuickEntryBarState {
-	language: "en" | "zh";
+	language: "en" | "vi";
 	target: QuickEntryTarget;
 	/** Recent agent workspaces, most recent first; Work is not listed. */
 	workspaces: QuickEntryWorkspace[];
@@ -473,7 +473,7 @@ export type IpcBenchmarkRunResult =
 /** Compact snapshot the renderer pushes to main to build the tray menu. */
 export interface TrayState {
 	status: "idle" | "streaming" | "waiting" | "error";
-	language: "zh" | "en";
+	language: "vi" | "en";
 	cwd: string | null;
 	projectName: string;
 	modelId: string | null;

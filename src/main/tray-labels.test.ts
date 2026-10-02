@@ -37,7 +37,7 @@ function state(overrides: Partial<TrayState> = {}): TrayState {
 describe("tray status surface", () => {
 	it("names the run state in the hover text, in the language the renderer reports", () => {
 		expect(trayTooltip(state({ status: "streaming" }))).toBe("Sai ATLAS — alpha · Running");
-		expect(trayTooltip(state({ status: "waiting", language: "zh" }))).toBe("Sai ATLAS — alpha · 等待确认");
+		expect(trayTooltip(state({ status: "waiting", language: "vi" }))).toBe("Sai ATLAS — alpha · Chờ phản hồi");
 		expect(trayTooltip(state({ status: "error" }))).toContain("Error");
 		expect(trayTooltip(state({ status: "idle" }))).toContain("Idle");
 	});
@@ -52,7 +52,7 @@ describe("tray label mapping", () => {
 		expect(approvalLabel("en", "yolo")).toBe("Full access");
 		expect(approvalLabel("en", "write")).toBe("Auto-edit");
 		expect(approvalLabel("en", "always-ask")).toBe("Ask every time");
-		expect(approvalLabel("zh", "always-ask")).toBe("每次询问");
+		expect(approvalLabel("vi", "always-ask")).toBe("Hỏi mỗi lần");
 	});
 
 	it("renders token counts at the precision the menu prints", () => {
@@ -76,7 +76,7 @@ describe("menuSignature", () => {
 		expect(menuSignature(state({ thinkingLevel: "high" }))).not.toBe(base);
 		expect(menuSignature(state({ fastMode: true }))).not.toBe(base);
 		expect(menuSignature(state({ approvalMode: "yolo" }))).not.toBe(base);
-		expect(menuSignature(state({ language: "zh" }))).not.toBe(base);
+		expect(menuSignature(state({ language: "vi" }))).not.toBe(base);
 		expect(menuSignature(state({ projectName: "beta" }))).not.toBe(base);
 		// Crossing the printed bucket (42% → 43%) is a visible change.
 		expect(menuSignature(state({ contextPercent: 42.6 }))).not.toBe(base);

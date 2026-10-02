@@ -171,13 +171,13 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		}
 		await page.keyboard.press("Escape");
 		await page.evaluate(async () => {
-			await window.omp.prefs.set("language", "zh");
+			await window.omp.prefs.set("language", "vi");
 		});
 		await page.reload();
-		await expect(page.getByRole("button", { name: "设置", exact: true })).toBeVisible();
-		await closeWelcomeIfPresent("欢迎使用 Sai ATLAS", "暂时跳过");
-		await page.getByRole("button", { name: "设置", exact: true }).click();
-		await expect(page.getByRole("dialog")).toContainText("权限与安全");
+		await expect(page.getByRole("button", { name: "Cài đặt", exact: true })).toBeVisible();
+		await closeWelcomeIfPresent("Chào mừng bạn đến với Sai ATLAS", "Bỏ qua lúc này");
+		await page.getByRole("button", { name: "Cài đặt", exact: true }).click();
+		await expect(page.getByRole("dialog")).toContainText("Quyền hạn & Bảo mật");
 		await expect(page.getByRole("dialog").locator(".settings-nav-group-label")).toHaveCount(8);
 		const settingsPages: Array<{ group: string; page: string; text: string }> = [];
 		for (let groupIndex = 0; groupIndex < 8; groupIndex++) {
@@ -206,31 +206,31 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 			}
 		}
 		await fs.writeFile("test-results/settings-pages.json", JSON.stringify(settingsPages, null, 2));
-		const settingsSearch = page.getByRole("dialog").getByPlaceholder("搜索设置和管理资源…");
+		const settingsSearch = page.getByRole("dialog").getByPlaceholder("Tìm kiếm cài đặt và tài nguyên được quản lý…");
 		await settingsSearch.fill("bash.patterns");
-		await page.getByRole("button", { name: /Bash 审批模式 bash.patterns/ }).click();
+		await page.getByRole("button", { name: /Mẫu phê duyệt Bash bash.patterns/ }).click();
 		const rules = page.locator('[title="bash.patterns"]').locator("..").locator("..");
 		await expect(rules.locator("textarea")).toHaveValue("[]");
 		const rule = { match: "echo audit-blocked", approval: "deny" };
 		await rules.locator("textarea").fill(JSON.stringify([rule]));
-		await rules.getByRole("button", { name: "应用", exact: true }).click();
+		await rules.getByRole("button", { name: "Áp dụng", exact: true }).click();
 		await expect
 			.poll(() => page.evaluate(() => window.omp.rpc.getSettings(["bash.patterns"])))
 			.toMatchObject({ success: true, data: { values: { "bash.patterns": [rule] } } });
 		await rules.locator("textarea").fill("[]");
-		await rules.getByRole("button", { name: "应用", exact: true }).click();
+		await rules.getByRole("button", { name: "Áp dụng", exact: true }).click();
 		await expect
 			.poll(() => page.evaluate(() => window.omp.rpc.getSettings(["bash.patterns"])))
 			.toMatchObject({ success: true, data: { values: { "bash.patterns": [] } } });
-		await page.getByRole("dialog").getByRole("button", { name: "外观与使用", exact: true }).click();
-		await expect(page.getByRole("dialog")).toContainText("选择 GUI 主题");
-		await page.screenshot({ path: "test-results/05-packaged-zh.png", scale: "css", animations: "disabled" });
+		await page.getByRole("dialog").getByRole("button", { name: "Giao diện & Trải nghiệm", exact: true }).click();
+		await expect(page.getByRole("dialog")).toContainText("Chọn chủ đề GUI");
+		await page.screenshot({ path: "test-results/05-packaged-vi.png", scale: "css", animations: "disabled" });
 		await page.keyboard.press("Escape");
 		const backgrounds: string[] = [];
-		for (const theme of ["VIF 浅色", "VIF 海军蓝"]) {
-			await page.getByRole("button", { name: "选择主题", exact: true }).click();
-			const picker = page.getByRole("dialog", { name: "选择主题", exact: true });
-			await picker.getByPlaceholder("搜索主题…").fill(theme);
+		for (const theme of ["VIF Sáng", "VIF Hải quân"]) {
+			await page.getByRole("button", { name: "Chọn giao diện", exact: true }).click();
+			const picker = page.getByRole("dialog", { name: "Chọn giao diện", exact: true });
+			await picker.getByPlaceholder("Tìm kiếm giao diện…").fill(theme);
 			await picker.locator("button[aria-pressed]").filter({ hasText: theme }).click();
 			await expect(picker).toHaveCount(0);
 			backgrounds.push(
@@ -261,18 +261,18 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		}, bootPrefs);
 		await page.reload();
 		await expect.poll(() => app.evaluate(() => Reflect.get(globalThis, "auditPrefsRequested"))).toBe(true);
-		await expect(page.getByRole("button", { name: "选择主题", exact: true })).toBeVisible();
-		await closeWelcomeIfPresent("欢迎使用 Sai ATLAS", "暂时跳过");
-		await page.getByRole("button", { name: "选择主题", exact: true }).click();
-		const freshPicker = page.getByRole("dialog", { name: "选择主题", exact: true });
-		await freshPicker.getByPlaceholder("搜索主题…").fill("VIF 浅色");
-		await freshPicker.locator("button[aria-pressed]").filter({ hasText: "VIF 浅色" }).click();
+		await expect(page.getByRole("button", { name: "Chọn giao diện", exact: true })).toBeVisible();
+		await closeWelcomeIfPresent("Chào mừng bạn đến với Sai ATLAS", "Bỏ qua lúc này");
+		await page.getByRole("button", { name: "Chọn giao diện", exact: true }).click();
+		const freshPicker = page.getByRole("dialog", { name: "Chọn giao diện", exact: true });
+		await freshPicker.getByPlaceholder("Tìm kiếm giao diện…").fill("VIF Sáng");
+		await freshPicker.locator("button[aria-pressed]").filter({ hasText: "VIF Sáng" }).click();
 		await expect(freshPicker).toHaveCount(0);
 		const chosenBackground = await page.evaluate(() =>
 			getComputedStyle(document.documentElement).getPropertyValue("--omp-bg-primary"),
 		);
-		await page.getByRole("button", { name: "设置", exact: true }).click();
-		await page.getByRole("dialog").getByRole("button", { name: "外观与使用", exact: true }).click();
+		await page.getByRole("button", { name: "Cài đặt", exact: true }).click();
+		await page.getByRole("dialog").getByRole("button", { name: "Giao diện & Trải nghiệm", exact: true }).click();
 		const font = page.locator('#setting-gui-fontSize input[type="number"]');
 		const chosenFont = await font.inputValue();
 		for (const value of [String(Number(chosenFont) + 1), chosenFont]) {

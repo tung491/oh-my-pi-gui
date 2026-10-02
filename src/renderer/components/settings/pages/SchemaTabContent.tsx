@@ -8,7 +8,7 @@ import type { SettingEntry } from "../../../../shared/rpc-types";
 import { useLang, useT } from "../../../lib/i18n";
 import { Section } from "../editors/Section";
 import { SchemaSettingRow } from "../SchemaSettingRow";
-import { ZH_GROUP_TITLES } from "../schema-zh";
+import { VI_GROUP_TITLES } from "../schema-vi";
 import { groupSchemaEntries, isSettingVisibleInGui } from "../settings-schema-utils";
 
 /** All settings for one schema tab, sectioned by its ordered groups. */
@@ -52,7 +52,7 @@ export function SchemaTabContent({
 		<>
 			{ungrouped.length > 0 && <div className="mb-4">{ungrouped.map(renderRow)}</div>}
 			{orderedGroups.map(group => (
-				<Section key={group.name} title={lang === "zh" ? (ZH_GROUP_TITLES[group.name] ?? group.name) : group.name}>
+				<Section key={group.name} title={lang === "vi" ? (VI_GROUP_TITLES[group.name] ?? group.name) : group.name}>
 					{group.entries.map(renderRow)}
 				</Section>
 			))}

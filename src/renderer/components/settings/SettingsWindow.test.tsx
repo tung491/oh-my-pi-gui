@@ -296,8 +296,8 @@ describe("GUI settings visibility", () => {
 	});
 });
 
-describe("SchemaTabContent zh translations", () => {
-	const zhEntries: SettingEntry[] = [
+describe("SchemaTabContent vi translations", () => {
+	const viEntries: SettingEntry[] = [
 		entry({
 			path: "compaction.enabled",
 			tab: "appearance",
@@ -318,7 +318,7 @@ describe("SchemaTabContent zh translations", () => {
 		return renderToStaticMarkup(
 			<I18nProvider>
 				<SchemaTabContent
-					entries={zhEntries}
+					entries={viEntries}
 					groups={["Theme"]}
 					onCommitted={() => {}}
 					tabId="appearance"
@@ -328,14 +328,14 @@ describe("SchemaTabContent zh translations", () => {
 		);
 	}
 
-	it("renders group titles and setting text in Chinese when lang is zh, with English fallback", () => {
+	it("renders group titles and setting text in Vietnamese when lang is vi, with English fallback", () => {
 		const original = Object.getOwnPropertyDescriptor(globalThis, "navigator");
-		Object.defineProperty(globalThis, "navigator", { configurable: true, value: { language: "zh-CN" } });
+		Object.defineProperty(globalThis, "navigator", { configurable: true, value: { language: "vi-VN" } });
 		try {
 			const html = renderTab();
-			expect(html).toContain(">主题</h3>"); // translated group title
-			expect(html).toContain("自动压缩"); // translated label
-			expect(html).toContain("上下文过大时自动压缩"); // translated description
+			expect(html).toContain(">Chủ đề</h3>"); // translated group title
+			expect(html).toContain("Tự động nén"); // translated label
+			expect(html).toContain("Tự động nén khi ngữ cảnh tăng"); // translated description
 			expect(html).toContain(">Undeclared</h3>"); // group without a translation stays English
 			expect(html).toContain("Mystery Setting"); // setting without a translation stays English
 			expect(html).toContain("An English-only setting");

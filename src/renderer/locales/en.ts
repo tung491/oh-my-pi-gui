@@ -2268,7 +2268,7 @@ export const en: Record<string, string> = {
 	"chat.starter.brainstorm.title": "Brainstorm ideas",
 	"chat.starter.brainstorm.prompt": "Brainstorm ten ideas and rank the top three with reasons.",
 	"chat.starter.translate.title": "Translate text",
-	"chat.starter.translate.prompt": "Translate the text I paste between Chinese and English, keeping tone.",
+	"chat.starter.translate.prompt": "Translate the text I paste between Vietnamese and English, keeping tone.",
 	"chat.exec.python": "Python",
 	"chat.exec.shell": "Shell",
 	"chat.exec.running": "running",
