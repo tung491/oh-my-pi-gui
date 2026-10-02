@@ -72,13 +72,6 @@ impl RpcClient {
         })
     }
 
-    /// Fire a command without waiting for its response; returns the id used.
-    pub(crate) fn fire(&self, command: Value) -> String {
-        let id = self.mint_id();
-        (self.send)(Self::frame_with_id(&command, &id));
-        id
-    }
-
     /// Route an inbound response frame to its waiting request; false when nothing waits for it.
     pub(crate) fn on_response(&self, frame: &Value) -> bool {
         let Some(id) = frame.get("id").and_then(Value::as_str).filter(|id| !id.is_empty()) else { return false };
@@ -95,6 +88,7 @@ impl RpcClient {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn pending_count(&self) -> usize {
         lock(&self.pending).len()
     }
@@ -147,11 +141,12 @@ mod tests {
     async fn reject_all_fails_every_pending_request_with_the_reason() {
         let (client, sent) = client();
         let waiting = client.command(json!({ "type": "get_state" }), None);
-        let id = client.fire(json!({ "type": "bash", "command": "ls" }));
-        assert_eq!(id, "gui-2");
+        let second = client.command(json!({ "type": "bash", "command": "ls" }), None);
+        assert_eq!(lock(&sent)[1]["id"], "gui-2");
         assert_eq!(lock(&sent).len(), 2);
         client.reject_all("Sidecar disconnected");
         assert_eq!(waiting.await, Err(SidecarError::Other("Sidecar disconnected".into())));
+        assert_eq!(second.await, Err(SidecarError::Other("Sidecar disconnected".into())));
         assert_eq!(client.pending_count(), 0);
     }
 }

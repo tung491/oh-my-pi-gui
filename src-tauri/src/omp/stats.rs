@@ -113,14 +113,22 @@ impl StatsServer {
         Self { inner: Arc::new(Inner { program, env, state: Mutex::new(State { port: DEFAULT_PORT, ..State::default() }), listeners: Mutex::new(Vec::new()) }) }
     }
 
+    #[cfg(test)]
     pub(crate) fn port(&self) -> u16 {
         lock(&self.inner.state).port
+    }
+
+    /// The running server's pid, so a test can prove `kill()` leaves nothing behind.
+    #[cfg(test)]
+    pub(crate) fn child_pid_for_test(&self) -> Option<u32> {
+        lock(&self.inner.state).child.as_ref().and_then(|child| child.pid)
     }
 
     pub(crate) fn on_event(&self, listener: StatsListener) {
         lock(&self.inner.listeners).push(listener);
     }
 
+    #[cfg(test)]
     pub(crate) fn start(&self) {
         {
             let mut state = lock(&self.inner.state);
@@ -377,10 +385,12 @@ impl StatsClient {
         self.available.store(false, Ordering::SeqCst);
     }
 
+    #[cfg(test)]
     pub(crate) fn available(&self) -> bool {
         self.available.load(Ordering::SeqCst)
     }
 
+    #[cfg(test)]
     /// Requests actually issued; the dashboard must never be probed at port 0.
     pub(crate) fn requests_made(&self) -> usize {
         self.requests.load(Ordering::SeqCst)

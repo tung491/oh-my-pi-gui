@@ -709,11 +709,7 @@ impl Inner {
                 self.handle_ready(&frame);
                 return;
             }
-            "response" => {
-                if rpc.map(|rpc| rpc.on_response(&frame)).unwrap_or(false) {
-                    return;
-                }
-            }
+            "response" if rpc.as_ref().map(|rpc| rpc.on_response(&frame)).unwrap_or(false) => return,
             _ => {}
         }
         let typed = match kind {

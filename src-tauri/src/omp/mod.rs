@@ -175,8 +175,16 @@ impl Omp {
         }
     }
 
-    /// Listeners on other ports; `init` registers them once the context exists.
+    /// Listeners on other ports, plus the startup probe of the dashboard client
+    /// (`index.ts` probes once at launch; at port 0 it only records "unavailable").
+    /// `init` runs this once the context exists.
     pub(crate) fn register_listeners(ctx: &Arc<AppCtx>) {
+        if let Some(omp) = ctx.omp.as_any().downcast_ref::<Omp>() {
+            let client = omp.stats_client();
+            crate::bridge::spawn_task(async move {
+                let _ = client.probe().await;
+            });
+        }
         let weak = Arc::downgrade(ctx);
         ctx.desktop.on_window_closed(Box::new(move |record| {
             if let Some(ctx) = weak.upgrade() {
@@ -238,6 +246,9 @@ impl OmpPort for Omp {
     }
 
     fn shutdown(&self) -> BoxFuture<'_, ()> {
+        // The slot is emptied, so a read after shutdown would rebuild the server;
+        // the frozen shutdown order runs no handler after this point, so that path
+        // is unreachable (the TS kept the killed instance and answered "exhausted").
         if let Some(server) = lock(&self.stats).take() {
             server.kill();
         }

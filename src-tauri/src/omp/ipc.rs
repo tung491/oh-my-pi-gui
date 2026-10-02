@@ -136,15 +136,19 @@ mod tests {
             result = dispatch_for_test(&ctx, caller(), "stats:fetch", vec![payload.clone()]).await.unwrap();
         }
         let server = module(&ctx).unwrap().stats_server().unwrap();
-        let port = server.port();
+        let port = module(&ctx).unwrap().stats_client().port();
+        let pid = server.child_pid_for_test().expect("a running stats server");
         ctx.omp.shutdown().await;
         assert_eq!(result[0]["folder"], "/home/dev/projects/workspace-alpha");
         assert_eq!(result.as_array().map(Vec::len), Some(2));
         assert_ne!(port, 0);
-        // The server is gone after shutdown: a fresh read reports the dead end.
-        let after = dispatch_for_test(&ctx, caller(), "stats:fetch", vec![json!({ "path": "/api/stats/folders" })]).await.unwrap();
-        assert_eq!(after["unavailable"], false);
-        assert_eq!(after["error"], "The bundled stats server is not running.");
+        // Shutdown kills the server; the exit-wait task reaps it, so the process vanishes.
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let gone = || std::fs::read_to_string(format!("/proc/{pid}/stat")).map(|stat| stat.contains(") Z ")).unwrap_or(true);
+        while !gone() && std::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        assert!(gone(), "stats server {pid} survived shutdown");
     }
 
     #[tokio::test]

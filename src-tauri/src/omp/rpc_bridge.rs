@@ -181,7 +181,7 @@ where
     let mut oversize = false;
     loop {
         let buffer = match reader.fill_buf().await {
-            Ok(buffer) if buffer.is_empty() => break,
+            Ok([]) => break,
             Ok(buffer) => buffer,
             Err(_) => break,
         };
