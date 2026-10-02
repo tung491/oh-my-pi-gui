@@ -589,7 +589,7 @@ mod tests {
 
         let response = json!({ "type": "extension_ui_response", "id": "req-1", "confirmed": true });
         assert_eq!(h.ok("extension-ui:respond", vec![json!({ "response": response })]).await, Value::Null);
-        assert_eq!(*a.side_channel.lock().unwrap(), [response.clone()]);
+        assert_eq!(*a.side_channel.lock().unwrap(), *std::slice::from_ref(&response));
         // The route is consumed: the same id now goes to the focused tab.
         h.ok("extension-ui:respond", vec![json!({ "response": response })]).await;
         assert_eq!(*b.side_channel.lock().unwrap(), [response]);

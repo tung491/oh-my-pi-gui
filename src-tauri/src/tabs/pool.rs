@@ -1422,7 +1422,7 @@ mod tests {
             "sessionPath": null, "sessionId": "sess-1", "title": "Fix flaky test",
         });
         // A background session-info pushes a light snapshot and caches it for later…
-        assert_eq!(h.sent(win, CHANNEL_TAB_STATUS), [expected.clone()]);
+        assert_eq!(h.sent(win, CHANNEL_TAB_STATUS), std::slice::from_ref(&expected));
         // …with no full-channel forward from a background tab.
         assert!(h.sent(win, CHANNEL_SESSION_INFO_UPDATE).is_empty());
         assert_eq!(h.tabs_json(win)[1], expected);
@@ -1897,7 +1897,7 @@ mod tests {
         assert!(h.tabs().set_active_tab(win, "tab-b"));
         let response = json!({ "type": "extension_ui_response", "id": "req-1", "confirmed": true });
         assert!(h.tabs().route_side_channel("req-1", response.clone(), true));
-        assert_eq!(*a.side_channel.lock().unwrap(), [response.clone()]);
+        assert_eq!(*a.side_channel.lock().unwrap(), *std::slice::from_ref(&response));
         assert!(b.side_channel.lock().unwrap().is_empty());
 
         // Final responses consume the route: a repeated id falls back to the caller.
