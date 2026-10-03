@@ -5,9 +5,10 @@
 //! sandbox assertion, media permissions, spell checking and crash recovery.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
 use serde_json::json;
 use tauri::webview::{DownloadEvent, NewWindowResponse, PageLoadEvent};
@@ -355,33 +356,85 @@ pub fn build_window(app: &AppHandle, spec: WindowSpec) -> tauri::Result<WebviewW
 /// what Electron's default `will-download` handling did. The dialog cannot run
 /// inside the request callback: that runs on the main thread, which the dialog
 /// itself needs.
+///
+/// Every window gets its own handler, but on WebKitGTK all of them hang off the
+/// one shared web context, so each download's `Finished` event reaches every
+/// window's handler (and `Requested` reaches the first one built). The
+/// bookkeeping is therefore process-wide: the first `Requested` for a URL
+/// stages it, later ones reuse that staging path, and the first `Finished`
+/// claims it, so the save dialog opens exactly once per download.
 struct Downloads {
     host: Arc<dyn Host>,
     win_id: WindowId,
     dev_url: Option<Url>,
     staging_dir: PathBuf,
+    /// Decide completion from the staged file rather than wry's reported result
+    /// (see `download_completed`).
+    filesystem_decides: bool,
+    registry: Arc<DownloadRegistry>,
+}
+
+/// The downloads in flight across every window, by URL. A `blob:` URL is
+/// unique per `URL.createObjectURL`, and wry reports the same request URI for
+/// a download's request and its completion.
+#[derive(Default)]
+struct DownloadRegistry {
     counter: AtomicU64,
-    /// The suggested filename of each download in flight, by URL.
-    suggested: Mutex<HashMap<Url, String>>,
+    in_flight: Mutex<HashMap<Url, StagedDownload>>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct StagedDownload {
+    /// The filename the page suggested, offered in the save dialog.
+    suggested: String,
+    /// Where WebKit writes the file until the user picks a destination.
+    staged: PathBuf,
+    /// The window whose handler staged the download, used as the dialog parent.
+    win_id: WindowId,
+}
+
+/// The one registry every window's download handler shares.
+static DOWNLOAD_REGISTRY: LazyLock<Arc<DownloadRegistry>> = LazyLock::new(Arc::default);
+
+/// Whether a finished download left a complete file to save. WebKitGTK removes
+/// the file of a failed or cancelled download itself, while wry's failure flag
+/// is set once per window and never cleared, so after one blocked download it
+/// reports every later one as failed. There the staged file's presence is the
+/// truth; elsewhere the reported result is, as long as the file is there.
+fn download_completed(reported_success: bool, staged_exists: bool, filesystem_decides: bool) -> bool {
+    staged_exists && (filesystem_decides || reported_success)
 }
 
 impl Downloads {
     fn new(host: Arc<dyn Host>, win_id: WindowId, dev_url: Option<Url>) -> Self {
-        Self {
+        Self::with_registry(
             host,
             win_id,
             dev_url,
-            staging_dir: downloads_dir(),
-            counter: AtomicU64::new(0),
-            suggested: Mutex::new(HashMap::new()),
-        }
+            downloads_dir(),
+            cfg!(target_os = "linux"),
+            DOWNLOAD_REGISTRY.clone(),
+        )
+    }
+
+    fn with_registry(
+        host: Arc<dyn Host>,
+        win_id: WindowId,
+        dev_url: Option<Url>,
+        staging_dir: PathBuf,
+        filesystem_decides: bool,
+        registry: Arc<DownloadRegistry>,
+    ) -> Self {
+        Self { host, win_id, dev_url, staging_dir, filesystem_decides, registry }
     }
 
     fn handle(&self, event: DownloadEvent<'_>) -> bool {
         match event {
             DownloadEvent::Requested { url, destination } => self.requested(url, destination),
             DownloadEvent::Finished { url, path, success } => {
-                self.finished(url, path, success);
+                if let Some(save) = self.finished(url, path, success) {
+                    bridge::spawn_task(save);
+                }
                 true
             }
             _ => true,
@@ -397,6 +450,12 @@ impl Downloads {
             );
             return false;
         }
+        if let Some(record) = lock(&self.registry.in_flight).get(&url) {
+            // Another window's handler staged this download already; keep its path
+            // so the file lands where that record expects it.
+            *destination = record.staged.clone();
+            return true;
+        }
         if let Err(error) = std::fs::create_dir_all(&self.staging_dir) {
             runtime_log::note(
                 "unknown",
@@ -411,35 +470,49 @@ impl Downloads {
             .map(|name| name.to_string_lossy().to_string())
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| "download".to_string());
-        let staged = self.staging_dir.join(format!(
-            ".{suggested}.{}-{}.part",
-            std::process::id(),
-            self.counter.fetch_add(1, Ordering::Relaxed)
-        ));
-        lock(&self.suggested).insert(url, suggested);
-        *destination = staged;
+        let mut in_flight = lock(&self.registry.in_flight);
+        let record = in_flight.entry(url).or_insert_with(|| StagedDownload {
+            staged: self.staging_dir.join(format!(
+                ".{suggested}.{}-{}.part",
+                std::process::id(),
+                self.registry.counter.fetch_add(1, Ordering::Relaxed)
+            )),
+            suggested,
+            win_id: self.win_id,
+        });
+        *destination = record.staged.clone();
         true
     }
 
-    fn finished(&self, url: Url, path: Option<PathBuf>, success: bool) {
-        let suggested = lock(&self.suggested).remove(&url).unwrap_or_else(|| "download".to_string());
-        let Some(staged) = path else {
+    /// Claim a finished download. Only the first handler to see it gets the
+    /// record; the others return `None` without touching anything. A completed
+    /// download yields the save task (dialog, then move or discard); a failed
+    /// one has its staged file removed here.
+    fn finished(&self, url: Url, path: Option<PathBuf>, success: bool) -> Option<impl Future<Output = ()> + Send + 'static> {
+        let record = lock(&self.registry.in_flight).remove(&url)?;
+        let StagedDownload { suggested, staged, win_id } = record;
+        if let Some(reported) = path.as_ref().filter(|reported| **reported != staged) {
             runtime_log::note(
                 "unknown",
-                format!("download of {url} finished without a path (success={success})"),
-                json!({ "winId": self.win_id.0 }),
+                format!("download of {url} finished at {} instead of {}", reported.display(), staged.display()),
+                json!({ "winId": win_id.0 }),
             );
-            return;
-        };
+        }
+        if !download_completed(success, staged.exists(), self.filesystem_decides) {
+            remove_staged(&staged);
+            runtime_log::note("unknown", format!("download of {url} failed"), json!({ "winId": win_id.0 }));
+            return None;
+        }
         if !success {
-            let _ = std::fs::remove_file(&staged);
-            runtime_log::note("unknown", format!("download of {url} failed"), json!({ "winId": self.win_id.0 }));
-            return;
+            runtime_log::note(
+                "unknown",
+                format!("download of {url} was reported as failed but its file is complete; saving it"),
+                json!({ "winId": win_id.0 }),
+            );
         }
         let host = self.host.clone();
-        let win_id = self.win_id;
         let default_path = self.staging_dir.join(&suggested);
-        bridge::spawn_task(async move {
+        Some(async move {
             let options = SaveDialogOptions { title: None, default_path: Some(default_path), filters: Vec::new(), parent: Some(win_id) };
             match host.save_dialog(options).await {
                 Some(target) => {
@@ -449,14 +522,25 @@ impl Downloads {
                             format!("could not save the download to {}: {error}", target.display()),
                             json!({ "winId": win_id.0 }),
                         );
-                        let _ = std::fs::remove_file(&staged);
+                        remove_staged(&staged);
                     }
                 }
-                None => {
-                    let _ = std::fs::remove_file(&staged);
-                }
+                None => remove_staged(&staged),
             }
-        });
+        })
+    }
+}
+
+/// Remove a staged download, logging anything but its already being gone.
+fn remove_staged(staged: &Path) {
+    if let Err(error) = std::fs::remove_file(staged) {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            runtime_log::note(
+                "unknown",
+                format!("could not remove the staged download {}: {error}", staged.display()),
+                json!({}),
+            );
+        }
     }
 }
 
@@ -740,5 +824,166 @@ mod tests {
         assert!(should_reload(None, 1_000));
         assert!(!should_reload(Some(1_000), 20_000));
         assert!(should_reload(Some(1_000), 31_000));
+    }
+
+    /// Two windows' download handlers over one registry, as on WebKitGTK where
+    /// every window's handler hears every download.
+    struct TwoWindows {
+        staging: tempfile::TempDir,
+        host: Arc<crate::testing::FakeHost>,
+        main: Downloads,
+        bar: Downloads,
+    }
+
+    fn two_windows(filesystem_decides: bool) -> TwoWindows {
+        let staging = tempfile::tempdir().unwrap();
+        let host = Arc::new(crate::testing::FakeHost::new());
+        let registry = Arc::new(DownloadRegistry::default());
+        let window = |win_id| {
+            Downloads::with_registry(
+                host.clone(),
+                win_id,
+                None,
+                staging.path().to_path_buf(),
+                filesystem_decides,
+                registry.clone(),
+            )
+        };
+        let (main, bar) = (window(WindowId(1)), window(WindowId::QUICK_ENTRY));
+        TwoWindows { staging, host, main, bar }
+    }
+
+    impl TwoWindows {
+        /// What wry hands the handler: the suggested name under the Downloads folder.
+        fn prefilled(&self, name: &str) -> PathBuf {
+            self.staging.path().join(name)
+        }
+
+        /// Request `url` through `handler` and have "WebKit" write `body` to the staged path.
+        fn download(&self, handler: &Downloads, url: &Url, name: &str, body: &str) -> PathBuf {
+            let mut destination = self.prefilled(name);
+            assert!(handler.requested(url.clone(), &mut destination));
+            std::fs::write(&destination, body).unwrap();
+            destination
+        }
+
+        fn save_dialogs(&self) -> Vec<String> {
+            self.host.log.calls().into_iter().filter(|call| call.starts_with("save_dialog(")).collect()
+        }
+
+        fn answer_save_dialog(&self, answer: Option<PathBuf>) {
+            self.host.save_dialog_answers.lock().unwrap().push(answer);
+        }
+    }
+
+    #[test]
+    fn every_window_stages_a_download_at_the_same_path() {
+        let windows = two_windows(true);
+        let blob = url("blob:tauri://localhost/3f1c-uuid");
+        let mut first = windows.prefilled("omp-logs.log");
+        let mut second = windows.prefilled("omp-logs.log");
+        assert!(windows.main.requested(blob.clone(), &mut first));
+        assert!(windows.bar.requested(blob, &mut second));
+        assert_eq!(first, second, "a later handler must not redirect the file");
+        assert_eq!(first.parent(), Some(windows.staging.path()));
+        let staged_name = first.file_name().unwrap().to_string_lossy().to_string();
+        assert!(staged_name.starts_with(".omp-logs.log.") && staged_name.ends_with(".part"), "{staged_name}");
+    }
+
+    #[tokio::test]
+    async fn a_finished_download_opens_one_save_dialog_with_the_suggested_name() {
+        let windows = two_windows(true);
+        let blob = url("blob:tauri://localhost/3f1c-uuid");
+        let staged = windows.download(&windows.main, &blob, "omp-logs.log", "log lines");
+        let target = windows.staging.path().join("saved.log");
+        windows.answer_save_dialog(Some(target.clone()));
+        // The bar's handler hears the completion first; it still saves under the page's name.
+        let save = windows.bar.finished(blob.clone(), Some(staged.clone()), true).expect("the first completion claims it");
+        assert!(windows.main.finished(blob, Some(staged.clone()), true).is_none(), "the second completion is ignored");
+        save.await;
+        let dialogs = windows.save_dialogs();
+        assert_eq!(dialogs.len(), 1, "{dialogs:?}");
+        let suggested = format!("{:?}", windows.prefilled("omp-logs.log"));
+        assert!(dialogs[0].contains(&suggested), "{dialogs:?}");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "log lines");
+        assert!(!staged.exists());
+    }
+
+    #[tokio::test]
+    async fn concurrent_downloads_are_handled_independently() {
+        let windows = two_windows(true);
+        let first = url("blob:tauri://localhost/first-uuid");
+        let second = url("blob:tauri://localhost/second-uuid");
+        let first_staged = windows.download(&windows.main, &first, "a.log", "a");
+        let second_staged = windows.download(&windows.main, &second, "b.log", "b");
+        assert_ne!(first_staged, second_staged);
+        // Both dialogs are cancelled, which discards each staged file.
+        let second_save = windows.main.finished(second.clone(), Some(second_staged.clone()), true).unwrap();
+        assert!(windows.bar.finished(second, Some(second_staged.clone()), true).is_none());
+        second_save.await;
+        assert!(!second_staged.exists());
+        assert!(first_staged.exists(), "finishing one download leaves the other alone");
+        let first_save = windows.bar.finished(first, Some(first_staged.clone()), true).unwrap();
+        first_save.await;
+        assert!(!first_staged.exists());
+        let dialogs = windows.save_dialogs();
+        assert_eq!(dialogs.len(), 2, "{dialogs:?}");
+        assert!(dialogs[0].contains(&format!("{:?}", windows.prefilled("b.log"))), "{dialogs:?}");
+        assert!(dialogs[1].contains(&format!("{:?}", windows.prefilled("a.log"))), "{dialogs:?}");
+    }
+
+    #[test]
+    fn a_failed_download_removes_its_staged_file_once() {
+        let windows = two_windows(false);
+        let blob = url("blob:tauri://localhost/3f1c-uuid");
+        let staged = windows.download(&windows.main, &blob, "omp-logs.log", "partial");
+        assert!(windows.main.finished(blob.clone(), None, false).is_none());
+        assert!(!staged.exists(), "the partial file is discarded");
+        // A file that shows up at the same path later is not this download's to remove.
+        std::fs::write(&staged, "unrelated").unwrap();
+        assert!(windows.bar.finished(blob, None, false).is_none());
+        assert!(staged.exists(), "the second completion touches nothing");
+        assert!(windows.save_dialogs().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_complete_file_is_saved_even_when_reported_as_failed_where_the_filesystem_decides() {
+        let windows = two_windows(true);
+        let blob = url("blob:tauri://localhost/3f1c-uuid");
+        let staged = windows.download(&windows.main, &blob, "omp-logs.log", "log lines");
+        windows.answer_save_dialog(None);
+        windows.main.finished(blob, None, false).expect("the staged file is complete").await;
+        assert_eq!(windows.save_dialogs().len(), 1);
+        assert!(!staged.exists(), "cancelling the dialog discards the file");
+    }
+
+    #[test]
+    fn a_download_without_its_file_opens_no_dialog() {
+        let windows = two_windows(true);
+        let blob = url("blob:tauri://localhost/3f1c-uuid");
+        let mut destination = windows.prefilled("omp-logs.log");
+        assert!(windows.main.requested(blob.clone(), &mut destination));
+        assert!(windows.main.finished(blob, Some(destination), true).is_none());
+        assert!(windows.save_dialogs().is_empty());
+    }
+
+    #[test]
+    fn a_blocked_download_is_never_staged() {
+        let windows = two_windows(true);
+        let foreign = url("https://example.com/file.zip");
+        let mut destination = windows.prefilled("file.zip");
+        assert!(!windows.main.requested(foreign.clone(), &mut destination));
+        assert_eq!(destination, windows.prefilled("file.zip"));
+        assert!(windows.bar.finished(foreign, None, false).is_none());
+        assert!(windows.save_dialogs().is_empty());
+    }
+
+    #[test]
+    fn download_completion_trusts_the_file_where_the_filesystem_decides() {
+        assert!(download_completed(false, true, true), "a sticky failure flag does not discard a complete file");
+        assert!(!download_completed(true, false, true));
+        assert!(download_completed(true, true, false));
+        assert!(!download_completed(false, true, false));
+        assert!(!download_completed(true, false, false));
     }
 }
