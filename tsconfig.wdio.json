@@ -1,0 +1,7 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"types": ["node", "mocha", "@wdio/globals/types", "@wdio/mocha-framework", "expect-webdriverio"]
+	},
+	"include": ["e2e-tauri/**/*.ts", "wdio.conf.ts", "src/renderer/global.d.ts"]
+}
