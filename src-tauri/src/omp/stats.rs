@@ -29,7 +29,7 @@ const VALID_PATHS: &[&str] = &[
     "/api/stats/overview",
     "/api/stats/model-dashboard",
     "/api/stats/costs",
-    "/api/stats/behavior",
+    "/api/stats/frustration",
     "/api/stats/tools",
     "/api/stats/providers",
     "/api/stats/recent",
