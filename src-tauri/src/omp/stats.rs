@@ -15,7 +15,7 @@ use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::oneshot;
 
-use super::manager::SpawnEnvProvider;
+use super::manager::{spawn_supervised, SpawnEnvProvider};
 use super::stats_restart_policy::{RestartBudget, Revive, MAX_RESTART_ATTEMPTS};
 use crate::bridge::spawn_task;
 
@@ -79,9 +79,17 @@ pub(crate) type StatsListener = Box<dyn Fn(&StatsEvent) + Send + Sync>;
 
 struct Running {
     id: u64,
+    /// The supervisor's pid on Unix (omp runs below it), omp's own elsewhere.
     pid: Option<u32>,
     kill_request: Mutex<Option<oneshot::Sender<()>>>,
+    /// The supervisor's control channel. Closing it, or this process dying,
+    /// makes the supervisor stop omp, so a crashed shell leaves no stats server.
+    #[cfg(unix)]
+    control: Mutex<Option<ControlChannel>>,
 }
+
+#[cfg(unix)]
+type ControlChannel = (tokio::net::unix::OwnedReadHalf, tokio::net::unix::OwnedWriteHalf);
 
 #[derive(Default)]
 struct State {
@@ -188,11 +196,16 @@ impl Inner {
         }
     }
 
+    /// Start the stop: close the control channel and SIGTERM the supervisor,
+    /// which runs its own SIGTERM → grace → SIGKILL → sweep sequence for omp.
     fn terminate(child: &Running) {
         #[cfg(unix)]
-        if let Some(pid) = child.pid {
-            let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
-            return;
+        {
+            drop(lock(&child.control).take());
+            if let Some(pid) = child.pid {
+                let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
+                return;
+            }
         }
         let request = lock(&child.kill_request).take();
         if let Some(request) = request {
@@ -204,29 +217,40 @@ impl Inner {
         let env = (self.env)().await;
         // The bundled omp registers this flag as --no-open (kebab-case), not the
         // camelCase the oclif property name suggests.
-        let args = ["stats", "--host", "127.0.0.1", "--port", &DEFAULT_PORT.to_string(), "--no-open"];
-        let mut command = Command::new(&self.program);
-        command.args(args).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).kill_on_drop(false);
-        command.env_remove("APPIMAGE_EXIT_AFTER_INSTALL");
-        for (key, value) in &env {
-            command.env(key, value);
-        }
-        command.env("PI_NOTIFICATIONS", "off");
-        let mut child = match command.spawn() {
-            Ok(child) => child,
+        let args: Vec<String> =
+            ["stats", "--host", "127.0.0.1", "--port", &DEFAULT_PORT.to_string(), "--no-open"].iter().map(|arg| arg.to_string()).collect();
+        // Supervised like the RPC sidecar: the server must not outlive a shell
+        // that crashes or is killed, which a plain child would.
+        let configure = |command: &mut Command| {
+            command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
+            command.env_remove("APPIMAGE_EXIT_AFTER_INSTALL");
+            for (key, value) in &env {
+                command.env(key, value);
+            }
+            command.env("PI_NOTIFICATIONS", "off");
+        };
+        let supervised = match spawn_supervised(&self.program, &args, configure) {
+            Ok(supervised) => supervised,
             Err(error) => {
                 lock(&self.state).spawning = false;
                 self.attempt_restart(error.to_string());
                 return;
             }
         };
+        let mut child = supervised.child;
         let (kill_tx, kill_rx) = oneshot::channel();
         let id = {
             let mut state = lock(&self.state);
             state.next_id += 1;
             state.next_id
         };
-        let running = Arc::new(Running { id, pid: child.id(), kill_request: Mutex::new(Some(kill_tx)) });
+        let running = Arc::new(Running {
+            id,
+            pid: child.id(),
+            kill_request: Mutex::new(Some(kill_tx)),
+            #[cfg(unix)]
+            control: Mutex::new(Some((supervised.control_read, supervised.control_write))),
+        });
         let disposed = {
             let mut state = lock(&self.state);
             state.spawning = false;
@@ -536,6 +560,92 @@ pub(crate) mod tests {
         assert_eq!(server.port(), 0);
         assert_eq!(*lock(&exits), vec![0]);
         server.kill();
+    }
+
+    /// Env var naming the stats script the stand-in GUI serves.
+    const STATS_SCRIPT_ENV: &str = "SAI_ATLAS_TEST_STATS_SCRIPT";
+
+    /// Live (not zombie) processes whose command line names `script`.
+    #[cfg(unix)]
+    fn running_scripts(script: &Path) -> Vec<u32> {
+        let wanted = script.display().to_string();
+        let Ok(entries) = std::fs::read_dir("/proc") else { return Vec::new() };
+        entries
+            .flatten()
+            .filter_map(|entry| entry.file_name().to_string_lossy().parse::<u32>().ok())
+            .filter(|pid| {
+                let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap_or_default();
+                let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default();
+                !stat.is_empty() && !stat.contains(") Z ") && String::from_utf8_lossy(&cmdline).contains(&wanted)
+            })
+            .collect()
+    }
+
+    /// A crashed or killed shell must take its stats server with it, as it
+    /// does the RPC sidecar: the server runs under the same supervisor.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn sigkill_of_the_gui_takes_the_stats_server_down_within_10_s() {
+        use crate::omp::supervisor::{TEST_HARNESS_ARGS, TEST_ROLE_ENV};
+        use tokio::io::AsyncBufReadExt;
+        let dir = tempfile::tempdir().unwrap();
+        let script = write_bun_script(
+            dir.path(),
+            "stats-outlives.ts",
+            "process.stdout.write(\"Dashboard available at: http://127.0.0.1:55125\\n\");\nawait Bun.sleep(600_000);",
+        );
+        let mut gui = tokio::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "omp::stats::tests::stats_gui_role_helper"])
+            .args(TEST_HARNESS_ARGS)
+            .env(TEST_ROLE_ENV, "stats-gui")
+            .env(STATS_SCRIPT_ENV, &script)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::inherit())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        let mut lines = tokio::io::BufReader::new(gui.stdout.take().unwrap()).lines();
+        let ready = tokio::time::timeout(Duration::from_secs(20), async {
+            while let Ok(Some(line)) = lines.next_line().await {
+                if line.starts_with("stats ready") {
+                    return true;
+                }
+            }
+            false
+        })
+        .await
+        .unwrap_or(false);
+        assert!(ready, "the stand-in GUI never reported a ready stats server");
+        let servers = running_scripts(&script);
+        assert!(!servers.is_empty(), "no stats server is running");
+
+        let started = std::time::Instant::now();
+        let gui_pid = gui.id().unwrap();
+        nix::sys::signal::kill(nix::unistd::Pid::from_raw(gui_pid as i32), nix::sys::signal::Signal::SIGKILL).unwrap();
+        let _ = gui.wait().await;
+        let gone = poll_until(Duration::from_secs(10), || running_scripts(&script).is_empty()).await;
+        assert!(gone, "stats server still running after the GUI died: {:?}", running_scripts(&script));
+        assert!(started.elapsed() < Duration::from_secs(10), "took {:?}", started.elapsed());
+    }
+
+    /// Stand-in GUI for the hard-kill case: starts the stats server, reports
+    /// once it is ready and sleeps until killed. Without the role variable (a
+    /// plain `cargo test`) it does nothing.
+    #[test]
+    fn stats_gui_role_helper() {
+        if std::env::var(crate::omp::supervisor::TEST_ROLE_ENV).as_deref() != Ok("stats-gui") {
+            return;
+        }
+        let script = PathBuf::from(std::env::var(STATS_SCRIPT_ENV).unwrap());
+        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+        runtime.block_on(async {
+            let server = StatsServer::new(script, no_env());
+            server.start();
+            assert!(poll_until(Duration::from_secs(15), || server.port() != 0).await, "the stats server never became ready");
+            println!("stats ready {}", server.port());
+            tokio::time::sleep(Duration::from_secs(600)).await;
+        });
     }
 
     #[test]
