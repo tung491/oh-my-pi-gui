@@ -44,13 +44,6 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 	const page = await app.firstWindow();
 	const errors: string[] = [];
 	page.on("pageerror", error => errors.push(error.message));
-	const closeWelcomeIfPresent = async (title: string, closeLabel: string) => {
-		const welcome = page.getByRole("dialog", { name: title, exact: true });
-		if ((await welcome.count()) === 0) return;
-		await expect(welcome).toBeVisible();
-		await welcome.getByRole("button", { name: closeLabel, exact: true }).click();
-		await expect(welcome).toHaveCount(0);
-	};
 	try {
 		await expect
 			.poll(async () => (await page.evaluate(() => window.omp.sidecar.getStatus())).status, { timeout: 60_000 })
@@ -124,11 +117,8 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		await exportPage.screenshot({ path: "test-results/exported-session.png", scale: "css", animations: "disabled" });
 		await exportPage.close();
 		await page.screenshot({ path: "test-results/04-real-core.png", scale: "css", animations: "disabled" });
-		await expect(page.getByRole("dialog", { name: "Welcome to Sai ATLAS" })).toBeVisible();
-		await page
-			.getByRole("dialog", { name: "Welcome to Sai ATLAS" })
-			.getByRole("button", { name: "Skip for now", exact: true })
-			.click();
+		// The profile is seeded with a completed welcome, so the first-run screen stays closed.
+		await expect(page.getByRole("dialog", { name: "Set up your local assistant", exact: true })).toHaveCount(0);
 		await expect(page.getByRole("dialog")).toHaveCount(0);
 		const original = evidence.saved.data as RpcSessionState;
 		await page.locator("textarea").first().fill("/new");
@@ -146,7 +136,6 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		}, original.sessionFile!);
 		await page.reload();
 		await expect(page.locator("[data-transcript-kind]")).toContainText(["arm audit ok"]);
-		await closeWelcomeIfPresent("Welcome to Sai ATLAS", "Skip for now");
 		await page.getByRole("button", { name: "Session stats", exact: true }).click();
 		const stats = page.getByRole("dialog");
 		await expect(stats).toBeVisible();
@@ -173,7 +162,6 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		});
 		await page.reload();
 		await expect(page.getByRole("button", { name: "Cài đặt", exact: true })).toBeVisible();
-		await closeWelcomeIfPresent("Chào mừng bạn đến với Sai ATLAS", "Bỏ qua lúc này");
 		await page.getByRole("button", { name: "Cài đặt", exact: true }).click();
 		await expect(page.getByRole("dialog")).toContainText("Quyền hạn & Bảo mật");
 		await expect(page.getByRole("dialog").locator(".settings-nav-group-label")).toHaveCount(8);
@@ -260,7 +248,6 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		await page.reload();
 		await expect.poll(() => app.evaluate(() => Reflect.get(globalThis, "auditPrefsRequested"))).toBe(true);
 		await expect(page.getByRole("button", { name: "Chọn giao diện", exact: true })).toBeVisible();
-		await closeWelcomeIfPresent("Chào mừng bạn đến với Sai ATLAS", "Bỏ qua lúc này");
 		await page.getByRole("button", { name: "Chọn giao diện", exact: true }).click();
 		const freshPicker = page.getByRole("dialog", { name: "Chọn giao diện", exact: true });
 		await freshPicker.getByPlaceholder("Tìm kiếm giao diện…").fill("VIF Sáng");
