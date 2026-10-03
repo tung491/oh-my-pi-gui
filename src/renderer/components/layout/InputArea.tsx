@@ -1065,7 +1065,7 @@ export function InputArea() {
 								className={cx(
 									CHIP,
 									CHIP_SURFACE,
-									"min-w-0 max-w-52 gap-1.5 px-2.5 font-mono text-omp-sm font-medium text-(--omp-text) hover:bg-[var(--omp-selected-bg)]",
+									"min-w-0 max-w-52 gap-1.5 px-2.5 text-omp-sm font-medium text-(--omp-text) hover:bg-[var(--omp-selected-bg)]",
 								)}
 							>
 								<span className="size-[7px] shrink-0 rounded-full bg-(--omp-brand)" />

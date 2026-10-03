@@ -46,7 +46,7 @@ export function ModelCard({ choice, progress, picked, downloadDisabled, onUse, o
 			</div>
 			<div className="flex flex-col gap-0.5">
 				<h3 className="font-display text-omp-lg font-semibold text-(--omp-text)">{choice.label}</h3>
-				<p className="font-mono text-omp-sm text-(--omp-text-secondary)">{choice.tag}</p>
+				<p className="text-omp-sm text-(--omp-text-secondary)">{choice.tag}</p>
 			</div>
 			<dl className="omp-model-specs">
 				<dt>{t("welcome.card.params")}</dt>

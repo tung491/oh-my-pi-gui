@@ -172,7 +172,7 @@ export function RequestsRoute({ range, refreshKey }: { range: StatsRange; refres
 				label: t("stats.col.model"),
 				render: row => (
 					<span>
-						<span className="block font-mono text-(--omp-text)">{row.model}</span>
+						<span className="block text-(--omp-text)">{row.model}</span>
 						<span className="block text-omp-xs text-(--omp-dim)">{row.provider}</span>
 					</span>
 				),

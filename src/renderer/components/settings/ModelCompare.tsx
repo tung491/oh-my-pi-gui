@@ -545,7 +545,7 @@ export function ModelCompare({ open, onClose }: ModelCompareProps) {
 									<td className="max-w-[260px] px-3 py-2">
 										<div className="flex min-w-0 flex-col">
 											<div className="flex items-center gap-1.5">
-												<span className="truncate font-mono text-omp-sm text-(--omp-text)">{row.id}</span>
+												<span className="truncate text-omp-sm text-(--omp-text)">{row.id}</span>
 												{active && (
 													<Badge dot variant="info">
 														{t("modelCompare.current")}
