@@ -186,20 +186,43 @@ impl OutboundSink for tauri::ipc::Channel<Envelope> {
 pub enum Fault {
     /// Reject the channel with this message.
     Error(String),
+    /// Answer with this value instead of running the handler.
+    Value(Value),
     /// Delay the handler by this many milliseconds.
     Delay(u64),
     /// Hold the handler until `test:release` names this barrier.
     Barrier(String),
+    /// Hold at the barrier, then reject with the message instead of running the handler.
+    BarrierThenError(String, String),
+    /// Hold at the barrier, then answer with this value instead of running the handler.
+    BarrierThenValue(String, Value),
+}
+
+/// The page generation the e2e helpers invoke `test:*` channels with. Calls on
+/// it bypass the page's ordered queue (whose `gen` and `seq` are private to the
+/// page), so a `test:release` is never stuck behind the call it has to free.
+#[cfg(feature = "e2e-hooks")]
+pub const E2E_HOOK_GEN: &str = "e2e-hooks";
+
+/// A scripted fault on one channel; `first_arg` narrows it to calls whose
+/// first argument equals that value (so a keyed `prefs:get` can pass while the
+/// unkeyed one is held).
+#[cfg(feature = "e2e-hooks")]
+struct FaultRule {
+    fault: Fault,
+    first_arg: Option<Value>,
 }
 
 #[cfg(feature = "e2e-hooks")]
 #[derive(Default)]
 struct Faults {
-    by_channel: HashMap<String, Fault>,
+    by_channel: HashMap<String, FaultRule>,
     /// One released flag per barrier. A `watch` keeps the released value, so
     /// a `test:release` that lands before the held call's task first polls
     /// still lets it through (a `Notify` would wake only parked waiters).
     barriers: HashMap<String, tokio::sync::watch::Sender<bool>>,
+    /// Calls that reached each channel's handler slot, faulted or not.
+    calls: HashMap<String, u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -524,8 +547,32 @@ impl Bridge {
     ) -> impl std::future::Future<Output = Result<Value, IpcError>> + Send + 'static {
         let (tx, rx) = oneshot::channel();
         let call = PendingCall { channel, args, reply: tx };
-        self.enqueue(ctx, caller, gen, seq, call);
+        #[cfg(feature = "e2e-hooks")]
+        let is_hook_call = gen == E2E_HOOK_GEN;
+        #[cfg(not(feature = "e2e-hooks"))]
+        let is_hook_call = false;
+        if is_hook_call {
+            self.run_hook_call(ctx, caller, call);
+        } else {
+            self.enqueue(ctx, caller, gen, seq, call);
+        }
         async move { rx.await.unwrap_or_else(|_| Err(IpcError::new("the bridge dropped the call"))) }
+    }
+
+    /// A call on the hook generation runs now, outside the page's ordered
+    /// queue; only `test:*` channels may travel that way.
+    #[cfg(feature = "e2e-hooks")]
+    fn run_hook_call(&self, ctx: &Arc<AppCtx>, caller: Caller, call: PendingCall) {
+        if call.channel.starts_with("test:") {
+            self.run_call(ctx, caller, call);
+        } else {
+            let _ = call.reply.send(Err(IpcError::new("the hook generation only carries test channels")));
+        }
+    }
+
+    #[cfg(not(feature = "e2e-hooks"))]
+    fn run_hook_call(&self, _: &Arc<AppCtx>, _: Caller, _: PendingCall) {
+        unreachable!("hook calls exist only with the e2e-hooks feature")
     }
 
     fn enqueue(&self, ctx: &Arc<AppCtx>, caller: Caller, gen: String, seq: u64, call: PendingCall) {
@@ -684,10 +731,19 @@ impl Bridge {
 
     #[cfg(feature = "e2e-hooks")]
     fn call_handler(&self, ctx: &Arc<AppCtx>, caller: Caller, channel: &str, handler: Handler, args: Vec<Value>) -> Reply {
-        let fault = lock(&self.faults).by_channel.get(channel).cloned();
+        let fault = {
+            let mut faults = lock(&self.faults);
+            *faults.calls.entry(channel.to_string()).or_default() += 1;
+            faults
+                .by_channel
+                .get(channel)
+                .filter(|rule| rule.first_arg.as_ref().is_none_or(|expected| args.first() == Some(expected)))
+                .map(|rule| rule.fault.clone())
+        };
         match fault {
             None => handler(ctx, caller, args),
             Some(Fault::Error(message)) => Reply::err(IpcError::new(message)),
+            Some(Fault::Value(value)) => Reply::ok(value),
             Some(Fault::Delay(ms)) => {
                 let ctx = Arc::clone(ctx);
                 Reply::Later(Box::pin(async move {
@@ -699,11 +755,9 @@ impl Bridge {
                 }))
             }
             Some(Fault::Barrier(id)) => {
-                let mut released = lock(&self.faults).barriers.entry(id).or_insert_with(|| tokio::sync::watch::Sender::new(false)).subscribe();
+                let mut released = self.hold_at_barrier(id);
                 let ctx = Arc::clone(ctx);
                 Reply::Later(Box::pin(async move {
-                    // Err means the barrier was dropped unreleased (the bridge is
-                    // going away); nothing could release it later, so run anyway.
                     let _ = released.wait_for(|released| *released).await;
                     match handler(&ctx, caller, args) {
                         Reply::Ready(result) => result,
@@ -711,7 +765,30 @@ impl Bridge {
                     }
                 }))
             }
+            Some(Fault::BarrierThenError(id, message)) => {
+                let mut released = self.hold_at_barrier(id);
+                Reply::Later(Box::pin(async move {
+                    let _ = released.wait_for(|released| *released).await;
+                    Err(IpcError::new(message))
+                }))
+            }
+            Some(Fault::BarrierThenValue(id, value)) => {
+                let mut released = self.hold_at_barrier(id);
+                Reply::Later(Box::pin(async move {
+                    let _ = released.wait_for(|released| *released).await;
+                    Ok(value)
+                }))
+            }
         }
+    }
+
+    /// Subscribe a held call to the barrier `id`, creating it unreleased. The
+    /// receiver's `wait_for` returns `Err` only when the barrier was dropped
+    /// unreleased (the bridge is going away); nothing could release it later,
+    /// so callers proceed anyway.
+    #[cfg(feature = "e2e-hooks")]
+    fn hold_at_barrier(&self, id: String) -> tokio::sync::watch::Receiver<bool> {
+        lock(&self.faults).barriers.entry(id).or_insert_with(|| tokio::sync::watch::Sender::new(false)).subscribe()
     }
 
     // -- outbound ----------------------------------------------------------
@@ -822,12 +899,30 @@ impl Bridge {
 
     #[cfg(feature = "e2e-hooks")]
     pub fn set_fault(&self, channel: &str, fault: Fault) {
-        lock(&self.faults).by_channel.insert(channel.to_string(), fault);
+        lock(&self.faults).by_channel.insert(channel.to_string(), FaultRule { fault, first_arg: None });
+    }
+
+    /// Like `set_fault`, but only calls whose first argument equals `first_arg` fault.
+    #[cfg(feature = "e2e-hooks")]
+    pub fn set_fault_when(&self, channel: &str, fault: Fault, first_arg: Value) {
+        lock(&self.faults).by_channel.insert(channel.to_string(), FaultRule { fault, first_arg: Some(first_arg) });
     }
 
     #[cfg(feature = "e2e-hooks")]
     pub fn clear_fault(&self, channel: &str) {
         lock(&self.faults).by_channel.remove(channel);
+    }
+
+    /// Calls currently held at barrier `id`; 0 once released or when it never existed.
+    #[cfg(feature = "e2e-hooks")]
+    pub fn barrier_waiters(&self, id: &str) -> usize {
+        lock(&self.faults).barriers.get(id).map(|released| released.receiver_count()).unwrap_or(0)
+    }
+
+    /// Calls that reached `channel`'s handler slot since start, faulted ones included.
+    #[cfg(feature = "e2e-hooks")]
+    pub fn calls_to(&self, channel: &str) -> u64 {
+        lock(&self.faults).calls.get(channel).copied().unwrap_or(0)
     }
 
     #[cfg(feature = "e2e-hooks")]
@@ -1340,6 +1435,60 @@ mod tests {
         assert!(result.is_ok());
         // The released barrier is gone, so a later release of the same name is a miss.
         assert!(!ctx.bridge.release_barrier("b1"));
+    }
+
+    #[cfg(feature = "e2e-hooks")]
+    #[tokio::test]
+    async fn a_barrier_fault_can_reject_or_answer_once_released() {
+        let ctx = ctx();
+        attach(&ctx, main_caller(), "g1").await;
+        ctx.bridge.set_fault("test:echo", Fault::BarrierThenError("hold".into(), "scripted refusal".into()));
+        let mut held = Box::pin(ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 0, "test:echo".into(), vec![]));
+        tokio::time::timeout(Duration::from_millis(20), &mut held).await.expect_err("held");
+        assert_eq!(ctx.bridge.barrier_waiters("hold"), 1);
+        assert!(ctx.bridge.release_barrier("hold"));
+        assert_eq!(held.await, Err(IpcError::new("scripted refusal")));
+        assert_eq!(ctx.bridge.barrier_waiters("hold"), 0);
+
+        ctx.bridge.set_fault("test:echo", Fault::BarrierThenValue("hold".into(), json!({ "canned": true })));
+        let answered = ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 1, "test:echo".into(), vec![]);
+        assert!(ctx.bridge.release_barrier("hold"));
+        assert_eq!(answered.await, Ok(json!({ "canned": true })));
+
+        // Without a barrier the canned answer comes at once.
+        ctx.bridge.set_fault("test:echo", Fault::Value(json!({ "canned": "now" })));
+        let immediate = ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 2, "test:echo".into(), vec![]).await;
+        assert_eq!(immediate, Ok(json!({ "canned": "now" })));
+    }
+
+    #[cfg(feature = "e2e-hooks")]
+    #[tokio::test]
+    async fn a_fault_scoped_to_one_payload_leaves_other_calls_alone() {
+        let ctx = ctx();
+        attach(&ctx, main_caller(), "g1").await;
+        ctx.bridge.set_fault_when("test:echo", Fault::Error("unkeyed refused".into()), json!({}));
+        let keyed = ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 0, "test:echo".into(), vec![json!({ "key": "k" })]).await;
+        assert!(keyed.is_ok());
+        let unkeyed = ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 1, "test:echo".into(), vec![json!({})]).await;
+        assert_eq!(unkeyed, Err(IpcError::new("unkeyed refused")));
+        assert_eq!(ctx.bridge.calls_to("test:echo"), 2);
+        assert_eq!(ctx.bridge.calls_to("test:order"), 0);
+    }
+
+    #[cfg(feature = "e2e-hooks")]
+    #[tokio::test]
+    async fn the_hook_generation_runs_test_channels_ahead_of_an_unattached_page() {
+        let ctx = ctx();
+        // No page has attached, so a page call waits for its generation…
+        let mut waiting = Box::pin(ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 0, "test:echo".into(), vec![]));
+        tokio::time::timeout(Duration::from_millis(20), &mut waiting).await.expect_err("waits for attach");
+        // …while a hook call on the hook generation runs at once, whatever its seq.
+        let hook = ctx.bridge.invoke(&ctx, main_caller(), E2E_HOOK_GEN.into(), 7, "test:echo".into(), vec![json!("now")]).await;
+        assert_eq!(hook, Ok(json!({ "winId": 1, "args": ["now"] })));
+        let refused = ctx.bridge.invoke(&ctx, main_caller(), E2E_HOOK_GEN.into(), 8, "runtime:log-path".into(), vec![]).await;
+        assert_eq!(refused, Err(IpcError::new("the hook generation only carries test channels")));
+        let wrong_scope = ctx.bridge.invoke(&ctx, Caller::quick_entry(), E2E_HOOK_GEN.into(), 0, "test:echo".into(), vec![]).await;
+        assert_eq!(wrong_scope, Err(IpcError::wrong_scope("test:echo")));
     }
 
     #[tokio::test]
