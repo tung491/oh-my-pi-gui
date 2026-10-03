@@ -85,12 +85,12 @@ pub struct LogSnapshot {
 }
 
 /// The flush callback: one batch of complete lines.
-type LinesCallback = Box<dyn Fn(Vec<String>) + Send + Sync>;
+type LinesCallback = dyn Fn(Vec<String>) + Send + Sync;
 
 pub struct LogWatcher {
     logs_dir: PathBuf,
     state: Mutex<State>,
-    on_lines: Mutex<Option<LinesCallback>>,
+    on_lines: Mutex<Option<Arc<LinesCallback>>>,
     running: AtomicBool,
 }
 
@@ -99,8 +99,8 @@ impl LogWatcher {
         Self { logs_dir, state: Mutex::new(State::new()), on_lines: Mutex::new(None), running: AtomicBool::new(false) }
     }
 
-    pub fn on_lines(&self, callback: LinesCallback) {
-        *lock(&self.on_lines) = Some(callback);
+    pub fn on_lines(&self, callback: Box<LinesCallback>) {
+        *lock(&self.on_lines) = Some(Arc::from(callback));
     }
 
     pub fn snapshot(&self) -> LogSnapshot {
@@ -124,8 +124,10 @@ impl LogWatcher {
             while watcher.running.load(Ordering::SeqCst) {
                 tokio::time::sleep(POLL_INTERVAL).await;
                 watcher.poll_once();
-                if let Some(lines) = lock(&watcher.state).take_flush() {
-                    if let Some(callback) = lock(&watcher.on_lines).as_ref() {
+                let flushed = lock(&watcher.state).take_flush();
+                if let Some(lines) = flushed {
+                    let callback = lock(&watcher.on_lines).clone();
+                    if let Some(callback) = callback {
                         callback(lines);
                     }
                 }
@@ -137,7 +139,8 @@ impl LogWatcher {
         self.running.store(false, Ordering::SeqCst);
         let lines = lock(&self.state).flush_now();
         if let Some(lines) = lines {
-            if let Some(callback) = lock(&self.on_lines).as_ref() {
+            let callback = lock(&self.on_lines).clone();
+            if let Some(callback) = callback {
                 callback(lines);
             }
         }
@@ -247,5 +250,58 @@ mod tests {
         assert_eq!(snapshot.next_sequence, 2);
 
         watcher.stop();
+    }
+
+    /// The production callback (wired in `services/mod.rs`) calls
+    /// `watcher.snapshot()`, re-locking `state` from inside the flush callback
+    /// that itself ran with `state` briefly locked.
+    ///
+    /// Detection here is deliberately plain OS waits (`std::sync::mpsc`
+    /// `recv_timeout`), run off the async scheduler via `spawn_blocking`,
+    /// rather than `tokio::time`: the self-deadlock under test blocks
+    /// whichever worker thread is driving the runtime's reactor, which stalls
+    /// every `tokio::time` wakeup process-wide. Checked empirically: with the
+    /// bug reintroduced, an unrelated `tokio::spawn` task that only ticks on
+    /// its own `sleep()` stops in lockstep with the deadlock, on
+    /// `worker_threads` from 2 up to 8. A `tokio::time`-based wait (including
+    /// `tokio::time::timeout`) would therefore hang alongside the bug instead
+    /// of failing it; `multi_thread` still matters so the background poll
+    /// task and this test's OS threads can make progress on separate OS
+    /// threads once the fix is in place.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn callback_may_reenter_snapshot_and_stop_returns() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("omp.test.log");
+        std::fs::write(&file, "").unwrap();
+        let watcher = Arc::new(LogWatcher::new(dir.path().to_path_buf()));
+
+        let reentrant = watcher.clone();
+        let (tx, rx) = std::sync::mpsc::channel::<u64>();
+        watcher.on_lines(Box::new(move |_lines| {
+            let snapshot = reentrant.snapshot();
+            let _ = tx.send(snapshot.next_sequence);
+        }));
+        watcher.start();
+
+        std::fs::write(&file, "hello\n").unwrap();
+
+        let sequence = tokio::task::spawn_blocking(move || rx.recv_timeout(Duration::from_secs(5)))
+            .await
+            .unwrap()
+            .expect("timed out waiting for the flush callback to re-enter snapshot()");
+        assert_eq!(sequence, 1);
+
+        let for_stop = watcher.clone();
+        let stop_result = tokio::task::spawn_blocking(move || {
+            let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+            std::thread::spawn(move || {
+                for_stop.stop();
+                let _ = stop_tx.send(());
+            });
+            stop_rx.recv_timeout(Duration::from_secs(2))
+        })
+        .await
+        .unwrap();
+        assert!(stop_result.is_ok(), "stop() must return instead of deadlocking on the state lock");
     }
 }

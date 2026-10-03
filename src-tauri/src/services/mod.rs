@@ -19,7 +19,7 @@ mod system;
 
 use std::path::PathBuf;
 use std::any::Any;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use futures_util::future::BoxFuture;
 use serde_json::Value;
@@ -191,13 +191,7 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
         services.index.start();
 
         let weak_ctx = Arc::downgrade(ctx);
-        let log_watcher = services.log_watcher.clone();
-        services.log_watcher.on_lines(Box::new(move |lines| {
-            if let Some(ctx) = weak_ctx.upgrade() {
-                let snapshot = log_watcher.snapshot();
-                ctx.bridge.broadcast_main("log:line", serde_json::json!({ "lines": lines, "nextSequence": snapshot.next_sequence }));
-            }
-        }));
+        wire_log_watcher(weak_ctx, services.log_watcher.clone());
         services.log_watcher.start();
     }
     let weak_ctx = Arc::downgrade(ctx);
@@ -209,4 +203,99 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
         }
     }));
     Ok(())
+}
+
+/// Wires the log watcher's flush callback to broadcast `log:line` on `weak_ctx`'s
+/// bridge. Extracted from `init` so a test can exercise the wiring itself
+/// (callback re-entering `snapshot()`, the broadcast payload shape) against a
+/// fake ctx, without running `init`'s other side effects.
+fn wire_log_watcher(weak_ctx: Weak<AppCtx>, log_watcher: Arc<LogWatcher>) {
+    let captured = log_watcher.clone();
+    log_watcher.on_lines(Box::new(move |lines| {
+        if let Some(ctx) = weak_ctx.upgrade() {
+            let snapshot = captured.snapshot();
+            ctx.bridge.broadcast_main("log:line", serde_json::json!({ "lines": lines, "nextSequence": snapshot.next_sequence }));
+        }
+    }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bridge::Registry;
+    use crate::ports::{Caller, WindowId};
+    use crate::testing::{self, Fakes, RecordingSink};
+    use std::time::{Duration, Instant};
+
+    fn registry() -> Registry {
+        let mut reg = Registry::new();
+        register(&mut reg);
+        reg
+    }
+
+    /// Reproduces `log_watcher.rs`'s `callback_may_reenter_snapshot_and_stop_returns`
+    /// at the wiring level: the production callback (built by `wire_log_watcher`)
+    /// calls `snapshot()` while still inside the flush callback, then shutdown
+    /// must still complete, and the resulting broadcast must carry the batch and
+    /// the sequence number the renderer expects.
+    ///
+    /// As in `log_watcher.rs`, waiting here uses a plain OS poll interval
+    /// (a channel receive with a short timeout, run off the async scheduler
+    /// via `spawn_blocking`) instead of `tokio::time`: once this bug's
+    /// self-deadlock stalls the runtime's reactor, every `tokio::time` wakeup
+    /// stalls with it, so a `tokio::time`-based wait would hang alongside the
+    /// bug instead of failing it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn wire_log_watcher_broadcasts_log_line_and_shuts_down_within_timeout() {
+        let fakes = Fakes::default();
+        let logs_dir = fakes.dir.path().join("logs");
+        std::fs::create_dir_all(&logs_dir).unwrap();
+        let log_file = logs_dir.join("omp.test.log");
+        std::fs::write(&log_file, "").unwrap();
+
+        let log_watcher = Arc::new(LogWatcher::new(logs_dir));
+        let ctx = testing::fake_ctx_with(&fakes, registry());
+        let weak_ctx = Arc::downgrade(&ctx);
+        wire_log_watcher(weak_ctx, log_watcher.clone());
+
+        let sink = Arc::new(RecordingSink::default());
+        ctx.bridge.attach(&ctx, Caller::main(WindowId(1)), "g1".to_string(), sink.clone());
+
+        log_watcher.start();
+        std::fs::write(&log_file, "hello\n").unwrap();
+
+        let sink_for_wait = sink.clone();
+        let broadcast = tokio::task::spawn_blocking(move || {
+            // A channel that nothing ever sends on: `recv_timeout` blocks for
+            // the poll interval via the OS without an explicit sleep call.
+            let (_never_tx, ticker) = std::sync::mpsc::channel::<()>();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if let Some(envelope) = sink_for_wait.sent().into_iter().find(|envelope| envelope.channel == "log:line") {
+                    return Some(envelope);
+                }
+                if Instant::now() > deadline {
+                    return None;
+                }
+                let _ = ticker.recv_timeout(Duration::from_millis(20));
+            }
+        })
+        .await
+        .unwrap()
+        .expect("timed out waiting for the log:line broadcast");
+        assert_eq!(broadcast.payload["lines"], serde_json::json!(["hello"]));
+        assert_eq!(broadcast.payload["nextSequence"], serde_json::json!(1));
+
+        let stop_result = tokio::task::spawn_blocking(move || {
+            let (stop_tx, stop_rx) = std::sync::mpsc::channel::<()>();
+            std::thread::spawn(move || {
+                log_watcher.stop();
+                let _ = stop_tx.send(());
+            });
+            stop_rx.recv_timeout(Duration::from_secs(2))
+        })
+        .await
+        .unwrap();
+        assert!(stop_result.is_ok(), "stop() must return instead of deadlocking on the state lock");
+    }
 }
