@@ -120,6 +120,27 @@ test("quick entry sends a new chat and focuses the main window", async () => {
 	await expect.poll(barVisible).toBe(false);
 });
 
+test("quick entry sends from the Send button", async () => {
+	const before = await tabs();
+	const prompts = (await recorded("prompt")).length;
+	const bar = await openQuickEntry();
+	const sendButton = bar.getByRole("button", { name: "Send", exact: true });
+	// Nothing to send yet: the button only arms once the draft has text.
+	await expect(sendButton).toBeDisabled();
+	await bar.locator("textarea").fill("sent with the button");
+	await expect(sendButton).toBeEnabled();
+	await sendButton.click();
+
+	await expect
+		.poll(async () => (await recorded("prompt")).map(command => command.message))
+		.toContain("sent with the button");
+	expect((await recorded("prompt")).length).toBe(prompts + 1);
+	const after = await tabs();
+	expect(after).toHaveLength(before.length + 1);
+	expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("chat");
+	await expect.poll(barVisible).toBe(false);
+});
+
 test("quick entry agent target opens the Work workspace", async () => {
 	const before = await tabs();
 	const bar = await openQuickEntry();
