@@ -54,6 +54,10 @@ export interface LaunchOptions {
 	args?: string[];
 	/** Start without the project directory argument, as a launcher or menu would. */
 	noProject?: boolean;
+	/** Start the app in the launch directory (a launch that ignores its argv lands there). */
+	startInLaunchDir?: boolean;
+	/** Send the app's stdout and stderr to `PreparedLaunch.output`. */
+	captureOutput?: boolean;
 	/** Runs once the profile directories and prefs exist, before the app starts. */
 	setup?: (launch: Launch) => Promise<void>;
 }
@@ -76,6 +80,8 @@ export interface Launch {
 export interface PreparedLaunch extends Launch {
 	/** Exactly what `launch-app.sh` exports on top of the driver's environment. */
 	env: Record<string, string>;
+	/** The app's stdout and stderr, when `captureOutput` was set. */
+	output: string | null;
 }
 
 export interface TauriOptions {
@@ -118,6 +124,7 @@ export async function prepareLaunch(options: LaunchOptions): Promise<PreparedLau
 	const agent = path.join(dir, "agent");
 	const project = path.join(dir, "project");
 	const record = path.join(dir, "rpc.jsonl");
+	const output = options.captureOutput ? path.join(dir, "app-output.log") : null;
 	await Promise.all([fsp.mkdir(desktop), fsp.mkdir(agent), fsp.mkdir(project)]);
 	await writeDesktopPrefs(desktop, { language: "en", ...options.prefs }, { freshWelcome: options.freshWelcome });
 
@@ -130,6 +137,8 @@ export async function prepareLaunch(options: LaunchOptions): Promise<PreparedLau
 		...(options.omp === null ? {} : { OMP_BUNDLED_OMP: options.omp ?? FIXTURE }),
 		OMP_GUI_TEST_RECORD: record,
 		...(options.history === undefined ? {} : { OMP_GUI_TEST_HISTORY: String(options.history) }),
+		...(options.startInLaunchDir ? { OMP_E2E_APP_CWD: dir } : {}),
+		...(output ? { OMP_E2E_APP_LOG: output } : {}),
 		...options.env,
 	};
 	const envFile = path.join(dir, "launch.env");
@@ -146,6 +155,7 @@ export async function prepareLaunch(options: LaunchOptions): Promise<PreparedLau
 		project,
 		record,
 		env,
+		output,
 		capabilities: capabilitiesFor(envFile, desktop, [
 			...(options.noProject ? [] : [project]),
 			...(options.args ?? []),

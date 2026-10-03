@@ -18,6 +18,14 @@ const SPEC_SUFFIX = ".e2e.ts";
 /** Twins with no Playwright original, by design. */
 const TAURI_ONLY: ReadonlySet<string> = new Set(["csp.e2e.ts"]);
 
+/**
+ * Tests that exist only in a twin, by design: the installed-package smoke ends
+ * with the hard-kill case, which only the Tauri shell's sidecar supervisor has.
+ */
+const TAURI_ONLY_TESTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+	["packaged-smoke.e2e.ts", new Set(["a hard kill leaves no sidecar or tool child"])],
+]);
+
 /** A test definition at the start of a line: Playwright's `test(` or mocha's `it(`. */
 const TEST_START = /^[ \t]*(?:test|it)\(\s*(["'`])((?:\\.|(?!\1).)*)\1/gm;
 /** An assertion: `expect(` or Playwright's polling form `expect.poll(`. */
@@ -74,8 +82,13 @@ export function compare(originals: Map<string, string>, twins: Map<string, strin
 				);
 			}
 		}
+		const twinOnly = TAURI_ONLY_TESTS.get(file) ?? new Set<string>();
 		for (const title of found.keys()) {
-			if (!wantedTitles.has(title)) problems.push(`${file}: twin-only test "${title}" has no Playwright original`);
+			if (!wantedTitles.has(title) && !twinOnly.has(title))
+				problems.push(`${file}: twin-only test "${title}" has no Playwright original`);
+		}
+		for (const title of twinOnly) {
+			if (!found.has(title)) problems.push(`${file}: Tauri-only test "${title}" is missing from the twin`);
 		}
 	}
 	for (const file of twins.keys()) {

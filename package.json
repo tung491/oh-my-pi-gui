@@ -40,6 +40,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:tauri": "wdio run wdio.conf.ts",
+    "test:e2e:tauri:packaged": "wdio run wdio.packaged.conf.ts",
     "bench": "vitest bench",
     "build:omp:win": "bun scripts/build-bundled-omp.ts --target bun-windows-x64-baseline",
     "build:omp:linux": "bun scripts/build-bundled-omp.ts --target bun-linux-x64-baseline",
