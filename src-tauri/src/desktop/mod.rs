@@ -113,6 +113,11 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// A closed-window listener kept behind an `Arc` rather than the bare `Box` the
+/// port hands in, so the whole list can be cloned out of `closed_listeners`'
+/// guard before any listener runs (a listener may register another one).
+type ClosedListener = Arc<dyn Fn(&WindowRecord) + Send + Sync>;
+
 /// Run a call into another module on a main-thread path (init, a menu, tray,
 /// shortcut or exit callback). A panic there would unwind through the native
 /// event loop and abort the process, so it is caught and logged instead, as the
@@ -139,7 +144,7 @@ pub struct Desktop {
     /// Set by `mark_quitting` and `request_quit`: layout persistence stops.
     quitting: AtomicBool,
     windows: WindowRegistry,
-    closed_listeners: Mutex<Vec<WindowClosedListener>>,
+    closed_listeners: Mutex<Vec<ClosedListener>>,
     quick_entry: QuickEntryController,
     shortcut: Mutex<Option<Arc<QuickEntryShortcut>>>,
     shortcut_registry: Mutex<Option<Arc<dyn ShortcutRegistry>>>,
@@ -212,7 +217,11 @@ impl Desktop {
     }
 
     pub(crate) fn shortcut_release_window(&self, win_id: WindowId) {
-        if let Some(shortcut) = lock(&self.shortcut).clone() {
+        // Clone the handle out in its own `let` first: an `if let` scrutinee keeps
+        // the guard on `self.shortcut` alive across the whole body (edition-2021
+        // temporary scoping), and `release_window` calls back into `set_suspended`.
+        let shortcut = lock(&self.shortcut).clone();
+        if let Some(shortcut) = shortcut {
             shortcut.release_window(win_id);
         }
     }
@@ -446,7 +455,7 @@ impl DesktopPort for Desktop {
     }
 
     fn on_window_closed(&self, listener: WindowClosedListener) {
-        lock(&self.closed_listeners).push(listener);
+        lock(&self.closed_listeners).push(Arc::from(listener));
     }
 
     fn rebuild_menu(&self) {

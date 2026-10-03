@@ -29,6 +29,23 @@ pub(crate) fn is_reachable(rect: &Rect, work_areas: &[Rect]) -> bool {
     })
 }
 
+/// The content (inner) size to request so a window's full footprint (the
+/// outer bounds `windowState` saves, matching Electron's `getBounds()` /
+/// `useContentSize: false` semantics) ends up at `target_outer`.
+///
+/// The window builder can only ask for a content size, not a footprint, so a
+/// window is first built at a guess (`probe_inner`) and its realized footprint
+/// (`probe_outer`) measured; the gap between the two is the platform's window
+/// decoration (GTK's client-side header bar and shadow, a title bar and
+/// border elsewhere). Subtracting it from the target gives the content size
+/// whose footprint will be exactly `target_outer`, as long as the decoration
+/// stays constant between the probe and the corrected size — true for a
+/// fixed theme and scale factor, which is the only case this guards.
+pub(crate) fn corrected_inner_size(target_outer: (f64, f64), probe_inner: (f64, f64), probe_outer: (f64, f64)) -> (f64, f64) {
+    let decoration = (probe_outer.0 - probe_inner.0, probe_outer.1 - probe_inner.1);
+    ((target_outer.0 - decoration.0).max(1.0), (target_outer.1 - decoration.1).max(1.0))
+}
+
 /// Keep `rect` where it was when its title bar is on a screen, otherwise place
 /// it centred on the fallback display (never resized when it fits: a window the
 /// user stretched across two monitors comes back that way when both return).
@@ -92,5 +109,21 @@ mod tests {
         let restored = restore_within_displays(saved, &[LAPTOP]);
         assert!(restored.y >= LAPTOP.y);
         assert!(restored.y + 28.0 <= LAPTOP.height);
+    }
+
+    #[test]
+    fn corrects_the_requested_inner_size_so_the_outer_footprint_matches_the_target() {
+        // The reported drift: GTK client-side decorations add 52x89 logical
+        // pixels (header bar + shadow) once a window is realized.
+        let corrected = corrected_inner_size((1452.0, 989.0), (1452.0, 989.0), (1504.0, 1078.0));
+        assert_eq!(corrected, (1400.0, 900.0));
+        let realized_outer = (corrected.0 + 52.0, corrected.1 + 89.0);
+        assert_eq!(realized_outer, (1452.0, 989.0));
+    }
+
+    #[test]
+    fn zero_decoration_leaves_the_requested_size_unchanged() {
+        let corrected = corrected_inner_size((1400.0, 900.0), (1400.0, 900.0), (1400.0, 900.0));
+        assert_eq!(corrected, (1400.0, 900.0));
     }
 }

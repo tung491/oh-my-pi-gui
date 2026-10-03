@@ -362,4 +362,34 @@ mod tests {
         desktop.on_menu_id(&ctx, ID_QUIT);
         assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
     }
+
+    /// `TrayController::destroy` must release its own state lock before calling
+    /// `backend.destroy_tray()`. Proven here by a backend whose `destroy_tray`
+    /// calls back into `TrayController::displayed`, which takes the same lock:
+    /// if `destroy` still held it, this would deadlock instead of returning.
+    /// Run off-thread with a timeout so a regression fails the test instead of
+    /// hanging the whole run.
+    #[test]
+    fn destroy_releases_its_lock_before_calling_the_backend() {
+        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        desktop.tray.install(&ctx, &desktop);
+
+        let probe_ctx = ctx.clone();
+        *backend.on_destroy_tray.lock().unwrap() = Some(Box::new(move || {
+            if let Some(desktop) = Desktop::of(&probe_ctx) {
+                let _ = desktop.tray.displayed();
+            }
+        }));
+
+        let call_ctx = ctx.clone();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let desktop = Desktop::of(&call_ctx).expect("the harness installs the real Desktop");
+            desktop.tray.destroy(desktop);
+            let _ = done_tx.send(());
+        });
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("destroy must release its lock before calling the backend, not hold it across the call");
+    }
 }

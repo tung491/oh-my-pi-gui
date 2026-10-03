@@ -54,7 +54,12 @@ impl Desktop {
     /// Windows the last window takes the app with it.
     fn on_window_destroyed(&self, ctx: &Arc<AppCtx>, win_id: WindowId) {
         if let Some(record) = self.windows.record(win_id) {
-            for listener in super::lock(&self.closed_listeners).iter() {
+            // Clone the listener list (each entry is an `Arc`, so this is cheap) and
+            // drop the guard before calling any of them: a `for` loop driven straight
+            // off the guard keeps it locked for every iteration, and a listener that
+            // registers another one (`on_window_closed`) would deadlock on itself.
+            let listeners = super::lock(&self.closed_listeners).clone();
+            for listener in listeners.iter() {
                 listener(&record);
             }
         }
@@ -184,5 +189,38 @@ mod tests {
         assert!(desktop.record(first).is_none());
         assert!(!ctx.bridge.windows().contains(&Caller::main(first)));
         assert!(ctx.bridge.windows().contains(&Caller::main(second)));
+    }
+
+    /// A listener that registers another listener runs while `closed_listeners`
+    /// is mid-notification. `on_window_destroyed` must have already cloned the
+    /// list out of its guard before calling listeners, or `on_window_closed`'s
+    /// push deadlocks on itself. Run off-thread with a timeout so a regression
+    /// fails the test instead of hanging the whole run.
+    #[test]
+    fn a_listener_that_registers_another_listener_does_not_deadlock() {
+        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
+
+        let probe_ctx = Arc::downgrade(&ctx);
+        desktop.on_window_closed(Box::new(move |_record| {
+            if let Some(ctx) = probe_ctx.upgrade() {
+                if let Some(desktop) = Desktop::of(&ctx) {
+                    desktop.on_window_closed(Box::new(|_record| {}));
+                }
+            }
+        }));
+
+        backend.destroy(first);
+        let call_ctx = ctx.clone();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let desktop = Desktop::of(&call_ctx).expect("the harness installs the real Desktop");
+            desktop.on_window_event(&call_ctx, first, WinEvent::Destroyed);
+            let _ = done_tx.send(());
+        });
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(2))
+            .expect("a listener registering another listener must not deadlock the closed-window notification");
+        assert_eq!(crate::desktop::lock(&desktop.closed_listeners).len(), 2, "the listener registered during notification must still land");
     }
 }

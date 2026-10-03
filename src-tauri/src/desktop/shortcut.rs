@@ -546,7 +546,12 @@ mod tests {
         }
 
         fn fire(&self, accelerator: &str) {
-            if let Some(callback) = lock(&self.bound).get(accelerator).cloned() {
+            // The clone must finish, dropping the guard, before invoking the
+            // callback: an `if let` scrutinee would otherwise keep `self.bound`
+            // locked for the call, and a callback that re-registers a shortcut
+            // would deadlock on itself.
+            let callback = lock(&self.bound).get(accelerator).cloned();
+            if let Some(callback) = callback {
                 callback();
             }
         }
