@@ -10,7 +10,7 @@ const VALID_PATHS: Record<string, true> = {
 	"/api/stats/overview": true,
 	"/api/stats/model-dashboard": true,
 	"/api/stats/costs": true,
-	"/api/stats/behavior": true,
+	"/api/stats/frustration": true,
 	"/api/stats/tools": true,
 	"/api/stats/providers": true,
 	"/api/stats/recent": true,

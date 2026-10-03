@@ -1,177 +1,130 @@
 /**
- * Behavior: user-frustration signals (yelling, profanity, anguish, negation,
- * repetition, blame) — overall cards, per-model table, and a stacked trend.
+ * Behavior: how often user messages show frustration, overall and per model
+ * version, from the agent's `/api/stats/frustration` tallies. A message counts
+ * once, classified by its cached judge verdict when one exists, else by the
+ * pattern signals the agent stored when it indexed the message.
  */
 
 import { useEffect, useMemo } from "react";
-import { Line } from "react-chartjs-2";
-import { baseChartOptions, bucketLabels, chartColors, compact } from "../../lib/chart";
-import "../../lib/chart";
 import { useStats } from "../../hooks/use-stats";
+import { compact } from "../../lib/chart";
+import { formatPercent } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import type { StatsRange } from "./StatsDashboard";
-import { ChartBox, MetricCard, RouteFrame, SectionTitle, type StatColumn, StatTable } from "./shared";
+import { MetricCard, RouteFrame, SectionTitle, type StatColumn, StatTable } from "./shared";
 
-interface Overall {
-	totalMessages: number;
-	totalYelling: number;
-	totalProfanity: number;
-	totalAnguish: number;
-	totalNegation: number;
-	totalRepetition: number;
-	totalBlame: number;
-	totalChars: number;
-}
-
-interface ModelRow {
-	model: string;
-	provider: string;
-	totalMessages: number;
-	totalYelling: number;
-	totalProfanity: number;
-	totalAnguish: number;
-	totalNegation: number;
-	totalRepetition: number;
-	totalBlame: number;
-	totalChars: number;
-}
-
-interface SeriesPoint {
-	timestamp: number;
-	model: string;
+/** Frustration tallies over a set of user messages (the agent's `FrustrationCounts`). */
+interface FrustrationCounts {
+	/** User messages with non-empty prose. */
 	messages: number;
-	yelling: number;
-	profanity: number;
-	anguish: number;
-	negation: number;
-	repetition: number;
-	blame: number;
+	/** Messages with a cached judge verdict; the rest are classified by pattern. */
+	judged: number;
+	/** Annoyed at anything. */
+	annoyed: number;
+	/** Annoyed and aimed at the assistant; a subset of `annoyed`. */
+	atAssistant: number;
+	/** Aimed at the assistant and hostile; a subset of `atAssistant`. */
+	angry: number;
 }
 
-interface BehaviorData {
-	overall: Overall;
-	byModel: ModelRow[];
-	behaviorSeries: SeriesPoint[];
+/** One model version: provider and spelling variants merge under one catalog identity. */
+interface FrustrationModelRow extends FrustrationCounts {
+	key: string;
+	/** Display label, e.g. `opus 4.5`; the raw model id when unclassified. */
+	label: string;
+	/** Raw model ids merged into this row. */
+	models: string[];
+}
+
+interface FrustrationData {
+	overall: FrustrationCounts;
+	byModel: FrustrationModelRow[];
+}
+
+/** `part` as a share of `whole`, or the empty-value dash when there is nothing to divide. */
+export function shareOf(part: number, whole: number): string {
+	return whole > 0 ? formatPercent((part / whole) * 100) : formatPercent(null);
 }
 
 const SIGNALS = [
-	{ key: "yelling", labelKey: "stats.behavior.signal.yelling" },
-	{ key: "profanity", labelKey: "stats.behavior.signal.profanity" },
-	{ key: "anguish", labelKey: "stats.behavior.signal.anguish" },
-	{ key: "negation", labelKey: "stats.behavior.signal.negation" },
-	{ key: "repetition", labelKey: "stats.behavior.signal.repetition" },
-	{ key: "blame", labelKey: "stats.behavior.signal.blame" },
+	{ key: "annoyed", labelKey: "stats.behavior.annoyed" },
+	{ key: "atAssistant", labelKey: "stats.behavior.atAssistant" },
+	{ key: "angry", labelKey: "stats.behavior.angry" },
 ] as const;
-
-type SignalKey = (typeof SIGNALS)[number]["key"];
 
 export function BehaviorRoute({ range, refreshKey }: { range: StatsRange; refreshKey: number }) {
 	const t = useT();
 	const params = useMemo(() => ({ range }), [range]);
-	const { data, isLoading, error, refetch } = useStats<BehaviorData>("/api/stats/behavior", params);
+	const { data, isLoading, error, refetch } = useStats<FrustrationData>("/api/stats/frustration", params);
 
 	useEffect(() => {
 		if (refreshKey > 0) refetch();
 	}, [refreshKey, refetch]);
 
-	const stats = data;
-	const overall = stats?.overall;
+	const overall = data?.overall;
 
-	const columns: StatColumn<ModelRow>[] = useMemo(
+	const columns: StatColumn<FrustrationModelRow>[] = useMemo(
 		() => [
 			{
 				key: "model",
 				label: t("stats.col.model"),
 				render: row => (
 					<span>
-						<span className="block font-medium text-(--omp-text)">{row.model}</span>
-						<span className="block text-omp-xs text-(--omp-dim)">{row.provider}</span>
+						<span className="block font-medium text-(--omp-text)">{row.label}</span>
+						<span className="block text-omp-xs text-(--omp-dim)">{row.models.join(", ")}</span>
 					</span>
 				),
 			},
-			{ key: "messages", label: t("stats.col.messages"), align: "right", render: row => compact(row.totalMessages) },
+			{ key: "messages", label: t("stats.col.messages"), align: "right", render: row => compact(row.messages) },
 			...SIGNALS.map(
-				(signal): StatColumn<ModelRow> => ({
+				(signal): StatColumn<FrustrationModelRow> => ({
 					key: signal.key,
 					label: t(signal.labelKey),
 					align: "right",
-					render: row => {
-						const value = row[
-							`total${signal.key[0].toUpperCase()}${signal.key.slice(1)}` as keyof ModelRow
-						] as number;
-						return value > 0 ? (
-							<span className="text-(--omp-warning)">{value}</span>
+					render: row =>
+						row[signal.key] > 0 ? (
+							<span className="text-(--omp-warning)">{row[signal.key]}</span>
 						) : (
 							<span className="text-(--omp-dim)">0</span>
-						);
-					},
+						),
 				}),
 			),
 		],
 		[t],
 	);
 
-	const trend = useMemo(() => {
-		const colors = chartColors();
-		const series = stats?.behaviorSeries ?? [];
-		const timestamps = [...new Set(series.map(point => point.timestamp))].sort((a, b) => a - b);
-		return {
-			labels: bucketLabels(timestamps),
-			datasets: SIGNALS.map((signal, index) => ({
-				label: t(signal.labelKey),
-				data: timestamps.map(ts =>
-					series
-						.filter(point => point.timestamp === ts)
-						.reduce((acc, point) => acc + point[signal.key as SignalKey], 0),
-				),
-				borderColor: colors[index % colors.length],
-				backgroundColor: "transparent",
-				tension: 0.3,
-				pointRadius: 0,
-				borderWidth: 1.5,
-			})),
-		};
-	}, [stats, t]);
-
 	return (
 		<RouteFrame
 			hasData={data !== null}
-			empty={!overall || overall.totalMessages === 0}
+			empty={!overall || overall.messages === 0}
 			error={error}
 			loading={isLoading}
 			onRetry={refetch}
 		>
 			{overall && (
 				<>
-					<div className="grid grid-cols-2 gap-2.5 md:grid-cols-4 xl:grid-cols-7">
-						<MetricCard label={t("stats.col.messages")} tone="accent" value={compact(overall.totalMessages)} />
+					<div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-5">
+						<MetricCard label={t("stats.col.messages")} tone="accent" value={compact(overall.messages)} />
+						<MetricCard
+							label={t("stats.behavior.judged")}
+							sub={t("stats.behavior.judgedSub", {
+								judged: compact(overall.judged),
+								pattern: compact(overall.messages - overall.judged),
+							})}
+							value={shareOf(overall.judged, overall.messages)}
+						/>
 						{SIGNALS.map(signal => (
 							<MetricCard
 								key={signal.key}
 								label={t(signal.labelKey)}
-								tone={
-									(overall[
-										`total${signal.key[0].toUpperCase()}${signal.key.slice(1)}` as keyof Overall
-									] as number) > 0
-										? "warning"
-										: "default"
-								}
-								value={String(
-									overall[`total${signal.key[0].toUpperCase()}${signal.key.slice(1)}` as keyof Overall] ?? 0,
-								)}
+								sub={t("stats.behavior.countSub", { count: compact(overall[signal.key]) })}
+								tone={overall[signal.key] > 0 ? "warning" : "default"}
+								value={shareOf(overall[signal.key], overall.messages)}
 							/>
 						))}
 					</div>
-					<SectionTitle>{t("stats.behavior.trend")}</SectionTitle>
-					<ChartBox height={240}>
-						<Line data={trend} options={baseChartOptions()} />
-					</ChartBox>
 					<SectionTitle>{t("stats.behavior.byModel")}</SectionTitle>
-					<StatTable
-						columns={columns}
-						keyFor={row => `${row.provider}/${row.model}`}
-						rows={stats?.byModel ?? []}
-					/>
+					<StatTable columns={columns} keyFor={row => row.key} rows={data?.byModel ?? []} />
 				</>
 			)}
 		</RouteFrame>

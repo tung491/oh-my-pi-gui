@@ -1979,13 +1979,12 @@ export const en: Record<string, string> = {
 	"stats.errors.noMessage": "(no message)",
 
 	// Stats behavior route
-	"stats.behavior.signal.yelling": "Yelling",
-	"stats.behavior.signal.profanity": "Profanity",
-	"stats.behavior.signal.anguish": "Anguish",
-	"stats.behavior.signal.negation": "Negation",
-	"stats.behavior.signal.repetition": "Repetition",
-	"stats.behavior.signal.blame": "Blame",
-	"stats.behavior.trend": "Signal trend",
+	"stats.behavior.judged": "Judge coverage",
+	"stats.behavior.judgedSub": "{judged} judged · {pattern} by pattern",
+	"stats.behavior.annoyed": "Annoyed",
+	"stats.behavior.atAssistant": "At the assistant",
+	"stats.behavior.angry": "Angry",
+	"stats.behavior.countSub": "{count} messages",
 	"stats.behavior.byModel": "By model",
 
 	// Stats gain route
