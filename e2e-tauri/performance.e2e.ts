@@ -12,7 +12,6 @@ describe("performance", () => {
 	it("bounded history rendering and input responsiveness across 5k, 20k and 50k messages", async function () {
 		// Explicit local performance audit.
 		if (process.env.OMP_GUI_PERFORMANCE !== "1") this.skip();
-		this.timeout(900_000);
 		const results: object[] = [];
 		const roots = [
 			{ name: "candidate", root: ROOT },
@@ -68,5 +67,5 @@ describe("performance", () => {
 					await fs.writeFile("test-results/performance.json", JSON.stringify(results, null, 2));
 					expect(errors).toEqual([]);
 				}
-	});
+	}).timeout(900_000);
 });

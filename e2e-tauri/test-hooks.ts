@@ -16,17 +16,8 @@
 /** The page generation `bridge::E2E_HOOK_GEN` dispatches without queueing. */
 const HOOK_GENERATION = "e2e-hooks";
 
-/**
- * The slice of `WebdriverIO.Browser` these helpers use. Pass the `browser`
- * global from `@wdio/globals`; typing against this slice keeps the file
- * compilable without the wdio packages installed.
- */
-export interface HookBrowser {
-	execute<Return, Args extends unknown[]>(
-		script: string | ((...args: Args) => Return),
-		...args: Args
-	): Promise<Return>;
-}
+/** The browser the helpers drive; pass the `browser` global from `@wdio/globals`. */
+export type HookBrowser = WebdriverIO.Browser;
 
 /** What `window.__TAURI_INTERNALS__` offers the page; Tauri injects it before any page script. */
 interface TauriInternals {

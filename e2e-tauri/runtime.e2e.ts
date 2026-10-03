@@ -10,8 +10,7 @@ const ABORT = 'button[aria-label="Abort"]';
 const sidecarStatus = async () => (await browser.execute(() => window.omp.sidecar.getStatus())).status;
 
 describe("runtime", () => {
-	it("streaming with 50k history preserves the reading anchor, supports five tasks, and recovers a draft after restart", async function () {
-		this.timeout(180_000);
+	it("streaming with 50k history preserves the reading anchor, supports five tasks, and recovers a draft after restart", async () => {
 		await launch({ name: "runtime", history: 50_000 });
 		await awaitBridge(browser);
 		await collectPageErrors(browser);
@@ -96,7 +95,7 @@ describe("runtime", () => {
 		);
 		await browser.saveScreenshot("test-results/runtime-recovered.png");
 		expect(errors).toEqual([]);
-	});
+	}).timeout(180_000);
 
 	it("an older real core reports unavailable capabilities and retains the editable draft", async function () {
 		// Set a preserved pre-refactor sidecar path for the compatibility audit.

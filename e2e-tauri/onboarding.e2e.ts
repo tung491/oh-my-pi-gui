@@ -56,8 +56,7 @@ describe("onboarding", () => {
 		if (first) await fs.copyFile(first.record, "test-results/onboarding-rpc.jsonl").catch(() => {});
 	});
 
-	it("a fresh profile downloads a model on the welcome screen and does not see it again", async function () {
-		this.timeout(120_000);
+	it("a fresh profile downloads a model on the welcome screen and does not see it again", async () => {
 		first = await launch({
 			name: "onboarding",
 			freshWelcome: true,
@@ -124,5 +123,5 @@ describe("onboarding", () => {
 		// The gate runs on the ready transition; give it the time a probe would take before asserting absence.
 		await browser.pause(2_000);
 		await expect($$(WELCOME)).toBeElementsArrayOfSize(0);
-	});
+	}).timeout(120_000);
 });

@@ -18,8 +18,7 @@ function withTrace(trace: string, assertion: () => void): void {
 }
 
 describe("auto-follow", () => {
-	it("a bottom-pinned transcript rides the stream, and 'jump to latest' re-engages it", async function () {
-		this.timeout(150_000);
+	it("a bottom-pinned transcript rides the stream, and 'jump to latest' re-engages it", async () => {
 		// Enough history that an abort leaves something to scroll up through, which is
 		// the state a reader is actually in when they send the next message.
 		await launch({ name: "auto-follow", history: 300 });
@@ -131,5 +130,5 @@ describe("auto-follow", () => {
 
 		await browser.saveScreenshot("test-results/auto-follow.png");
 		expect(await pageErrors(browser)).toEqual([]);
-	});
+	}).timeout(150_000);
 });
