@@ -41,7 +41,7 @@ use crate::ports::{CtxRef, DesktopPort, QuitRisk, RunProgressState, SessionKind,
 use crate::runtime_log;
 
 use app_quit::{exit_decision, ExitDecision, QuitState};
-use deep_link::{PendingLinks, DEEP_LINK_PROTOCOL};
+use deep_link::{plugin_owns_links, registers_url_scheme, BuildKind, PendingLinks, DEEP_LINK_PROTOCOL};
 use launch_argv::{launch_arguments, parse_launch_argv, LaunchRequest};
 use quick_entry::QuickEntryController;
 use shortcut::{QuickEntryShortcut, ShortcutDeps, ShortcutRegistry, TOGGLE_WINDOW_SHORTCUT_ID};
@@ -337,11 +337,7 @@ impl Desktop {
             }))
         });
 
-        if cfg!(debug_assertions) && self.backend.platform() == Platform::Linux {
-            if let Err(error) = self.backend.register_deep_link_scheme() {
-                runtime_log::note("unknown", format!("could not register the omp:// scheme for the dev build: {error}"), json!({}));
-            }
-        }
+        self.register_url_scheme();
 
         let argv = launch_arguments(&self.backend.argv(), false);
         let request = parse_launch_argv(&argv, DEEP_LINK_PROTOCOL, |path| self.backend.directory_exists(path));
@@ -358,12 +354,15 @@ impl Desktop {
         self.tray.install(ctx, self);
         self.install_app_menu(ctx);
 
-        // Cold-start links: argv on Linux and Windows, the OS handoff on macOS.
+        // Cold-start links: argv everywhere, plus the OS handoff on macOS. Off
+        // macOS the plugin's startup URLs are a copy of the same argv.
         if let LaunchRequest::Url(url) = &request {
             self.links_offer_cold_start(url.clone());
         }
-        for url in self.backend.startup_urls() {
-            self.links_offer_cold_start(url);
+        if plugin_owns_links(self.backend.platform()) {
+            for url in self.backend.startup_urls() {
+                self.links_offer_cold_start(url);
+            }
         }
         self.replay_pending_links(ctx);
         if request == LaunchRequest::QuickEntry {
@@ -371,6 +370,26 @@ impl Desktop {
         }
         registry.start();
     }
+
+    /// Make this binary the system `omp://` handler. Only a release build does:
+    /// a debug or e2e build would point every link on the desktop at a binary
+    /// that runs without the profile it was started with.
+    fn register_url_scheme(&self) {
+        if registers_url_scheme(BuildKind::current(), self.backend.platform()) {
+            self.register_url_scheme_now();
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn register_url_scheme_now(&self) {
+        if let Err(error) = self.backend.register_deep_link_scheme() {
+            runtime_log::note("unknown", format!("could not register the omp:// scheme: {error}"), json!({}));
+        }
+    }
+
+    /// The registration is not even compiled into a debug build.
+    #[cfg(debug_assertions)]
+    fn register_url_scheme_now(&self) {}
 
     fn links_offer_cold_start(&self, url: String) {
         // Before setup the buffer holds it; `replay_pending_links` runs right after.
@@ -524,16 +543,7 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
             survive("deep link event", || {
                 let Some(ctx) = weak.upgrade() else { return };
                 let Some(desktop) = Desktop::of(&ctx) else { return };
-                for url in event.urls() {
-                    let text = url.to_string();
-                    if url.scheme() == "file" {
-                        if let Ok(path) = url.to_file_path() {
-                            desktop.open_file(&ctx, path.to_string_lossy().to_string());
-                        }
-                    } else {
-                        desktop.open_url(&ctx, text);
-                    }
-                }
+                desktop.on_plugin_urls(&ctx, event.urls());
             });
         });
     }
