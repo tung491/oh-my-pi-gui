@@ -267,10 +267,23 @@ export interface RoleQuery {
  * aria-labelledby, alt, else its text content, whitespace-collapsed) matches.
  * Waits for it to appear.
  */
-export async function byRole(
+export async function byRole(role: keyof typeof ROLE_SELECTORS, query: RoleQuery): Promise<WebdriverIO.Element> {
+	const deadline = Date.now() + (query.timeout ?? 10_000);
+	let found = await queryRole(role, query);
+	while (!found && Date.now() < deadline) {
+		await new Promise(resolve => setTimeout(resolve, 100));
+		found = await queryRole(role, query);
+	}
+	if (!found)
+		throw new Error(`no ${role} named ${String(query.name)}${query.within ? ` inside ${query.within}` : ""}`);
+	return found;
+}
+
+/** `byRole` without the wait: the element now, or null (Playwright's `count() > 0` checks). */
+export async function queryRole(
 	role: keyof typeof ROLE_SELECTORS,
-	{ name, exact = false, within, timeout = 10_000 }: RoleQuery,
-): Promise<WebdriverIO.Element> {
+	{ name, exact = false, within }: RoleQuery,
+): Promise<WebdriverIO.Element | null> {
 	const pattern = name instanceof RegExp ? { source: name.source, flags: name.flags } : null;
 	const plain = typeof name === "string" ? name : null;
 	const find = () =>
@@ -334,15 +347,44 @@ export async function byRole(
 			plain,
 			exact,
 		);
-	let found = await find();
-	const deadline = Date.now() + timeout;
-	while (!found && Date.now() < deadline) {
-		await new Promise(resolve => setTimeout(resolve, 100));
-		found = await find();
-	}
-	if (!found) throw new Error(`no ${role} named ${String(name)}${within ? ` inside ${within}` : ""}`);
+	const found = await find();
 	// WebDriver hands a DOM node back as an element reference, which `$` wraps.
-	return $(found as unknown as WebdriverIO.Element).getElement();
+	return found ? $(found as unknown as WebdriverIO.Element).getElement() : null;
+}
+
+/**
+ * Playwright's `getByText(text, { exact: true })` inside `scope`: the innermost
+ * elements whose whitespace-collapsed text content is exactly `text`.
+ */
+export function exactTextCount(text: string, scope = "body"): Promise<number> {
+	return browser.execute(
+		(root: string, wanted: string) => {
+			const normal = (element: Element) => element.textContent?.replace(/\s+/g, " ").trim();
+			return Array.from(document.querySelectorAll(`${root} *`)).filter(
+				element =>
+					normal(element) === wanted && !Array.from(element.children).some(child => normal(child) === wanted),
+			).length;
+		},
+		scope,
+		text,
+	);
+}
+
+/** The last element `exactTextCount` counts, or null. */
+export async function lastExactText(text: string, scope = "body"): Promise<WebdriverIO.Element | null> {
+	const found = await browser.execute(
+		(root: string, wanted: string) => {
+			const normal = (element: Element) => element.textContent?.replace(/\s+/g, " ").trim();
+			const matches = Array.from(document.querySelectorAll(`${root} *`)).filter(
+				element =>
+					normal(element) === wanted && !Array.from(element.children).some(child => normal(child) === wanted),
+			);
+			return matches[matches.length - 1] ?? null;
+		},
+		scope,
+		text,
+	);
+	return found ? $(found as unknown as WebdriverIO.Element).getElement() : null;
 }
 
 /**

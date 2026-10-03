@@ -15,6 +15,7 @@ import {
 	awaitBridge,
 	byRole,
 	collectPageErrors,
+	exactTextCount,
 	fill,
 	launch,
 	nodeOf,
@@ -51,20 +52,6 @@ async function chooseThemeVi(theme: string): Promise<void> {
 	await byRole("dialog", { name: "Chọn giao diện", exact: true });
 	await fill($(`${DIALOG} [placeholder="Tìm kiếm giao diện…"]`), theme);
 	await $(`//*[@role="dialog"]//button[@aria-pressed][contains(normalize-space(.), "${theme}")]`).click();
-}
-
-/** Elements inside the open dialog whose own text is exactly `text` (Playwright's exact getByText). */
-function exactTextCount(text: string): Promise<number> {
-	return browser.execute(
-		(dialog: string, wanted: string) =>
-			Array.from(document.querySelectorAll(`${dialog} *`)).filter(
-				element =>
-					element.textContent?.replace(/\s+/g, " ").trim() === wanted &&
-					!Array.from(element.children).some(child => child.textContent?.replace(/\s+/g, " ").trim() === wanted),
-			).length,
-		DIALOG,
-		text,
-	);
 }
 
 describe("real core", () => {
@@ -194,7 +181,7 @@ describe("real core", () => {
 			await (await byRole("button", { name: label, exact: true, within: `${DIALOG} nav` })).click();
 			expect(
 				await until(
-					() => exactTextCount("Loading stats…"),
+					() => exactTextCount("Loading stats…", DIALOG),
 					count => count === 0,
 					{
 						timeout: 30_000,
