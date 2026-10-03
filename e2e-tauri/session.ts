@@ -13,12 +13,13 @@
  * Profiles live under the run directory wdio.conf.ts creates; it removes them
  * once the run ends and every app process is gone.
  */
+import { spawn, spawnSync } from "node:child_process";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { $, browser } from "@wdio/globals";
-import type { ChainablePromiseElement } from "webdriverio";
+import { type ChainablePromiseElement, remote } from "webdriverio";
 import { writeDesktopPrefs } from "../e2e/desktop-prefs";
 
 export const ROOT = path.resolve(import.meta.dirname, "..");
@@ -42,12 +43,19 @@ export interface LaunchOptions {
 	freshWelcome?: boolean;
 	/** Environment for the app and, through it, the sidecar. */
 	env?: Record<string, string>;
-	/** The sidecar binary (`OMP_BUNDLED_OMP`); the fixture unless a spec brings another. */
-	omp?: string;
+	/**
+	 * The sidecar binary (`OMP_BUNDLED_OMP`); the fixture unless a spec brings
+	 * another. `null` sets none, so the app resolves its own bundled sidecar.
+	 */
+	omp?: string | null;
 	/** The app binary; the e2e-hooks debug build unless a spec compares another. */
 	binary?: string;
 	/** Arguments after the project directory. */
 	args?: string[];
+	/** Start without the project directory argument, as a launcher or menu would. */
+	noProject?: boolean;
+	/** Runs once the profile directories and prefs exist, before the app starts. */
+	setup?: (launch: Launch) => Promise<void>;
 }
 
 export interface Launch {
@@ -62,6 +70,12 @@ export interface Launch {
 	/** `OMP_GUI_TEST_RECORD`: every RPC command the fixture received, one JSON line each. */
 	record: string;
 	capabilities: TauriCapabilities;
+}
+
+/** A launch this process prepared, with the environment the app starts in. */
+export interface PreparedLaunch extends Launch {
+	/** Exactly what `launch-app.sh` exports on top of the driver's environment. */
+	env: Record<string, string>;
 }
 
 export interface TauriOptions {
@@ -98,7 +112,7 @@ export function runtimeLogPath(launch: Launch): string {
  * Create the profile, prefs and environment file for one launch, and return
  * the capabilities that start it.
  */
-export async function prepareLaunch(options: LaunchOptions): Promise<Launch> {
+export async function prepareLaunch(options: LaunchOptions): Promise<PreparedLaunch> {
 	const dir = await fsp.mkdtemp(path.join(runDir(), `${options.name}-`));
 	const desktop = path.join(dir, "desktop");
 	const agent = path.join(dir, "agent");
@@ -113,7 +127,7 @@ export async function prepareLaunch(options: LaunchOptions): Promise<Launch> {
 		PI_CONFIG_DIR: path.relative(os.homedir(), dir),
 		OMP_PROFILE: "",
 		PI_PROFILE: "",
-		OMP_BUNDLED_OMP: options.omp ?? FIXTURE,
+		...(options.omp === null ? {} : { OMP_BUNDLED_OMP: options.omp ?? FIXTURE }),
 		OMP_GUI_TEST_RECORD: record,
 		...(options.history === undefined ? {} : { OMP_GUI_TEST_HISTORY: String(options.history) }),
 		...options.env,
@@ -125,36 +139,54 @@ export async function prepareLaunch(options: LaunchOptions): Promise<Launch> {
 	});
 	await fsp.writeFile(envFile, `${lines.join("\n")}\n`);
 
-	return {
+	const prepared: PreparedLaunch = {
 		dir,
 		desktop,
 		agent,
 		project,
 		record,
-		capabilities: {
-			"tauri:options": {
-				application: LAUNCHER,
-				args: [envFile, project, `${USER_DATA_SWITCH}${desktop}`, ...(options.args ?? [])],
-			},
-			"wdio:enforceWebDriverClassic": true,
-		},
+		env,
+		capabilities: capabilitiesFor(envFile, desktop, [
+			...(options.noProject ? [] : [project]),
+			...(options.args ?? []),
+		]),
+	};
+	await options.setup?.(prepared);
+	return prepared;
+}
+
+function capabilitiesFor(envFile: string, desktop: string, argv: string[]): TauriCapabilities {
+	return {
+		"tauri:options": { application: LAUNCHER, args: [envFile, ...argv, `${USER_DATA_SWITCH}${desktop}`] },
+		"wdio:enforceWebDriverClassic": true,
 	};
 }
 
 let current: Launch | null = null;
 
 /** Replace the running session with a fresh launch. */
-export async function launch(options: LaunchOptions): Promise<Launch> {
+export async function launch(options: LaunchOptions): Promise<PreparedLaunch> {
 	const prepared = await prepareLaunch(options);
 	await browser.reloadSession(prepared.capabilities);
 	current = prepared;
 	return prepared;
 }
 
-/** Start the same profile again, as a user reopening the app would. */
-export async function relaunch(previous: Launch): Promise<void> {
-	await browser.reloadSession(previous.capabilities);
-	current = previous;
+/**
+ * Start the same profile again, as a user reopening the app would; `argv`
+ * replaces the app arguments of the earlier launch (the profile stays).
+ */
+export async function relaunch(previous: Launch, argv?: string[]): Promise<void> {
+	const [envFile, ...rest] = previous.capabilities["tauri:options"].args;
+	const capabilities = argv
+		? capabilitiesFor(envFile, previous.desktop, argv)
+		: capabilitiesFor(
+				envFile,
+				previous.desktop,
+				rest.filter(arg => !arg.startsWith(USER_DATA_SWITCH)),
+			);
+	await browser.reloadSession(capabilities);
+	current = { ...previous, capabilities };
 }
 
 /**
@@ -207,6 +239,7 @@ const ROLE_SELECTORS = {
 	button: 'button:not([role]), [role="button"], input[type="button"], input[type="submit"]',
 	switch: '[role="switch"]',
 	img: '[role="img"], img[alt]:not([role])',
+	dialog: '[role="dialog"], dialog:not([role])',
 } as const;
 
 export interface RoleQuery {
@@ -394,4 +427,96 @@ export async function collectPageErrors(page: WebdriverIO.Browser): Promise<void
 
 export function pageErrors(page: WebdriverIO.Browser): Promise<string[]> {
 	return page.execute(() => (window as unknown as ErrorSink).__ompE2eErrors ?? []);
+}
+
+/**
+ * Page errors across reloads: a reload replaces the page and its error list,
+ * so the errors seen so far are kept here, and `reload()` installs collection
+ * on the new page, as Playwright's `pageerror` kept listening.
+ */
+export function pageErrorLog(page: WebdriverIO.Browser): { all(): Promise<string[]>; reload(): Promise<void> } {
+	const earlier: string[] = [];
+	return {
+		all: async () => [...earlier, ...(await pageErrors(page))],
+		reload: async () => {
+			earlier.push(...(await pageErrors(page)));
+			await page.refresh();
+			await awaitBridge(page);
+			await collectPageErrors(page);
+		},
+	};
+}
+
+/** A second WebKitWebDriver, for documents that must open outside the app. */
+const OUTSIDE_DRIVER = "/usr/bin/WebKitWebDriver";
+const OUTSIDE_DRIVER_PORT = 4446;
+/** WebKit's own test browser, the same engine (webkit2gtk-4.1) the app embeds. */
+const OUTSIDE_BROWSER = "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/MiniBrowser";
+
+/** WebKitGTK's driver-specific capability: which browser binary to start, with which arguments. */
+interface WebKitGtkCapabilities extends WebdriverIO.Capabilities {
+	"webkitgtk:browserOptions": { binary: string; args: string[] };
+}
+
+export interface OutsideBrowser {
+	page: WebdriverIO.Browser;
+	close(): Promise<void>;
+}
+
+/**
+ * Open `url` in a browser outside the app (a WebDriver-driven MiniBrowser on
+ * its own driver), as a user opening an exported file would; never in an app
+ * window. A busy driver port is an error naming its owner. `close()` ends the
+ * session and stops the driver by PID.
+ */
+export async function openOutsideBrowser(url: string): Promise<OutsideBrowser> {
+	const owner = spawnSync("ss", ["-ltnp", `sport = :${OUTSIDE_DRIVER_PORT}`], { encoding: "utf8" })
+		.stdout.split("\n")
+		.slice(1)
+		.filter(line => line.trim());
+	if (owner.length > 0) throw new Error(`Port ${OUTSIDE_DRIVER_PORT} is in use; stop its owner:\n${owner.join("\n")}`);
+	const driver = spawn(OUTSIDE_DRIVER, [`--port=${OUTSIDE_DRIVER_PORT}`], { stdio: ["ignore", "ignore", "inherit"] });
+	await new Promise<void>((resolve, reject) => {
+		driver.once("spawn", resolve);
+		driver.once("error", reject);
+	});
+	const stopDriver = async () => {
+		if (driver.exitCode !== null || driver.signalCode !== null) return;
+		const exited = new Promise(resolve => driver.once("exit", resolve));
+		driver.kill("SIGTERM");
+		const timer = setTimeout(() => driver.kill("SIGKILL"), 5_000);
+		await exited;
+		clearTimeout(timer);
+	};
+	try {
+		const deadline = Date.now() + 15_000;
+		for (;;) {
+			const ready = await fetch(`http://127.0.0.1:${OUTSIDE_DRIVER_PORT}/status`).then(
+				response => response.ok,
+				() => false,
+			);
+			if (ready) break;
+			if (Date.now() > deadline) throw new Error(`WebKitWebDriver did not answer on port ${OUTSIDE_DRIVER_PORT}`);
+			await new Promise(resolve => setTimeout(resolve, 100));
+		}
+		const page = await remote({
+			hostname: "127.0.0.1",
+			port: OUTSIDE_DRIVER_PORT,
+			logLevel: "warn",
+			capabilities: {
+				"webkitgtk:browserOptions": { binary: OUTSIDE_BROWSER, args: ["--automation"] },
+			} satisfies WebKitGtkCapabilities as WebdriverIO.Capabilities,
+		});
+		await page.url(url);
+		return {
+			page,
+			close: async () => {
+				await page.deleteSession().catch(() => {});
+				await stopDriver();
+			},
+		};
+	} catch (error) {
+		await stopDriver();
+		throw error;
+	}
 }

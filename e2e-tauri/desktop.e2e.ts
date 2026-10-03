@@ -3,7 +3,6 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { $, $$, browser, expect } from "@wdio/globals";
 import {
-	awaitBridge,
 	awaitMainWindow,
 	byRole,
 	collectPageErrors,
@@ -11,7 +10,7 @@ import {
 	type Launch,
 	launch,
 	nodeOf,
-	pageErrors,
+	pageErrorLog,
 	ROOT,
 	recorded,
 	textOf,
@@ -39,20 +38,9 @@ const TEXT = "textContent";
 const containing = { containing: true } as const;
 
 let app: Launch;
-/** Page errors of documents the specs have reloaded away from. */
-const earlierErrors: string[] = [];
-
-async function errors(): Promise<string[]> {
-	return [...earlierErrors, ...(await pageErrors(browser))];
-}
-
-/** Playwright's `page.reload()`, keeping the page errors seen so far. */
-async function reload(): Promise<void> {
-	earlierErrors.push(...(await pageErrors(browser)));
-	await browser.refresh();
-	await awaitBridge(browser);
-	await collectPageErrors(browser);
-}
+const pageLog = pageErrorLog(browser);
+const errors = () => pageLog.all();
+const reload = () => pageLog.reload();
 
 async function command(text: string): Promise<void> {
 	await fill($("textarea"), text);
@@ -100,6 +88,8 @@ function labelled(label: string, assertion: () => void): void {
 
 interface ListenerAudit {
 	__ompDocumentListeners?: () => number;
+	/** Every registration the audit saw, so the evidence shows it was watching. */
+	__ompDocumentListenerAdds?: () => number;
 }
 
 describe("desktop", () => {
@@ -455,6 +445,7 @@ describe("desktop", () => {
 			type Entry = { type: string; listener: EventListenerOrEventListenerObject; capture: boolean };
 			const live: Entry[] = [];
 			const removedEarlier: Entry[] = [];
+			let adds = 0;
 			const captureOf = (options?: boolean | EventListenerOptions) =>
 				typeof options === "boolean" ? options : Boolean(options?.capture);
 			const indexIn = (
@@ -473,6 +464,7 @@ describe("desktop", () => {
 				if (!listener) return;
 				add(type, listener, options);
 				const capture = captureOf(options);
+				adds++;
 				if (indexIn(live, type, listener, capture) >= 0) return;
 				const settings = typeof options === "object" ? options : undefined;
 				if (settings?.signal?.aborted) return;
@@ -499,6 +491,7 @@ describe("desktop", () => {
 					removedEarlier.push({ type, listener, capture });
 			};
 			audit.__ompDocumentListeners = () => live.length - removedEarlier.length;
+			audit.__ompDocumentListenerAdds = () => adds;
 		});
 		const listeners = () =>
 			browser.execute(() => (window as unknown as ListenerAudit).__ompDocumentListeners?.() ?? Number.NaN);
@@ -525,6 +518,9 @@ describe("desktop", () => {
 					taskCycles: 100,
 					documentListenersBefore: before,
 					documentListenersAfter: after,
+					documentListenerRegistrationsSeen: await browser.execute(
+						() => (window as unknown as ListenerAudit).__ompDocumentListenerAdds?.() ?? 0,
+					),
 					tabsAfter: 1,
 				},
 				null,

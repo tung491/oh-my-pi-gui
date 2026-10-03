@@ -19,4 +19,13 @@ case " $* " in
 		exit 64
 		;;
 esac
-exec "${OMP_E2E_APP_BINARY:?the launch env must name the app binary}" "$@"
+# Optional, per launch: a working directory (a launch that ignores its argv
+# lands there), and a file that takes the app's stdout and stderr.
+if [ -n "${OMP_E2E_APP_CWD:-}" ]; then
+	cd "$OMP_E2E_APP_CWD"
+fi
+binary=${OMP_E2E_APP_BINARY:?the launch env must name the app binary}
+if [ -n "${OMP_E2E_APP_LOG:-}" ]; then
+	exec "$binary" "$@" >>"$OMP_E2E_APP_LOG" 2>&1
+fi
+exec "$binary" "$@"
