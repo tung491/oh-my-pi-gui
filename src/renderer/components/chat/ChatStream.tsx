@@ -309,14 +309,27 @@ function SessionTranscript() {
 	// Whether the tail belongs to the follower. An upward gesture is the only thing
 	// that revokes it: `pinned` carries the reader's intent, and the measured edge is
 	// the fallback for a stale unpinned flag from a restored view. Reading only the
-	// measured edge let one frame of lag strand the stream — `scrollToEnd()` targets
-	// the virtualizer's size, which trails a row that is still growing, so the view
-	// fell outside the edge slack and the tail was abandoned for the rest of the run.
+	// measured edge let one frame of lag strand the stream — the virtualizer's size
+	// trails a row that is still growing, so the view fell outside the edge slack and
+	// the tail was abandoned for the rest of the run.
 	const followsTail = useCallback(
 		(el: HTMLElement) =>
 			viewRef.current.pinned || (isTranscriptAtLiveEdge(el) && gestureTowardTailRef.current !== false),
 		[],
 	);
+
+	// One write to the scroller's real bottom, on the same ruler as
+	// `isTranscriptAtLiveEdge`. Never `virtualizer.scrollToEnd()`: that arms the
+	// virtualizer's index reconcile, which re-scrolls to the growing last row every
+	// frame until a frame passes without growth (or 5 s). When frames arrive slower
+	// than stream chunks, that chase outlives a reader's wheel-up and drags the view
+	// back to the tail, past every gesture veto below. An offset target never moves,
+	// so its reconcile only waits; the vetoed followers below do the following.
+	const scrollToLiveEdge = useCallback(() => {
+		const el = parentRef.current;
+		if (!el) return;
+		virtualizer.scrollToOffset(el.scrollHeight - el.clientHeight);
+	}, [virtualizer]);
 
 	// Follow appended rows and same-count tail replacements (notably the
 	// pending -> streaming transition) while the viewport sits at the live edge.
@@ -330,10 +343,10 @@ function SessionTranscript() {
 			if (!followsTail(el)) return;
 			// A wheel gesture can arrive before React cleans up this queued frame.
 			if (userScrollIntentRef.current) return;
-			virtualizer.scrollToEnd();
+			scrollToLiveEdge();
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [virtualizer, followsTail, rows.length, tailRowKey, sessionId, totalSize]);
+	}, [scrollToLiveEdge, followsTail, rows.length, tailRowKey, sessionId, totalSize]);
 
 	// Row measurements, fonts and images move the live edge after React has
 	// committed the new rows. Observe the canvas sizer — the scroll container's
@@ -344,11 +357,11 @@ function SessionTranscript() {
 		if (!el || !canvas || typeof ResizeObserver === "undefined") return;
 		const observer = new ResizeObserver(() => {
 			if (userScrollIntentRef.current) return;
-			if (followsTail(el)) virtualizer.scrollToEnd();
+			if (followsTail(el)) scrollToLiveEdge();
 		});
 		observer.observe(canvas);
 		return () => observer.disconnect();
-	}, [virtualizer, followsTail]);
+	}, [scrollToLiveEdge, followsTail]);
 
 	// Entrance motion for content that genuinely arrives. Marking is imperative and
 	// one-shot per row key so it never replays when the virtualizer recycles a row
@@ -486,8 +499,8 @@ function SessionTranscript() {
 		gestureAnchorRef.current = null;
 		gestureTowardTailRef.current = true;
 		setPinned(true);
-		virtualizer.scrollToEnd();
-	}, [virtualizer]);
+		scrollToLiveEdge();
+	}, [scrollToLiveEdge]);
 
 	// A send reclaims the live edge even when the user had scrolled up. Mounted
 	// keyed per tab+session, so seeding from the mount-time value keeps a
