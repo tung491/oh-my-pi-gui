@@ -37,7 +37,8 @@ impl RecordingSink {
 
 impl OutboundSink for RecordingSink {
     fn send(&self, envelope: Envelope) -> Result<(), String> {
-        if let Some(message) = lock(&self.fail_with).clone() {
+        let failure = lock(&self.fail_with).clone();
+        if let Some(message) = failure {
             return Err(message);
         }
         lock(&self.sent).push(envelope);

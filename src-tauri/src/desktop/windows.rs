@@ -1108,7 +1108,8 @@ pub(crate) mod fake {
         }
 
         fn build_main_window(&self, spec: MainWindowSpec) -> Result<(), String> {
-            if let Some(message) = lock(&self.build_failure).clone() {
+            let failure = lock(&self.build_failure).clone();
+            if let Some(message) = failure {
                 return Err(message);
             }
             self.log.record(format!("build_main_window({})", spec.win_id));

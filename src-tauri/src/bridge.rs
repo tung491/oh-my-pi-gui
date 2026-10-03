@@ -833,7 +833,8 @@ impl Bridge {
     /// Release every call held at `id`; true when a barrier of that name existed.
     #[cfg(feature = "e2e-hooks")]
     pub fn release_barrier(&self, id: &str) -> bool {
-        match lock(&self.faults).barriers.remove(id) {
+        let removed = lock(&self.faults).barriers.remove(id);
+        match removed {
             Some(notify) => {
                 notify.notify_waiters();
                 true
@@ -1082,7 +1083,8 @@ mod tests {
 
     impl OutboundSink for ReloadingSink {
         fn send(&self, _: Envelope) -> Result<(), String> {
-            if let Some(ctx) = lock(&self.ctx).take() {
+            let ctx = lock(&self.ctx).take();
+            if let Some(ctx) = ctx {
                 ctx.bridge.attach(&ctx, main_caller(), "g2".to_string(), self.replacement.clone());
             }
             Err("dead channel".to_string())

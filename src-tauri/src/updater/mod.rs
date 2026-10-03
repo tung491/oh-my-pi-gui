@@ -736,7 +736,8 @@ mod tests {
         fn answer(&self, request: &Request) -> Served {
             self.requests.lock().unwrap().push(request.clone());
             if request.path.ends_with(&format!("/latest/download/{}", feed::FEED_FILE)) {
-                return match self.feed.lock().unwrap().clone() {
+                let feed = self.feed.lock().unwrap().clone();
+                return match feed {
                     Some(feed) => Served { status: 200, headers: vec![], body: feed.into_bytes() },
                     None => Served { status: 404, headers: vec![], body: b"Not Found".to_vec() },
                 };
@@ -746,7 +747,8 @@ mod tests {
                 return Served { status: 404, headers: vec![], body: b"Not Found".to_vec() };
             };
             let total = body.len() as u64;
-            match (request.range_start, *self.range_mode.lock().unwrap()) {
+            let range_mode = *self.range_mode.lock().unwrap();
+            match (request.range_start, range_mode) {
                 (Some(start), RangeMode::Honor) if start >= total => Served { status: 416, headers: vec![("Content-Range".into(), format!("bytes */{total}"))], body: vec![] },
                 (Some(start), RangeMode::Honor) => Served {
                     status: 206,

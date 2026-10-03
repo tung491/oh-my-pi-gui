@@ -895,7 +895,8 @@ impl Inner {
                     "sidecar supervisor ignored SIGTERM; sending SIGKILL",
                     json!({ "cwd": cwd, "graceMs": SUPERVISOR_EXIT_GRACE.as_millis() as u64 }),
                 );
-                if let Some(request) = lock(&child.kill_request).take() {
+                let request = lock(&child.kill_request).take();
+                if let Some(request) = request {
                     let _ = request.send(());
                 }
                 let _ = exited.wait_for(|done| *done).await;

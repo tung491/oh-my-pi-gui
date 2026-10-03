@@ -13,6 +13,12 @@ default = []
 # Test-only bridge hooks (fault scripts, event injection). Never enabled by a bundle.
 e2e-hooks = []
 
+[lints.clippy]
+# Lock guards must not live across an await or a long match arm: clone or take
+# out of the guard in a `let`, then drop it before calling out.
+significant_drop_in_scrutinee = "warn"
+await_holding_lock = "warn"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

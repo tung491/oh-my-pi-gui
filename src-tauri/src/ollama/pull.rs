@@ -253,7 +253,8 @@ impl OllamaPuller {
 
     /// Abort the running pull; it resolves with its last frame and emits nothing further.
     pub fn cancel(&self) {
-        if let Some(active) = lock(&self.active).clone() {
+        let active = lock(&self.active).clone();
+        if let Some(active) = active {
             active.cancelled.store(true, Ordering::SeqCst);
             active.cancel_notify.notify_one();
         }

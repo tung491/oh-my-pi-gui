@@ -194,7 +194,8 @@ impl Inner {
             let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
             return;
         }
-        if let Some(request) = lock(&child.kill_request).take() {
+        let request = lock(&child.kill_request).take();
+        if let Some(request) = request {
             let _ = request.send(());
         }
     }

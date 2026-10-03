@@ -102,8 +102,11 @@ impl Omp {
     /// The bundled omp binary every child runs; the message is the `PathsError` text.
     pub(crate) fn omp_binary(&self) -> Result<PathBuf, String> {
         #[cfg(test)]
-        if let Some(binary) = lock(&self.test_overrides).binary.clone() {
-            return binary.ok_or_else(|| "bundled omp is unavailable in this test".to_string());
+        {
+            let binary = lock(&self.test_overrides).binary.clone();
+            if let Some(binary) = binary {
+                return binary.ok_or_else(|| "bundled omp is unavailable in this test".to_string());
+            }
         }
         crate::paths::resolve_bundled_omp().map_err(|error| error.to_string())
     }
@@ -111,8 +114,11 @@ impl Omp {
     /// Resolves the spawn environment through the port, without borrowing `self`.
     pub(crate) fn spawn_env_provider(&self) -> manager::SpawnEnvProvider {
         #[cfg(test)]
-        if let Some(provider) = lock(&self.test_overrides).spawn_env.clone() {
-            return provider;
+        {
+            let provider = lock(&self.test_overrides).spawn_env.clone();
+            if let Some(provider) = provider {
+                return provider;
+            }
         }
         let weak = self.ctx.clone();
         Arc::new(move || {
@@ -251,7 +257,8 @@ impl OmpPort for Omp {
         // The slot is emptied, so a read after shutdown would rebuild the server;
         // the frozen shutdown order runs no handler after this point, so that path
         // is unreachable (the TS kept the killed instance and answered "exhausted").
-        if let Some(server) = lock(&self.stats).take() {
+        let server = lock(&self.stats).take();
+        if let Some(server) = server {
             server.kill();
         }
         let runs: Vec<Arc<bench::BenchRunner>> = lock(&self.bench_runs).drain().map(|(_, runner)| runner).collect();
