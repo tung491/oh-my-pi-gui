@@ -39,7 +39,8 @@ impl QuitState {
         self.approved.store(false, Ordering::SeqCst);
     }
 
-    fn asking(&self) -> bool {
+    /// A confirmation dialog is open right now.
+    pub(crate) fn asking(&self) -> bool {
         self.asking.load(Ordering::SeqCst)
     }
 
