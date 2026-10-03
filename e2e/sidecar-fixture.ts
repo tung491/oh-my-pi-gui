@@ -2,9 +2,11 @@
 /// <reference types="bun" />
 import * as fs from "node:fs";
 import { createInterface } from "node:readline";
+import { RPC_MAX_FRAME_BYTES, RPC_MAX_REASSEMBLED_BYTES } from "../src/main/rpc-bridge";
 import type {
 	AgentMessage,
 	ExtensionUIResponse,
+	RpcChunkFrame,
 	RpcCommand,
 	RpcSecurityDashboardResult,
 	RpcSessionState,
@@ -181,7 +183,50 @@ if (process.argv.includes("stats")) {
 	let streamChunks = 0;
 	let holdSettings = false;
 	let releaseSettings: (() => void) | undefined;
-	const write = (data: unknown) => process.stdout.write(`${JSON.stringify(data)}\n`);
+	// Framing follows the agent's encoder: a frame over the transport limit goes
+	// out as contiguous rpc_chunk lines once protocol v2 is negotiated, and as
+	// the agent's overflow frame before that. No line ever exceeds the limit.
+	const CHUNK_PAYLOAD_BYTES = 262_144;
+	let protocolVersion = 1;
+	let chunkCounter = 0;
+	const writeLine = (frame: object) => process.stdout.write(`${JSON.stringify(frame)}\n`);
+	const write = (data: object) => {
+		const json = JSON.stringify(data);
+		const byteLength = Buffer.byteLength(json, "utf8");
+		if (byteLength <= RPC_MAX_FRAME_BYTES) {
+			process.stdout.write(`${json}\n`);
+			return;
+		}
+		if (protocolVersion === 2 && byteLength <= RPC_MAX_REASSEMBLED_BYTES) {
+			const bytes = Buffer.from(json, "utf8");
+			const count = Math.ceil(byteLength / CHUNK_PAYLOAD_BYTES);
+			const chunkId = `rpc-${++chunkCounter}`;
+			for (let index = 0; index < count; index++) {
+				const chunk: RpcChunkFrame = {
+					type: "rpc_chunk",
+					chunkId,
+					index,
+					count,
+					byteLength,
+					data: bytes.subarray(index * CHUNK_PAYLOAD_BYTES, (index + 1) * CHUNK_PAYLOAD_BYTES).toString("base64"),
+				};
+				writeLine(chunk);
+			}
+			return;
+		}
+		const frame = data as { type?: unknown; id?: unknown; command?: unknown };
+		writeLine(
+			frame.type === "response"
+				? {
+						type: "response",
+						id: frame.id,
+						command: frame.command,
+						success: false,
+						error: "RPC response exceeded the transport limit",
+					}
+				: { type: "rpc_frame_error", originalType: frame.type, error: "RPC frame exceeded the transport limit" },
+		);
+	};
 	const values: Record<string, unknown> = {
 		"approval.mode": "ask",
 		"theme.dark": "dark",
@@ -228,7 +273,13 @@ if (process.argv.includes("stats")) {
 		await discovery;
 		return [model, ...ollamaModels];
 	};
-	write({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] });
+	write({
+		type: "ready",
+		protocolVersion: 1,
+		supportedProtocolVersions: [1, 2],
+		maxFrameBytes: RPC_MAX_FRAME_BYTES,
+		maxReassembledFrameBytes: RPC_MAX_REASSEMBLED_BYTES,
+	});
 	const lines = createInterface({ input: process.stdin });
 	lines.on("line", line => {
 		const command = JSON.parse(line) as RpcCommand | ExtensionUIResponse;
@@ -237,6 +288,20 @@ if (process.argv.includes("stats")) {
 		const ok = (data: unknown = {}) =>
 			write({ type: "response", id: command.id, command: command.type, success: true, data });
 		switch (command.type) {
+			case "negotiate_protocol":
+				if (command.protocolVersion !== 2) {
+					write({
+						type: "response",
+						id: command.id,
+						command: command.type,
+						success: false,
+						error: `Unsupported RPC protocol version: ${command.protocolVersion}`,
+					});
+					break;
+				}
+				ok({ protocolVersion: 2 });
+				protocolVersion = 2;
+				break;
 			case "get_state":
 				ok(state);
 				break;
