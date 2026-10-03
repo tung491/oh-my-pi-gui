@@ -8,6 +8,8 @@ pub mod ipc;
 mod app_icons;
 mod app_quit;
 mod deep_link;
+#[cfg(target_os = "linux")]
+mod gnome_keybindings;
 mod launch_argv;
 mod lifecycle;
 mod menu;
@@ -39,10 +41,10 @@ use crate::ports::{CtxRef, DesktopPort, QuitRisk, RunProgressState, SessionKind,
 use crate::runtime_log;
 
 use app_quit::{exit_decision, ExitDecision, QuitState};
-use deep_link::{PendingLinks, DEEP_LINK_PROTOCOL};
+use deep_link::{plugin_owns_links, registers_url_scheme, BuildKind, PendingLinks, DEEP_LINK_PROTOCOL};
 use launch_argv::{launch_arguments, parse_launch_argv, LaunchRequest};
 use quick_entry::QuickEntryController;
-use shortcut::{QuickEntryShortcut, ShortcutDeps, ShortcutRegistry};
+use shortcut::{QuickEntryShortcut, ShortcutDeps, ShortcutRegistry, TOGGLE_WINDOW_SHORTCUT_ID};
 use shortcut_core::{native_accelerator, QuickEntryShortcutPref};
 use tray::TrayController;
 use wayland_portal::{desktop_entry_candidates, shortcut_mode, xwayland_only, ShortcutMode};
@@ -257,6 +259,7 @@ impl Desktop {
 
         let weak = Arc::downgrade(ctx);
         let toggle: shortcut::Activation = Arc::new(move || {
+            runtime_log::note("global-shortcut", "window toggle shortcut activated", json!({ "portal": portal }));
             survive("window toggle shortcut", || {
                 if let Some(ctx) = weak.upgrade() {
                     if let Some(desktop) = Desktop::of(&ctx) {
@@ -266,7 +269,7 @@ impl Desktop {
             });
         });
         if let Some(accelerator) = native_accelerator("window.toggle") {
-            match registry.register(accelerator, toggle) {
+            match registry.register(TOGGLE_WINDOW_SHORTCUT_ID, accelerator, toggle) {
                 Ok(true) => {}
                 Ok(false) => runtime_log::note("global-shortcut", format!("globalShortcut.register refused {accelerator}"), json!({ "accelerator": accelerator })),
                 Err(error) => runtime_log::note("global-shortcut", format!("globalShortcut.register threw for {accelerator}: {error}"), json!({ "accelerator": accelerator })),
@@ -334,11 +337,7 @@ impl Desktop {
             }))
         });
 
-        if cfg!(debug_assertions) && self.backend.platform() == Platform::Linux {
-            if let Err(error) = self.backend.register_deep_link_scheme() {
-                runtime_log::note("unknown", format!("could not register the omp:// scheme for the dev build: {error}"), json!({}));
-            }
-        }
+        self.register_url_scheme();
 
         let argv = launch_arguments(&self.backend.argv(), false);
         let request = parse_launch_argv(&argv, DEEP_LINK_PROTOCOL, |path| self.backend.directory_exists(path));
@@ -355,12 +354,15 @@ impl Desktop {
         self.tray.install(ctx, self);
         self.install_app_menu(ctx);
 
-        // Cold-start links: argv on Linux and Windows, the OS handoff on macOS.
+        // Cold-start links: argv everywhere, plus the OS handoff on macOS. Off
+        // macOS the plugin's startup URLs are a copy of the same argv.
         if let LaunchRequest::Url(url) = &request {
             self.links_offer_cold_start(url.clone());
         }
-        for url in self.backend.startup_urls() {
-            self.links_offer_cold_start(url);
+        if plugin_owns_links(self.backend.platform()) {
+            for url in self.backend.startup_urls() {
+                self.links_offer_cold_start(url);
+            }
         }
         self.replay_pending_links(ctx);
         if request == LaunchRequest::QuickEntry {
@@ -368,6 +370,26 @@ impl Desktop {
         }
         registry.start();
     }
+
+    /// Make this binary the system `omp://` handler. Only a release build does:
+    /// a debug or e2e build would point every link on the desktop at a binary
+    /// that runs without the profile it was started with.
+    fn register_url_scheme(&self) {
+        if registers_url_scheme(BuildKind::current(), self.backend.platform()) {
+            self.register_url_scheme_now();
+        }
+    }
+
+    #[cfg(not(debug_assertions))]
+    fn register_url_scheme_now(&self) {
+        if let Err(error) = self.backend.register_deep_link_scheme() {
+            runtime_log::note("unknown", format!("could not register the omp:// scheme: {error}"), json!({}));
+        }
+    }
+
+    /// The registration is not even compiled into a debug build.
+    #[cfg(debug_assertions)]
+    fn register_url_scheme_now(&self) {}
 
     fn links_offer_cold_start(&self, url: String) {
         // Before setup the buffer holds it; `replay_pending_links` runs right after.
@@ -513,7 +535,7 @@ impl DesktopPort for Desktop {
 /// context is managed.
 pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
     let Some(desktop) = Desktop::of(ctx) else { return Ok(()) };
-    let registry: Arc<dyn ShortcutRegistry> = shortcut_registry_for(app, desktop.wayland_portal);
+    let registry: Arc<dyn ShortcutRegistry> = shortcut_registry_for(app, desktop.wayland_portal, &desktop.backend.env());
     {
         use tauri_plugin_deep_link::DeepLinkExt;
         let weak = Arc::downgrade(ctx);
@@ -521,16 +543,7 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
             survive("deep link event", || {
                 let Some(ctx) = weak.upgrade() else { return };
                 let Some(desktop) = Desktop::of(&ctx) else { return };
-                for url in event.urls() {
-                    let text = url.to_string();
-                    if url.scheme() == "file" {
-                        if let Ok(path) = url.to_file_path() {
-                            desktop.open_file(&ctx, path.to_string_lossy().to_string());
-                        }
-                    } else {
-                        desktop.open_url(&ctx, text);
-                    }
-                }
+                desktop.on_plugin_urls(&ctx, event.urls());
             });
         });
     }
@@ -549,16 +562,23 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn shortcut_registry_for(app: &AppHandle, portal: bool) -> Arc<dyn ShortcutRegistry> {
-    if portal {
-        Arc::new(shortcut::PortalShortcutRegistry::new())
-    } else {
-        Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()))
+fn shortcut_registry_for(app: &AppHandle, portal: bool, env: &wayland_portal::Env) -> Arc<dyn ShortcutRegistry> {
+    if !portal {
+        return Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()));
     }
+    // GNOME's portal reports a chord mutter refused as bound; read GNOME's own bindings to see it.
+    let gnome_bindings = if gnome_keybindings::is_gnome_session(env) {
+        let bindings = survive("read GNOME keybindings", gnome_keybindings::read_gnome_keybindings).unwrap_or_default();
+        runtime_log::note("global-shortcut", format!("read {} GNOME keybinding settings", bindings.len()), json!({ "count": bindings.len() }));
+        bindings
+    } else {
+        Vec::new()
+    };
+    Arc::new(shortcut::PortalShortcutRegistry::new(gnome_bindings))
 }
 
 #[cfg(not(target_os = "linux"))]
-fn shortcut_registry_for(app: &AppHandle, _portal: bool) -> Arc<dyn ShortcutRegistry> {
+fn shortcut_registry_for(app: &AppHandle, _portal: bool, _env: &wayland_portal::Env) -> Arc<dyn ShortcutRegistry> {
     Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()))
 }
 
@@ -614,7 +634,7 @@ pub(crate) mod testing {
     pub(crate) struct AcceptAllRegistry;
 
     impl super::shortcut::ShortcutRegistry for AcceptAllRegistry {
-        fn register(&self, _accelerator: &str, _callback: super::shortcut::Activation) -> Result<bool, String> {
+        fn register(&self, _id: &str, _accelerator: &str, _callback: super::shortcut::Activation) -> Result<bool, String> {
             Ok(true)
         }
         fn unregister(&self, _accelerator: &str) -> Result<(), String> {

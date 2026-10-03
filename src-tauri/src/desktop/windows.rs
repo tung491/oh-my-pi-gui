@@ -144,9 +144,11 @@ pub(crate) trait Backend: Send + Sync {
     fn set_tray_menu(&self, menu: &[MenuItemModel]) -> Result<(), String>;
     fn destroy_tray(&self);
     fn set_app_menu(&self, menu: &[MenuItemModel]) -> Result<(), String>;
-    /// Register the `omp` scheme with the desktop (dev builds on Linux).
+    /// Register the `omp` scheme with the desktop (release builds on Linux).
+    /// Only compiled-in callers are release builds, so debug builds never use it.
+    #[cfg_attr(debug_assertions, allow(dead_code))]
     fn register_deep_link_scheme(&self) -> Result<(), String>;
-    /// URLs the OS handed over at launch (macOS `Opened`).
+    /// URLs the deep-link plugin holds at launch: the OS handoff on macOS, an argv copy elsewhere.
     fn startup_urls(&self) -> Vec<String>;
     fn default_workspace(&self) -> std::io::Result<PathBuf>;
     fn directory_exists(&self, path: &str) -> bool;
