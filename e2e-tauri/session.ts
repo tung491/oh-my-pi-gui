@@ -18,6 +18,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { $, browser } from "@wdio/globals";
+import type { ChainablePromiseElement } from "webdriverio";
 import { writeDesktopPrefs } from "../e2e/desktop-prefs";
 
 export const ROOT = path.resolve(import.meta.dirname, "..");
@@ -199,6 +200,131 @@ export async function awaitMainWindow(page: WebdriverIO.Browser, timeout = 30_00
 /** The DOM node behind a selector, typed for `browser.execute` callbacks that take it as an argument. */
 export async function nodeOf(selector: string): Promise<HTMLElement> {
 	return (await $(selector)) as unknown as HTMLElement;
+}
+
+/** The ARIA roles the specs look elements up by, with the elements that carry each one. */
+const ROLE_SELECTORS = {
+	button: 'button:not([role]), [role="button"], input[type="button"], input[type="submit"]',
+	switch: '[role="switch"]',
+	img: '[role="img"], img[alt]:not([role])',
+} as const;
+
+export interface RoleQuery {
+	/** Playwright's accessible-name filter: a substring (case-insensitive), the exact name, or a pattern. */
+	name: string | RegExp;
+	exact?: boolean;
+	/** Only inside the first element this selector matches (a dialog, a tab). */
+	within?: string;
+	timeout?: number;
+}
+
+/**
+ * Playwright's `getByRole(role, { name })` for the roles the specs use: the
+ * first rendered element with that role whose accessible name (aria-label,
+ * aria-labelledby, alt, else its text content, whitespace-collapsed) matches.
+ * Waits for it to appear.
+ */
+export async function byRole(
+	role: keyof typeof ROLE_SELECTORS,
+	{ name, exact = false, within, timeout = 10_000 }: RoleQuery,
+): Promise<WebdriverIO.Element> {
+	const pattern = name instanceof RegExp ? { source: name.source, flags: name.flags } : null;
+	const plain = typeof name === "string" ? name : null;
+	const find = () =>
+		browser.execute(
+			(
+				selector: string,
+				scope: string | null,
+				regex: { source: string; flags: string } | null,
+				text: string | null,
+				whole: boolean,
+			) => {
+				const root = scope ? document.querySelector(scope) : document;
+				if (!root) return null;
+				const hidden = (element: Element) => {
+					for (let node: Element | null = element; node; node = node.parentElement) {
+						if (node.getAttribute("aria-hidden") === "true") return true;
+					}
+					return getComputedStyle(element).visibility === "hidden" || element.getClientRects().length === 0;
+				};
+				const nameOf = (element: Element) => {
+					const label = element.getAttribute("aria-label");
+					if (label) return label;
+					const labelledBy = element.getAttribute("aria-labelledby");
+					if (labelledBy)
+						return labelledBy
+							.split(/\s+/)
+							.map(id => document.getElementById(id)?.textContent ?? "")
+							.join(" ");
+					if (element instanceof HTMLImageElement) return element.alt;
+					// Name from content, as the accessible-name algorithm walks it: DOM text
+					// (CSS text-transform does not apply), hidden children skipped, a child's
+					// own label used, and non-inline children kept apart by spaces.
+					const fromContent = (node: Node): string => {
+						if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+						if (!(node instanceof Element)) return "";
+						if (node.getAttribute("aria-hidden") === "true") return "";
+						const style = getComputedStyle(node);
+						if (style.display === "none" || style.visibility === "hidden") return "";
+						const own =
+							node.getAttribute("aria-label") ??
+							(node instanceof HTMLImageElement ? node.alt : null) ??
+							Array.from(node.childNodes).map(fromContent).join("");
+						return style.display.startsWith("inline") ? own : ` ${own} `;
+					};
+					return Array.from(element.childNodes).map(fromContent).join("") || element.getAttribute("title") || "";
+				};
+				const matches = (accessible: string) => {
+					if (regex) return new RegExp(regex.source, regex.flags).test(accessible);
+					if (text === null) return true;
+					return whole ? accessible === text : accessible.toLowerCase().includes(text.toLowerCase());
+				};
+				return (
+					Array.from(root.querySelectorAll(selector)).find(
+						element => !hidden(element) && matches(nameOf(element).replace(/\s+/g, " ").trim()),
+					) ?? null
+				);
+			},
+			ROLE_SELECTORS[role],
+			within ?? null,
+			pattern,
+			plain,
+			exact,
+		);
+	let found = await find();
+	const deadline = Date.now() + timeout;
+	while (!found && Date.now() < deadline) {
+		await new Promise(resolve => setTimeout(resolve, 100));
+		found = await find();
+	}
+	if (!found) throw new Error(`no ${role} named ${String(name)}${within ? ` inside ${within}` : ""}`);
+	// WebDriver hands a DOM node back as an element reference, which `$` wraps.
+	return $(found as unknown as WebdriverIO.Element).getElement();
+}
+
+/**
+ * Playwright's `fill`: focus the field, select its contents and insert the
+ * text as one edit (an empty string deletes). WebDriver's Element Clear would
+ * blur the field first, which commits blur-saved settings fields early.
+ */
+export async function fill(element: ChainablePromiseElement | WebdriverIO.Element, text: string): Promise<void> {
+	const node = (await element.getElement()) as unknown as HTMLElement;
+	await browser.execute(
+		(field: HTMLElement, value: string) => {
+			field.focus();
+			document.execCommand("selectAll");
+			if (value) document.execCommand("insertText", false, value);
+			else document.execCommand("delete");
+		},
+		node,
+		text,
+	);
+}
+
+/** The element's `textContent`, which Playwright's text matchers compare (hidden text included). */
+export async function textOf(element: ChainablePromiseElement | WebdriverIO.Element): Promise<string> {
+	const node = (await element.getElement()) as unknown as HTMLElement;
+	return browser.execute((target: HTMLElement) => target.textContent ?? "", node);
 }
 
 /** A real wheel gesture over the element, as a reader scrolling would make. */
