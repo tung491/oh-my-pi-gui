@@ -162,6 +162,12 @@ impl Desktop {
         Self::with_backend(backend, ctx)
     }
 
+    /// Whether the window exists and is shown; the e2e `test:windows` hook reads it.
+    #[cfg(feature = "e2e-hooks")]
+    pub(crate) fn is_window_visible(&self, id: WindowId) -> bool {
+        self.backend.exists(id) && self.backend.is_visible(id)
+    }
+
     pub(crate) fn with_backend(backend: Arc<dyn Backend>, ctx: CtxRef) -> Self {
         let wayland_portal = shortcut_mode(backend.platform(), &backend.env()) == ShortcutMode::Portal;
         Self {
