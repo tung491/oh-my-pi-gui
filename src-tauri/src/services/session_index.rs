@@ -17,7 +17,7 @@
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 
@@ -111,7 +111,7 @@ pub struct SessionIndex {
     default_cwd: String,
     parse_cache: Mutex<StampedLru<SessionInfo>>,
     text_cache: Mutex<StampedLru<String>>,
-    on_change: Mutex<Vec<Box<dyn Fn() + Send + Sync>>>,
+    on_change: Mutex<Vec<Arc<dyn Fn() + Send + Sync>>>,
     watcher: Mutex<Option<notify::RecommendedWatcher>>,
 }
 
@@ -133,11 +133,12 @@ impl SessionIndex {
     }
 
     pub fn on_change(&self, listener: Box<dyn Fn() + Send + Sync>) {
-        lock(&self.on_change).push(listener);
+        lock(&self.on_change).push(Arc::from(listener));
     }
 
     fn notify_change(&self) {
-        for listener in lock(&self.on_change).iter() {
+        let listeners = lock(&self.on_change).clone();
+        for listener in listeners.iter() {
             listener();
         }
     }
@@ -417,7 +418,6 @@ fn parse_tail(tail: &str) -> (SessionStatus, u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
 
     fn write_session(dir: &Path, id: &str, kind: Option<&str>) -> PathBuf {
         let project_dir = dir.join("project-x");
