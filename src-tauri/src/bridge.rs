@@ -196,7 +196,10 @@ pub enum Fault {
 #[derive(Default)]
 struct Faults {
     by_channel: HashMap<String, Fault>,
-    barriers: HashMap<String, Arc<tokio::sync::Notify>>,
+    /// One released flag per barrier. A `watch` keeps the released value, so
+    /// a `test:release` that lands before the held call's task first polls
+    /// still lets it through (a `Notify` would wake only parked waiters).
+    barriers: HashMap<String, tokio::sync::watch::Sender<bool>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -696,10 +699,12 @@ impl Bridge {
                 }))
             }
             Some(Fault::Barrier(id)) => {
-                let notify = lock(&self.faults).barriers.entry(id).or_insert_with(|| Arc::new(tokio::sync::Notify::new())).clone();
+                let mut released = lock(&self.faults).barriers.entry(id).or_insert_with(|| tokio::sync::watch::Sender::new(false)).subscribe();
                 let ctx = Arc::clone(ctx);
                 Reply::Later(Box::pin(async move {
-                    notify.notified().await;
+                    // Err means the barrier was dropped unreleased (the bridge is
+                    // going away); nothing could release it later, so run anyway.
+                    let _ = released.wait_for(|released| *released).await;
                     match handler(&ctx, caller, args) {
                         Reply::Ready(result) => result,
                         Reply::Later(future) => future.await,
@@ -835,8 +840,8 @@ impl Bridge {
     pub fn release_barrier(&self, id: &str) -> bool {
         let removed = lock(&self.faults).barriers.remove(id);
         match removed {
-            Some(notify) => {
-                notify.notify_waiters();
+            Some(released) => {
+                released.send_replace(true);
                 true
             }
             None => false,
@@ -1319,6 +1324,22 @@ mod tests {
         assert_eq!(failed, Err(IpcError::new("scripted")));
         ctx.bridge.clear_faults();
         assert!(ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 2, "test:echo".into(), vec![]).await.is_ok());
+    }
+
+    #[cfg(feature = "e2e-hooks")]
+    #[tokio::test]
+    async fn a_barrier_released_before_the_call_waits_still_releases_it() {
+        let ctx = ctx();
+        attach(&ctx, main_caller(), "g1").await;
+        ctx.bridge.set_fault("test:echo", Fault::Barrier("b1".into()));
+        // `invoke` dispatches synchronously and spawns the held task; on this
+        // current-thread runtime that task has not polled yet when we release.
+        let held = ctx.bridge.invoke(&ctx, main_caller(), "g1".into(), 0, "test:echo".into(), vec![]);
+        assert!(ctx.bridge.release_barrier("b1"));
+        let result = tokio::time::timeout(Duration::from_millis(500), held).await.expect("a release that came first still lets the call through");
+        assert!(result.is_ok());
+        // The released barrier is gone, so a later release of the same name is a miss.
+        assert!(!ctx.bridge.release_barrier("b1"));
     }
 
     #[tokio::test]
