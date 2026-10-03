@@ -18,6 +18,6 @@
 			"@renderer/*": ["./src/renderer/*"]
 		}
 	},
-	"include": ["src/**/*.ts", "src/**/*.tsx", "e2e/**/*.ts", "e2e-tauri/**/*.ts"],
+	"include": ["src/**/*.ts", "src/**/*.tsx", "e2e/**/*.ts"],
 	"exclude": ["node_modules", "out", "dist"]
 }
