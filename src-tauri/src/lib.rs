@@ -215,8 +215,17 @@ impl Host for TauriHost {
     }
 
     fn clipboard_read_text(&self) -> BoxFuture<'_, Result<String, HostError>> {
-        let result = self.app.clipboard().read_text().map_err(|error| HostError::Failed(error.to_string()));
-        Box::pin(std::future::ready(result))
+        // Reading the selection waits on the X11/Wayland selection owner, which
+        // can take as long as that app takes to answer; keep it off the runtime
+        // workers so a slow owner stalls only this call.
+        let app = self.app.clone();
+        Box::pin(async move {
+            let joined = tokio::task::spawn_blocking(move || app.clipboard().read_text()).await;
+            match joined {
+                Ok(read) => read.map_err(|error| HostError::Failed(error.to_string())),
+                Err(join_error) => Err(HostError::Failed(format!("clipboard read did not complete: {join_error}"))),
+            }
+        })
     }
 
     fn clipboard_write_text(&self, text: &str) -> BoxFuture<'_, Result<(), HostError>> {
