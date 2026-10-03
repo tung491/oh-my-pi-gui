@@ -877,9 +877,8 @@ mod tauri_backend {
         }
 
         fn set_tray_tooltip(&self, tooltip: &str) {
-            if let Some(tray) = lock(&self.tray).as_ref() {
-                let _ = tray.set_tooltip(Some(tooltip));
-            }
+            let Some(tray) = lock(&self.tray).clone() else { return };
+            let _ = tray.set_tooltip(Some(tooltip));
         }
 
         fn set_tray_menu(&self, items: &[MenuItemModel]) -> Result<(), String> {
@@ -889,7 +888,12 @@ mod tauri_backend {
         }
 
         fn destroy_tray(&self) {
-            if let Some(tray) = lock(&self.tray).take() {
+            // `.take()` must not sit inside an `if let` scrutinee: edition-2021 temporary
+            // scoping would then keep `self.tray`'s guard alive for the whole body, and
+            // `TrayIcon::set_visible` / `remove_tray_by_id` call back into Tauri's main-thread
+            // dispatcher, which would deadlock a worker calling in through the tray lock.
+            let tray = lock(&self.tray).take();
+            if let Some(tray) = tray {
                 let _ = tray.set_visible(false);
                 self.app.remove_tray_by_id(tray.id());
             }
@@ -984,6 +988,9 @@ pub(crate) mod fake {
         pub build_failure: Mutex<Option<String>>,
         /// The context whose bridge a built window registers with, as `build_window` does.
         pub ctx: Mutex<Option<crate::ports::CtxRef>>,
+        /// Run synchronously from `destroy_tray`, so a test can reach back into the
+        /// caller (e.g. `TrayController`) and prove no lock is still held there.
+        pub on_destroy_tray: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
     }
 
     impl FakeBackend {
@@ -1010,11 +1017,16 @@ pub(crate) mod fake {
                 startup_urls: Mutex::new(Vec::new()),
                 build_failure: Mutex::new(None),
                 ctx: Mutex::new(None),
+                on_destroy_tray: Mutex::new(None),
             }
         }
 
         fn register_with_bridge(&self, caller: crate::ports::Caller) {
-            if let Some(ctx) = lock(&self.ctx).as_ref().and_then(|ctx| ctx.upgrade()) {
+            // The lookup must finish (and drop the guard) before calling out to the
+            // bridge: an `if let` scrutinee would otherwise hold `self.ctx` locked
+            // across the call for the rest of the body.
+            let ctx = lock(&self.ctx).as_ref().and_then(|ctx| ctx.upgrade());
+            if let Some(ctx) = ctx {
                 ctx.bridge.register_window(caller);
             }
         }
@@ -1172,6 +1184,10 @@ pub(crate) mod fake {
             self.log.record("destroy_tray()");
             *lock(&self.tray_menu) = None;
             *lock(&self.tray_tooltip) = None;
+            let hook = lock(&self.on_destroy_tray).take();
+            if let Some(hook) = hook {
+                hook();
+            }
         }
 
         fn set_app_menu(&self, menu: &[MenuItemModel]) -> Result<(), String> {
