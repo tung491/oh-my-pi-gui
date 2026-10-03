@@ -234,6 +234,12 @@ pub fn resolve_bundled_omp_in(os_name: &str, exe_dir: &Path, appdir: Option<&Pat
 /// executable) in a packaged build, under `resources/` in development. A
 /// packaged GUI never consults a system `omp`; a missing binary is an error.
 pub fn resolve_bundled_omp() -> Result<PathBuf, PathsError> {
+    #[cfg(feature = "e2e-hooks")]
+    {
+        if let Some(fixture) = e2e_sidecar_override(std::env::var_os("OMP_BUNDLED_OMP")) {
+            return Ok(fixture);
+        }
+    }
     let filename = Path::new(bundled_omp_filename());
     if tauri::is_dev() {
         let dev_resources = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("resources");
@@ -244,6 +250,14 @@ pub fn resolve_bundled_omp() -> Result<PathBuf, PathsError> {
     let exe_dir = exe.parent().map(Path::to_path_buf).unwrap_or_default();
     let appdir = std::env::var_os("APPDIR").filter(|value| !value.is_empty()).map(PathBuf::from);
     resolve_bundled_omp_in(crate::runtime_log::node_platform(), &exe_dir, appdir.as_deref())
+}
+
+/// `OMP_BUNDLED_OMP` names the e2e fixture sidecar, as it does for the Electron
+/// specs. Only an `e2e-hooks` build reads it, so a shipped build always runs its
+/// own bundled binary.
+#[cfg(feature = "e2e-hooks")]
+fn e2e_sidecar_override(value: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    value.filter(|value| !value.is_empty()).map(PathBuf::from).filter(|path| path.is_file())
 }
 
 /// GUI-owned workspace for Work mode (`<agent dir>/../work`). It runs the full agent, never `--chat`.
@@ -392,6 +406,19 @@ mod tests {
         let candidates = bundled_omp_candidates("linux", &exe_dir, Some(&appdir));
         assert_eq!(candidates[1], lib);
         assert_eq!(candidates.last(), Some(&exe_dir));
+    }
+
+    #[test]
+    #[cfg(feature = "e2e-hooks")]
+    fn an_e2e_build_runs_the_fixture_sidecar_it_is_given() {
+        let dir = tempfile::tempdir().unwrap();
+        let fixture = dir.path().join("sidecar-fixture.ts");
+        std::fs::write(&fixture, "").unwrap();
+        assert_eq!(e2e_sidecar_override(Some(fixture.clone().into_os_string())), Some(fixture));
+        assert_eq!(e2e_sidecar_override(Some(dir.path().join("missing").into_os_string())), None);
+        assert_eq!(e2e_sidecar_override(Some(dir.path().to_path_buf().into_os_string())), None);
+        assert_eq!(e2e_sidecar_override(Some(std::ffi::OsString::new())), None);
+        assert_eq!(e2e_sidecar_override(None), None);
     }
 
     #[test]
