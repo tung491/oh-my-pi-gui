@@ -292,6 +292,9 @@ impl OllamaPuller {
 
     async fn run(&self, active: &Arc<ActivePull>) -> PullProgress {
         let mut aggregator = PullAggregator::new(active.tag.clone());
+        // One throttle for the whole pull: its state (last-sent time, pending
+        // frame) must survive across frames, not reset on every one.
+        let throttle = self.throttle_for(active);
         let base_url = (self.base_url)().await;
         let client = reqwest::Client::new();
         let response = match client
@@ -303,7 +306,7 @@ impl OllamaPuller {
         {
             Ok(response) => response,
             Err(error) => {
-                return self.finish(active, {
+                return self.finish(active, &throttle, {
                     let mut f = lock(&active.last).clone();
                     f.error = Some(super::probe::fault_text(&error));
                     f
@@ -314,7 +317,7 @@ impl OllamaPuller {
             let error = response_error(response).await;
             let mut frame = aggregator.frame();
             frame.error = Some(error);
-            return self.finish(active, frame);
+            return self.finish(active, &throttle, frame);
         }
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
@@ -328,22 +331,22 @@ impl OllamaPuller {
                 buffer = buffer[newline + 1..].to_string();
                 let Some(frame) = Self::apply_line(&mut aggregator, &line) else { continue };
                 if frame.error.is_some() || frame.done {
-                    return self.finish(active, frame);
+                    return self.finish(active, &throttle, frame);
                 }
-                self.emit(active, frame);
+                self.emit(active, &throttle, frame);
             }
         }
         let tail = Self::apply_line(&mut aggregator, buffer.trim());
         let final_frame = tail.unwrap_or_else(|| aggregator.frame());
         if final_frame.done || final_frame.error.is_some() {
-            return self.finish(active, final_frame);
+            return self.finish(active, &throttle, final_frame);
         }
         if active.cancelled.load(Ordering::SeqCst) {
             return lock(&active.last).clone();
         }
         let mut frame = final_frame;
         frame.error = Some("The download ended before Ollama reported success".to_string());
-        self.finish(active, frame)
+        self.finish(active, &throttle, frame)
     }
 
     fn apply_line(aggregator: &mut PullAggregator, line: &str) -> Option<PullProgress> {
@@ -357,21 +360,24 @@ impl OllamaPuller {
     }
 
     /// Throttled progress: the latest frame wins and goes out at most once per interval.
-    fn emit(&self, active: &Arc<ActivePull>, frame: PullProgress) {
+    fn emit(&self, active: &Arc<ActivePull>, throttle: &Throttle<PullProgress>, frame: PullProgress) {
         *lock(&active.last) = frame.clone();
         if active.cancelled.load(Ordering::SeqCst) {
             return;
         }
-        self.throttle_for(active).push(frame);
+        throttle.push(frame);
     }
 
-    /// Terminal frame: send it now regardless of throttling.
-    fn finish(&self, active: &Arc<ActivePull>, frame: PullProgress) -> PullProgress {
+    /// Terminal frame: send it now regardless of throttling. Routed through the
+    /// pull's own throttle (whose `is_terminal` always lets a terminal frame
+    /// through at once) so it also invalidates any frame still pending behind
+    /// the throttle's timer, instead of leaving it to go out stale afterwards.
+    fn finish(&self, active: &Arc<ActivePull>, throttle: &Throttle<PullProgress>, frame: PullProgress) -> PullProgress {
         if active.cancelled.load(Ordering::SeqCst) {
             return lock(&active.last).clone();
         }
         *lock(&active.last) = frame.clone();
-        self.send(active, frame.clone());
+        throttle.push(frame.clone());
         frame
     }
 
@@ -382,14 +388,15 @@ impl OllamaPuller {
             broadcast(&active, &sink, frame);
         })
     }
-
-    fn send(&self, active: &Arc<ActivePull>, frame: PullProgress) {
-        broadcast(active, &self.progress_sink, frame);
-    }
 }
 
-/// Every listener window of `active` hears `frame`.
+/// Every listener window of `active` hears `frame`. A throttle's pending frame
+/// is sent from a timer that can fire up to one interval after `cancel()`, so
+/// check again here rather than trusting the caller's earlier check.
 fn broadcast(active: &Arc<ActivePull>, sink: &ProgressSink, frame: PullProgress) {
+    if active.cancelled.load(Ordering::SeqCst) {
+        return;
+    }
     for win in lock(&active.listeners).iter() {
         sink(*win, frame.clone());
     }
@@ -433,6 +440,16 @@ mod tests {
 
     fn no_sink() -> ProgressSink {
         Arc::new(|_win, _frame| {})
+    }
+
+    /// A sink that forwards every frame (regardless of listener window) to a channel,
+    /// so a test can observe progress without racing a wall-clock sleep.
+    fn channel_sink() -> (ProgressSink, tokio::sync::mpsc::UnboundedReceiver<PullProgress>) {
+        let (progress_tx, progress_rx) = tokio::sync::mpsc::unbounded_channel();
+        let sink: ProgressSink = Arc::new(move |_win, frame| {
+            let _ = progress_tx.send(frame);
+        });
+        (sink, progress_rx)
     }
 
     fn immediate_base_url(url: String) -> BaseUrlFn {
@@ -510,11 +527,21 @@ mod tests {
             let _ = stream.shutdown().await;
         })
         .await;
-        let puller = OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::from_millis(100), no_sink());
-        let started = std::time::Instant::now();
-        let final_frame = puller.pull("qwen3:4b", None).await;
+        let (progress_sink, mut progress_rx) = channel_sink();
+        let puller = OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::from_millis(100), progress_sink);
+        let final_frame = puller.pull("qwen3:4b", Some(WindowId(1))).await;
         assert!(final_frame.done);
-        assert!(started.elapsed() < Duration::from_millis(100));
+
+        // `finish` sends the terminal frame synchronously, so everything the
+        // throttle has sent so far is already queued by the time `pull()`
+        // resolves; draining with `try_recv` (no further await) can't race the
+        // throttle's own background timer, which is still ~70ms away.
+        let mut frames = Vec::new();
+        while let Ok(frame) = progress_rx.try_recv() {
+            frames.push(frame);
+        }
+        assert!(frames.len() < 10, "throttling should coalesce the 50 updates into far fewer sent frames, got {}", frames.len());
+        assert_eq!(frames.last().map(|frame| frame.done), Some(true));
         fake.close().await;
     }
 
@@ -529,14 +556,26 @@ mod tests {
             }
         })
         .await;
-        let puller = Arc::new(OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::ZERO, no_sink()));
+        let (progress_sink, mut progress_rx) = channel_sink();
+        let puller = Arc::new(OllamaPuller::with_interval(immediate_base_url(fake.url.clone()), Duration::ZERO, progress_sink));
         let puller2 = puller.clone();
-        let pending = tokio::spawn(async move { puller2.pull("qwen3:8b", None).await });
+        let pending = tokio::spawn(async move { puller2.pull("qwen3:8b", Some(WindowId(1))).await });
         let (_body, mut stream) = rx.recv().await.expect("the pull request arrives");
         write_head_streaming(&mut stream, 200, "application/x-ndjson").await;
         let line = serde_json::json!({ "status": "pulling aaa", "digest": "aaa", "total": 1000, "completed": 250 });
         let _ = stream.write_all(format!("{line}\n").as_bytes()).await;
-        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        // Wait for the parser to have actually observed the frame before cancelling,
+        // instead of hoping a fixed sleep outlasts scheduling under load.
+        loop {
+            let frame = tokio::time::timeout(Duration::from_secs(5), progress_rx.recv())
+                .await
+                .expect("a progress frame arrives before the timeout")
+                .expect("the progress channel stays open");
+            if frame.status == "pulling aaa" {
+                break;
+            }
+        }
 
         puller.cancel();
         let final_frame = pending.await.expect("the pull task completes");
@@ -545,6 +584,7 @@ mod tests {
             PullProgress { tag: "qwen3:8b".to_string(), status: "pulling aaa".to_string(), completed: 250, total: 1000, percent: 25, done: false, error: None }
         );
         assert_eq!(puller.active_tag(), None);
+        assert!(matches!(progress_rx.try_recv(), Err(tokio::sync::mpsc::error::TryRecvError::Empty)));
         drop(stream);
 
         // Pulling again starts a fresh request (Ollama resumes from its kept layers).
