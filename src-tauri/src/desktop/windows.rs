@@ -47,6 +47,10 @@ pub(crate) enum WinEvent {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MainWindowSpec {
     pub win_id: WindowId,
+    /// The desired outer footprint (decorations included) — the same
+    /// quantity `bounds()` reports and `windowState` persists. A backend
+    /// that can only request a content size must correct for its own
+    /// decoration before the window counts as "at" this size.
     pub size: (f64, f64),
     pub position: Option<(f64, f64)>,
     pub maximize: bool,
@@ -128,7 +132,9 @@ pub(crate) trait Backend: Send + Sync {
     fn is_minimized(&self, id: WindowId) -> bool;
     fn is_maximized(&self, id: WindowId) -> bool;
     fn focused_window(&self) -> Option<WindowId>;
-    /// Outer position and inner size, in logical pixels.
+    /// The window's full footprint — outer position and outer size, in logical
+    /// pixels — matching what `windowState` persists and what Electron's
+    /// `getBounds()` reported for the same file.
     fn bounds(&self, id: WindowId) -> Option<Rect>;
     fn set_bounds(&self, id: WindowId, bounds: Rect);
     /// Work areas with the primary display first (the recentering target).
@@ -162,7 +168,9 @@ pub(crate) trait Backend: Send + Sync {
 // Saved geometry
 // ---------------------------------------------------------------------------
 
-/// `windowState` in `window-state.json`.
+/// `windowState` in `window-state.json`. `width`/`height` are the window's
+/// outer footprint (decorations included), the same quantity Electron's
+/// `getBounds()` saved to this file, so the two shells agree on a profile.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SavedWindowState {
@@ -596,7 +604,7 @@ mod tauri_backend {
 
     use super::{Backend, MainWindowSpec, MenuItemModel, QuickEntrySpec, WinEvent};
     use crate::desktop::quick_entry_core::QUICK_ENTRY_SIZE;
-    use crate::desktop::window_bounds::Rect;
+    use crate::desktop::window_bounds::{corrected_inner_size, Rect};
     use crate::desktop::{lock, menu, survive, tray, Desktop, Platform};
     use crate::ports::{CtxRef, WindowId, WindowKind};
     use crate::webview::{self, WindowSpec};
@@ -645,11 +653,25 @@ mod tauri_backend {
             }
         }
 
+        /// The window's full footprint (outer position and outer size), in
+        /// logical pixels — the quantity `windowState` persists.
         fn logical_rect(window: &WebviewWindow) -> Option<Rect> {
             let scale = window.scale_factor().ok()?;
             let position = window.outer_position().ok()?.to_logical::<f64>(scale);
-            let size = window.inner_size().ok()?.to_logical::<f64>(scale);
+            let size = window.outer_size().ok()?.to_logical::<f64>(scale);
             Some(Rect { x: position.x, y: position.y, width: size.width, height: size.height })
+        }
+
+        /// The window's content size and its full footprint, in logical
+        /// pixels. The gap between the two — GTK's client-side header bar
+        /// and shadow, or a title bar and border elsewhere — is only known
+        /// once the window exists, since the builder can only request a
+        /// content size (`WindowSpec::inner_size`).
+        fn content_and_outer_size(window: &WebviewWindow) -> Option<((f64, f64), (f64, f64))> {
+            let scale = window.scale_factor().ok()?;
+            let inner = window.inner_size().ok()?.to_logical::<f64>(scale);
+            let outer = window.outer_size().ok()?.to_logical::<f64>(scale);
+            Some(((inner.width, inner.height), (outer.width, outer.height)))
         }
 
         fn monitor_rect(monitor: &tauri::Monitor) -> Rect {
@@ -705,6 +727,15 @@ mod tauri_backend {
             }
             if spec.maximize {
                 let _ = window.maximize();
+            } else if let Some((probe_inner, probe_outer)) = Self::content_and_outer_size(&window) {
+                // `inner_size` above only requested a content size; `spec.size`
+                // is the desired outer footprint, so correct the content size
+                // once the window's real decoration is known, or a themed GTK
+                // header bar and shadow grow the window past what was saved.
+                let corrected = corrected_inner_size(spec.size, probe_inner, probe_outer);
+                if corrected != probe_inner {
+                    let _ = window.set_size(tauri::LogicalSize::new(corrected.0, corrected.1));
+                }
             }
             Ok(())
         }
@@ -950,7 +981,7 @@ pub(crate) mod fake {
     use std::sync::Mutex;
 
     use super::{Backend, MainWindowSpec, MenuItemModel, QuickEntrySpec};
-    use crate::desktop::window_bounds::Rect;
+    use crate::desktop::window_bounds::{corrected_inner_size, Rect};
     use crate::desktop::{lock, Platform};
     use crate::ports::WindowId;
     use crate::testing::CallLog;
@@ -984,6 +1015,13 @@ pub(crate) mod fake {
         pub argv: Mutex<Vec<String>>,
         pub env: Mutex<crate::desktop::wayland_portal::Env>,
         pub startup_urls: Mutex<Vec<String>>,
+        /// The scale factor applied to `decoration_physical` to get the
+        /// logical decoration a built window's outer footprint adds on top
+        /// of its requested content size (simulates GTK client-side
+        /// decorations on a HiDPI display). Defaults to no decoration at
+        /// scale 1, so every other test keeps today's exact pass-through.
+        pub scale: Mutex<f64>,
+        pub decoration_physical: Mutex<(f64, f64)>,
         /// When set, every main-window build fails with this message.
         pub build_failure: Mutex<Option<String>>,
         /// The context whose bridge a built window registers with, as `build_window` does.
@@ -1015,6 +1053,8 @@ pub(crate) mod fake {
                 argv: Mutex::new(vec!["sai-atlas".into()]),
                 env: Mutex::new([("XDG_SESSION_TYPE".to_string(), "x11".to_string())].into_iter().collect()),
                 startup_urls: Mutex::new(Vec::new()),
+                scale: Mutex::new(1.0),
+                decoration_physical: Mutex::new((0.0, 0.0)),
                 build_failure: Mutex::new(None),
                 ctx: Mutex::new(None),
                 on_destroy_tray: Mutex::new(None),
@@ -1041,6 +1081,21 @@ pub(crate) mod fake {
                 window.bounds.y = y;
             }
         }
+
+        /// Simulate window decoration: every window built from now on reports
+        /// an outer footprint `decoration_physical / scale` (logical) larger
+        /// than its requested content size, the way a GTK header bar and
+        /// shadow do on a real display.
+        pub(crate) fn set_decoration(&self, decoration_physical: (f64, f64), scale: f64) {
+            *lock(&self.decoration_physical) = decoration_physical;
+            *lock(&self.scale) = scale;
+        }
+
+        fn decoration_logical(&self) -> (f64, f64) {
+            let (width, height) = *lock(&self.decoration_physical);
+            let scale = *lock(&self.scale);
+            (width / scale, height / scale)
+        }
     }
 
     impl Backend for FakeBackend {
@@ -1059,9 +1114,18 @@ pub(crate) mod fake {
             self.log.record(format!("build_main_window({})", spec.win_id));
             self.register_with_bridge(crate::ports::Caller::main(spec.win_id));
             let (x, y) = spec.position.unwrap_or((100.0, 100.0));
+            // Mirror the real backend: `spec.size` is first requested as a
+            // content size, then corrected once the window's decoration is
+            // known so the realized outer footprint matches `spec.size`.
+            let decoration = self.decoration_logical();
+            let probe_inner = spec.size;
+            let probe_outer = (probe_inner.0 + decoration.0, probe_inner.1 + decoration.1);
+            let corrected_inner = corrected_inner_size(spec.size, probe_inner, probe_outer);
+            let outer = (corrected_inner.0 + decoration.0, corrected_inner.1 + decoration.1);
+            let size = if spec.maximize { spec.size } else { outer };
             lock(&self.windows).insert(
                 spec.win_id,
-                FakeWindow { visible: true, minimized: false, maximized: spec.maximize, bounds: Rect { x, y, width: spec.size.0, height: spec.size.1 } },
+                FakeWindow { visible: true, minimized: false, maximized: spec.maximize, bounds: Rect { x, y, width: size.0, height: size.1 } },
             );
             lock(&self.main_specs).push(spec);
             Ok(())
@@ -1341,6 +1405,36 @@ mod tests {
         desktop.persist_tab_layouts(&ctx);
         assert_eq!(ctx.prefs.get("tabLayouts").map(|v| v.as_array().map(Vec::len)), Some(Some(1)));
         assert_eq!(ctx.prefs.get("tabLayout"), None);
+    }
+
+    /// Save, restore, save again must be a fixed point: a window built from a
+    /// saved outer footprint must report that same footprint back, even on a
+    /// backend whose outer size is the content size plus a decoration (GTK's
+    /// client-side header bar and shadow), measured at a HiDPI scale factor.
+    #[test]
+    fn restoring_a_decorated_window_saves_the_same_outer_bounds_it_was_given() {
+        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        backend.set_decoration((104.0, 178.0), 2.0); // 52x89 logical, like the reported GTK drift.
+        let saved = json!({ "width": 1452.0, "height": 989.0, "x": 0.0, "y": 0.0, "isMaximized": false });
+        ctx.window_state.set(WINDOW_STATE_KEY, saved.clone()).unwrap();
+
+        let id = desktop.spawn_window(None, None, None).unwrap();
+        desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
+
+        assert_eq!(saved_state_value(&ctx), Some(saved), "no window move or resize happened; the saved bounds must not drift");
+    }
+
+    #[test]
+    fn restoring_an_undecorated_window_is_unaffected_by_the_correction() {
+        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let saved = json!({ "width": 1400.0, "height": 900.0, "x": 10.0, "y": 20.0, "isMaximized": false });
+        ctx.window_state.set(WINDOW_STATE_KEY, saved.clone()).unwrap();
+
+        let id = desktop.spawn_window(None, None, None).unwrap();
+        desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
+
+        assert_eq!(saved_state_value(&ctx), Some(saved));
+        assert!(backend.main_specs.lock().unwrap().iter().any(|spec| spec.size == (1400.0, 900.0)));
     }
 
     #[test]
