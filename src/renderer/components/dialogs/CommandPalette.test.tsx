@@ -189,6 +189,22 @@ describe("panel keyboard handling", () => {
 		await keyDown(rows()[3], "Escape");
 		expect(useUiStore.getState().commandPaletteOpen).toBe(false);
 	});
+
+	it("still goes back and then closes on Escape after focus fell out of the panel", async () => {
+		// Switching levels unmounts the focused row, and Chromium then parks focus
+		// on <body>, outside the panel. Escape must keep working from there.
+		seedTab("agent");
+		await mount();
+		await click(rowByLabel(translate("cmd.security")));
+		expect(rows().some(row => row.getAttribute("data-command-kind") === "submenu")).toBe(false);
+
+		await keyDown(document.body as unknown as TestElement, "Escape");
+		expect(useUiStore.getState().commandPaletteOpen).toBe(true);
+		expect(rows().some(row => row.getAttribute("data-command-name") === "security")).toBe(true);
+
+		await keyDown(document.body as unknown as TestElement, "Escape");
+		expect(useUiStore.getState().commandPaletteOpen).toBe(false);
+	});
 });
 
 describe("row execution", () => {

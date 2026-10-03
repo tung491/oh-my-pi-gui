@@ -7,7 +7,7 @@ import { useRuntimeTabId } from "../../stores/session-runtime-context";
  */
 
 import { Check, ChevronRight, CornerDownLeft, History, Search, Slash, X } from "lucide-react";
-import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AvailableCommand } from "../../../shared/rpc-types";
 import { hydrateSession, hydrateTabSession } from "../../hooks/use-rpc-events";
 import { newSessionNow } from "../../hooks/use-session-switch";
@@ -191,6 +191,8 @@ export function CommandPalette() {
 	const listRef = useRef<HTMLDivElement>(null);
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const fetchSeq = useRef(0);
+	/** This render's palette key handler; returns whether it consumed the key. */
+	const keyHandlerRef = useRef<(event: KeyboardEvent) => boolean>(() => false);
 
 	const refreshCommands = useCallback(() => {
 		const seq = ++fetchSeq.current;
@@ -234,7 +236,17 @@ export function CommandPalette() {
 		setSubmenu(null);
 		requestAnimationFrame(() => inputRef.current?.focus());
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key !== "Tab") return;
+			if (event.key !== "Tab") {
+				// Listened for on the document, not the panel: switching levels unmounts
+				// the focused row and the browser parks focus on <body>, outside the
+				// panel, where a panel-bound handler no longer hears Escape or arrows.
+				if (isImeKeyEvent(event) || !isTopmostDialog(panel)) return;
+				if (!keyHandlerRef.current(event)) return;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				event.stopPropagation();
+				return;
+			}
 			if (!panel) return;
 			const focusables = [
 				...panel.querySelectorAll<HTMLElement>("button, input, [tabindex]:not([tabindex='-1'])"),
@@ -473,10 +485,11 @@ export function CommandPalette() {
 				return;
 			}
 			if (item.affordance.kind === "submenu") {
+				// Focus first: the clicked row unmounts with the level switch.
+				inputRef.current?.focus();
 				setSubmenu(item);
 				setQuery("");
 				setActiveIndex(0);
-				requestAnimationFrame(() => inputRef.current?.focus());
 				return;
 			}
 			// Argument-taking commands never run blind: fill the composer with the
@@ -507,40 +520,39 @@ export function CommandPalette() {
 		[flatList, sidecarReady],
 	);
 
-	// Bound to the dialog panel, not the input: after clicking a row, focus sits
-	// on that button, and Escape/arrow keys held only by the input stop working.
-	const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-		if (isImeKeyEvent(event)) return;
+	/** Back to the top level, focusing the search input before the focused row unmounts. */
+	const leaveSubmenu = () => {
+		inputRef.current?.focus();
+		setSubmenu(null);
+	};
+
+	keyHandlerRef.current = (event: KeyboardEvent): boolean => {
 		switch (event.key) {
 			case "ArrowDown":
-				event.preventDefault();
 				step(1);
-				break;
+				return true;
 			case "ArrowUp":
-				event.preventDefault();
 				step(-1);
-				break;
+				return true;
 			case "ArrowLeft":
-				if (submenu) {
-					event.preventDefault();
-					setSubmenu(null);
-					setActiveIndex(0);
-				}
-				break;
+				if (!submenu) return false;
+				leaveSubmenu();
+				setActiveIndex(0);
+				return true;
 			case "Enter": {
 				// The input owns Enter. A focused row button already activates itself
 				// on Enter, so running the selection here too would execute twice.
-				if (event.target !== inputRef.current) break;
-				event.preventDefault();
+				if (event.target !== inputRef.current) return false;
 				const item = flatList[activeIndex];
 				if (item) execute(item);
-				break;
+				return true;
 			}
 			case "Escape":
-				event.preventDefault();
-				if (submenu) setSubmenu(null);
+				if (submenu) leaveSubmenu();
 				else close();
-				break;
+				return true;
+			default:
+				return false;
 		}
 	};
 
@@ -660,7 +672,6 @@ export function CommandPalette() {
 				aria-label={t("palette.searchLabel")}
 				aria-modal="true"
 				className="omp-dialog-panel omp-dialog-size-picker overflow-hidden rounded-[14px] border border-(--omp-modal-border) bg-(--omp-modal-bg) shadow-(--omp-shadow-lg)"
-				onKeyDown={onKeyDown}
 				ref={dialogRef}
 				role="dialog"
 			>
@@ -668,7 +679,7 @@ export function CommandPalette() {
 					{submenu && (
 						<button
 							type="button"
-							onClick={() => setSubmenu(null)}
+							onClick={leaveSubmenu}
 							className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-omp-sm font-medium text-(--omp-accent) hover:bg-(--omp-bg-tertiary)"
 						>
 							<X size={11} />
