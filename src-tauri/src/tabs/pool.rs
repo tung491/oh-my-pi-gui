@@ -108,11 +108,21 @@ struct Entry {
     full_wired: bool,
     /// The pool has started (or resumed) this tab's process.
     started: bool,
+    /// User `bash` (`!`) and `eval` (`$`) RPC requests awaiting their response.
+    /// Only the quit guard's inventory reads it: tab status and idle-session
+    /// routing follow the agent run alone.
+    user_execs: usize,
 }
 
 impl Entry {
     fn in_flight(&self) -> bool {
         self.running || self.compacting == Some(true)
+    }
+
+    /// Whether quitting now would interrupt work: an agent run, a compaction or
+    /// a user shell or eval command still awaiting its response.
+    fn working(&self) -> bool {
+        self.in_flight() || self.user_execs > 0
     }
 
     /// The `tab:status` push and `tab:get-all` item: a full tab snapshot including cached session meta.
@@ -633,6 +643,7 @@ impl SidecarPool {
                 session_file: None,
                 full_wired: false,
                 started: false,
+                user_execs: 0,
             });
             state.by_tab_id.insert(tab_id.clone(), key);
             let index = state.entries.len() - 1;
@@ -915,15 +926,30 @@ impl SidecarPool {
         self.read(|state| state.tabs_for_window(win_id))
     }
 
-    /// What every live tab is doing: the quit guard's inventory.
+    /// What every live tab is doing: the quit guard's inventory. A tab counts
+    /// as working during an agent run or compaction, and also while a user
+    /// `bash` or `eval` command it issued is running. Those commands emit no
+    /// agent events, so the agent run state alone would let a quit kill them
+    /// unasked; `sidecar-pool.ts` reports only the agent run state.
     pub(crate) fn tab_inventory(&self) -> Vec<WindowTabFact> {
         self.read(|state| {
             state
                 .entries
                 .iter()
-                .map(|entry| WindowTabFact { window_id: entry.win_id, tab_id: entry.tab_id.clone(), in_flight: entry.in_flight() })
+                .map(|entry| WindowTabFact { window_id: entry.win_id, tab_id: entry.tab_id.clone(), in_flight: entry.working() })
                 .collect()
         })
+    }
+
+    /// Count a user `bash` or `eval` request of `tab_id` as running work until
+    /// the returned guard drops; `None` when the tab is unknown. Take it before
+    /// the request is sent and hold it until its response settles.
+    pub(crate) fn begin_user_exec(&self, tab_id: &str) -> Option<UserExecGuard> {
+        let mut state = lock(&self.inner.state);
+        let index = state.index_of_tab(tab_id)?;
+        let entry = &mut state.entries[index];
+        entry.user_execs += 1;
+        Some(UserExecGuard { pool: Arc::downgrade(&self.inner), key: entry.key })
     }
 
     pub(crate) fn tab_layout_for_window(&self, win_id: WindowId) -> Option<PersistedTabLayout> {
@@ -1001,6 +1027,26 @@ impl SidecarPool {
     fn wiring(&self, tab_id: &str) -> usize {
         // TS counted "events" listeners: the light wiring is always on, full wiring adds one.
         self.read(|state| state.entry_for_tab(tab_id).map_or(0, |entry| 1 + usize::from(entry.full_wired)))
+    }
+}
+
+/// One in-flight user `bash` or `eval` request. Dropping it (response, delivery
+/// error, timeout or a cancelled reply) gives the count back exactly once. A
+/// released tab or a disposed pool has nothing left to decrement, and the entry
+/// key is never reused, so a later tab with the same id is not affected.
+pub(crate) struct UserExecGuard {
+    pool: Weak<Inner>,
+    key: u64,
+}
+
+impl Drop for UserExecGuard {
+    fn drop(&mut self) {
+        let Some(inner) = self.pool.upgrade() else { return };
+        let mut state = lock(&inner.state);
+        if let Some(index) = state.index_of_key(self.key) {
+            let entry = &mut state.entries[index];
+            entry.user_execs = entry.user_execs.saturating_sub(1);
+        }
     }
 }
 
