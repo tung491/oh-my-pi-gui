@@ -204,7 +204,8 @@ pub fn navigation_allowed(candidate: &Url, page: &str, dev_url: Option<&Url>, de
     if candidate.scheme() == "blob" {
         return download_allowed(&candidate, dev_url, debug);
     }
-    let path_ok = candidate.path() == format!("/{page}") || (page == "index.html" && candidate.path() == "/");
+    // Tauri loads the main page as `tauri://localhost`, whose path is empty, not `/`.
+    let path_ok = candidate.path() == format!("/{page}") || (page == "index.html" && matches!(candidate.path(), "" | "/"));
     path_ok && is_app_origin(&candidate, dev_url, debug)
 }
 
@@ -713,6 +714,7 @@ mod tests {
         assert!(navigation_allowed(&url("tauri://localhost/index.html#top"), "index.html", None, false));
         assert!(navigation_allowed(&url("tauri://localhost/quick-entry.html"), "quick-entry.html", None, false));
         assert!(navigation_allowed(&url("tauri://localhost/"), "index.html", None, false));
+        assert!(navigation_allowed(&url("tauri://localhost"), "index.html", None, false));
     }
 
     #[test]
@@ -746,6 +748,7 @@ mod tests {
         assert!(!navigation_allowed(&url("tauri://evil/index.html"), "index.html", None, false));
         // The bar must not load the chat page and vice versa.
         assert!(!navigation_allowed(&url("tauri://localhost/index.html"), "quick-entry.html", None, false));
+        assert!(!navigation_allowed(&url("tauri://localhost"), "quick-entry.html", None, false));
     }
 
     #[test]
