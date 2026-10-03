@@ -104,6 +104,25 @@ function pgrep(args: string[]): number[] {
 		.filter(pid => Number.isInteger(pid) && pid !== process.pid);
 }
 
+/** Live processes whose environment names this run's directory (every launch's descendants), the runner excluded. */
+function startedByRun(dir: string): Array<{ pid: number; command: string }> {
+	const found: Array<{ pid: number; command: string }> = [];
+	for (const entry of fs.readdirSync("/proc")) {
+		const pid = Number(entry);
+		if (!Number.isInteger(pid) || pid === process.pid) continue;
+		try {
+			const environ = fs.readFileSync(`/proc/${pid}/environ`, "utf8").split("\0");
+			if (!environ.includes(`${RUN_DIR_ENV}=${dir}`)) continue;
+			if (fs.readFileSync(`/proc/${pid}/stat`, "utf8").includes(") Z ")) continue;
+			const command = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").join(" ").trim();
+			found.push({ pid, command });
+		} catch {
+			// gone, or not ours to read
+		}
+	}
+	return found;
+}
+
 /** Processes whose command line carries this run's profile root: only apps we launched. */
 function appProcesses(dir: string): number[] {
 	const literal = dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -216,8 +235,9 @@ export const config: WebdriverIO.Config = {
 	},
 
 	onComplete: async () => {
-		if (runDir) {
-			for (const pid of appProcesses(runDir)) await stop(pid, "app");
+		const dir = runDir;
+		if (dir) {
+			for (const pid of appProcesses(dir)) await stop(pid, "app");
 		}
 		if (driver?.pid) {
 			const natives = pgrep(["-P", String(driver.pid)]);
@@ -225,9 +245,19 @@ export const config: WebdriverIO.Config = {
 			for (const pid of natives) await stop(pid, "WebKitWebDriver");
 		}
 		driver = null;
-		if (runDir) {
-			await fsp.rm(runDir, { recursive: true, force: true });
+		// Anything still carrying this run's directory in its environment was
+		// started by a launch and outlived it (a sidecar, a stats server, a tool):
+		// stop it, then fail the run, because the app should never leave it behind.
+		const leftovers = dir ? startedByRun(dir) : [];
+		for (const leftover of leftovers) await stop(leftover.pid, "leftover");
+		if (dir) {
+			await fsp.rm(dir, { recursive: true, force: true });
 			runDir = null;
+		}
+		if (leftovers.length > 0) {
+			throw new Error(
+				`processes outlived the run and were stopped:\n${leftovers.map(item => `${item.pid} ${item.command}`).join("\n")}`,
+			);
 		}
 	},
 };
