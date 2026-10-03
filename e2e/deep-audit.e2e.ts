@@ -3,6 +3,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron } from "playwright";
+import { keyboardPlatformOf } from "../src/renderer/lib/keymap";
+import { effectiveShortcut } from "../src/renderer/lib/shortcut-hint";
 import type { SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
 import { writeDesktopPrefs } from "./desktop-prefs";
 
@@ -571,7 +573,8 @@ async function mutateEntry(
 				await add.click();
 				const changed = await readSetting(page, entry.path);
 				if (!changed || typeof changed !== "object" || Array.isArray(changed) || equalJson(changed, initial)) {
-					await page.keyboard.press("Escape");
+					// Escape only dismisses an open picker; with none open it closes the whole Settings window.
+					if ((await page.locator('[role="listbox"]').count()) > 0) await page.keyboard.press("Escape");
 					return {
 						write: "skipped-no-control",
 						readback: "not-run",
@@ -708,6 +711,8 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 		// Exercise every schema entry that the GUI claims to support. TUI-only and
 		// metadata-less entries remain explicit rows in the matrix instead of being silently dropped.
 		for (const entry of schema.entries) {
+			// A row that closed the window fails itself instead of every row after it.
+			await expect(settings).toBeVisible();
 			let initial = currentValues[entry.path] ?? entry.value;
 			const isTuiOnly = entry.tuiOnly === true;
 			const isTerminalOnly = TERMINAL_DISPLAY_PATHS.has(entry.path);
@@ -811,8 +816,9 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 		await expect(page.getByRole("dialog")).toBeVisible();
 		await page.keyboard.press("Escape");
 		await expect(page.getByRole("dialog")).toHaveCount(0);
+		// The chip spells the palette's chords in the host's form: glyphs on macOS, text elsewhere.
 		await expect(page.locator('button[data-command-center-entry="true"]').first().locator("kbd")).toContainText(
-			"⌘K / ⌃K",
+			effectiveShortcut("palette", {}, keyboardPlatformOf(process.platform)),
 		);
 		await page.locator('button[data-command-center-entry="true"]').first().click();
 		const palette = page.getByRole("dialog");
