@@ -180,7 +180,7 @@ function RoleRow({
 					title={!sidecarReady ? t("modelRoles.notConnected") : undefined}
 					type="button"
 				>
-					<span className="min-w-0 flex-1 truncate font-mono">{currentLabel}</span>
+					<span className="min-w-0 flex-1 truncate">{currentLabel}</span>
 					<ChevronDown className="shrink-0 text-[var(--omp-dim)]" size={12} />
 				</button>
 				{open && (
@@ -270,7 +270,7 @@ function RoleRow({
 											type="button"
 										>
 											<span className="min-w-0 flex-1 truncate">{model.name}</span>
-											<span className="ml-2 shrink-0 font-mono text-omp-xs text-[var(--omp-dim)]">
+											<span className="ml-2 shrink-0 text-omp-xs text-[var(--omp-dim)]">
 												{model.provider}/{model.id}
 											</span>
 										</button>

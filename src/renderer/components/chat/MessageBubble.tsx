@@ -523,9 +523,7 @@ export const MessageBubble = memo(function MessageBubble({
 						<span className="shrink-0 text-omp-md font-semibold text-(--omp-text)">
 							{t("chat.assistantName")}
 						</span>
-						{headerMeta && (
-							<span className="min-w-0 truncate font-mono text-omp-sm text-(--omp-muted)">{headerMeta}</span>
-						)}
+						{headerMeta && <span className="min-w-0 truncate text-omp-sm text-(--omp-muted)">{headerMeta}</span>}
 					</div>
 				)}
 				{customLabel && (

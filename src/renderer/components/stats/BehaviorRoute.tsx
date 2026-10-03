@@ -84,7 +84,7 @@ export function BehaviorRoute({ range, refreshKey }: { range: StatsRange; refres
 				label: t("stats.col.model"),
 				render: row => (
 					<span>
-						<span className="block font-mono font-medium text-(--omp-text)">{row.model}</span>
+						<span className="block font-medium text-(--omp-text)">{row.model}</span>
 						<span className="block text-omp-xs text-(--omp-dim)">{row.provider}</span>
 					</span>
 				),

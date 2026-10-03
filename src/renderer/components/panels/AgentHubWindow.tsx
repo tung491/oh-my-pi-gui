@@ -275,7 +275,7 @@ const DefinitionRow = memo(function DefinitionRow({
 						</span>
 					) : (
 						<>
-							<span className={override ? "font-mono text-(--omp-text)" : "text-(--omp-dim)"}>
+							<span className={override ? "text-(--omp-text)" : "text-(--omp-dim)"}>
 								{override ?? t("agentHub.defs.modelSession")}
 							</span>
 							<Button disabled={busy} onClick={() => onBeginModelEdit(entry.name)} size="sm" variant="ghost">
@@ -593,7 +593,7 @@ const HubRow = memo(function HubRow({
 					{lastUpdate && <span className="min-w-0 truncate text-(--omp-dim)">{lastUpdate}</span>}
 				</span>
 			</span>
-			<span className="min-w-0 truncate font-mono text-omp-sm text-(--omp-dim)" role="cell" title={model}>
+			<span className="min-w-0 truncate text-omp-sm text-(--omp-dim)" role="cell" title={model}>
 				{model ?? "—"}
 			</span>
 			<span className="font-mono text-omp-sm font-medium text-(--omp-text) tabular-nums" role="cell">

@@ -354,10 +354,7 @@ export function ModelPicker() {
 											)}
 										</div>
 										{((model.name && model.name !== model.id) || model.description) && (
-											<span
-												className="truncate font-mono text-omp-sm text-(--omp-muted)"
-												title={model.description}
-											>
+											<span className="truncate text-omp-sm text-(--omp-muted)" title={model.description}>
 												{[model.name && model.name !== model.id ? model.id : null, model.description]
 													.filter(Boolean)
 													.join(" · ")}
