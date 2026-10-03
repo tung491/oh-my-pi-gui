@@ -12,7 +12,9 @@ use crate::i18n::MainTextKey;
 use crate::paths;
 use crate::ports::{Caller, IpcTabViewSplit, OpenDialogOptions, SidecarHandle, SidecarStatus};
 
+use super::pool::UserExecGuard;
 use super::tab_spawn::{spawn_tab_for_window, SpawnTabDeps};
+use super::Tabs;
 
 /// The payload: every channel of this module takes at most one argument.
 fn payload(args: &[Value]) -> &Value {
@@ -117,10 +119,14 @@ fn dispatch_rpc_command(
     let timeout_ms = payload.get("timeoutMs").and_then(Value::as_f64).filter(|ms| ms.is_finite() && *ms > 0.0).map(|ms| ms as u64);
     let id = id.cloned();
     let command = command.clone();
+    // Counted before the send, so the quit guard never sees a gap; the future owns it.
+    let user_exec = issuer_tab_id.as_deref().and_then(|issuer| begin_user_exec(ctx, &command, issuer));
     let response = sidecar.request(command.clone(), timeout_ms);
     let ctx = Arc::clone(ctx);
     Reply::Later(Box::pin(async move {
-        match response.await {
+        let response = response.await;
+        drop(user_exec);
+        match response {
             Ok(response) => {
                 if let Some(issuer) = issuer_tab_id.as_deref() {
                     note_passthrough(&ctx, caller, issuer, &command, &response);
@@ -130,6 +136,23 @@ fn dispatch_rpc_command(
             Err(error) => Ok(failed_response(id.as_ref(), json!({ "code": "rpc_delivery_unknown", "error": error.to_string() }))),
         }
     }))
+}
+
+/// Commands that run user code until their response: the sidecar's `bash` and
+/// `eval` handlers await the whole run, so the response marks its end.
+const USER_EXEC_COMMANDS: &[&str] = &["bash", "eval"];
+
+/// Count a composer `!` (`bash`) or `$` (`eval`) command as running work for
+/// the quit guard until the returned guard drops. These commands emit no agent
+/// events, so without this a quit would kill them without asking. The count
+/// ends when the response settles: with the reply, a delivery error, the
+/// sidecar going away, the tab being released, or the renderer's request
+/// timeout (a run that outlives `timeoutMs` stops counting early).
+fn begin_user_exec(ctx: &AppCtx, command: &Value, issuer: &str) -> Option<UserExecGuard> {
+    if !str_field(command, "type").is_some_and(|kind| USER_EXEC_COMMANDS.contains(&kind)) {
+        return None;
+    }
+    ctx.tabs.as_any().downcast_ref::<Tabs>()?.pool.begin_user_exec(issuer)
 }
 
 /// The session-ownership facts the passthrough carries: a successful
@@ -449,8 +472,9 @@ pub fn sidecar_status_get(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -
 mod tests {
     use super::*;
     use crate::bridge::{dispatch_for_test, Registry};
-    use crate::ports::{AcquireOptions, SidecarError, SidecarEvent, WindowId, WindowRecord};
+    use crate::ports::{AcquireOptions, SidecarError, SidecarEvent, TabStatus, WindowId, WindowRecord};
     use crate::tabs::Tabs;
+    use futures_util::future::BoxFuture;
     use crate::testing::{fake_ctx_cyclic, FakeSidecar, Fakes, RecordingSink};
 
     const WIN: WindowId = WindowId(1);
@@ -575,6 +599,138 @@ mod tests {
         // An unknown tab has no sidecar.
         let unknown = h.ok("rpc:command-for-tab", vec![json!({ "tabId": "nope", "command": { "id": "9", "type": "get_state" } })]).await;
         assert_eq!(unknown["error"], json!("Sidecar not connected"));
+    }
+
+    /// Dispatch `command` through `rpc:command` without polling the reply, as a
+    /// pending sidecar request: the fake answers only once the future is awaited.
+    fn pending_rpc(h: &Harness, command: Value) -> BoxFuture<'static, Result<Value, IpcError>> {
+        match rpc_command(&h.ctx, Caller::main(WIN), vec![json!({ "command": command })]) {
+            Reply::Later(pending) => pending,
+            Reply::Ready(answer) => panic!("expected a pending reply, got {answer:?}"),
+        }
+    }
+
+    /// The quit guard's view of `tab_id`.
+    fn working(h: &Harness, tab_id: &str) -> bool {
+        h.ctx.tabs.tab_inventory().iter().any(|fact| fact.tab_id == tab_id && fact.in_flight)
+    }
+
+    fn tab_status(h: &Harness, tab_id: &str) -> Option<TabStatus> {
+        h.ctx.tabs.tabs_for_window(WIN).into_iter().find(|tab| tab.tab_id == tab_id).map(|tab| tab.status)
+    }
+
+    /// A user command counts its tab as working only until its reply settles,
+    /// and never touches the status the renderer shows.
+    async fn assert_user_command_counts_until_its_reply(command: Value) {
+        let h = harness();
+        h.ready_tab("/a", "tab-a").set_status(SidecarStatus::Ready);
+        settle().await;
+        assert_eq!(tab_status(&h, "tab-a"), Some(TabStatus::Ready));
+        let status_pushes = h.sent("tab:status").len();
+        assert!(!working(&h, "tab-a"));
+
+        let reply = pending_rpc(&h, command.clone());
+        assert!(working(&h, "tab-a"), "{command} counts while its reply is pending");
+        assert_eq!(tab_status(&h, "tab-a"), Some(TabStatus::Ready), "the renderer-visible status stays ready");
+        assert_eq!(h.sent("tab:status").len(), status_pushes, "no tab status push");
+
+        assert_eq!(reply.await.unwrap(), json!({ "success": true }));
+        assert!(!working(&h, "tab-a"), "{command} stops counting once its reply settles");
+    }
+
+    #[tokio::test]
+    async fn a_pending_bash_command_counts_its_tab_as_working_until_the_reply_settles() {
+        assert_user_command_counts_until_its_reply(json!({ "id": "b", "type": "bash", "command": "sleep 600" })).await;
+    }
+
+    #[tokio::test]
+    async fn a_pending_eval_command_counts_its_tab_as_working_until_the_reply_settles() {
+        assert_user_command_counts_until_its_reply(json!({ "id": "e", "type": "eval", "code": "import time; time.sleep(600)" })).await;
+    }
+
+    #[tokio::test]
+    async fn a_failed_or_undelivered_bash_command_stops_counting() {
+        let h = harness();
+        let sidecar = h.ready_tab("/a", "tab-a");
+
+        sidecar.responses.lock().unwrap().push(Ok(json!({ "type": "response", "command": "bash", "success": false, "error": "boom" })));
+        let failed = pending_rpc(&h, json!({ "id": "1", "type": "bash", "command": "false" }));
+        assert!(working(&h, "tab-a"));
+        assert_eq!(failed.await.unwrap()["success"], json!(false));
+        assert!(!working(&h, "tab-a"));
+
+        sidecar.responses.lock().unwrap().push(Err(SidecarError::Timeout { timeout_ms: 660_000, command_type: "bash".into() }));
+        let timed_out = pending_rpc(&h, json!({ "id": "2", "type": "bash", "command": "sleep 900" }));
+        assert!(working(&h, "tab-a"));
+        assert_eq!(timed_out.await.unwrap()["code"], json!("rpc_delivery_unknown"));
+        assert!(!working(&h, "tab-a"));
+
+        // A reply nobody awaits any more (the renderer went away) gives the count back too.
+        let abandoned = pending_rpc(&h, json!({ "id": "3", "type": "bash", "command": "sleep 600" }));
+        assert!(working(&h, "tab-a"));
+        drop(abandoned);
+        assert!(!working(&h, "tab-a"));
+    }
+
+    #[tokio::test]
+    async fn concurrent_user_commands_count_until_the_last_reply_settles() {
+        let h = harness();
+        h.ready_tab("/a", "tab-a");
+        let shell = pending_rpc(&h, json!({ "id": "1", "type": "bash", "command": "sleep 600" }));
+        let python = pending_rpc(&h, json!({ "id": "2", "type": "eval", "code": "1" }));
+        shell.await.unwrap();
+        assert!(working(&h, "tab-a"), "the eval is still pending");
+        python.await.unwrap();
+        assert!(!working(&h, "tab-a"));
+    }
+
+    #[tokio::test]
+    async fn a_pending_bash_command_does_not_leak_its_count_past_its_tab_or_pool() {
+        let h = harness();
+        h.ready_tab("/a", "tab-a");
+        let reply = pending_rpc(&h, json!({ "id": "1", "type": "bash", "command": "sleep 600" }));
+        assert!(working(&h, "tab-a"));
+
+        // The tab closes mid-command: it leaves the inventory, and a new tab
+        // reusing its id starts idle and stays idle when the old reply settles.
+        assert!(h.ctx.tabs.release_tab("tab-a"));
+        assert!(h.ctx.tabs.tab_inventory().is_empty());
+        h.ready_tab("/a", "tab-a");
+        assert!(!working(&h, "tab-a"));
+        reply.await.unwrap();
+        assert!(!working(&h, "tab-a"));
+        let next = pending_rpc(&h, json!({ "id": "2", "type": "bash", "command": "true" }));
+        next.await.unwrap();
+        assert!(!working(&h, "tab-a"), "the count is back at zero, not below it");
+
+        // The whole pool is disposed mid-command.
+        let reply = pending_rpc(&h, json!({ "id": "3", "type": "bash", "command": "sleep 600" }));
+        h.ctx.tabs.dispose_all().await;
+        assert!(h.ctx.tabs.tab_inventory().is_empty());
+        reply.await.unwrap();
+        h.ready_tab("/b", "tab-b");
+        assert!(!working(&h, "tab-b"));
+    }
+
+    #[tokio::test]
+    async fn read_only_and_control_commands_never_count_as_working() {
+        let h = harness();
+        h.ready_tab("/a", "tab-a");
+        for (id, kind) in [("1", "get_state"), ("2", "abort_bash"), ("3", "abort_eval"), ("4", "get_messages")] {
+            let reply = pending_rpc(&h, json!({ "id": id, "type": kind }));
+            assert!(!working(&h, "tab-a"), "{kind} must not count");
+            reply.await.unwrap();
+        }
+        // A bash sent to a tab of the window by id counts that tab.
+        let b = h.ready_tab("/b", "tab-b");
+        let reply = match rpc_command_for_tab(&h.ctx, Caller::main(WIN), vec![json!({ "tabId": "tab-b", "command": { "id": "5", "type": "bash", "command": "ls" } })]) {
+            Reply::Later(pending) => pending,
+            Reply::Ready(answer) => panic!("expected a pending reply, got {answer:?}"),
+        };
+        assert!(working(&h, "tab-b") && !working(&h, "tab-a"));
+        reply.await.unwrap();
+        assert!(!working(&h, "tab-b"));
+        assert_eq!(calls(&b, "request(").len(), 1);
     }
 
     #[tokio::test]
