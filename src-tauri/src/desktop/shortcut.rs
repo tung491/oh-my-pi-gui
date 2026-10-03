@@ -15,16 +15,24 @@ use super::shortcut_core::{
     chord_to_accelerator, plan_shortcut_update, sanitize_shortcut_pref, saved_chord_replaced, shortcut_state, ChordRejection,
     QuickEntryShortcutPref, QuickEntryShortcutState, ShortcutMode, ShortcutPlan, ShortcutStateInput,
 };
+#[cfg(target_os = "linux")]
+use super::gnome_keybindings::{find_conflict, parse_portal_trigger, GnomeBinding};
 use super::{lock, Platform};
 use crate::ports::WindowId;
 use crate::runtime_log;
 
 pub(crate) type Activation = Arc<dyn Fn() + Send + Sync>;
 
+/// Stable ids for the portal: GNOME stores each binding under its id, so an id
+/// must name the action, never a position that a new shortcut would shift.
+pub(crate) const QUICK_ENTRY_SHORTCUT_ID: &str = "quick-entry";
+pub(crate) const TOGGLE_WINDOW_SHORTCUT_ID: &str = "toggle-window";
+
 /// The grab calls the shortcut makes: the plugin or the portal in the app, a fake in tests.
 pub(crate) trait ShortcutRegistry: Send + Sync {
-    /// `Ok(true)` registered (or requested), `Ok(false)` refused by the system, `Err` could not even be parsed.
-    fn register(&self, accelerator: &str, callback: Activation) -> Result<bool, String>;
+    /// Grab `accelerator` for the action `id`. `Ok(true)` registered (or
+    /// requested), `Ok(false)` refused by the system, `Err` could not even be parsed.
+    fn register(&self, id: &str, accelerator: &str, callback: Activation) -> Result<bool, String>;
     fn unregister(&self, accelerator: &str) -> Result<(), String>;
     /// Native only: stop handling while a shortcuts recorder captures keys.
     fn set_suspended(&self, suspended: bool);
@@ -246,7 +254,7 @@ impl QuickEntryShortcut {
     /// A registry that cannot parse the accelerator fails rather than refusing;
     /// either way the chord is not registered, and startup must go on.
     fn register(self: &Arc<Self>, accelerator: &str) -> bool {
-        match self.deps.registry.register(accelerator, self.activation()) {
+        match self.deps.registry.register(QUICK_ENTRY_SHORTCUT_ID, accelerator, self.activation()) {
             Ok(registered) => registered,
             Err(error) => {
                 (self.deps.log)(&format!("globalShortcut.register threw for {accelerator}"), json!({ "accelerator": accelerator, "error": error }));
@@ -297,7 +305,7 @@ impl PluginShortcutRegistry {
 }
 
 impl ShortcutRegistry for PluginShortcutRegistry {
-    fn register(&self, accelerator: &str, callback: Activation) -> Result<bool, String> {
+    fn register(&self, _id: &str, accelerator: &str, callback: Activation) -> Result<bool, String> {
         let suspended = *lock(&self.suspended);
         if !suspended {
             if let Err(error) = self.grab(accelerator, callback.clone()) {
@@ -349,11 +357,12 @@ impl ShortcutRegistry for PluginShortcutRegistry {
 
 /// Translate a plugin accelerator (`Control+Shift+Space`) into the portal's
 /// trigger description (`CTRL+SHIFT+space`: XDG modifiers and XKB keysym names).
+/// The portal only exists on Linux, where `CommandOrControl` means Control.
 pub(crate) fn accelerator_to_portal_trigger(accelerator: &str) -> String {
     accelerator
         .split('+')
         .map(|part| match part {
-            "Control" | "Ctrl" => "CTRL".to_string(),
+            "Control" | "Ctrl" | "CommandOrControl" | "CmdOrCtrl" | "CommandOrCtrl" | "CmdOrControl" => "CTRL".to_string(),
             "Alt" | "Option" => "ALT".to_string(),
             "Shift" => "SHIFT".to_string(),
             "Super" | "Command" | "Meta" => "LOGO".to_string(),
@@ -384,19 +393,32 @@ pub(crate) fn accelerator_to_portal_trigger(accelerator: &str) -> String {
         .join("+")
 }
 
+/// One startup registration waiting for the portal session.
+#[cfg(target_os = "linux")]
+struct PendingShortcut {
+    id: String,
+    accelerator: String,
+    callback: Activation,
+}
+
 /// Binds every registered accelerator in one portal session at `start`.
+/// GNOME's portal reports a chord mutter refused as bound, so a chord one of
+/// GNOME's own keybindings already holds is answered as refused here. It is
+/// still bound, so the user can rebind it in GNOME Settings.
 #[cfg(target_os = "linux")]
 pub(crate) struct PortalShortcutRegistry {
-    pending: Mutex<Vec<(String, Activation)>>,
+    pending: Mutex<Vec<PendingShortcut>>,
+    gnome_bindings: Vec<GnomeBinding>,
 }
 
 #[cfg(target_os = "linux")]
 impl PortalShortcutRegistry {
-    pub(crate) fn new() -> Self {
-        Self { pending: Mutex::new(Vec::new()) }
+    /// `gnome_bindings`: GNOME's keybindings at startup (empty outside GNOME).
+    pub(crate) fn new(gnome_bindings: Vec<GnomeBinding>) -> Self {
+        Self { pending: Mutex::new(Vec::new()), gnome_bindings }
     }
 
-    async fn bind(shortcuts: Vec<(String, Activation)>) -> Result<(), String> {
+    async fn bind(shortcuts: Vec<PendingShortcut>) -> Result<(), String> {
         use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
         use futures_util::StreamExt;
 
@@ -408,21 +430,21 @@ impl PortalShortcutRegistry {
         }
         let portal = GlobalShortcuts::new().await.map_err(|error| format!("GlobalShortcuts proxy: {error}"))?;
         let session = portal.create_session().await.map_err(|error| format!("create_session: {error}"))?;
-        let triggers: Vec<String> = shortcuts.iter().map(|(accelerator, _)| accelerator_to_portal_trigger(accelerator)).collect();
+        let triggers: Vec<String> = shortcuts.iter().map(|shortcut| accelerator_to_portal_trigger(&shortcut.accelerator)).collect();
         let requested: Vec<NewShortcut> = shortcuts
             .iter()
             .zip(&triggers)
-            .enumerate()
-            .map(|(index, ((accelerator, _), trigger))| {
-                NewShortcut::new(format!("shortcut-{index}"), format!("{} ({accelerator})", crate::product::PRODUCT_NAME)).preferred_trigger(trigger.as_str())
+            .map(|(shortcut, trigger)| {
+                NewShortcut::new(shortcut.id.as_str(), format!("{} ({})", crate::product::PRODUCT_NAME, shortcut.accelerator)).preferred_trigger(trigger.as_str())
             })
             .collect();
         let request = portal.bind_shortcuts(&session, &requested, None).await.map_err(|error| format!("bind_shortcuts: {error}"))?;
         let bound = request.response().map_err(|error| format!("bind_shortcuts response: {error}"))?;
         for shortcut in bound.shortcuts() {
+            // Accepted is all the portal can say: GNOME's answers success even for a chord mutter refused.
             runtime_log::note(
                 "global-shortcut",
-                format!("portal bound {} as '{}'", shortcut.id(), shortcut.trigger_description()),
+                format!("portal accepted {} as '{}'", shortcut.id(), shortcut.trigger_description()),
                 json!({ "id": shortcut.id(), "trigger": shortcut.trigger_description() }),
             );
         }
@@ -431,10 +453,8 @@ impl PortalShortcutRegistry {
         while let Some(event) = activated.next().await {
             let id = event.shortcut_id();
             runtime_log::note("global-shortcut", format!("portal activated {id}"), json!({ "id": id }));
-            if let Some(index) = id.strip_prefix("shortcut-").and_then(|index| index.parse::<usize>().ok()) {
-                if let Some((_, callback)) = shortcuts.get(index) {
-                    callback();
-                }
+            if let Some(shortcut) = shortcuts.iter().find(|shortcut| shortcut.id == id) {
+                (shortcut.callback)();
             }
         }
         // The session keeps the bindings alive; dropping it would release them.
@@ -445,9 +465,23 @@ impl PortalShortcutRegistry {
 
 #[cfg(target_os = "linux")]
 impl ShortcutRegistry for PortalShortcutRegistry {
-    fn register(&self, accelerator: &str, callback: Activation) -> Result<bool, String> {
-        lock(&self.pending).push((accelerator.to_string(), callback));
-        Ok(true)
+    fn register(&self, id: &str, accelerator: &str, callback: Activation) -> Result<bool, String> {
+        let conflict = parse_portal_trigger(&accelerator_to_portal_trigger(accelerator)).and_then(|chord| find_conflict(&chord, &self.gnome_bindings).cloned());
+        let mut pending = lock(&self.pending);
+        pending.retain(|shortcut| shortcut.id != id);
+        pending.push(PendingShortcut { id: id.to_string(), accelerator: accelerator.to_string(), callback });
+        drop(pending);
+        match conflict {
+            Some(owner) => {
+                runtime_log::note(
+                    "global-shortcut",
+                    format!("{accelerator} is already a GNOME keybinding ({}); mutter will not grab it", owner.owner()),
+                    json!({ "id": id, "accelerator": accelerator, "schema": owner.schema, "key": owner.key }),
+                );
+                Ok(false)
+            }
+            None => Ok(true),
+        }
     }
 
     fn unregister(&self, _accelerator: &str) -> Result<(), String> {
@@ -519,7 +553,8 @@ mod tests {
     }
 
     impl ShortcutRegistry for FakeRegistry {
-        fn register(&self, accelerator: &str, callback: Activation) -> Result<bool, String> {
+        fn register(&self, id: &str, accelerator: &str, callback: Activation) -> Result<bool, String> {
+            assert_eq!(id, QUICK_ENTRY_SHORTCUT_ID);
             lock(&self.calls).push(format!("register {accelerator}"));
             match self.outcomes.get(accelerator) {
                 Some(Outcome::Throw) => Err(format!("conversion failure from {accelerator}")),
@@ -552,7 +587,7 @@ mod tests {
         activations: Arc<Mutex<u32>>,
     }
 
-    fn shortcut(mode: ShortcutMode, registry: Arc<FakeRegistry>, saved: Option<QuickEntryShortcutPref>) -> Built {
+    fn shortcut(mode: ShortcutMode, registry: Arc<dyn ShortcutRegistry>, saved: Option<QuickEntryShortcutPref>) -> Built {
         let saves = Arc::new(Mutex::new(Vec::new()));
         let activations = Arc::new(Mutex::new(0));
         let saves_sink = saves.clone();
@@ -659,10 +694,56 @@ mod tests {
     #[test]
     fn translates_accelerators_into_portal_triggers() {
         assert_eq!(accelerator_to_portal_trigger("Control+Shift+Space"), "CTRL+SHIFT+space");
-        assert_eq!(accelerator_to_portal_trigger("CommandOrControl+Shift+O"), "CommandOrControl+SHIFT+o");
+        assert_eq!(accelerator_to_portal_trigger("CommandOrControl+Shift+O"), "CTRL+SHIFT+o");
+        assert_eq!(accelerator_to_portal_trigger("CmdOrCtrl+Shift+O"), "CTRL+SHIFT+o");
         assert_eq!(accelerator_to_portal_trigger("Alt+Shift+K"), "ALT+SHIFT+k");
         assert_eq!(accelerator_to_portal_trigger("Super+F12"), "LOGO+F12");
         assert_eq!(accelerator_to_portal_trigger("Control+Plus"), "CTRL+plus");
         assert_eq!(accelerator_to_portal_trigger("Control+,"), "CTRL+comma");
+    }
+
+    #[cfg(target_os = "linux")]
+    fn gnome_table() -> Vec<GnomeBinding> {
+        vec![GnomeBinding {
+            schema: "org.gnome.desktop.wm.keybindings".into(),
+            key: "switch-input-source".into(),
+            accelerators: vec!["<Shift><Control>space".into()],
+        }]
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_portal_chord_gnome_already_binds_is_refused_at_startup_with_a_notice() {
+        let registry = Arc::new(PortalShortcutRegistry::new(gnome_table()));
+        let Built { shortcut, .. } = shortcut(ShortcutMode::Portal, registry.clone(), None);
+        shortcut.register_at_startup();
+        assert_eq!(shortcut.state().status, super::super::shortcut_core::ShortcutStatus::Refused);
+        let notice = shortcut.take_startup_notice();
+        assert_eq!(notice.map(|notice| (notice.chord, notice.status)), Some(("⇧⌃␣".to_string(), super::super::shortcut_core::ShortcutStatus::Refused)));
+        // Still bound under its stable id, so GNOME Settings can rebind it.
+        let pending: Vec<(String, String)> = lock(&registry.pending).iter().map(|entry| (entry.id.clone(), entry.accelerator.clone())).collect();
+        assert_eq!(pending, vec![(QUICK_ENTRY_SHORTCUT_ID.to_string(), DEFAULT_ACCELERATOR.to_string())]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_free_portal_chord_is_requested_and_keeps_its_stable_id() {
+        let registry = PortalShortcutRegistry::new(gnome_table());
+        let noop: Activation = Arc::new(|| {});
+        assert_eq!(registry.register(TOGGLE_WINDOW_SHORTCUT_ID, "CommandOrControl+Shift+O", noop.clone()), Ok(true));
+        assert_eq!(registry.register(QUICK_ENTRY_SHORTCUT_ID, "Alt+Shift+K", noop.clone()), Ok(true));
+        assert_eq!(registry.register(QUICK_ENTRY_SHORTCUT_ID, "Control+Shift+Space", noop), Ok(false));
+        let ids: Vec<String> = lock(&registry.pending).iter().map(|entry| format!("{} {}", entry.id, entry.accelerator)).collect();
+        assert_eq!(ids, vec!["toggle-window CommandOrControl+Shift+O".to_string(), "quick-entry Control+Shift+Space".to_string()]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn outside_gnome_the_portal_trusts_the_desktop() {
+        let registry = Arc::new(PortalShortcutRegistry::new(Vec::new()));
+        let Built { shortcut, .. } = shortcut(ShortcutMode::Portal, registry, None);
+        shortcut.register_at_startup();
+        assert_eq!(shortcut.state().status, super::super::shortcut_core::ShortcutStatus::Requested);
+        assert_eq!(shortcut.take_startup_notice(), None);
     }
 }

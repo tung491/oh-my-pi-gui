@@ -8,6 +8,8 @@ pub mod ipc;
 mod app_icons;
 mod app_quit;
 mod deep_link;
+#[cfg(target_os = "linux")]
+mod gnome_keybindings;
 mod launch_argv;
 mod lifecycle;
 mod menu;
@@ -42,7 +44,7 @@ use app_quit::{exit_decision, ExitDecision, QuitState};
 use deep_link::{PendingLinks, DEEP_LINK_PROTOCOL};
 use launch_argv::{launch_arguments, parse_launch_argv, LaunchRequest};
 use quick_entry::QuickEntryController;
-use shortcut::{QuickEntryShortcut, ShortcutDeps, ShortcutRegistry};
+use shortcut::{QuickEntryShortcut, ShortcutDeps, ShortcutRegistry, TOGGLE_WINDOW_SHORTCUT_ID};
 use shortcut_core::{native_accelerator, QuickEntryShortcutPref};
 use tray::TrayController;
 use wayland_portal::{desktop_entry_candidates, shortcut_mode, xwayland_only, ShortcutMode};
@@ -257,6 +259,7 @@ impl Desktop {
 
         let weak = Arc::downgrade(ctx);
         let toggle: shortcut::Activation = Arc::new(move || {
+            runtime_log::note("global-shortcut", "window toggle shortcut activated", json!({ "portal": portal }));
             survive("window toggle shortcut", || {
                 if let Some(ctx) = weak.upgrade() {
                     if let Some(desktop) = Desktop::of(&ctx) {
@@ -266,7 +269,7 @@ impl Desktop {
             });
         });
         if let Some(accelerator) = native_accelerator("window.toggle") {
-            match registry.register(accelerator, toggle) {
+            match registry.register(TOGGLE_WINDOW_SHORTCUT_ID, accelerator, toggle) {
                 Ok(true) => {}
                 Ok(false) => runtime_log::note("global-shortcut", format!("globalShortcut.register refused {accelerator}"), json!({ "accelerator": accelerator })),
                 Err(error) => runtime_log::note("global-shortcut", format!("globalShortcut.register threw for {accelerator}: {error}"), json!({ "accelerator": accelerator })),
@@ -513,7 +516,7 @@ impl DesktopPort for Desktop {
 /// context is managed.
 pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
     let Some(desktop) = Desktop::of(ctx) else { return Ok(()) };
-    let registry: Arc<dyn ShortcutRegistry> = shortcut_registry_for(app, desktop.wayland_portal);
+    let registry: Arc<dyn ShortcutRegistry> = shortcut_registry_for(app, desktop.wayland_portal, &desktop.backend.env());
     {
         use tauri_plugin_deep_link::DeepLinkExt;
         let weak = Arc::downgrade(ctx);
@@ -549,16 +552,23 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
 }
 
 #[cfg(target_os = "linux")]
-fn shortcut_registry_for(app: &AppHandle, portal: bool) -> Arc<dyn ShortcutRegistry> {
-    if portal {
-        Arc::new(shortcut::PortalShortcutRegistry::new())
-    } else {
-        Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()))
+fn shortcut_registry_for(app: &AppHandle, portal: bool, env: &wayland_portal::Env) -> Arc<dyn ShortcutRegistry> {
+    if !portal {
+        return Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()));
     }
+    // GNOME's portal reports a chord mutter refused as bound; read GNOME's own bindings to see it.
+    let gnome_bindings = if gnome_keybindings::is_gnome_session(env) {
+        let bindings = survive("read GNOME keybindings", gnome_keybindings::read_gnome_keybindings).unwrap_or_default();
+        runtime_log::note("global-shortcut", format!("read {} GNOME keybinding settings", bindings.len()), json!({ "count": bindings.len() }));
+        bindings
+    } else {
+        Vec::new()
+    };
+    Arc::new(shortcut::PortalShortcutRegistry::new(gnome_bindings))
 }
 
 #[cfg(not(target_os = "linux"))]
-fn shortcut_registry_for(app: &AppHandle, _portal: bool) -> Arc<dyn ShortcutRegistry> {
+fn shortcut_registry_for(app: &AppHandle, _portal: bool, _env: &wayland_portal::Env) -> Arc<dyn ShortcutRegistry> {
     Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()))
 }
 
@@ -614,7 +624,7 @@ pub(crate) mod testing {
     pub(crate) struct AcceptAllRegistry;
 
     impl super::shortcut::ShortcutRegistry for AcceptAllRegistry {
-        fn register(&self, _accelerator: &str, _callback: super::shortcut::Activation) -> Result<bool, String> {
+        fn register(&self, _id: &str, _accelerator: &str, _callback: super::shortcut::Activation) -> Result<bool, String> {
             Ok(true)
         }
         fn unregister(&self, _accelerator: &str) -> Result<(), String> {
