@@ -137,6 +137,14 @@ mod tests {
         let server = module(&ctx).unwrap().stats_server().unwrap();
         let port = module(&ctx).unwrap().stats_client().port();
         let pid = server.child_pid_for_test().expect("a running stats server");
+        // On Unix that is the supervisor; the server itself runs below it.
+        let below: Vec<u32> = std::fs::read_dir(format!("/proc/{pid}/task"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .flat_map(|task| std::fs::read_to_string(task.path().join("children")).unwrap_or_default().split_whitespace().filter_map(|child| child.parse().ok()).collect::<Vec<u32>>())
+            .collect();
+        assert!(!below.is_empty(), "the supervisor {pid} runs no stats server");
         ctx.omp.shutdown().await;
         assert_eq!(result[0]["folder"], "/home/dev/projects/workspace-alpha");
         assert_eq!(result.as_array().map(Vec::len), Some(2));
@@ -148,6 +156,12 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
         assert!(gone(), "stats server {pid} survived shutdown");
+        let process_gone = |child: u32| std::fs::read_to_string(format!("/proc/{child}/stat")).map(|stat| stat.contains(") Z ")).unwrap_or(true);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !below.iter().all(|child| process_gone(*child)) && std::time::Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        assert!(below.iter().all(|child| process_gone(*child)), "stats server children {below:?} survived shutdown");
     }
 
     #[tokio::test]

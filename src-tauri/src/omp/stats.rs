@@ -128,6 +128,7 @@ impl StatsServer {
 
     /// The running server's pid, so a test can prove `kill()` leaves nothing behind.
     #[cfg(test)]
+    /// The pid of the process this server spawned: the supervisor on Unix.
     pub(crate) fn child_pid_for_test(&self) -> Option<u32> {
         lock(&self.inner.state).child.as_ref().and_then(|child| child.pid)
     }
@@ -307,9 +308,12 @@ impl Inner {
         }
         let inner = self.clone();
         spawn_task(async move {
+            // Only an actual kill request kills here. The sender also goes away
+            // when `kill()` drops this child's record, and a SIGKILL then would
+            // reach the supervisor before it could stop omp, orphaning omp.
             let status = tokio::select! {
                 status = child.wait() => status,
-                _ = kill_rx => {
+                Ok(()) = kill_rx => {
                     let _ = child.start_kill();
                     child.wait().await
                 }
