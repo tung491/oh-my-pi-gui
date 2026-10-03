@@ -66,6 +66,17 @@ impl TauriHost {
         win_id.and_then(|id| self.app.get_webview_window(&id.label()))
     }
 
+    /// The window a native dialog is attached to. On Linux there is none: the
+    /// GTK3 dialog backend ignores a parent, and reading a Wayland window
+    /// handle for a hidden window dereferences a null surface.
+    fn dialog_parent(&self, win_id: Option<WindowId>) -> Option<tauri::WebviewWindow> {
+        if dialog_parent_supported() {
+            self.window(win_id)
+        } else {
+            None
+        }
+    }
+
     fn file_dialog(
         &self,
         title: Option<&str>,
@@ -93,11 +104,16 @@ impl TauriHost {
             let extensions: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
             builder = builder.add_filter(&filter.name, &extensions);
         }
-        if let Some(window) = self.window(parent) {
+        if let Some(window) = self.dialog_parent(parent) {
             builder = builder.set_parent(&window);
         }
         builder
     }
+}
+
+/// Whether native dialogs on this platform are attached to a parent window.
+fn dialog_parent_supported() -> bool {
+    !cfg!(target_os = "linux")
 }
 
 fn file_paths(paths: Vec<tauri_plugin_dialog::FilePath>) -> Vec<PathBuf> {
@@ -156,7 +172,7 @@ impl Host for TauriHost {
             MessageKind::Warning => MessageDialogKind::Warning,
             MessageKind::Error => MessageDialogKind::Error,
         });
-        if let Some(window) = self.window(parent) {
+        if let Some(window) = self.dialog_parent(parent) {
             builder = builder.parent(&window);
         }
         // The plugin shows at most three buttons; the first is the affirmative one.
@@ -451,4 +467,12 @@ pub fn run() -> ExitCode {
         _ => {}
     });
     ExitCode::SUCCESS
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn native_dialogs_are_never_parented_on_linux() {
+        assert_eq!(super::dialog_parent_supported(), !cfg!(target_os = "linux"));
+    }
 }
