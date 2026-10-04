@@ -520,6 +520,19 @@ describe("ProvidersWindow (Ollama)", () => {
 		);
 	});
 
+	it("asks for a reopen when this session cannot ask for administrator access", async () => {
+		ollama.status.mockResolvedValue(STOPPED);
+		ollama.runRemedy.mockResolvedValueOnce({ outcome: "reopen-required", status: STOPPED, fault: "no_new_privs" });
+		await mountOpen();
+		const remedy = () => document.body.querySelector('[data-action="remedy"]') as HTMLButtonElement;
+
+		await act(async () => remedy().click());
+		await settle();
+		expect(document.body.querySelector("[data-remedy-hint]")?.textContent).toBe(
+			translate("welcome.ollama.remedyReopen"),
+		);
+	});
+
 	it("shows a status probe failure instead of spinning", async () => {
 		ollama.status.mockRejectedValue(new Error("ipc closed"));
 		await mountOpen();

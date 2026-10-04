@@ -293,7 +293,13 @@ export type UpdateStatus =
 			transferred: number;
 			total: number;
 	  }
-	| { state: "downloaded"; version: string; mode: UpdateInstallMode }
+	| {
+			state: "downloaded";
+			version: string;
+			mode: UpdateInstallMode;
+			/** The install could not ask for administrator access in this process; quit and reopen, then install. */
+			reopenRequired?: boolean;
+	  }
 	| { state: "not-available"; version: string }
 	| { state: "error"; message: string; showInBanner?: boolean };
 

@@ -1347,6 +1347,8 @@ export const vi: Record<string, string> = {
 	"updater.downloadingInstaller": "Đang tải trình cài đặt…",
 	"updater.ready": "{version} đã sẵn sàng — khởi động lại để áp dụng",
 	"updater.restart": "Khởi động lại & cài đặt",
+	"updater.reopenToInstall":
+		"Đã tải xong {version}, nhưng Sai ATLAS không thể yêu cầu quyền quản trị trong phiên này. Hãy thoát rồi mở lại Sai ATLAS, sau đó thử lại.",
 	"updater.installerReady": "Trình cài đặt {version} đã được xác minh và mở trong Finder",
 	"updater.openInstaller": "Mở trình cài đặt",
 	"updater.manualInstructions":
@@ -2973,6 +2975,8 @@ export const vi: Record<string, string> = {
 	"welcome.ollama.remedyUnavailable":
 		"Hệ thống này không thể yêu cầu quyền quản trị tại đây. Hãy chạy lệnh ở trên trong terminal, rồi kiểm tra lại.",
 	"welcome.ollama.remedyFailed": "Không thành công: {error}",
+	"welcome.ollama.remedyReopen":
+		"Sai ATLAS không thể yêu cầu quyền quản trị trong phiên này. Hãy thoát rồi mở lại Sai ATLAS, sau đó thử lại.",
 	"welcome.error.setModel": "Không thể đặt {tag} làm mô hình mặc định: {error}",
 	"welcome.tier.minimal": "Tối thiểu",
 	"welcome.tier.recommended": "Đề xuất",

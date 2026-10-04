@@ -20,6 +20,10 @@ const APT_GET: &str = "/usr/bin/apt-get";
 const PKEXEC_DISMISSED: i32 = 126;
 const PKEXEC_NOT_AUTHORIZED: i32 = 127;
 
+/// What pkexec prints when it cannot gain privileges because the process
+/// runs with `no_new_privs`; it exits with `PKEXEC_NOT_AUTHORIZED` then too.
+const PKEXEC_NOT_SETUID: &str = "must be setuid root";
+
 /// The two privileged commands a deb install may run, in order.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DebInstallPlan {
@@ -57,11 +61,36 @@ impl RunFailure {
     fn pkexec_refused(&self) -> bool {
         matches!(self.code, Some(PKEXEC_DISMISSED | PKEXEC_NOT_AUTHORIZED))
     }
+
+    /// pkexec could not gain privileges at all: this process runs with
+    /// `no_new_privs`. Caught here too in case the up-front check missed it.
+    fn pkexec_blocked(&self) -> bool {
+        self.code == Some(PKEXEC_NOT_AUTHORIZED) && self.detail.contains(PKEXEC_NOT_SETUID)
+    }
+}
+
+/// Why an install did not happen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum InstallError {
+    /// This process runs with `no_new_privs` (Electron's relaunch helper started
+    /// it), so pkexec cannot work until the app is quit and opened again. The
+    /// downloaded package stays usable.
+    ReopenRequired,
+    Failed(String),
+}
+
+impl From<String> for InstallError {
+    fn from(detail: String) -> Self {
+        InstallError::Failed(detail)
+    }
 }
 
 /// Runs one argv vector as root. Injected so tests never start pkexec.
 pub(crate) trait PrivilegedRunner: Send + Sync {
     fn run(&self, argv: Vec<String>) -> BoxFuture<'_, Result<(), RunFailure>>;
+
+    /// Whether this process can gain privileges at all; pkexec cannot under `no_new_privs`.
+    fn can_elevate(&self) -> bool;
 }
 
 /// The production runner: spawns `argv[0]` (pkexec) with the rest as its
@@ -92,6 +121,10 @@ impl PrivilegedRunner for PkexecRunner {
             Err(RunFailure { code: output.status.code(), detail })
         })
     }
+
+    fn can_elevate(&self) -> bool {
+        !crate::relaunch::no_new_privs()
+    }
 }
 
 /// Verify the downloaded package against the feed's hash. Runs again right
@@ -115,17 +148,23 @@ pub(crate) async fn verify_package(package: &Path, expected_sha512: &str) -> Res
 /// running as this user, which could also edit anything else the user owns;
 /// users who want no window at all install the package by hand with `sudo apt
 /// install ./<package>.deb`.
-pub(crate) async fn install_deb(runner: &dyn PrivilegedRunner, package: &Path, expected_sha512: &str) -> Result<(), String> {
+pub(crate) async fn install_deb(runner: &dyn PrivilegedRunner, package: &Path, expected_sha512: &str) -> Result<(), InstallError> {
     let plan = deb_install_plan(package)?;
     verify_package(package, expected_sha512).await?;
+    if !runner.can_elevate() {
+        return Err(InstallError::ReopenRequired);
+    }
     let Err(install) = runner.run(plan.install).await else { return Ok(()) };
+    if install.pkexec_blocked() {
+        return Err(InstallError::ReopenRequired);
+    }
     // pkexec refusing means the user said no; a second prompt would only ask again.
     if install.pkexec_refused() {
-        return Err(install.detail);
+        return Err(install.detail.into());
     }
     match runner.run(plan.fix_dependencies).await {
         Ok(()) => Ok(()),
-        Err(fix) => Err(format!("{}; {}", install.detail, fix.detail)),
+        Err(fix) => Err(format!("{}; {}", install.detail, fix.detail).into()),
     }
 }
 
@@ -194,6 +233,8 @@ pub(crate) mod tests {
     pub(crate) struct FakeRunner {
         pub calls: Mutex<Vec<Vec<String>>>,
         pub answers: Mutex<Vec<Result<(), RunFailure>>>,
+        /// Plays a process running with `no_new_privs`.
+        pub no_new_privs: std::sync::atomic::AtomicBool,
     }
 
     impl PrivilegedRunner for FakeRunner {
@@ -202,6 +243,10 @@ pub(crate) mod tests {
             let mut answers = self.answers.lock().unwrap();
             let answer = if answers.is_empty() { Ok(()) } else { answers.remove(0) };
             Box::pin(std::future::ready(answer))
+        }
+
+        fn can_elevate(&self) -> bool {
+            !self.no_new_privs.load(std::sync::atomic::Ordering::SeqCst)
         }
     }
 
@@ -275,12 +320,41 @@ pub(crate) mod tests {
         for code in [PKEXEC_DISMISSED, PKEXEC_NOT_AUTHORIZED] {
             let runner = FakeRunner::default();
             *runner.answers.lock().unwrap() = vec![Err(failure(code, "dismissed"))];
-            assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), "dismissed");
+            assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("dismissed".into()));
             assert_eq!(runner.calls.lock().unwrap().len(), 1);
         }
         let runner = FakeRunner::default();
         *runner.answers.lock().unwrap() = vec![Err(failure(1, "first")), Err(failure(100, "second"))];
-        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), "first; second");
+        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("first; second".into()));
+    }
+
+    #[tokio::test]
+    async fn asks_for_a_reopen_instead_of_running_pkexec_under_no_new_privs() {
+        let dir = tempfile::tempdir().unwrap();
+        let package = dir.path().join("sai-atlas_0.9.16_amd64.deb");
+        tokio::fs::write(&package, b"deb bytes").await.unwrap();
+        let sha = sha512_file_base64(&package).await.unwrap();
+        let runner = FakeRunner { no_new_privs: true.into(), ..FakeRunner::default() };
+        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::ReopenRequired);
+        assert!(runner.calls.lock().unwrap().is_empty(), "pkexec never runs");
+        // The hash is still checked first: a changed package is reported as such.
+        assert!(matches!(install_deb(&runner, &package, "not-the-hash").await.unwrap_err(), InstallError::Failed(detail) if detail.contains("SHA-512")));
+    }
+
+    #[tokio::test]
+    async fn reads_pkexec_s_setuid_failure_as_a_reopen_not_a_refusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let package = dir.path().join("sai-atlas_0.9.16_amd64.deb");
+        tokio::fs::write(&package, b"deb bytes").await.unwrap();
+        let sha = sha512_file_base64(&package).await.unwrap();
+        let runner = FakeRunner::default();
+        *runner.answers.lock().unwrap() = vec![Err(failure(PKEXEC_NOT_AUTHORIZED, "pkexec must be setuid root"))];
+        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::ReopenRequired);
+        assert_eq!(runner.calls.lock().unwrap().len(), 1, "no dependency fix after a blocked pkexec");
+        // The same words with another status are an ordinary failure.
+        let runner = FakeRunner::default();
+        *runner.answers.lock().unwrap() = vec![Err(failure(1, "must be setuid root")), Err(failure(1, "again"))];
+        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("must be setuid root; again".into()));
     }
 
     #[tokio::test]
@@ -290,7 +364,7 @@ pub(crate) mod tests {
         tokio::fs::write(&package, b"deb bytes").await.unwrap();
         let runner = FakeRunner::default();
         let error = install_deb(&runner, &package, "not-the-hash").await.unwrap_err();
-        assert!(error.contains("SHA-512"), "{error}");
+        assert!(matches!(&error, InstallError::Failed(detail) if detail.contains("SHA-512")), "{error:?}");
         assert!(runner.calls.lock().unwrap().is_empty());
     }
 

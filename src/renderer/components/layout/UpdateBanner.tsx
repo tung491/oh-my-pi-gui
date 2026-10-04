@@ -83,6 +83,17 @@ export function UpdateBanner() {
 				</div>
 			);
 		}
+		// Installing again here would fail the same way, so there is no button.
+		if (status.reopenRequired) {
+			return (
+				<div className="flex items-center gap-2 border-b border-(--omp-border-muted) bg-transparent px-3 py-1.5 text-omp-md">
+					<AlertTriangle size={13} className="shrink-0 text-(--omp-warning)" />
+					<span className="min-w-0 flex-1 text-(--omp-text)">
+						{t("updater.reopenToInstall", { version: status.version })}
+					</span>
+				</div>
+			);
+		}
 		return (
 			<div className="flex items-center gap-2 border-b border-(--omp-border-muted) bg-transparent px-3 py-1.5 text-omp-md">
 				<RefreshCw size={13} className="shrink-0 text-(--omp-success)" />

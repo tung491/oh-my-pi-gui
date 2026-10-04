@@ -109,7 +109,8 @@ export interface OllamaInstallProgress {
  * Ollama now answers: `status.state` says that. `cancelled` is a dismissed polkit
  * dialog and `unavailable` a missing pkexec / authentication agent; neither is an error.
  */
-export type OllamaRemedyOutcome = "applied" | "cancelled" | "unavailable" | "failed";
+/** `reopen-required`: this process cannot ask for administrator access until the app is quit and reopened. */
+export type OllamaRemedyOutcome = "applied" | "cancelled" | "unavailable" | "failed" | "reopen-required";
 
 export interface OllamaRemedyResult {
 	outcome: OllamaRemedyOutcome;

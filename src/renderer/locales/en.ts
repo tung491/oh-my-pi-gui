@@ -1415,6 +1415,8 @@ export const en: Record<string, string> = {
 	"updater.downloadingInstaller": "Downloading installer…",
 	"updater.ready": "{version} ready — restart to apply",
 	"updater.restart": "Restart & install",
+	"updater.reopenToInstall":
+		"{version} is downloaded, but Sai ATLAS can't ask for administrator access in this session. Quit and reopen Sai ATLAS, then try again.",
 	"updater.installerReady": "{version} installer verified and opened in Finder",
 	"updater.openInstaller": "Open installer",
 	"updater.manualInstructions":
@@ -3171,6 +3173,8 @@ export const en: Record<string, string> = {
 	"welcome.ollama.remedyUnavailable":
 		"This system can't ask for administrator access here. Run the command above in a terminal, then check again.",
 	"welcome.ollama.remedyFailed": "That didn't work: {error}",
+	"welcome.ollama.remedyReopen":
+		"Sai ATLAS can't ask for administrator access in this session. Quit and reopen Sai ATLAS, then try again.",
 	"welcome.error.setModel": "Couldn't make {tag} the default model: {error}",
 	"welcome.tier.minimal": "Minimal",
 	"welcome.tier.recommended": "Recommended",

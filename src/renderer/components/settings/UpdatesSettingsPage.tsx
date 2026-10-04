@@ -132,6 +132,11 @@ export function UpdatesSettingsPage() {
 						{status.state === "downloaded" && status.mode === "manual" && (
 							<p className="mt-1 text-omp-xs text-(--omp-muted)">{t("updater.manualInstructions")}</p>
 						)}
+						{status.state === "downloaded" && status.reopenRequired && (
+							<p className="mt-1 text-omp-xs text-(--omp-muted)">
+								{t("updater.reopenToInstall", { version: status.version })}
+							</p>
+						)}
 					</div>
 					<div className="updates-current">
 						<div className="text-omp-xxs uppercase tracking-wider text-(--omp-dim)">{t("updates.current")}</div>
@@ -157,7 +162,7 @@ export function UpdatesSettingsPage() {
 						{status.state === "downloading" && (
 							<span className="text-omp-sm text-(--omp-muted)">{status.percent}%</span>
 						)}
-						{status.state === "downloaded" && (
+						{status.state === "downloaded" && !status.reopenRequired && (
 							<Button
 								icon={status.mode === "manual" ? <FolderOpen size={13} /> : <RotateCcw size={13} />}
 								onClick={() => void window.omp.updater.apply()}

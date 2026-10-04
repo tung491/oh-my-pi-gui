@@ -46,6 +46,11 @@ pub(crate) enum UpdateStatus {
     Downloaded {
         version: String,
         mode: UpdateInstallMode,
+        /// The install could not ask for privileges in this process
+        /// (`no_new_privs`); the renderer asks the user to quit and reopen the
+        /// app, then install the same download.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reopen_required: Option<bool>,
     },
     NotAvailable {
         version: String,

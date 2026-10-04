@@ -58,6 +58,9 @@ pub enum OllamaRemedyOutcome {
     Cancelled,
     Unavailable,
     Failed,
+    /// This process cannot gain privileges (`no_new_privs`, inherited from
+    /// Electron's relaunch helper): the user must quit and reopen the app.
+    ReopenRequired,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -81,6 +84,19 @@ const STDERR_KEEP: usize = 16 * STDERR_TAIL;
 
 fn no_auth_agent(stderr: &str) -> bool {
     stderr.to_lowercase().contains("no authentication agent")
+}
+
+/// pkexec's words when it cannot gain privileges under `no_new_privs`.
+fn pkexec_not_setuid(stderr: &str) -> bool {
+    stderr.contains("must be setuid root")
+}
+
+/// The attempt when pkexec cannot work in this process at all.
+fn reopen_required() -> Attempt {
+    Attempt {
+        outcome: OllamaRemedyOutcome::ReopenRequired,
+        fault: Some("this process runs with no_new_privs, so pkexec cannot ask for administrator access until the app is reopened".to_string()),
+    }
 }
 
 /// Each `\r` redraw replaces the line it is on, as a terminal would show it.
@@ -111,7 +127,9 @@ fn classify_exit(outcome: &ExitOutcome, stderr: &str, file: &str) -> Attempt {
         ExitOutcome::Exited { code: Some(0), killed_by_us: false } => Attempt { outcome: OllamaRemedyOutcome::Applied, fault: None },
         ExitOutcome::Exited { code: Some(126), killed_by_us: false } => Attempt { outcome: OllamaRemedyOutcome::Cancelled, fault: None },
         ExitOutcome::Exited { code: Some(127), killed_by_us: false } => {
-            if no_auth_agent(stderr) {
+            if pkexec_not_setuid(stderr) {
+                reopen_required()
+            } else if no_auth_agent(stderr) {
                 let fault = tail(stderr);
                 Attempt {
                     outcome: OllamaRemedyOutcome::Unavailable,
@@ -464,6 +482,24 @@ impl Default for RemedyGate {
     }
 }
 
+/// `run_remedy`, unless this process cannot gain privileges (`can_elevate`
+/// false under `no_new_privs`): pkexec would only fail, so nothing runs and
+/// the user is asked to reopen the app.
+async fn run_remedy_if_elevatable(
+    spawner: &Spawner,
+    id: OllamaRemedyId,
+    platform: &str,
+    probe: &ProbeFn,
+    options: SettleOptions,
+    on_progress: Option<&(dyn Fn(OllamaInstallProgress) + Send + Sync)>,
+    can_elevate: bool,
+) -> Result<OllamaRemedyResult, String> {
+    if can_elevate || platform != "linux" {
+        return run_remedy(spawner, id, platform, probe, options, on_progress).await;
+    }
+    Ok(settle(probe, options, reopen_required()).await)
+}
+
 /// `run_remedy` with the real process spawner, for production use.
 pub async fn run_remedy_real(
     id: OllamaRemedyId,
@@ -473,7 +509,7 @@ pub async fn run_remedy_real(
     on_progress: Option<&(dyn Fn(OllamaInstallProgress) + Send + Sync)>,
 ) -> Result<OllamaRemedyResult, String> {
     let spawner: Spawner = Arc::new(spawn_real);
-    run_remedy(&spawner, id, platform, probe, options, on_progress).await
+    run_remedy_if_elevatable(&spawner, id, platform, probe, options, on_progress, !crate::relaunch::no_new_privs()).await
 }
 
 #[cfg(test)]
@@ -652,6 +688,48 @@ mod tests {
                 assert_eq!(result.fault, None);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn asks_for_a_reopen_without_running_pkexec_under_no_new_privs() {
+        for id in [OllamaRemedyId::LinuxStart, OllamaRemedyId::LinuxInstall] {
+            let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
+            let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
+            let frames = Arc::new(Mutex::new(Vec::new()));
+            let frames2 = frames.clone();
+            let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
+            let result = run_remedy_if_elevatable(&spawner, id, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, Some(on_progress), false)
+                .await
+                .expect("the remedy answers");
+            assert!(lock(&calls).is_empty(), "pkexec never runs");
+            assert!(lock(&frames).is_empty(), "no install progress for a command that never ran");
+            assert_eq!(result.outcome, OllamaRemedyOutcome::ReopenRequired);
+            assert_eq!(result.status, status(OllamaState::Stopped));
+            assert!(result.fault.as_deref().is_some_and(|fault| fault.contains("no_new_privs")));
+        }
+        // Able to elevate: the command runs as before.
+        let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
+        let (probe, _) = probe_sequence(vec![OllamaState::Ok]);
+        let result =
+            run_remedy_if_elevatable(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None, true)
+                .await
+                .expect("the remedy runs");
+        assert_eq!(lock(&calls).len(), 1);
+        assert_eq!(result.outcome, OllamaRemedyOutcome::Applied);
+        // Off Linux the platform error still wins.
+        let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
+        assert!(run_remedy_if_elevatable(&spawner, OllamaRemedyId::LinuxStart, "darwin", &probe, SettleOptions::default(), None, false).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn reads_pkexec_s_setuid_failure_as_a_reopen_not_a_cancel() {
+        let (spawner, _calls, _kills) = fake_spawn(Ending::Exit(Some(127)), vec!["pkexec must be setuid root\n"]);
+        let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
+            .await
+            .expect("the remedy runs");
+        assert_eq!(result.outcome, OllamaRemedyOutcome::ReopenRequired);
+        assert_eq!(serde_json::to_value(result.outcome).unwrap(), serde_json::json!("reopen-required"));
     }
 
     #[tokio::test]

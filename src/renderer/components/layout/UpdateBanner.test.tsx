@@ -89,6 +89,19 @@ describe("UpdateBanner", () => {
 		expect(container.textContent).not.toMatch(/Finder|DMG/i);
 	});
 
+	it("asks for a reopen instead of offering an install that cannot ask for administrator access", async () => {
+		useUpdaterStore.setState({
+			status: { state: "downloaded", version: "0.9.18", mode: "automatic", reopenRequired: true },
+			dismissed: {},
+		});
+		await mount(<UpdateBanner />);
+
+		expect(container.textContent).toContain("0.9.18 is downloaded");
+		expect(container.textContent).toContain("Quit and reopen Sai ATLAS, then try again.");
+		expect(container.textContent).not.toContain("Restart & install");
+		expect(container.querySelectorAll("button")).toHaveLength(0);
+	});
+
 	it("keeps user-initiated verification failures visible with a retry action", async () => {
 		useUpdaterStore.setState({
 			status: { state: "error", message: "Installer failed SHA-512 verification.", showInBanner: true },

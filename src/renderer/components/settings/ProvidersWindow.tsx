@@ -127,6 +127,9 @@ export function ProvidersWindow() {
 				case "unavailable":
 					setRemedyHint(t("welcome.ollama.remedyUnavailable"));
 					break;
+				case "reopen-required":
+					setRemedyHint(t("welcome.ollama.remedyReopen"));
+					break;
 				case "failed":
 					setRemedyHint(t("welcome.ollama.remedyFailed", { error: result.fault ?? "" }));
 					break;

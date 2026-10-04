@@ -46,7 +46,7 @@ use crate::ports::{CtxRef, UpdaterPort};
 use crate::runtime_log;
 
 use feed::{Asset, AssetTarget};
-use install::{PkexecRunner, PrivilegedRunner};
+use install::{InstallError, PkexecRunner, PrivilegedRunner};
 use state::{
     asks_before_install, installer_partial_path, installs_on_quit, linux_package_kind, package_type_at, plan_installer_transfer,
     settle_incomplete_update_check, sha512_file_base64, sweep_installer_partials, LinuxPackageKind, UpdateInstallMode, UpdateStatus,
@@ -442,7 +442,7 @@ impl Updater {
         if mode == UpdateInstallMode::Manual {
             self.open_manual_installer(&destination)?;
         }
-        self.set_status(UpdateStatus::Downloaded { version: version.to_string(), mode });
+        self.set_status(UpdateStatus::Downloaded { version: version.to_string(), mode, reopen_required: None });
         Ok(())
     }
 
@@ -464,9 +464,9 @@ impl Updater {
     }
 
     async fn run_apply(&self) {
-        let (mode, path, sha512) = {
+        let (version, mode, path, sha512) = {
             let inner = self.inner();
-            let Some(UpdateStatus::Downloaded { mode, .. }) = inner.status.clone() else { return };
+            let Some(UpdateStatus::Downloaded { version, mode, .. }) = inner.status.clone() else { return };
             if inner.install_done {
                 return;
             }
@@ -476,7 +476,7 @@ impl Updater {
                 return;
             };
             let Some(active) = inner.active.as_ref() else { return };
-            (mode, path, active.asset.sha512.clone())
+            (version, mode, path, active.asset.sha512.clone())
         };
         if mode == UpdateInstallMode::Manual {
             if let Err(message) = self.open_manual_installer(&path) {
@@ -503,18 +503,24 @@ impl Updater {
                 }
                 ctx.host.exit(0);
             }
-            Err(detail) => {
+            Err(error) => {
                 if asks {
                     ctx.desktop.withdraw_quit_approval();
                 }
-                self.error(format!("{} ({detail})", self.text(MainTextKey::UpdatesInstallFailed)), Some(true));
+                match error {
+                    InstallError::ReopenRequired => {
+                        runtime_log::note("unknown", "the update cannot ask for privileges in this process (no_new_privs); asking for a reopen", json!({ "version": version }));
+                        self.set_status(UpdateStatus::Downloaded { version, mode, reopen_required: Some(true) });
+                    }
+                    InstallError::Failed(detail) => self.error(format!("{} ({detail})", self.text(MainTextKey::UpdatesInstallFailed)), Some(true)),
+                }
             }
         }
     }
 
     /// Install the verified package for this install kind. Returns the program
     /// to start once this process has exited.
-    async fn install_now(&self, package: &Path, sha512: &str) -> Result<Option<PathBuf>, String> {
+    async fn install_now(&self, package: &Path, sha512: &str) -> Result<Option<PathBuf>, InstallError> {
         match self.config.kind {
             Some(LinuxPackageKind::Deb) => {
                 // Verifies the hash itself, right before the privileged call.
@@ -529,7 +535,8 @@ impl Updater {
             }
             None => {
                 install::verify_package(package, sha512).await?;
-                start_platform_installer(package, false).map(|()| None)
+                start_platform_installer(package, false)?;
+                Ok(None)
             }
         }
     }
@@ -913,7 +920,7 @@ mod tests {
                 inner.active = Some(ActiveUpdate { version: "0.9.16".into(), asset: Asset { name: name.into(), sha512: sha512_base64(bytes), size: Some(bytes.len() as u64) } });
                 inner.downloaded = Some(path.clone());
             }
-            updater.set_status(UpdateStatus::Downloaded { version: "0.9.16".into(), mode });
+            updater.set_status(UpdateStatus::Downloaded { version: "0.9.16".into(), mode, reopen_required: None });
             path
         }
     }
@@ -1017,7 +1024,7 @@ mod tests {
         *server.feed.lock().unwrap() = Some(feed_yaml("0.9.16", b"a", b"d"));
         let h = harness(Setup { release_base: base, ..Setup::default() });
         h.seed_downloaded(UpdateInstallMode::Automatic, b"d", DEB_NAME);
-        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic });
+        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic, reopen_required: None });
         assert!(server.requests.lock().unwrap().is_empty());
     }
 
@@ -1232,6 +1239,28 @@ mod tests {
         assert!(h.fakes.host.relaunches.lock().unwrap().is_empty());
         assert!(h.fakes.host.exit_codes.lock().unwrap().is_empty());
         assert!(!h.updater().inner().install_done);
+    }
+
+    #[tokio::test]
+    async fn apply_keeps_the_download_and_asks_for_a_reopen_when_pkexec_cannot_work() {
+        let h = harness(Setup::default());
+        *h.fakes.desktop.approve_install.lock().unwrap() = true;
+        h.runner.no_new_privs.store(true, Ordering::SeqCst);
+        let package = h.seed_downloaded(UpdateInstallMode::Automatic, b"deb bytes", DEB_NAME);
+
+        h.call("updater:apply").await;
+
+        assert!(h.runner.calls.lock().unwrap().is_empty(), "pkexec never runs");
+        assert_eq!(h.fakes.desktop.log.calls(), ["approve_quit_before_install()", "withdraw_quit_approval()"]);
+        let reopen = json!({ "state": "downloaded", "version": "0.9.16", "mode": "automatic", "reopenRequired": true });
+        assert_eq!(h.updater().status(), reopen);
+        assert_eq!(h.statuses().last(), Some(&reopen));
+        assert!(h.fakes.host.relaunches.lock().unwrap().is_empty());
+        assert!(h.fakes.host.exit_codes.lock().unwrap().is_empty());
+        assert!(!h.updater().inner().install_done);
+        assert_eq!(h.updater().inner().downloaded.as_deref(), Some(package.as_path()), "the verified download is kept");
+        // A timer check leaves the state alone.
+        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic, reopen_required: Some(true) });
     }
 
     #[tokio::test]
