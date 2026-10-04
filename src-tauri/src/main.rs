@@ -3,10 +3,21 @@
 
 use std::process::ExitCode;
 
+#[cfg(target_os = "linux")]
+use sai_atlas_lib::electron_relauncher;
 use sai_atlas_lib::{omp, ports, product, webview};
 
 fn main() -> ExitCode {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+
+    // After a .deb update the 0.9.x Electron app starts this binary as its
+    // relaunch helper and blocks until the helper answers on fd 3. It is
+    // handled first, before glib, Tauri or the 0.9.x AppImage flag below, so
+    // Electron is never left waiting.
+    #[cfg(target_os = "linux")]
+    if electron_relauncher::is_relauncher_invocation(&args) {
+        return electron_relauncher::run(args);
+    }
 
     // The sidecar supervisor is this same binary, re-executed with a reserved
     // first argument. It must take over before anything initializes Tauri, so

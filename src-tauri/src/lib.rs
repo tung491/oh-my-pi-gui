@@ -6,6 +6,8 @@
 
 pub mod bridge;
 pub mod ctx;
+#[cfg(target_os = "linux")]
+pub mod electron_relauncher;
 pub mod i18n;
 pub mod paths;
 pub mod ports;
@@ -267,6 +269,21 @@ fn start_pending_relaunch(relaunch: &PendingRelaunch) {
     // the old image stays mounted until the new app quits.
     let old_appdir = std::env::var_os("APPDIR").filter(|value| !value.is_empty()).map(PathBuf::from);
     let cwd = relaunch::relaunch_cwd(std::env::current_dir().ok().as_deref(), old_appdir.as_deref(), dirs::home_dir().as_deref());
+    // A child would inherit this process's no_new_privs (an app Electron's
+    // relaunch helper started directly has it), and pkexec would stay broken
+    // in the new app; the user's service manager starts it without the flag.
+    #[cfg(target_os = "linux")]
+    if relaunch::no_new_privs() {
+        match relaunch::launch_detached(&program, std::env::vars_os().collect(), old_appdir.as_deref(), &cwd, "relaunch") {
+            Ok(route) => runtime_log::note(
+                "unknown",
+                format!("relaunching {} ({})", program.display(), route.name()),
+                json!({ "program": program.display().to_string(), "route": route.name(), "noNewPrivs": true }),
+            ),
+            Err(error) => runtime_log::note("main-uncaught", format!("relaunch of {} failed: {error}", program.display()), json!({})),
+        }
+        return;
+    }
     let spawned = tauri::async_runtime::block_on(async {
         relaunch::relaunch_command(&program, std::env::vars_os().collect(), old_appdir.as_deref(), &cwd).spawn()
     });

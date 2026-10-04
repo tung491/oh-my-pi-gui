@@ -232,7 +232,8 @@ pub fn install(log: RuntimeLog) -> &'static RuntimeLog {
 /// The process-wide log, installed lazily at the profile's default path when
 /// nothing installed one first (so a failure before setup still gets written).
 /// That fallback carries the crate version, which may lag the bundle version
-/// `run()` installs; nothing logs before `run()` installs the real one.
+/// `run()` installs; only the Electron relaunch helper, which never reaches
+/// `run()`, logs through it.
 pub fn global() -> &'static RuntimeLog {
     GLOBAL.get_or_init(|| RuntimeLog::new(default_path(), env!("CARGO_PKG_VERSION")))
 }
