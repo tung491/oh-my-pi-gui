@@ -172,15 +172,30 @@ pub(crate) trait CorrectableWindow {
     /// The full footprint in logical pixels, `None` when it cannot be read.
     fn outer_size(&self) -> Option<(f64, f64)>;
     /// Whether the window has had its first configure. tao on Linux fills the
-    /// outer size and outer position from the same origin until then, so
-    /// "not yet" reads as the two being equal; after a configure they match
-    /// only for a window whose position equals its size, which then waits for
-    /// its next `Resized` like a window built on the main thread.
+    /// outer size and outer position from the same origin until then
+    /// ([`origin_seeded`]); after a configure they match only for a window
+    /// whose position equals its size, which the catch-up check then leaves
+    /// armed until the window's next configure (possibly a user's resize).
     fn configured(&self) -> bool;
     /// A maximized or fullscreen window's size is the window manager's, not the request's.
     fn maximized_or_fullscreen(&self) -> bool;
     /// Ask for a new content size; the window reports it at its next configure.
     fn request_inner_size(&self, size: (f64, f64));
+}
+
+/// Whether tao's outer position and outer size (physical, at `scale`) are
+/// still the one origin tao seeds both with before a Linux window's first
+/// configure. tao stores that origin as an `i32` and converts it twice: as a
+/// logical `i32` position, and cast to `u32` as a logical size, both scaled
+/// to physical with a rounding, saturating cast. GTK scale factors are
+/// integers, so the position converts back to the logical origin exactly and
+/// the size conversion can be replayed on it; comparing the raw numbers
+/// instead misreads a negative origin at scale 2 or more, where the size
+/// saturates and the cast position wraps.
+pub(crate) fn origin_seeded(position: (i32, i32), size: (u32, u32), scale: f64) -> bool {
+    let origin = tauri::PhysicalPosition::new(position.0, position.1).to_logical::<i32>(scale);
+    let as_size = tauri::LogicalSize::new(origin.x as u32, origin.y as u32).to_physical::<u32>(scale);
+    (as_size.width, as_size.height) == size
 }
 
 /// Request the content size whose footprint lands on `target_outer`, for a
@@ -202,7 +217,9 @@ pub(crate) fn correct_to_outer(window: &impl CorrectableWindow, target_outer: (f
 
 /// Linux's deferred corrections, by window: a window's decoration is unknown
 /// until its first configure, so its correction waits for that and runs once.
-/// The window events and the catch-up check all run on the main thread.
+/// A correction is armed on whichever thread builds the window, before its
+/// listener exists; the window events, the catch-up check and the disarm on
+/// destroy all run on the main thread, so they never interleave.
 #[derive(Default)]
 pub(crate) struct PendingCorrections {
     targets: Mutex<BTreeMap<WindowId, (f64, f64)>>,
@@ -712,8 +729,10 @@ mod tauri_backend {
     use crate::webview::{self, WindowSpec};
     use crate::{paths, product, runtime_log};
 
-    /// A live window, read and resized through Tauri. Its getters are cache
-    /// reads on the main thread, where every caller here runs.
+    /// A live window, read and resized through Tauri. On the main thread (every
+    /// Linux correction path) its getters read tao's caches directly; from the
+    /// thread that builds a window elsewhere (the macOS/Windows correction
+    /// right after the build) each getter is a round trip to the main thread.
     struct Live<'a>(&'a WebviewWindow);
 
     impl CorrectableWindow for Live<'_> {
@@ -727,10 +746,8 @@ mod tauri_backend {
             if !cfg!(target_os = "linux") {
                 return true;
             }
-            // Both caches hold the same origin (as i32, the size cast to u32)
-            // until the first configure-event.
-            match (self.0.outer_size(), self.0.outer_position()) {
-                (Ok(size), Ok(position)) => size.width != position.x as u32 || size.height != position.y as u32,
+            match (self.0.outer_size(), self.0.outer_position(), self.0.scale_factor()) {
+                (Ok(size), Ok(position), Ok(scale)) => !super::origin_seeded((position.x, position.y), (size.width, size.height), scale),
                 _ => false,
             }
         }
@@ -1823,6 +1840,27 @@ mod tests {
         assert_eq!(backend.windows.lock().unwrap().get(&id).map(|window| window.requested_inner), Some((1452.0, 989.0)));
         desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
         assert_eq!(saved_state_value(&ctx).map(|saved| saved["isMaximized"].clone()), Some(json!(true)));
+    }
+
+    #[test]
+    fn recognizes_the_origin_tao_seeds_both_outer_caches_with_before_the_first_configure() {
+        // What tao's getters return for a seeded origin, replayed by hand.
+        let seeded = |origin: (i32, i32), scale: f64| {
+            let position = ((f64::from(origin.0) * scale).round() as i32, (f64::from(origin.1) * scale).round() as i32);
+            let size = (((origin.0 as u32) as f64 * scale).round() as u32, ((origin.1 as u32) as f64 * scale).round() as u32);
+            (position, size)
+        };
+        for (origin, scale) in [((260, 90), 1.0), ((0, 0), 1.0), ((130, 45), 2.0), ((-1920, 40), 1.0), ((-1920, 40), 2.0), ((40, -30), 3.0)] {
+            let (position, size) = seeded(origin, scale);
+            assert!(origin_seeded(position, size, scale), "{origin:?} at scale {scale}: {position:?} {size:?}");
+        }
+        // A negative origin at scale 2: the size saturates, the position does not.
+        assert_eq!(seeded((-1920, 40), 2.0), ((-3840, 80), (u32::MAX, 80)));
+        // Configured windows: a real footprint, at scale 1 and 2.
+        assert!(!origin_seeded((260, 90), (1452, 989), 1.0));
+        assert!(!origin_seeded((-3840, 80), (2904, 1978), 2.0));
+        // The documented collision: a window whose position equals its size.
+        assert!(origin_seeded((1280, 720), (1280, 720), 1.0));
     }
 
     #[test]
