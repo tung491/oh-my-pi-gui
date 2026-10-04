@@ -321,7 +321,7 @@ describe("Linux package", () => {
 		expect(COMPAT_SYMLINKS).toEqual({ "opt/Sai ATLAS/sai-atlas": "/usr/bin/sai-atlas" });
 		expect(DESKTOP_ENTRY_ID).toBe("vn.io.vif.saiatlas.desktop");
 		expect(scripts()["package:tauri:linux"]).toMatch(
-			/ && bun src-tauri\/linux\/finalize-deb\.ts src-tauri\/target\/x86_64-unknown-linux-gnu\/release\/bundle\/deb$/,
+			/ && bun src-tauri\/linux\/finalize-deb\.ts src-tauri\/target\/x86_64-unknown-linux-gnu\/release\/bundle\/deb( && |$)/,
 		);
 		// Round-trip a package laid out the way tauri-bundler writes one.
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "finalize-deb-"));
@@ -370,6 +370,14 @@ describe("Linux package", () => {
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}
+	});
+
+	it("the AppImage is finished last so its bundled WebKit finds the host's bwrap and xdg-dbus-proxy", () => {
+		// tauri-bundler relocates every /usr in the bundled libwebkit2gtk; without the finalize
+		// step the always-on web-process sandbox fails to start from the AppImage.
+		expect(scripts()["package:tauri:linux"]).toMatch(
+			/ && bun src-tauri\/linux\/finalize-deb\.ts \S+ && bun src-tauri\/linux\/finalize-appimage\.ts src-tauri\/target\/x86_64-unknown-linux-gnu\/release\/bundle\/appimage$/,
+		);
 	});
 
 	it("no AppArmor profile is bundled", () => {
