@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.16] - 2026-10-04
+
 ### Added
 
 - **Send button in quick entry**: the bar has a Send button next to the hints, so a prompt can be sent with the mouse or a screen reader as well as with Enter. It stays disabled until there is text.
@@ -9,6 +11,10 @@
 ### Fixed
 
 - **Behavior stats**: the Behavior page of Session stats showed "Stats unavailable" (404) against the current agent, which replaced its behavior signals with frustration tallies. The page now shows the share of messages that were annoyed, aimed at the assistant, or angry, overall and per model version.
+- **Reading while a reply streams**: scrolling up during a reply no longer pulls you back to the bottom; **Jump to latest** follows the stream again.
+- **Command palette keys**: after opening a submenu, Escape goes back to the top level and the arrow keys keep working, instead of the palette ignoring them.
+- **Remove global override**: the Settings button now removes a setting's global value; the bundled agent used to reject the request and keep the value.
+- **Model names**: model names in the composer, pickers, stats and agent windows use the interface font instead of a monospace one.
 
 ### Changed
 
