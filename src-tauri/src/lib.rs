@@ -404,12 +404,15 @@ pub fn run() -> ExitCode {
             return ExitCode::from(STARTUP_FAILURE_EXIT_CODE);
         }
     };
-    runtime_log::install(RuntimeLog::new(paths::runtime_log_path(), env!("CARGO_PKG_VERSION")));
+    // The log records the bundle's version (`package.json`, through
+    // `tauri.conf.json`), the same one the updater and `app_version` report;
+    // the crate version in `Cargo.toml` is not bumped on release.
+    let mut context = tauri::generate_context!();
+    runtime_log::install(RuntimeLog::new(paths::runtime_log_path(), context.package_info().version.to_string()));
     if let Err(error) = std::fs::create_dir_all(profile) {
         return startup_failure("creating the profile directory", error);
     }
 
-    let mut context = tauri::generate_context!();
     // Throwaway profiles get their own identity, so the single-instance D-Bus
     // name (and the GtkApplication name) never hand off to the user's real app.
     if !paths::is_default_profile() {
