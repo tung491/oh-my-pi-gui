@@ -320,6 +320,7 @@ impl UserManagerTools {
 /// transient service of the user's systemd manager, so the app does not
 /// inherit this process's `no_new_privs`; when there is no user manager, or
 /// `systemd-run` is missing or fails, as a direct child (`relaunch_command`).
+/// Either way the app gets none of this process's stdio.
 /// `purpose` goes into the unit's instance name and must be alphanumeric.
 #[cfg(target_os = "linux")]
 pub(crate) fn launch_detached(
@@ -358,7 +359,17 @@ fn launch_detached_with(
     }
     // Never waited for: this process exits right after the launch, and the
     // reparented child is reaped by init or the session's subreaper.
-    relaunch_command(program, args, env, appdirs, cwd).as_std_mut().spawn()?;
+    //
+    // No stdio is handed on either. This process's stdio belongs to whoever
+    // started it, and that may wait for end-of-file on it: electron-updater
+    // runs the AppImage install child through `execFileSync`, which returns
+    // only once every holder of the child's stdout and stderr pipes has closed
+    // them, so an inheriting waiter would freeze the old app for good. Nobody
+    // reads a detached app's output, the app writes its own runtime log, and
+    // the systemd-run route gives it the journal rather than these pipes.
+    let mut command = relaunch_command(program, args, env, appdirs, cwd);
+    command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    command.as_std_mut().spawn()?;
     Ok(LaunchRoute::Direct { reason })
 }
 
@@ -1008,6 +1019,22 @@ mod tests {
         let args = std::fs::read_to_string(&args_file).unwrap();
         let tail: Vec<&str> = args.lines().skip_while(|line| *line != "--").collect();
         assert_eq!(tail, ["--", "/bin/sh", "-c", "exec \"$$2\"", "sh", "4242", "/x/Name.AppImage"]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn launch_detached_hands_no_stdio_to_a_direct_child() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("marker");
+        let program_args: Vec<OsString> =
+            // Read inside a substitution: dash points its own fd 1 at a redirect's file while the command runs.
+            ["-c", "fds=$(readlink /proc/$$/fd/0 /proc/$$/fd/1 /proc/$$/fd/2) && echo \"$fds\" > \"$1.tmp\" && mv \"$1.tmp\" \"$1\"", "sh", marker.to_str().unwrap()]
+                .into_iter()
+                .map(OsString::from)
+                .collect();
+        let route = launch_detached_with(&fake_tools(dir.path()), Path::new("/bin/sh"), &program_args, manager_env(dir.path()), &[], dir.path(), "test").unwrap();
+        assert!(matches!(route, LaunchRoute::Direct { .. }), "{route:?}");
+        assert_eq!(wait_for_file(&marker), "/dev/null\n/dev/null\n/dev/null\n");
     }
 
     #[cfg(target_os = "linux")]

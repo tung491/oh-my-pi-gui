@@ -30,10 +30,11 @@ fn main() -> ExitCode {
     // variable set and blocks until it exits; a shell that kept running would
     // hang the install. Electron cannot start the new image afterwards, so
     // this run schedules that start. It exits 0 whatever happens: any other
-    // status would report a failed install after the file was replaced.
+    // status would report a failed install after the file was replaced, so
+    // even a panic while scheduling is caught (it still prints to stderr).
     if std::env::var("APPIMAGE_EXIT_AFTER_INSTALL").map(|value| value == "true").unwrap_or(false) {
         #[cfg(target_os = "linux")]
-        appimage_handover::schedule_relaunch();
+        let _ = std::panic::catch_unwind(appimage_handover::schedule_relaunch);
         return ExitCode::SUCCESS;
     }
 

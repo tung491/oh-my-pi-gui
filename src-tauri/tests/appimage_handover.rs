@@ -3,10 +3,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 //! The built binary runs as electron-updater's AppImage install child
-//! (`APPIMAGE_EXIT_AFTER_INSTALL=true`, waited for by its parent), and a shell
-//! plays the old Electron app: it waits for the install child, then, for a
-//! restart, spawns a `--type=relauncher` helper naming the new image before
-//! it exits. The "new image" is a marker script, and `XDG_RUNTIME_DIR` is
+//! (`APPIMAGE_EXIT_AFTER_INSTALL=true`), and a shell plays the old Electron
+//! app. Like `execFileSync`, the shell reads the install child's stdout and
+//! stderr to end-of-file, so the install returns only once nothing else holds
+//! them. Then, for a restart, it spawns a `--type=relauncher` helper naming
+//! the new image before it exits. The "new image" is a marker script, and `XDG_RUNTIME_DIR` is
 //! unset, so no service manager is contacted and no real app ever starts.
 
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ struct Sandbox {
 impl Sandbox {
     fn new() -> Self {
         let sandbox = Self { dir: tempfile::tempdir().unwrap() };
+        std::fs::create_dir(sandbox.image().parent().unwrap()).unwrap();
         write_script(
             &sandbox.image(),
             &format!(
@@ -32,8 +34,9 @@ impl Sandbox {
         sandbox
     }
 
+    /// Spaces and `$` in the path must survive every hop to the waiter's `exec`.
     fn image(&self) -> PathBuf {
-        self.dir.path().join("Sai-ATLAS-0.9.17-x86_64.AppImage")
+        self.dir.path().join("My Apps $HOME").join("Sai ATLAS $v 0.9.17.AppImage")
     }
 
     fn marker(&self) -> PathBuf {
@@ -48,11 +51,15 @@ impl Sandbox {
         self.dir.path().join("config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl")
     }
 
-    /// The old app: runs the install child to completion, records its exit
-    /// status, optionally spawns the relaunch helper, then lives a little longer.
+    /// The old app: runs the install child to completion, reading its output
+    /// to end-of-file, records its exit status, optionally spawns the relaunch
+    /// helper, then lives a little longer. Fails if the install does not
+    /// return promptly, which is what would freeze the real old app.
     fn run_old_app(&self, restart: bool, appimage: Option<&Path>) {
         let helper = if restart { r#"sh -c 'sleep 0.3; :' sh --type=relauncher --no-sandbox --- "$APPIMAGE_TARGET" &"# } else { "" };
-        let script = format!(r#"APPIMAGE_EXIT_AFTER_INSTALL=true "$0"; echo $? > "$1"; {helper} sleep 0.2"#);
+        // The substitution reads to end-of-file and then reaps the child; its
+        // `exec` keeps this shell the install child's parent, as Electron is.
+        let script = format!(r#"out=$(export APPIMAGE_EXIT_AFTER_INSTALL=true; exec "$0" 2>&1 </dev/null); echo $? > "$1"; {helper} sleep 0.2"#);
         let mut command = Command::new("/bin/sh");
         command
             .args(["-c", &script, BIN])
@@ -69,7 +76,21 @@ impl Sandbox {
         if let Some(appimage) = appimage {
             command.env("APPIMAGE", appimage);
         }
-        assert!(command.status().expect("run the fake old app").success());
+        let mut old_app = command.spawn().expect("run the fake old app");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let status = loop {
+            if let Some(status) = old_app.try_wait().unwrap() {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                // Ending the old app also ends the waiter, which watches it.
+                old_app.kill().unwrap();
+                old_app.wait().unwrap();
+                panic!("the install child's output stayed open after it exited: execFileSync would never return");
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        assert!(status.success());
     }
 }
 
