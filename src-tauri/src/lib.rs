@@ -4,6 +4,8 @@
 //! the `omp` sidecar. Foundation modules live at the crate root; each wave
 //! module owns one directory and talks to the others only through `ports`.
 
+#[cfg(target_os = "linux")]
+pub mod appimage_handover;
 pub mod bridge;
 pub mod ctx;
 #[cfg(target_os = "linux")]
@@ -268,13 +270,14 @@ fn start_pending_relaunch(relaunch: &PendingRelaunch) {
     // An AppImage's mount: the relaunch must not inherit anything under it, or
     // the old image stays mounted until the new app quits.
     let old_appdir = std::env::var_os("APPDIR").filter(|value| !value.is_empty()).map(PathBuf::from);
-    let cwd = relaunch::relaunch_cwd(std::env::current_dir().ok().as_deref(), old_appdir.as_deref(), dirs::home_dir().as_deref());
+    let appdirs: Vec<&Path> = old_appdir.as_deref().into_iter().collect();
+    let cwd = relaunch::relaunch_cwd(std::env::current_dir().ok().as_deref(), &appdirs, dirs::home_dir().as_deref());
     // A child would inherit this process's no_new_privs (an app Electron's
     // relaunch helper started directly has it), and pkexec would stay broken
     // in the new app; the user's service manager starts it without the flag.
     #[cfg(target_os = "linux")]
     if relaunch::no_new_privs() {
-        match relaunch::launch_detached(&program, std::env::vars_os().collect(), old_appdir.as_deref(), &cwd, "relaunch") {
+        match relaunch::launch_detached(&program, &[], std::env::vars_os().collect(), &appdirs, &cwd, "relaunch") {
             Ok(route) => runtime_log::note(
                 "unknown",
                 format!("relaunching {} ({})", program.display(), route.name()),
@@ -285,7 +288,7 @@ fn start_pending_relaunch(relaunch: &PendingRelaunch) {
         return;
     }
     let spawned = tauri::async_runtime::block_on(async {
-        relaunch::relaunch_command(&program, std::env::vars_os().collect(), old_appdir.as_deref(), &cwd).spawn()
+        relaunch::relaunch_command(&program, &[], std::env::vars_os().collect(), &appdirs, &cwd).spawn()
     });
     match spawned {
         Ok(_child) => runtime_log::note("unknown", format!("relaunching {}", program.display()), json!({ "program": program.display().to_string() })),

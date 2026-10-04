@@ -93,8 +93,9 @@ fn launch_app() -> Result<relaunch::LaunchRoute, String> {
     let old_appdir = std::env::var_os("APPDIR").filter(|value| !value.is_empty()).map(PathBuf::from);
     let current_exe = std::env::current_exe().ok();
     let target = launch_target(current_exe.as_deref(), appimage.as_deref(), old_appdir.as_deref())?;
-    let cwd = relaunch::relaunch_cwd(std::env::current_dir().ok().as_deref(), old_appdir.as_deref(), dirs::home_dir().as_deref());
-    relaunch::launch_detached(&target, std::env::vars_os().collect(), old_appdir.as_deref(), &cwd, "handover")
+    let appdirs: Vec<&Path> = old_appdir.as_deref().into_iter().collect();
+    let cwd = relaunch::relaunch_cwd(std::env::current_dir().ok().as_deref(), &appdirs, dirs::home_dir().as_deref());
+    relaunch::launch_detached(&target, &[], std::env::vars_os().collect(), &appdirs, &cwd, "handover")
         .map_err(|error| format!("{} could not be started: {error}", target.display()))
 }
 

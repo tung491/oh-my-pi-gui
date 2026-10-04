@@ -25,14 +25,18 @@ use tokio::process::Command;
 /// once (`main.rs`); a relaunched app that inherited it would quit immediately.
 const EXIT_AFTER_INSTALL: &str = "APPIMAGE_EXIT_AFTER_INSTALL";
 
-/// `program` with `env` minus anything under `old_appdir` (the running
-/// AppImage's mount, `None` outside an AppImage), started in `cwd`, inheriting
-/// only stdio. No arguments, so a launch link or workspace is not replayed.
-pub(crate) fn relaunch_command(program: &Path, env: Vec<(OsString, OsString)>, old_appdir: Option<&Path>, cwd: &Path) -> Command {
+/// `program args` with `env` minus anything under `appdirs` (AppImage mounts
+/// that go away; none outside an AppImage), started in `cwd` in a session of
+/// its own, inheriting only stdio. A relaunch of the app passes no arguments,
+/// so a launch link or workspace is not replayed.
+pub(crate) fn relaunch_command(program: &Path, args: &[OsString], env: Vec<(OsString, OsString)>, appdirs: &[&Path], cwd: &Path) -> Command {
     let mut command = Command::new(program);
-    command.env_clear().envs(scrub_env(env, old_appdir)).env_remove(EXIT_AFTER_INSTALL).current_dir(cwd);
+    command.args(args).env_clear().envs(scrub_env(env, appdirs)).env_remove(EXIT_AFTER_INSTALL).current_dir(cwd);
     #[cfg(target_os = "linux")]
-    close_inherited_fds_on_exec(command.as_std_mut());
+    {
+        close_inherited_fds_on_exec(command.as_std_mut());
+        start_new_session_on_exec(command.as_std_mut());
+    }
     command
 }
 
@@ -92,10 +96,10 @@ fn is_inherited_launch_var(name: &OsStr) -> bool {
 }
 
 /// The environment for an app started on another process's behalf:
-/// `scrub_env` for the old mount, minus `INHERITED_LAUNCH_ENV`.
+/// `scrub_env` for the mounts that go away, minus `INHERITED_LAUNCH_ENV`.
 #[cfg(target_os = "linux")]
-pub(crate) fn launch_env(env: Vec<(OsString, OsString)>, old_appdir: Option<&Path>) -> Vec<(OsString, OsString)> {
-    scrub_env(env, old_appdir).into_iter().filter(|(name, _)| !is_inherited_launch_var(name)).collect()
+pub(crate) fn launch_env(env: Vec<(OsString, OsString)>, appdirs: &[&Path]) -> Vec<(OsString, OsString)> {
+    scrub_env(env, appdirs).into_iter().filter(|(name, _)| !is_inherited_launch_var(name)).collect()
 }
 
 /// Whether `path` is `root` or inside it (see `is_under`).
@@ -105,28 +109,32 @@ pub(crate) fn path_is_under(path: &Path, root: &Path) -> bool {
 }
 
 /// The relaunch's working directory: this process's cwd unless it is gone or
-/// lies under the old mount, in which case `home`, else `/`. A .deb relaunch
-/// therefore keeps the cwd it always had.
-pub(crate) fn relaunch_cwd(current: Option<&Path>, old_appdir: Option<&Path>, home: Option<&Path>) -> PathBuf {
+/// lies under one of `appdirs`, in which case `home`, else `/`. A .deb
+/// relaunch therefore keeps the cwd it always had.
+pub(crate) fn relaunch_cwd(current: Option<&Path>, appdirs: &[&Path], home: Option<&Path>) -> PathBuf {
     match current {
-        Some(dir) if !old_appdir.is_some_and(|appdir| is_under(dir.as_os_str(), appdir.as_os_str())) => dir.to_path_buf(),
+        Some(dir) if !appdirs.iter().any(|appdir| is_under(dir.as_os_str(), appdir.as_os_str())) => dir.to_path_buf(),
         _ => home.map_or_else(|| PathBuf::from("/"), Path::to_path_buf),
     }
 }
 
-/// `env` with every `:`-separated component equal to or under `old_appdir`
-/// removed; a variable left with no non-empty component is dropped. Without an
-/// old `$APPDIR` (not an AppImage) the environment passes through unchanged.
-pub(crate) fn scrub_env(env: Vec<(OsString, OsString)>, old_appdir: Option<&Path>) -> Vec<(OsString, OsString)> {
-    let Some(appdir) = old_appdir.filter(|appdir| !normalize(appdir.as_os_str()).is_empty()) else { return env };
-    env.into_iter().filter_map(|(key, value)| scrub_value(&value, appdir.as_os_str()).map(|value| (key, value))).collect()
+/// `env` with every `:`-separated component equal to or under one of
+/// `appdirs` removed; a variable left with no non-empty component is dropped.
+/// Without a mount (not an AppImage) the environment passes through unchanged.
+pub(crate) fn scrub_env(env: Vec<(OsString, OsString)>, appdirs: &[&Path]) -> Vec<(OsString, OsString)> {
+    let appdirs: Vec<&std::ffi::OsStr> = appdirs.iter().map(|appdir| appdir.as_os_str()).filter(|appdir| !normalize(appdir).is_empty()).collect();
+    if appdirs.is_empty() {
+        return env;
+    }
+    env.into_iter().filter_map(|(key, value)| scrub_value(&value, &appdirs).map(|value| (key, value))).collect()
 }
 
 #[cfg(unix)]
-fn scrub_value(value: &std::ffi::OsStr, appdir: &std::ffi::OsStr) -> Option<OsString> {
+fn scrub_value(value: &std::ffi::OsStr, appdirs: &[&std::ffi::OsStr]) -> Option<OsString> {
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
     let components: Vec<&[u8]> = value.as_bytes().split(|byte| *byte == b':').collect();
-    let kept: Vec<&[u8]> = components.iter().copied().filter(|component| !is_under(std::ffi::OsStr::from_bytes(component), appdir)).collect();
+    let kept: Vec<&[u8]> =
+        components.iter().copied().filter(|component| !appdirs.iter().any(|appdir| is_under(std::ffi::OsStr::from_bytes(component), appdir))).collect();
     if kept.len() == components.len() {
         return Some(value.to_os_string());
     }
@@ -138,7 +146,7 @@ fn scrub_value(value: &std::ffi::OsStr, appdir: &std::ffi::OsStr) -> Option<OsSt
 
 /// `$APPDIR` only exists inside a Linux AppImage; elsewhere nothing is scrubbed.
 #[cfg(not(unix))]
-fn scrub_value(value: &std::ffi::OsStr, _appdir: &std::ffi::OsStr) -> Option<OsString> {
+fn scrub_value(value: &std::ffi::OsStr, _appdirs: &[&std::ffi::OsStr]) -> Option<OsString> {
     Some(value.to_os_string())
 }
 
@@ -187,6 +195,21 @@ fn close_inherited_fds_on_exec(command: &mut std::process::Command) {
     unsafe {
         command.pre_exec(move || {
             mark_cloexec_from(3, limit);
+            Ok(())
+        });
+    }
+}
+
+/// Start the child in a session of its own, so job control or a hangup aimed
+/// at the launching process's terminal session cannot reach it.
+#[cfg(target_os = "linux")]
+fn start_new_session_on_exec(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt as _;
+    // SAFETY: `setsid` is async-signal-safe and touches no memory. It fails only
+    // for a process group leader, which a freshly forked child never is.
+    unsafe {
+        command.pre_exec(|| {
+            libc::setsid();
             Ok(())
         });
     }
@@ -293,41 +316,49 @@ impl UserManagerTools {
     }
 }
 
-/// Start `program` with no arguments in `cwd`, with `launch_env(env)`, as a
+/// Start `program args` in `cwd`, with `launch_env(env, appdirs)`, as a
 /// transient service of the user's systemd manager, so the app does not
 /// inherit this process's `no_new_privs`; when there is no user manager, or
 /// `systemd-run` is missing or fails, as a direct child (`relaunch_command`).
 /// `purpose` goes into the unit's instance name and must be alphanumeric.
 #[cfg(target_os = "linux")]
-pub(crate) fn launch_detached(program: &Path, env: Vec<(OsString, OsString)>, old_appdir: Option<&Path>, cwd: &Path, purpose: &str) -> std::io::Result<LaunchRoute> {
-    launch_detached_with(&UserManagerTools::system(), program, env, old_appdir, cwd, purpose)
+pub(crate) fn launch_detached(
+    program: &Path,
+    args: &[OsString],
+    env: Vec<(OsString, OsString)>,
+    appdirs: &[&Path],
+    cwd: &Path,
+    purpose: &str,
+) -> std::io::Result<LaunchRoute> {
+    launch_detached_with(&UserManagerTools::system(), program, args, env, appdirs, cwd, purpose)
 }
 
 #[cfg(target_os = "linux")]
 fn launch_detached_with(
     tools: &UserManagerTools,
     program: &Path,
+    args: &[OsString],
     env: Vec<(OsString, OsString)>,
-    old_appdir: Option<&Path>,
+    appdirs: &[&Path],
     cwd: &Path,
     purpose: &str,
 ) -> std::io::Result<LaunchRoute> {
-    let env = launch_env(env, old_appdir);
+    let env = launch_env(env, appdirs);
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.subsec_nanos());
     let unit = unit_name(purpose, std::process::id(), nanos);
-    let mut reason = match start_with_user_manager(tools, &unit, program, &env, cwd) {
+    let mut reason = match start_with_user_manager(tools, &unit, program, args, &env, cwd) {
         UserManagerStart::Started => return Ok(LaunchRoute::UserManager { unit }),
         UserManagerStart::Unconfirmed(reason) => return Ok(LaunchRoute::Unconfirmed { unit, reason }),
         UserManagerStart::NotStarted(reason) => reason,
     };
     // The AppImage runtime mounts itself through the setuid fusermount3,
     // which cannot gain privileges under no_new_privs either.
-    if old_appdir.is_some() && no_new_privs() {
+    if !appdirs.is_empty() && no_new_privs() {
         reason.push_str("; an AppImage started under no_new_privs usually cannot mount itself and may exit at once");
     }
     // Never waited for: this process exits right after the launch, and the
     // reparented child is reaped by init or the session's subreaper.
-    relaunch_command(program, env, old_appdir, cwd).as_std_mut().spawn()?;
+    relaunch_command(program, args, env, appdirs, cwd).as_std_mut().spawn()?;
     Ok(LaunchRoute::Direct { reason })
 }
 
@@ -348,9 +379,10 @@ fn unit_name(purpose: &str, pid: u32, nanos: u32) -> String {
 /// the transient unit, readable by this user only, until it is collected).
 /// The program path is passed as it is: `systemd-run` looks it up itself, so
 /// escaping a `$` would name a file that does not exist, and the manager does
-/// not expand variables in it.
+/// not expand variables in it. The manager does expand `$NAME` in the
+/// arguments after it, so every `$` there is doubled.
 #[cfg(target_os = "linux")]
-fn systemd_run_args<'a>(unit: &str, program: &Path, env_names: impl IntoIterator<Item = &'a OsStr>, cwd: &Path) -> Vec<OsString> {
+fn systemd_run_args<'a>(unit: &str, program: &Path, program_args: &[OsString], env_names: impl IntoIterator<Item = &'a OsStr>, cwd: &Path) -> Vec<OsString> {
     let mut args: Vec<OsString> =
         ["--user", "--quiet", "--collect", "-p", "Type=exec", "-p", "ExitType=cgroup"].into_iter().map(OsString::from).collect();
     args.push(OsString::from(format!("--unit={unit}")));
@@ -364,7 +396,22 @@ fn systemd_run_args<'a>(unit: &str, program: &Path, env_names: impl IntoIterator
     }
     args.push(OsString::from("--"));
     args.push(program.as_os_str().to_os_string());
+    args.extend(program_args.iter().map(|arg| escape_dollars(arg)));
     args
+}
+
+/// `arg` with every `$` doubled, which the service manager turns back into one.
+#[cfg(target_os = "linux")]
+fn escape_dollars(arg: &OsStr) -> OsString {
+    use std::os::unix::ffi::{OsStrExt as _, OsStringExt as _};
+    let mut escaped = Vec::with_capacity(arg.len());
+    for byte in arg.as_bytes() {
+        if *byte == b'$' {
+            escaped.push(b'$');
+        }
+        escaped.push(*byte);
+    }
+    OsString::from_vec(escaped)
 }
 
 /// Whether the service manager accepts this variable: a shell-style name and
@@ -448,12 +495,12 @@ const SYSTEMCTL_UNIT_NOT_LOADED: i32 = 5;
 /// is killed, but the start job it queued may still run, so the unit is
 /// stopped (which cancels a pending start) before anything else starts the app.
 #[cfg(target_os = "linux")]
-fn start_with_user_manager(tools: &UserManagerTools, unit: &str, program: &Path, env: &[(OsString, OsString)], cwd: &Path) -> UserManagerStart {
+fn start_with_user_manager(tools: &UserManagerTools, unit: &str, program: &Path, program_args: &[OsString], env: &[(OsString, OsString)], cwd: &Path) -> UserManagerStart {
     if !has_user_manager(env) {
         return UserManagerStart::NotStarted("XDG_RUNTIME_DIR is not set, so there is no user service manager".into());
     }
     let passed: Vec<&(OsString, OsString)> = env.iter().filter(|(name, value)| passes_to_user_manager(name, value)).collect();
-    let args = systemd_run_args(unit, program, passed.iter().map(|(name, _)| name.as_os_str()), cwd);
+    let args = systemd_run_args(unit, program, program_args, passed.iter().map(|(name, _)| name.as_os_str()), cwd);
     let tool = tools.systemd_run.display();
     match run_tool(&tools.systemd_run, &args, &passed, tools.start_timeout) {
         ToolRun::Exited { status, .. } if status.success() => UserManagerStart::Started,
@@ -552,7 +599,7 @@ mod tests {
     }
 
     fn scrubbed(entries: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
-        scrub_env(pairs(entries), Some(Path::new(APPDIR)))
+        scrub_env(pairs(entries), &[Path::new(APPDIR)])
     }
 
     #[test]
@@ -599,13 +646,29 @@ mod tests {
     #[test]
     fn scrub_env_without_an_old_appdir_is_the_identity() {
         let entries = pairs(&[("LD_LIBRARY_PATH", "/tmp/.mount_SaiATLabc123/usr/lib"), ("APPDIR", APPDIR)]);
-        assert_eq!(scrub_env(entries.clone(), None), entries);
-        assert_eq!(scrub_env(entries.clone(), Some(Path::new(""))), entries);
+        assert_eq!(scrub_env(entries.clone(), &[]), entries);
+        assert_eq!(scrub_env(entries.clone(), &[Path::new("")]), entries);
+    }
+
+    #[test]
+    fn scrub_env_drops_components_of_every_mount() {
+        let install_child = Path::new("/tmp/.mount_Sai-ATGlNNdi");
+        let env = pairs(&[
+            ("PATH", "/tmp/.mount_Sai-ATGlNNdi/usr/bin:/tmp/.mount_SaiATLabc123/usr/bin:/usr/bin:/bin"),
+            ("XDG_DATA_DIRS", "/tmp/.mount_SaiATLabc123/usr/share:/usr/share"),
+            ("GTK_PATH", "/tmp/.mount_Sai-ATGlNNdi/usr/lib/gtk-3.0"),
+            ("HOME", "/home/u"),
+        ]);
+        assert_eq!(
+            scrub_env(env, &[install_child, Path::new(APPDIR)]),
+            pairs(&[("PATH", "/usr/bin:/bin"), ("XDG_DATA_DIRS", "/usr/share"), ("HOME", "/home/u")])
+        );
+        assert_eq!(relaunch_cwd(Some(Path::new("/tmp/.mount_Sai-ATGlNNdi/usr")), &[Path::new(APPDIR), install_child], None), PathBuf::from("/"));
     }
 
     #[test]
     fn relaunch_cwd_leaves_the_old_mount() {
-        let (appdir, home) = (Some(Path::new(APPDIR)), Some(Path::new("/home/user")));
+        let (appdir, home) = (&[Path::new(APPDIR)][..], Some(Path::new("/home/user")));
         assert_eq!(relaunch_cwd(Some(Path::new("/tmp/.mount_SaiATLabc123/usr/bin")), appdir, home), PathBuf::from("/home/user"));
         assert_eq!(relaunch_cwd(Some(Path::new(APPDIR)), appdir, None), PathBuf::from("/"));
         assert_eq!(relaunch_cwd(None, appdir, home), PathBuf::from("/home/user"));
@@ -614,8 +677,8 @@ mod tests {
     #[test]
     fn relaunch_cwd_keeps_a_cwd_outside_the_mount() {
         let projects = Path::new("/home/user/projects");
-        assert_eq!(relaunch_cwd(Some(projects), Some(Path::new(APPDIR)), Some(Path::new("/home/user"))), projects);
-        assert_eq!(relaunch_cwd(Some(projects), None, Some(Path::new("/home/user"))), projects);
+        assert_eq!(relaunch_cwd(Some(projects), &[Path::new(APPDIR)], Some(Path::new("/home/user"))), projects);
+        assert_eq!(relaunch_cwd(Some(projects), &[], Some(Path::new("/home/user"))), projects);
     }
 
     /// A pipe whose ends are inheritable, like the AppImage runtime's keepalive pipe.
@@ -643,7 +706,7 @@ mod tests {
         // (inside `if`, so a filtered last entry does not fail the loop).
         let script = r#"for f in /proc/self/fd/*; do if [ -e "$f" ]; then printf '%s ' "${f##*/}"; fi; done"#;
         let env = vec![(OsString::from("PATH"), OsString::from("/usr/bin:/bin"))];
-        let output = relaunch_command(Path::new("/bin/sh"), env, None, Path::new("/")).arg("-c").arg(script).output().await.expect("spawn /bin/sh");
+        let output = relaunch_command(Path::new("/bin/sh"), &[], env, &[], Path::new("/")).arg("-c").arg(script).output().await.expect("spawn /bin/sh");
         close_pipe(pipe);
         assert!(output.status.success(), "{output:?}");
         assert_eq!(String::from_utf8_lossy(&output.stdout).trim_end(), "0 1 2", "inherited pipe fds were {pipe:?}");
@@ -655,9 +718,24 @@ mod tests {
         let env = pairs(&[("LD_LIBRARY_PATH", "/tmp/.mount_SaiATLabc123/usr/lib"), ("KEEP", "yes"), (EXIT_AFTER_INSTALL, "1"), ("PATH", "/usr/bin:/bin")]);
         let script = r#"printf '%s|%s|%s|%s' "${LD_LIBRARY_PATH-unset}" "$KEEP" "${APPIMAGE_EXIT_AFTER_INSTALL-unset}" "$(pwd)""#;
         let output =
-            relaunch_command(Path::new("/bin/sh"), env, Some(Path::new(APPDIR)), Path::new("/")).arg("-c").arg(script).output().await.expect("spawn /bin/sh");
+            relaunch_command(Path::new("/bin/sh"), &[], env, &[Path::new(APPDIR)], Path::new("/")).arg("-c").arg(script).output().await.expect("spawn /bin/sh");
         assert!(output.status.success(), "{output:?}");
         assert_eq!(String::from_utf8_lossy(&output.stdout), "unset|yes|unset|/");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn relaunch_command_passes_args_and_starts_a_new_session() {
+        let env = vec![(OsString::from("PATH"), OsString::from("/usr/bin:/bin"))];
+        let args: Vec<OsString> = ["-c", r#"printf '%s|%s|' "$1" "$2"; read -r stat < /proc/$$/stat; set -- $stat; echo "$6 $1""#, "sh", "one", "two $x"].into_iter().map(OsString::from).collect();
+        let output = relaunch_command(Path::new("/bin/sh"), &args, env, &[], Path::new("/")).output().await.expect("spawn /bin/sh");
+        assert!(output.status.success(), "{output:?}");
+        let text = String::from_utf8_lossy(&output.stdout);
+        let (printed, ids) = text.split_at(text.rfind('|').unwrap() + 1);
+        assert_eq!(printed, "one|two $x|");
+        let ids: Vec<&str> = ids.split_whitespace().collect();
+        assert_eq!(ids.len(), 2, "{text}");
+        assert_eq!(ids[0], ids[1], "the child leads its own session: {text}");
     }
 
     #[cfg(target_os = "linux")]
@@ -735,7 +813,7 @@ mod tests {
             "APPIMAGE_INSTALL",
         ];
         let env: Vec<(OsString, OsString)> = dropped.iter().chain(kept.iter()).map(|name| (OsString::from(name), OsString::from("1"))).collect();
-        let names: Vec<String> = launch_env(env, None).into_iter().map(|(name, _)| name.to_string_lossy().into_owned()).collect();
+        let names: Vec<String> = launch_env(env, &[]).into_iter().map(|(name, _)| name.to_string_lossy().into_owned()).collect();
         assert_eq!(names, kept);
     }
 
@@ -743,14 +821,14 @@ mod tests {
     #[test]
     fn launch_env_also_scrubs_the_old_mount() {
         let env = pairs(&[("LD_LIBRARY_PATH", "/tmp/.mount_SaiATLabc123/usr/lib:/opt/lib"), ("APPDIR", APPDIR), ("GDK_BACKEND", "x11"), ("HOME", "/home/u")]);
-        assert_eq!(launch_env(env, Some(Path::new(APPDIR))), pairs(&[("LD_LIBRARY_PATH", "/opt/lib"), ("HOME", "/home/u")]));
+        assert_eq!(launch_env(env, &[Path::new(APPDIR)]), pairs(&[("LD_LIBRARY_PATH", "/opt/lib"), ("HOME", "/home/u")]));
     }
 
     #[cfg(target_os = "linux")]
     #[test]
     fn systemd_run_starts_a_transient_service_that_outlives_its_first_process() {
         let names = [OsStr::new("DISPLAY"), OsStr::new("PATH")];
-        let args = systemd_run_args("app-vn.io.vif.saiatlas-handover-42-0000abcd.service", Path::new("/usr/bin/sai-atlas"), names, Path::new("/home/u/my projects"));
+        let args = systemd_run_args("app-vn.io.vif.saiatlas-handover-42-0000abcd.service", Path::new("/usr/bin/sai-atlas"), &[], names, Path::new("/home/u/my projects"));
         let expected: Vec<OsString> = [
             "--user",
             "--quiet",
@@ -771,6 +849,19 @@ mod tests {
         .collect();
         assert_eq!(args, expected);
         assert!(!args.iter().any(|arg| arg == "--scope"), "a scope would run the app under this process's no_new_privs");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn systemd_run_passes_program_arguments_after_the_program_with_dollars_doubled() {
+        let program_args: Vec<OsString> = ["-c", r#"echo "$1" ${HOME}"#, "sh", "/x/Sai ATLAS.AppImage"].into_iter().map(OsString::from).collect();
+        let args = systemd_run_args("app-vn.io.vif.saiatlas@handover1.service", Path::new("/bin/sh"), &program_args, [OsStr::new("PATH")], Path::new("/"));
+        let separator = args.iter().position(|arg| arg == "--").unwrap();
+        let tail: Vec<&OsStr> = args[separator + 1..].iter().map(OsString::as_os_str).collect();
+        assert_eq!(tail, [OsStr::new("/bin/sh"), OsStr::new("-c"), OsStr::new(r#"echo "$$1" $${HOME}"#), OsStr::new("sh"), OsStr::new("/x/Sai ATLAS.AppImage")]);
+        // The program path itself is never escaped: systemd-run looks it up as written.
+        let dollar_program = systemd_run_args("u.service", Path::new("/opt/a$b/app"), &[], [], Path::new("/"));
+        assert_eq!(dollar_program.last().map(OsString::as_os_str), Some(OsStr::new("/opt/a$b/app")));
     }
 
     #[cfg(target_os = "linux")]
@@ -861,7 +952,7 @@ mod tests {
         let (script, marker) = (dir.path().join("app"), dir.path().join("marker"));
         write_script(&script, &format!("#!/bin/sh\necho \"$#|$KEEP|${{GDK_BACKEND-unset}}|$(pwd)\" > '{}'\n", marker.display()));
         let env = pairs(&[("PATH", "/usr/bin:/bin"), ("KEEP", "yes"), ("GDK_BACKEND", "x11")]);
-        let route = launch_detached_with(&fake_tools(dir.path()), &script, env, None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, &[], env, &[], dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Direct { reason } if reason.contains("XDG_RUNTIME_DIR")), "{route:?}");
         assert_eq!(wait_for_file(&marker), format!("0|yes|unset|{}\n", dir.path().display()));
     }
@@ -871,7 +962,7 @@ mod tests {
     fn launch_detached_falls_back_when_systemd_run_is_missing() {
         let dir = tempfile::tempdir().unwrap();
         let (script, marker) = marker_app(dir.path());
-        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, &[], manager_env(dir.path()), &[], dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Direct { reason } if reason.contains("could not start")), "{route:?}");
         assert_eq!(route.name(), "direct");
         assert_eq!(wait_for_file(&marker), "started 0\n");
@@ -888,7 +979,7 @@ mod tests {
             &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nenv > '{}'\n", args_file.display(), env_file.display()),
         );
         let tools = fake_tools(dir.path());
-        let route = launch_detached_with(&tools, &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&tools, &script, &[], manager_env(dir.path()), &[], dir.path(), "test").unwrap();
         let LaunchRoute::UserManager { unit } = &route else { panic!("{route:?}") };
         assert_eq!(route.name(), "systemd-run");
         let args = std::fs::read_to_string(&args_file).unwrap();
@@ -906,11 +997,38 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
+    fn launch_detached_puts_the_program_arguments_after_the_program() {
+        let dir = tempfile::tempdir().unwrap();
+        let args_file = dir.path().join("args");
+        write_script(&dir.path().join("systemd-run"), &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n", args_file.display()));
+        let program_args: Vec<OsString> = ["-c", "exec \"$2\"", "sh", "4242", "/x/Name.AppImage"].into_iter().map(OsString::from).collect();
+        let route =
+            launch_detached_with(&fake_tools(dir.path()), Path::new("/bin/sh"), &program_args, manager_env(dir.path()), &[], dir.path(), "handover").unwrap();
+        assert!(matches!(route, LaunchRoute::UserManager { .. }), "{route:?}");
+        let args = std::fs::read_to_string(&args_file).unwrap();
+        let tail: Vec<&str> = args.lines().skip_while(|line| *line != "--").collect();
+        assert_eq!(tail, ["--", "/bin/sh", "-c", "exec \"$$2\"", "sh", "4242", "/x/Name.AppImage"]);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn launch_detached_passes_the_program_arguments_on_the_direct_route() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("marker");
+        let program_args: Vec<OsString> =
+            ["-c", "echo \"$1 $2\" > \"$3\"", "sh", "first", "$second", marker.to_str().unwrap()].into_iter().map(OsString::from).collect();
+        let route = launch_detached_with(&fake_tools(dir.path()), Path::new("/bin/sh"), &program_args, manager_env(dir.path()), &[], dir.path(), "test").unwrap();
+        assert!(matches!(route, LaunchRoute::Direct { .. }), "{route:?}");
+        assert_eq!(wait_for_file(&marker), "first $second\n");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
     fn launch_detached_falls_back_when_systemd_run_fails() {
         let dir = tempfile::tempdir().unwrap();
         let (script, marker) = marker_app(dir.path());
         write_script(&dir.path().join("systemd-run"), "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n");
-        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, &[], manager_env(dir.path()), &[], dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Direct { reason } if reason.contains("Failed to connect to bus")), "{route:?}");
         assert_eq!(wait_for_file(&marker), "started 0\n");
     }
@@ -924,7 +1042,7 @@ mod tests {
         write_script(&dir.path().join("systemd-run"), "#!/bin/sh\nexec sleep 30\n");
         write_script(&dir.path().join("systemctl"), &format!("#!/bin/sh\necho \"$@\" > '{}'\n", stop_file.display()));
         let started = std::time::Instant::now();
-        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, &[], manager_env(dir.path()), &[], dir.path(), "test").unwrap();
         assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
         let LaunchRoute::Direct { reason } = &route else { panic!("{route:?}") };
         assert!(reason.contains("did not answer") && reason.contains("was stopped"), "{reason}");
@@ -940,7 +1058,7 @@ mod tests {
         let (script, marker) = marker_app(dir.path());
         write_script(&dir.path().join("systemd-run"), "#!/bin/sh\nexec sleep 30\n");
         write_script(&dir.path().join("systemctl"), "#!/bin/sh\necho 'Failed to stop' >&2\nexit 1\n");
-        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, &[], manager_env(dir.path()), &[], dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Unconfirmed { reason, .. } if reason.contains("Failed to stop")), "{route:?}");
         assert_eq!(route.name(), "systemd-run (unconfirmed)");
         std::thread::sleep(std::time::Duration::from_millis(300));
@@ -954,7 +1072,7 @@ mod tests {
         let (script, marker) = marker_app(dir.path());
         write_script(&dir.path().join("systemd-run"), "#!/bin/sh\nexec sleep 30\n");
         write_script(&dir.path().join("systemctl"), "#!/bin/sh\necho 'Unit not loaded.' >&2\nexit 5\n");
-        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, &[], manager_env(dir.path()), &[], dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Direct { .. }), "{route:?}");
         assert_eq!(wait_for_file(&marker), "started 0\n");
     }

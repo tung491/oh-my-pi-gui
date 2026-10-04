@@ -4,7 +4,7 @@
 use std::process::ExitCode;
 
 #[cfg(target_os = "linux")]
-use sai_atlas_lib::electron_relauncher;
+use sai_atlas_lib::{appimage_handover, electron_relauncher};
 use sai_atlas_lib::{omp, ports, product, webview};
 
 fn main() -> ExitCode {
@@ -28,8 +28,12 @@ fn main() -> ExitCode {
 
     // The 0.9.x Electron AppImage updater runs the new AppImage with this
     // variable set and blocks until it exits; a shell that kept running would
-    // hang the install.
+    // hang the install. Electron cannot start the new image afterwards, so
+    // this run schedules that start. It exits 0 whatever happens: any other
+    // status would report a failed install after the file was replaced.
     if std::env::var("APPIMAGE_EXIT_AFTER_INSTALL").map(|value| value == "true").unwrap_or(false) {
+        #[cfg(target_os = "linux")]
+        appimage_handover::schedule_relaunch();
         return ExitCode::SUCCESS;
     }
 
