@@ -157,3 +157,17 @@ fn starts_the_app_when_no_pipe_is_on_fd_3() {
     let log = wait_for_file(&sandbox.runtime_log(), Duration::from_secs(10)).expect("the runtime log line");
     assert!(log.contains(r#""syncByte":"no descriptor""#), "{log}");
 }
+
+#[test]
+fn starts_the_app_when_nobody_reads_the_pipe_on_fd_3() {
+    let sandbox = Sandbox::new();
+    let (read, write) = pipe();
+    // Only the helper's fd 3 is left: the write fails with EPIPE, which must neither kill it nor stop the launch.
+    drop(read);
+    let mut parent = sandbox.parent(r#""$0" --type=relauncher --- x & sleep 0.5"#, Some(&write));
+    drop(write);
+    assert!(parent.wait().unwrap().success());
+    assert_eq!(wait_for_file(&sandbox.marker(), Duration::from_secs(10)).as_deref(), Some("args=0 gdk=unset\n"));
+    let log = wait_for_file(&sandbox.runtime_log(), Duration::from_secs(10)).expect("the runtime log line");
+    assert!(log.contains(r#""syncByte":"write failed: Broken pipe"#), "{log}");
+}

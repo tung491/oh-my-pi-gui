@@ -236,10 +236,13 @@ mod tests {
         args.iter().map(OsString::from).collect()
     }
 
+    /// Close-on-exec, so no child that another test spawns meanwhile keeps
+    /// either end open (a held read end turns `EPIPE` into a successful write,
+    /// a held write end delays the reader's end-of-file).
     fn pipe() -> (OwnedFd, OwnedFd) {
         let mut fds = [0; 2];
-        // SAFETY: `pipe` writes two descriptors into the array it is given.
-        assert_eq!(unsafe { libc::pipe(fds.as_mut_ptr()) }, 0, "pipe: {}", std::io::Error::last_os_error());
+        // SAFETY: `pipe2` writes two descriptors into the array it is given.
+        assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0, "pipe2: {}", std::io::Error::last_os_error());
         // SAFETY: both descriptors were just created and are owned here.
         unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) }
     }
@@ -252,6 +255,22 @@ mod tests {
         // SAFETY: as above.
         let count = unsafe { libc::read(read.as_raw_fd(), buffer.as_mut_ptr().cast(), buffer.len()) };
         buffer[..usize::try_from(count).unwrap_or(0)].to_vec()
+    }
+
+    /// Whether every write end of the pipe is closed, waiting up to 5 s. This
+    /// asks the pipe rather than probing the closed number, which a test
+    /// running in parallel may already have reused.
+    fn write_end_closed(read: &OwnedFd) -> bool {
+        let mut entry = libc::pollfd { fd: read.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            // SAFETY: `poll` reads and writes exactly the one entry it is given.
+            if unsafe { libc::poll(&mut entry, 1, 100) } == 1 && entry.revents & libc::POLLHUP != 0 {
+                return true;
+            }
+            drain(read);
+        }
+        false
     }
 
     fn sleeper(seconds: &str) -> std::process::Child {
@@ -319,8 +338,7 @@ mod tests {
         std::mem::forget(write);
         assert_eq!(signal_ready(raw), SyncByte::Written);
         assert_eq!(drain(&read), vec![0u8]);
-        // SAFETY: probing a number this test no longer owns; F_GETFD only reads flags.
-        assert_eq!(unsafe { libc::fcntl(raw, libc::F_GETFD) }, -1, "the write end stays open");
+        assert!(write_end_closed(&read), "the write end stays open");
     }
 
     #[test]
@@ -329,20 +347,29 @@ mod tests {
         assert_eq!(signal_ready(file.as_raw_fd()), SyncByte::NotAPipe);
         // SAFETY: F_GETFD only reads flags; the file must still be open.
         assert!(unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) } >= 0, "a descriptor that is not Electron's pipe is left alone");
-        let (read, write) = pipe();
-        let closed = write.as_raw_fd();
-        drop(write);
-        drop(read);
-        assert_eq!(signal_ready(closed), SyncByte::NoDescriptor);
+        // A number no process can have open (it lies above the kernel's
+        // descriptor ceiling), unlike a just-closed one, which another test
+        // may reuse at once. The helper with nothing on fd 3 runs in the
+        // integration tests.
+        assert_eq!(signal_ready(libc::c_int::MAX), SyncByte::NoDescriptor);
     }
 
     #[test]
-    fn survives_a_pipe_nobody_reads() {
+    fn closes_a_pipe_it_cannot_write_to() {
+        // A full pipe fails the write the same way whoever else holds its read
+        // end. The helper on a pipe nobody reads (EPIPE) runs in the integration tests.
         let (read, write) = pipe();
-        drop(read);
+        // SAFETY: plain flag and write calls on descriptors this test owns.
+        unsafe {
+            libc::fcntl(write.as_raw_fd(), libc::F_SETFL, libc::O_NONBLOCK);
+            let chunk = [0u8; 4096];
+            while libc::write(write.as_raw_fd(), chunk.as_ptr().cast(), chunk.len()) > 0 {}
+        }
         let raw = write.as_raw_fd();
+        // `signal_ready` closes the descriptor itself.
         std::mem::forget(write);
-        assert_eq!(signal_ready(raw), SyncByte::WriteFailed(libc::EPIPE));
+        assert_eq!(signal_ready(raw), SyncByte::WriteFailed(libc::EAGAIN));
+        assert!(write_end_closed(&read), "the write end stays open");
     }
 
     #[test]
