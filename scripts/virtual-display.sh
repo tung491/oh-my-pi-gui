@@ -85,7 +85,9 @@ run() {
 	[[ ${1-} == -- ]] && shift
 	[[ $# -gt 0 ]] || die "usage: run -- CMD..."
 	start
-	vars=(-u WAYLAND_DISPLAY DISPLAY="$display" XDG_SESSION_TYPE=x11)
+	# GDK_BACKEND too: a session that exports GDK_BACKEND=wayland would send GTK
+	# windows to the real compositor's default socket even without WAYLAND_DISPLAY.
+	vars=(-u WAYLAND_DISPLAY DISPLAY="$display" XDG_SESSION_TYPE=x11 GDK_BACKEND=x11)
 	a11y=$(gdbus call --session --dest org.a11y.Bus --object-path /org/a11y/bus --method org.a11y.Bus.GetAddress 2>/dev/null |
 		sed -nE "s/^\('(.*)',\)$/\1/p" || true)
 	if [[ -n $a11y ]]; then
