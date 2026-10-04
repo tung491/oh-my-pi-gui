@@ -240,6 +240,9 @@ fn mark_cloexec_by_sweep(first: libc::c_int, limit: libc::c_int) {
 pub(crate) enum LaunchRoute {
     /// A transient service of the user's systemd manager, free of this process's `no_new_privs`.
     UserManager { unit: String },
+    /// `systemd-run` did not answer and the unit could not be stopped: the app
+    /// may still start through it late, so it is not started a second time.
+    Unconfirmed { unit: String, reason: String },
     /// A direct child of this process, which inherits its `no_new_privs`; `reason` says why
     /// the service manager was not used.
     Direct { reason: String },
@@ -251,43 +254,89 @@ impl LaunchRoute {
     pub(crate) fn name(&self) -> &'static str {
         match self {
             LaunchRoute::UserManager { .. } => "systemd-run",
+            LaunchRoute::Unconfirmed { .. } => "systemd-run (unconfirmed)",
             LaunchRoute::Direct { .. } => "direct",
+        }
+    }
+
+    /// Why the service manager did not (verifiably) start the app.
+    pub(crate) fn reason(&self) -> Option<&str> {
+        match self {
+            LaunchRoute::UserManager { .. } => None,
+            LaunchRoute::Unconfirmed { reason, .. } | LaunchRoute::Direct { reason } => Some(reason),
         }
     }
 }
 
+/// The service-manager tools `launch_detached` runs, by absolute path like
+/// the updater's other tools, and how long each may take.
 #[cfg(target_os = "linux")]
-const SYSTEMD_RUN: &str = "systemd-run";
+#[derive(Clone, Debug)]
+struct UserManagerTools {
+    systemd_run: PathBuf,
+    systemctl: PathBuf,
+    /// How long `systemd-run` may take to report the started (or failed) exec.
+    start_timeout: std::time::Duration,
+    /// How long `systemctl stop` may take to cancel a start that timed out.
+    stop_timeout: std::time::Duration,
+}
 
-/// How long `systemd-run` may take to report the started (or failed) exec.
 #[cfg(target_os = "linux")]
-const SYSTEMD_RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+impl UserManagerTools {
+    fn system() -> Self {
+        Self {
+            systemd_run: PathBuf::from("/usr/bin/systemd-run"),
+            systemctl: PathBuf::from("/usr/bin/systemctl"),
+            start_timeout: std::time::Duration::from_secs(10),
+            stop_timeout: std::time::Duration::from_secs(5),
+        }
+    }
+}
 
 /// Start `program` with no arguments in `cwd`, with `launch_env(env)`, as a
 /// transient service of the user's systemd manager, so the app does not
 /// inherit this process's `no_new_privs`; when there is no user manager, or
 /// `systemd-run` is missing or fails, as a direct child (`relaunch_command`).
-/// `purpose` names the unit (`app-<app id>-<purpose>-<unique>.service`) and
-/// must be a plain word.
+/// `purpose` goes into the unit's instance name and must be alphanumeric.
 #[cfg(target_os = "linux")]
 pub(crate) fn launch_detached(program: &Path, env: Vec<(OsString, OsString)>, old_appdir: Option<&Path>, cwd: &Path, purpose: &str) -> std::io::Result<LaunchRoute> {
+    launch_detached_with(&UserManagerTools::system(), program, env, old_appdir, cwd, purpose)
+}
+
+#[cfg(target_os = "linux")]
+fn launch_detached_with(
+    tools: &UserManagerTools,
+    program: &Path,
+    env: Vec<(OsString, OsString)>,
+    old_appdir: Option<&Path>,
+    cwd: &Path,
+    purpose: &str,
+) -> std::io::Result<LaunchRoute> {
     let env = launch_env(env, old_appdir);
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.subsec_nanos());
     let unit = unit_name(purpose, std::process::id(), nanos);
-    let reason = match start_with_user_manager(&unit, program, &env, cwd) {
-        Ok(()) => return Ok(LaunchRoute::UserManager { unit }),
-        Err(reason) => reason,
+    let mut reason = match start_with_user_manager(tools, &unit, program, &env, cwd) {
+        UserManagerStart::Started => return Ok(LaunchRoute::UserManager { unit }),
+        UserManagerStart::Unconfirmed(reason) => return Ok(LaunchRoute::Unconfirmed { unit, reason }),
+        UserManagerStart::NotStarted(reason) => reason,
     };
+    // The AppImage runtime mounts itself through the setuid fusermount3,
+    // which cannot gain privileges under no_new_privs either.
+    if old_appdir.is_some() && no_new_privs() {
+        reason.push_str("; an AppImage started under no_new_privs usually cannot mount itself and may exit at once");
+    }
     // Never waited for: this process exits right after the launch, and the
     // reparented child is reaped by init or the session's subreaper.
     relaunch_command(program, env, old_appdir, cwd).as_std_mut().spawn()?;
     Ok(LaunchRoute::Direct { reason })
 }
 
-/// A unit name following the XDG `app-<id>-<random>.service` convention.
+/// A transient service name in the XDG `app-<ApplicationID>@<RANDOM>.service`
+/// form, from which xdg-desktop-portal reads the app id (`APP_ID`) of the
+/// started app; the instance part must be alphanumeric.
 #[cfg(target_os = "linux")]
 fn unit_name(purpose: &str, pid: u32, nanos: u32) -> String {
-    format!("app-{}-{purpose}-{pid}-{nanos:08x}.service", crate::product::APP_ID)
+    format!("app-{}@{purpose}{pid}{nanos:08x}.service", crate::product::APP_ID)
 }
 
 /// `systemd-run`'s arguments for `program`. `Type=exec` makes `systemd-run`
@@ -295,7 +344,11 @@ fn unit_name(purpose: &str, pid: u32, nanos: u32) -> String {
 /// an app relaunched from it later) alive while any of its processes runs,
 /// where the default would stop the unit, killing the rest, when the first
 /// process exits. `--setenv=NAME` without a value passes `systemd-run`'s own
-/// value, so no value ever appears on a command line.
+/// value, so no value ever appears on a command line (the values do land in
+/// the transient unit, readable by this user only, until it is collected).
+/// The program path is passed as it is: `systemd-run` looks it up itself, so
+/// escaping a `$` would name a file that does not exist, and the manager does
+/// not expand variables in it.
 #[cfg(target_os = "linux")]
 fn systemd_run_args<'a>(unit: &str, program: &Path, env_names: impl IntoIterator<Item = &'a OsStr>, cwd: &Path) -> Vec<OsString> {
     let mut args: Vec<OsString> =
@@ -331,43 +384,96 @@ fn has_user_manager(env: &[(OsString, OsString)]) -> bool {
     env.iter().any(|(name, value)| name == "XDG_RUNTIME_DIR" && !value.is_empty())
 }
 
-/// Run `systemd-run` and wait for its answer. `Err` carries why the app was
-/// not started that way. A `systemd-run` that times out is killed, but its
-/// start job may still run; a second launch is then handed to the first by
-/// the single-instance plugin.
+/// What asking the user's service manager to start the app came to.
 #[cfg(target_os = "linux")]
-fn start_with_user_manager(unit: &str, program: &Path, env: &[(OsString, OsString)], cwd: &Path) -> Result<(), String> {
+#[derive(Debug, PartialEq, Eq)]
+enum UserManagerStart {
+    Started,
+    /// Not started that way, and nothing is left that could start it later.
+    NotStarted(String),
+    /// No answer, and the queued start could not be cancelled.
+    Unconfirmed(String),
+}
+
+/// How a bounded tool run ended.
+#[cfg(target_os = "linux")]
+enum ToolRun {
+    Exited { status: std::process::ExitStatus, stderr: String },
+    TimedOut,
+    SpawnFailed(std::io::Error),
+}
+
+/// Run `program args` with only `env`, outside any old mount, inheriting no
+/// descriptors, and wait up to `timeout`; a run past it is killed.
+#[cfg(target_os = "linux")]
+fn run_tool(program: &Path, args: &[OsString], env: &[&(OsString, OsString)], timeout: std::time::Duration) -> ToolRun {
     use std::io::Read as _;
-    if !has_user_manager(env) {
-        return Err("XDG_RUNTIME_DIR is not set, so there is no user service manager".into());
-    }
-    let passed: Vec<&(OsString, OsString)> = env.iter().filter(|(name, value)| passes_to_user_manager(name, value)).collect();
-    let mut command = std::process::Command::new(SYSTEMD_RUN);
+    let mut command = std::process::Command::new(program);
     command
-        .args(systemd_run_args(unit, program, passed.iter().map(|(name, _)| name.as_os_str()), cwd))
+        .args(args)
         .env_clear()
-        .envs(passed.iter().map(|(name, value)| (name, value)))
+        .envs(env.iter().map(|(name, value)| (name, value)))
         .current_dir("/")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
     close_inherited_fds_on_exec(&mut command);
-    let mut child = command.spawn().map_err(|error| format!("{SYSTEMD_RUN} could not start: {error}"))?;
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => return ToolRun::SpawnFailed(error),
+    };
     let pid = libc::pid_t::try_from(child.id()).unwrap_or(libc::pid_t::MAX);
-    if !wait_for_exit(pid, SYSTEMD_RUN_TIMEOUT, &mut || matches!(child.try_wait(), Ok(None))) {
+    if !wait_for_exit(pid, timeout, &mut || matches!(child.try_wait(), Ok(None))) {
         let _ = child.kill();
         let _ = child.wait();
-        return Err(format!("{SYSTEMD_RUN} did not answer within {} s", SYSTEMD_RUN_TIMEOUT.as_secs()));
+        return ToolRun::TimedOut;
     }
-    let status = child.wait().map_err(|error| format!("{SYSTEMD_RUN} could not be waited for: {error}"))?;
-    if status.success() {
-        return Ok(());
-    }
+    let status = match child.wait() {
+        Ok(status) => status,
+        Err(error) => return ToolRun::SpawnFailed(error),
+    };
     let mut stderr = String::new();
     if let Some(mut pipe) = child.stderr.take() {
         let _ = pipe.read_to_string(&mut stderr);
     }
-    Err(format!("{SYSTEMD_RUN} failed ({status}): {}", stderr.trim()))
+    ToolRun::Exited { status, stderr: stderr.trim().to_string() }
+}
+
+/// `systemctl stop` exits with this when the unit is not loaded: no start job
+/// was ever queued, or it is gone.
+#[cfg(target_os = "linux")]
+const SYSTEMCTL_UNIT_NOT_LOADED: i32 = 5;
+
+/// Run `systemd-run` and wait for its answer. A `systemd-run` that times out
+/// is killed, but the start job it queued may still run, so the unit is
+/// stopped (which cancels a pending start) before anything else starts the app.
+#[cfg(target_os = "linux")]
+fn start_with_user_manager(tools: &UserManagerTools, unit: &str, program: &Path, env: &[(OsString, OsString)], cwd: &Path) -> UserManagerStart {
+    if !has_user_manager(env) {
+        return UserManagerStart::NotStarted("XDG_RUNTIME_DIR is not set, so there is no user service manager".into());
+    }
+    let passed: Vec<&(OsString, OsString)> = env.iter().filter(|(name, value)| passes_to_user_manager(name, value)).collect();
+    let args = systemd_run_args(unit, program, passed.iter().map(|(name, _)| name.as_os_str()), cwd);
+    let tool = tools.systemd_run.display();
+    match run_tool(&tools.systemd_run, &args, &passed, tools.start_timeout) {
+        ToolRun::Exited { status, .. } if status.success() => UserManagerStart::Started,
+        ToolRun::Exited { status, stderr } => UserManagerStart::NotStarted(format!("{tool} failed ({status}): {stderr}")),
+        ToolRun::SpawnFailed(error) => UserManagerStart::NotStarted(format!("{tool} could not start: {error}")),
+        ToolRun::TimedOut => {
+            let timed_out = format!("{tool} did not answer within {} s", tools.start_timeout.as_secs_f32());
+            let stop: Vec<OsString> = ["--user", "stop", unit].into_iter().map(OsString::from).collect();
+            let stopped = match run_tool(&tools.systemctl, &stop, &passed, tools.stop_timeout) {
+                ToolRun::Exited { status, .. } if status.success() || status.code() == Some(SYSTEMCTL_UNIT_NOT_LOADED) => Ok(()),
+                ToolRun::Exited { status, stderr } => Err(format!("{status}: {stderr}")),
+                ToolRun::TimedOut => Err(format!("no answer within {} s", tools.stop_timeout.as_secs_f32())),
+                ToolRun::SpawnFailed(error) => Err(error.to_string()),
+            };
+            match stopped {
+                Ok(()) => UserManagerStart::NotStarted(format!("{timed_out}; {unit} was stopped")),
+                Err(error) => UserManagerStart::Unconfirmed(format!("{timed_out}, and stopping {unit} failed ({error})")),
+            }
+        }
+    }
 }
 
 /// How often the fallback wait re-checks when the kernel has no `pidfd_open` (before 5.3).
@@ -683,7 +789,12 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn unit_names_follow_the_xdg_app_convention() {
-        assert_eq!(unit_name("handover", 4242, 0xabc), "app-vn.io.vif.saiatlas-handover-4242-00000abc.service");
+        let name = unit_name("handover", 4242, 0xabc);
+        assert_eq!(name, "app-vn.io.vif.saiatlas@handover424200000abc.service");
+        // xdg-desktop-portal's rule for a host app's id from its systemd unit.
+        let portal = regex::Regex::new(r"^app-(?:[[:alnum:]]+\-)?(.+?)(?:@[[:alnum:]]*|\-autostart)?\.service$").unwrap();
+        let app_id = portal.captures(&name).and_then(|captures| captures.get(1)).map(|id| id.as_str());
+        assert_eq!(app_id, Some(crate::product::APP_ID));
         assert!(has_user_manager(&pairs(&[("XDG_RUNTIME_DIR", "/run/user/1000")])));
         assert!(!has_user_manager(&pairs(&[("XDG_RUNTIME_DIR", "")])));
         assert!(!has_user_manager(&pairs(&[("HOME", "/home/u")])));
@@ -719,6 +830,30 @@ mod tests {
         panic!("{} never appeared", path.display());
     }
 
+    /// Service-manager tools that are fakes in `dir` (or absent), with short timeouts.
+    #[cfg(target_os = "linux")]
+    fn fake_tools(dir: &Path) -> UserManagerTools {
+        UserManagerTools {
+            systemd_run: dir.join("systemd-run"),
+            systemctl: dir.join("systemctl"),
+            start_timeout: std::time::Duration::from_millis(300),
+            stop_timeout: std::time::Duration::from_secs(5),
+        }
+    }
+
+    /// A launch target that records its argument count into `marker`.
+    #[cfg(target_os = "linux")]
+    fn marker_app(dir: &Path) -> (PathBuf, PathBuf) {
+        let (script, marker) = (dir.join("app"), dir.join("marker"));
+        write_script(&script, &format!("#!/bin/sh\necho \"started $#\" > '{}'\n", marker.display()));
+        (script, marker)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn manager_env(dir: &Path) -> Vec<(OsString, OsString)> {
+        pairs(&[("PATH", "/usr/bin:/bin"), ("XDG_RUNTIME_DIR", dir.to_str().unwrap()), ("SECRET", "s3cr3t value"), ("GDK_BACKEND", "x11")])
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn launch_detached_falls_back_to_a_direct_child_without_a_user_manager() {
@@ -726,7 +861,7 @@ mod tests {
         let (script, marker) = (dir.path().join("app"), dir.path().join("marker"));
         write_script(&script, &format!("#!/bin/sh\necho \"$#|$KEEP|${{GDK_BACKEND-unset}}|$(pwd)\" > '{}'\n", marker.display()));
         let env = pairs(&[("PATH", "/usr/bin:/bin"), ("KEEP", "yes"), ("GDK_BACKEND", "x11")]);
-        let route = launch_detached(&script, env, None, dir.path(), "test").unwrap();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, env, None, dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Direct { reason } if reason.contains("XDG_RUNTIME_DIR")), "{route:?}");
         assert_eq!(wait_for_file(&marker), format!("0|yes|unset|{}\n", dir.path().display()));
     }
@@ -735,14 +870,93 @@ mod tests {
     #[test]
     fn launch_detached_falls_back_when_systemd_run_is_missing() {
         let dir = tempfile::tempdir().unwrap();
-        let (script, marker) = (dir.path().join("app"), dir.path().join("marker"));
-        write_script(&script, &format!("#!/bin/sh\necho started > '{}'\n", marker.display()));
-        // No systemd-run on this PATH; the runtime dir exists but is never contacted.
-        let env = pairs(&[("PATH", dir.path().to_str().unwrap()), ("XDG_RUNTIME_DIR", dir.path().to_str().unwrap())]);
-        let route = launch_detached(&script, env, None, dir.path(), "test").unwrap();
+        let (script, marker) = marker_app(dir.path());
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
         assert!(matches!(&route, LaunchRoute::Direct { reason } if reason.contains("could not start")), "{route:?}");
         assert_eq!(route.name(), "direct");
-        assert_eq!(wait_for_file(&marker), "started\n");
+        assert_eq!(wait_for_file(&marker), "started 0\n");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn launch_detached_hands_systemd_run_variable_names_and_values_only_through_its_environment() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, marker) = marker_app(dir.path());
+        let (args_file, env_file) = (dir.path().join("args"), dir.path().join("env"));
+        write_script(
+            &dir.path().join("systemd-run"),
+            &format!("#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nenv > '{}'\n", args_file.display(), env_file.display()),
+        );
+        let tools = fake_tools(dir.path());
+        let route = launch_detached_with(&tools, &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        let LaunchRoute::UserManager { unit } = &route else { panic!("{route:?}") };
+        assert_eq!(route.name(), "systemd-run");
+        let args = std::fs::read_to_string(&args_file).unwrap();
+        assert!(args.lines().any(|line| line == format!("--unit={unit}")), "{args}");
+        assert!(args.lines().any(|line| line == "--setenv=SECRET"), "{args}");
+        assert!(!args.contains("s3cr3t"), "a value reached the command line: {args}");
+        assert!(!args.contains("GDK_BACKEND"), "{args}");
+        assert_eq!(args.lines().last(), Some(script.to_str().unwrap()));
+        let env = std::fs::read_to_string(&env_file).unwrap();
+        assert!(env.lines().any(|line| line == "SECRET=s3cr3t value"), "{env}");
+        assert!(!env.contains("GDK_BACKEND"), "{env}");
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(!marker.exists(), "the app was started a second time, directly");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn launch_detached_falls_back_when_systemd_run_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, marker) = marker_app(dir.path());
+        write_script(&dir.path().join("systemd-run"), "#!/bin/sh\necho 'Failed to connect to bus' >&2\nexit 1\n");
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        assert!(matches!(&route, LaunchRoute::Direct { reason } if reason.contains("Failed to connect to bus")), "{route:?}");
+        assert_eq!(wait_for_file(&marker), "started 0\n");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn launch_detached_stops_a_unit_that_timed_out_before_starting_the_app_directly() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, marker) = marker_app(dir.path());
+        let stop_file = dir.path().join("stop");
+        write_script(&dir.path().join("systemd-run"), "#!/bin/sh\nexec sleep 30\n");
+        write_script(&dir.path().join("systemctl"), &format!("#!/bin/sh\necho \"$@\" > '{}'\n", stop_file.display()));
+        let started = std::time::Instant::now();
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
+        let LaunchRoute::Direct { reason } = &route else { panic!("{route:?}") };
+        assert!(reason.contains("did not answer") && reason.contains("was stopped"), "{reason}");
+        let stop = std::fs::read_to_string(&stop_file).unwrap();
+        assert!(stop.starts_with("--user stop app-vn.io.vif.saiatlas@test"), "{stop}");
+        assert_eq!(wait_for_file(&marker), "started 0\n");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn launch_detached_starts_nothing_more_when_a_timed_out_unit_cannot_be_stopped() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, marker) = marker_app(dir.path());
+        write_script(&dir.path().join("systemd-run"), "#!/bin/sh\nexec sleep 30\n");
+        write_script(&dir.path().join("systemctl"), "#!/bin/sh\necho 'Failed to stop' >&2\nexit 1\n");
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        assert!(matches!(&route, LaunchRoute::Unconfirmed { reason, .. } if reason.contains("Failed to stop")), "{route:?}");
+        assert_eq!(route.name(), "systemd-run (unconfirmed)");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(!marker.exists(), "the app was started directly while the unit may still start it");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn an_unloaded_unit_counts_as_stopped() {
+        let dir = tempfile::tempdir().unwrap();
+        let (script, marker) = marker_app(dir.path());
+        write_script(&dir.path().join("systemd-run"), "#!/bin/sh\nexec sleep 30\n");
+        write_script(&dir.path().join("systemctl"), "#!/bin/sh\necho 'Unit not loaded.' >&2\nexit 5\n");
+        let route = launch_detached_with(&fake_tools(dir.path()), &script, manager_env(dir.path()), None, dir.path(), "test").unwrap();
+        assert!(matches!(&route, LaunchRoute::Direct { .. }), "{route:?}");
+        assert_eq!(wait_for_file(&marker), "started 0\n");
     }
 
     #[cfg(target_os = "linux")]

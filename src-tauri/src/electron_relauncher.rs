@@ -57,7 +57,8 @@ pub fn run(args: Vec<OsString>) -> ExitCode {
         "parentPid": parent,
         "syncByte": sync.name(),
         "switches": lossy(switches),
-        "droppedArgv": lossy(dropped),
+        // Only the count: the old command line may carry an omp:// link with a token in it.
+        "droppedArgCount": dropped.len(),
     });
     let outcome = run_protocol(parent, PARENT_EXIT_TIMEOUT, &mut || nix::unistd::getppid().as_raw() == parent, launch_app);
     report(&outcome, details);
@@ -197,6 +198,11 @@ fn report(outcome: &Outcome<relaunch::LaunchRoute>, mut details: serde_json::Val
                         relaunch::LaunchRoute::UserManager { unit } => {
                             details["unit"] = json!(unit);
                             "Electron relaunch helper: started the app through the user's service manager".to_string()
+                        }
+                        relaunch::LaunchRoute::Unconfirmed { unit, reason } => {
+                            details["unit"] = json!(unit);
+                            details["fallbackReason"] = json!(reason);
+                            "Electron relaunch helper: the user's service manager did not answer; the app may still start through it".to_string()
                         }
                         relaunch::LaunchRoute::Direct { reason } => {
                             let no_new_privs = relaunch::no_new_privs();

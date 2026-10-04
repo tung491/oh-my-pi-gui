@@ -278,7 +278,7 @@ fn start_pending_relaunch(relaunch: &PendingRelaunch) {
             Ok(route) => runtime_log::note(
                 "unknown",
                 format!("relaunching {} ({})", program.display(), route.name()),
-                json!({ "program": program.display().to_string(), "route": route.name(), "noNewPrivs": true }),
+                json!({ "program": program.display().to_string(), "route": route.name(), "reason": route.reason(), "noNewPrivs": true }),
             ),
             Err(error) => runtime_log::note("main-uncaught", format!("relaunch of {} failed: {error}", program.display()), json!({})),
         }

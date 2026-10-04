@@ -442,7 +442,7 @@ impl Updater {
         if mode == UpdateInstallMode::Manual {
             self.open_manual_installer(&destination)?;
         }
-        self.set_status(UpdateStatus::Downloaded { version: version.to_string(), mode, reopen_required: None });
+        self.set_status(UpdateStatus::Downloaded { version: version.to_string(), mode, reopen_required: false });
         Ok(())
     }
 
@@ -485,6 +485,12 @@ impl Updater {
             return;
         }
         let Some(ctx) = self.ctx() else { return };
+        // pkexec cannot work in this process at all, so asking the user to
+        // close their working tabs first would be for nothing.
+        if self.config.kind == Some(LinuxPackageKind::Deb) && !self.config.privileged.can_elevate() {
+            self.ask_for_reopen(version, mode);
+            return;
+        }
         // A deb runs pkexec + dpkg and an AppImage swaps its file before this
         // process quits, so the working-tabs prompt must come first: a quit
         // cancelled afterwards would keep the old process running on top of
@@ -508,14 +514,18 @@ impl Updater {
                     ctx.desktop.withdraw_quit_approval();
                 }
                 match error {
-                    InstallError::ReopenRequired => {
-                        runtime_log::note("unknown", "the update cannot ask for privileges in this process (no_new_privs); asking for a reopen", json!({ "version": version }));
-                        self.set_status(UpdateStatus::Downloaded { version, mode, reopen_required: Some(true) });
-                    }
+                    InstallError::ReopenRequired => self.ask_for_reopen(version, mode),
                     InstallError::Failed(detail) => self.error(format!("{} ({detail})", self.text(MainTextKey::UpdatesInstallFailed)), Some(true)),
                 }
             }
         }
+    }
+
+    /// Keep the verified download and ask the user to quit and reopen the app:
+    /// this process runs with `no_new_privs`, so pkexec cannot ask for privileges.
+    fn ask_for_reopen(&self, version: String, mode: UpdateInstallMode) {
+        runtime_log::note("unknown", "the update cannot ask for privileges in this process (no_new_privs); asking for a reopen", json!({ "version": version }));
+        self.set_status(UpdateStatus::Downloaded { version, mode, reopen_required: true });
     }
 
     /// Install the verified package for this install kind. Returns the program
@@ -920,7 +930,7 @@ mod tests {
                 inner.active = Some(ActiveUpdate { version: "0.9.16".into(), asset: Asset { name: name.into(), sha512: sha512_base64(bytes), size: Some(bytes.len() as u64) } });
                 inner.downloaded = Some(path.clone());
             }
-            updater.set_status(UpdateStatus::Downloaded { version: "0.9.16".into(), mode, reopen_required: None });
+            updater.set_status(UpdateStatus::Downloaded { version: "0.9.16".into(), mode, reopen_required: false });
             path
         }
     }
@@ -1024,7 +1034,7 @@ mod tests {
         *server.feed.lock().unwrap() = Some(feed_yaml("0.9.16", b"a", b"d"));
         let h = harness(Setup { release_base: base, ..Setup::default() });
         h.seed_downloaded(UpdateInstallMode::Automatic, b"d", DEB_NAME);
-        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic, reopen_required: None });
+        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic, reopen_required: false });
         assert!(server.requests.lock().unwrap().is_empty());
     }
 
@@ -1251,7 +1261,7 @@ mod tests {
         h.call("updater:apply").await;
 
         assert!(h.runner.calls.lock().unwrap().is_empty(), "pkexec never runs");
-        assert_eq!(h.fakes.desktop.log.calls(), ["approve_quit_before_install()", "withdraw_quit_approval()"]);
+        assert!(h.fakes.desktop.log.calls().is_empty(), "no quit prompt for an install that cannot run");
         let reopen = json!({ "state": "downloaded", "version": "0.9.16", "mode": "automatic", "reopenRequired": true });
         assert_eq!(h.updater().status(), reopen);
         assert_eq!(h.statuses().last(), Some(&reopen));
@@ -1260,7 +1270,21 @@ mod tests {
         assert!(!h.updater().inner().install_done);
         assert_eq!(h.updater().inner().downloaded.as_deref(), Some(package.as_path()), "the verified download is kept");
         // A timer check leaves the state alone.
-        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic, reopen_required: Some(true) });
+        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Downloaded { version: "0.9.16".into(), mode: UpdateInstallMode::Automatic, reopen_required: true });
+    }
+
+    #[tokio::test]
+    async fn apply_asks_for_a_reopen_when_pkexec_reports_it_cannot_gain_privileges() {
+        let h = harness(Setup::default());
+        *h.fakes.desktop.approve_install.lock().unwrap() = true;
+        *h.runner.answers.lock().unwrap() = vec![Err(install::RunFailure { code: Some(127), detail: "pkexec must be setuid root".into() })];
+        h.seed_downloaded(UpdateInstallMode::Automatic, b"deb bytes", DEB_NAME);
+
+        h.call("updater:apply").await;
+
+        assert_eq!(h.fakes.desktop.log.calls(), ["approve_quit_before_install()", "withdraw_quit_approval()"]);
+        assert_eq!(h.updater().status(), json!({ "state": "downloaded", "version": "0.9.16", "mode": "automatic", "reopenRequired": true }));
+        assert!(h.fakes.host.exit_codes.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -144,7 +144,8 @@ fn answers_electron_then_starts_the_app_without_arguments_once_electron_exits() 
     let log = wait_for_file(&sandbox.runtime_log(), Duration::from_secs(10)).expect("the runtime log line");
     assert!(log.contains(r#""route":"direct""#), "{log}");
     assert!(log.contains(r#""syncByte":"written""#), "{log}");
-    assert!(log.contains("omp://x"), "the dropped command line is logged: {log}");
+    assert!(log.contains(r#""droppedArgCount":3"#), "{log}");
+    assert!(!log.contains("omp://x"), "the dropped command line is logged verbatim: {log}");
 }
 
 #[test]

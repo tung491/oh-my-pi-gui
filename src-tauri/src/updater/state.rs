@@ -49,8 +49,8 @@ pub(crate) enum UpdateStatus {
         /// The install could not ask for privileges in this process
         /// (`no_new_privs`); the renderer asks the user to quit and reopen the
         /// app, then install the same download.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        reopen_required: Option<bool>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        reopen_required: bool,
     },
     NotAvailable {
         version: String,
