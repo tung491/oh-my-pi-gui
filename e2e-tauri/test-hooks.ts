@@ -43,6 +43,8 @@ export interface HookWindow {
 	cwd: string | null;
 	/** `null` when the desktop cannot tell (never in the real app). */
 	visible: boolean | null;
+	/** The outer footprint in logical pixels, as `window-state.json` saves it; `null` when unknown. */
+	bounds: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** What `test:runtime` reports. */

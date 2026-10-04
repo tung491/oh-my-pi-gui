@@ -2,6 +2,8 @@
 //! A saved rect may name a display that is no longer attached; a window that
 //! "opens" there is unreachable, so it is recentered on the fallback display.
 
+use super::windows::{MIN_HEIGHT, MIN_WIDTH};
+
 /// A rectangle in logical pixels, as the renderer and the saved state use it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Rect {
@@ -29,21 +31,35 @@ pub(crate) fn is_reachable(rect: &Rect, work_areas: &[Rect]) -> bool {
     })
 }
 
+/// The largest window decoration (outer footprint minus content size, logical
+/// pixels) believed to be real. GNOME's client-side header bar and shadow are
+/// about 52x89, Windows' borders and caption about 16x39, macOS' title bar
+/// 0x28; a larger gap is a bogus measurement (a size cache still holding the
+/// window's position, or a first configure the compositor constrained).
+const MAX_DECORATION_WIDTH: f64 = 200.0;
+const MAX_DECORATION_HEIGHT: f64 = 300.0;
+
 /// The content (inner) size to request so a window's full footprint (the
 /// outer bounds `windowState` saves, matching Electron's `getBounds()` /
 /// `useContentSize: false` semantics) ends up at `target_outer`.
 ///
-/// The window builder can only ask for a content size, not a footprint, so a
-/// window is first built at a guess (`probe_inner`) and its realized footprint
-/// (`probe_outer`) measured; the gap between the two is the platform's window
-/// decoration (GTK's client-side header bar and shadow, a title bar and
-/// border elsewhere). Subtracting it from the target gives the content size
-/// whose footprint will be exactly `target_outer`, as long as the decoration
-/// stays constant between the probe and the corrected size — true for a
-/// fixed theme and scale factor, which is the only case this guards.
-pub(crate) fn corrected_inner_size(target_outer: (f64, f64), probe_inner: (f64, f64), probe_outer: (f64, f64)) -> (f64, f64) {
-    let decoration = (probe_outer.0 - probe_inner.0, probe_outer.1 - probe_inner.1);
-    ((target_outer.0 - decoration.0).max(1.0), (target_outer.1 - decoration.1).max(1.0))
+/// The window builder can only ask for a content size, so a window is built
+/// at `requested_inner` and its realized footprint (`measured_outer`) read
+/// back; the gap between the two is the platform's window decoration (GTK's
+/// client-side header bar and shadow, a title bar and border elsewhere).
+/// Subtracting it from the target gives the content size whose footprint is
+/// exactly `target_outer`, as long as the decoration stays constant — true for
+/// a fixed theme and scale factor.
+///
+/// `None` means the measurement is not a plausible decoration (negative, or
+/// past the ceilings above) and the window keeps its requested content size:
+/// skipping the correction costs at most one decoration of growth, applying a
+/// bogus one can double the window. The result never goes below the window's
+/// minimum content size.
+pub(crate) fn corrected_inner_size(target_outer: (f64, f64), requested_inner: (f64, f64), measured_outer: (f64, f64)) -> Option<(f64, f64)> {
+    let decoration = (measured_outer.0 - requested_inner.0, measured_outer.1 - requested_inner.1);
+    let plausible = (0.0..=MAX_DECORATION_WIDTH).contains(&decoration.0) && (0.0..=MAX_DECORATION_HEIGHT).contains(&decoration.1);
+    plausible.then(|| ((target_outer.0 - decoration.0).max(MIN_WIDTH), (target_outer.1 - decoration.1).max(MIN_HEIGHT)))
 }
 
 /// Keep `rect` where it was when its title bar is on a screen, otherwise place
@@ -113,17 +129,45 @@ mod tests {
 
     #[test]
     fn corrects_the_requested_inner_size_so_the_outer_footprint_matches_the_target() {
-        // The reported drift: GTK client-side decorations add 52x89 logical
-        // pixels (header bar + shadow) once a window is realized.
+        // GTK client-side decorations add 52x89 logical pixels (header bar +
+        // shadow) once a window is realized.
         let corrected = corrected_inner_size((1452.0, 989.0), (1452.0, 989.0), (1504.0, 1078.0));
-        assert_eq!(corrected, (1400.0, 900.0));
-        let realized_outer = (corrected.0 + 52.0, corrected.1 + 89.0);
-        assert_eq!(realized_outer, (1452.0, 989.0));
+        assert_eq!(corrected, Some((1400.0, 900.0)));
+        let (width, height) = corrected.unwrap();
+        assert_eq!((width + 52.0, height + 89.0), (1452.0, 989.0));
+    }
+
+    #[test]
+    fn a_known_decoration_is_subtracted_from_a_default_sized_target() {
+        assert_eq!(corrected_inner_size((1400.0, 900.0), (1400.0, 900.0), (1452.0, 989.0)), Some((1348.0, 811.0)));
     }
 
     #[test]
     fn zero_decoration_leaves_the_requested_size_unchanged() {
-        let corrected = corrected_inner_size((1400.0, 900.0), (1400.0, 900.0), (1400.0, 900.0));
-        assert_eq!(corrected, (1400.0, 900.0));
+        assert_eq!(corrected_inner_size((1400.0, 900.0), (1400.0, 900.0), (1400.0, 900.0)), Some((1400.0, 900.0)));
+    }
+
+    #[test]
+    fn a_size_cache_still_holding_the_window_position_never_doubles_the_window() {
+        // Before its first configure, a Linux window reports its position as
+        // its outer size. Read as a decoration that is hugely negative; the
+        // old arithmetic turned (260, 90) into a 2540x1710 window.
+        for position in [(260.0, 90.0), (0.0, 0.0), (28.0, 28.0)] {
+            assert_eq!(corrected_inner_size((1400.0, 900.0), (1400.0, 900.0), position), None, "{position:?}");
+        }
+    }
+
+    #[test]
+    fn a_decoration_past_the_plausibility_ceilings_is_ignored() {
+        let target = (1400.0, 900.0);
+        assert_eq!(corrected_inner_size(target, target, (1600.0, 1200.0)), Some((1200.0, 600.0)));
+        assert_eq!(corrected_inner_size(target, target, (1601.0, 1000.0)), None, "201 px wide");
+        assert_eq!(corrected_inner_size(target, target, (1500.0, 1201.0)), None, "301 px tall");
+        assert_eq!(corrected_inner_size(target, target, (1399.0, 950.0)), None, "negative width");
+    }
+
+    #[test]
+    fn the_corrected_size_never_drops_below_the_minimum_window_size() {
+        assert_eq!(corrected_inner_size((820.0, 650.0), (820.0, 650.0), (872.0, 739.0)), Some((MIN_WIDTH, MIN_HEIGHT)));
     }
 }

@@ -20,10 +20,16 @@ const TAURI_ONLY: ReadonlySet<string> = new Set(["csp.e2e.ts"]);
 
 /**
  * Tests that exist only in a twin, by design: the installed-package smoke ends
- * with the hard-kill case, which only the Tauri shell's sidecar supervisor has.
+ * with the hard-kill case, which only the Tauri shell's sidecar supervisor has,
+ * and the desktop spec checks the restored window size, which the Tauri shell
+ * corrects for its window decoration itself (Electron's `setBounds` did not need to).
  */
 const TAURI_ONLY_TESTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 	["packaged-smoke.e2e.ts", new Set(["a hard kill leaves no sidecar or tool child"])],
+	[
+		"desktop.e2e.ts",
+		new Set(["a restored window opens at its saved footprint and a restart leaves the saved state unchanged"]),
+	],
 ]);
 
 /** A test definition at the start of a line: Playwright's `test(` or mocha's `it(`. */

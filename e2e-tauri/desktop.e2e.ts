@@ -13,6 +13,7 @@ import {
 	pageErrorLog,
 	ROOT,
 	recorded,
+	relaunch,
 	textOf,
 	until,
 } from "./session";
@@ -21,6 +22,8 @@ import {
 	callsTo,
 	currentWindowId,
 	emitToWindow,
+	type HookWindow,
+	listWindows,
 	navigationProbe,
 	releaseBarrier,
 	setFault,
@@ -809,5 +812,38 @@ describe("desktop", () => {
 		await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
 		await expect(alertWith("audit appearance write refused")).toBeDisplayed();
 		expect(await errors()).toEqual([]);
+	});
+});
+
+describe("window geometry", () => {
+	it("a restored window opens at its saved footprint and a restart leaves the saved state unchanged", async () => {
+		// The saved outer footprint, as Electron's `getBounds()` wrote it. A
+		// window corrected against a size cache that still held its position
+		// came back as 2*1300-40 by 2*850-30 and saved that.
+		const saved = { width: 1300, height: 850, x: 40, y: 30, isMaximized: false };
+		const sameSize = (bounds: HookWindow["bounds"]) =>
+			bounds?.width === saved.width && bounds?.height === saved.height;
+		const geometry = await launch({
+			name: "window-geometry",
+			prefs: { firstRunComplete: true },
+			setup: prepared =>
+				fs.writeFile(path.join(prepared.desktop, "window-state.json"), JSON.stringify({ windowState: saved })),
+		});
+		const stateFile = path.join(geometry.desktop, "window-state.json");
+		const mainBounds = async () =>
+			(await listWindows(browser)).find(window => window.kind === "main")?.bounds ?? null;
+		const savedState = async () => JSON.parse(await fs.readFile(stateFile, "utf8")).windowState;
+
+		await awaitMainWindow(browser);
+		expect(await until(mainBounds, sameSize)).toMatchObject({ width: saved.width, height: saved.height });
+		// Moves and resizes are written after a 500 ms debounce; give any write time to land.
+		await browser.pause(1_500);
+		expect(await savedState()).toEqual(saved);
+
+		await relaunch(geometry);
+		await awaitMainWindow(browser);
+		expect(await until(mainBounds, sameSize)).toMatchObject({ width: saved.width, height: saved.height });
+		await browser.pause(1_500);
+		expect(await savedState()).toEqual(saved);
 	});
 });

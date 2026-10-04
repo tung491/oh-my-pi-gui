@@ -143,8 +143,9 @@ mod hooks {
         Reply::ok(Value::Null)
     }
 
-    /// `test:windows`: the known windows, whether each page has attached, and
-    /// whether the window is shown (`null` when the desktop cannot tell).
+    /// `test:windows`: the known windows, whether each page has attached,
+    /// whether the window is shown, and its outer footprint in logical pixels
+    /// (`visible` and `bounds` are `null` when the desktop cannot tell).
     pub fn windows(ctx: &Arc<AppCtx>, _: Caller, _: Vec<Value>) -> Reply {
         let desktop = ctx.desktop.as_any().downcast_ref::<crate::desktop::Desktop>();
         let windows: Vec<Value> = ctx
@@ -160,6 +161,9 @@ mod hooks {
                     "attached": ctx.bridge.is_attached(caller.win_id),
                     "cwd": record.map(|r| r.cwd),
                     "visible": desktop.map(|desktop| desktop.is_window_visible(caller.win_id)),
+                    "bounds": desktop
+                        .and_then(|desktop| desktop.window_bounds(caller.win_id))
+                        .map(|bounds| json!({ "x": bounds.x, "y": bounds.y, "width": bounds.width, "height": bounds.height })),
                 })
             })
             .collect();
@@ -335,15 +339,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn windows_hook_lists_known_windows_and_leaves_visibility_unknown_on_a_fake_desktop() {
+    async fn windows_hook_lists_known_windows_and_leaves_visibility_and_bounds_unknown_on_a_fake_desktop() {
         let ctx = fake_ctx(registry());
         ctx.bridge.register_window(Caller::quick_entry());
         let windows = hook(&ctx, "test:windows", Value::Null).await.expect("window list");
         assert_eq!(
             windows,
             json!([
-                { "winId": 0, "label": "quick-entry", "kind": "quick-entry", "attached": false, "cwd": null, "visible": null },
-                { "winId": 1, "label": "main-1", "kind": "main", "attached": true, "cwd": null, "visible": null },
+                { "winId": 0, "label": "quick-entry", "kind": "quick-entry", "attached": false, "cwd": null, "visible": null, "bounds": null },
+                { "winId": 1, "label": "main-1", "kind": "main", "attached": true, "cwd": null, "visible": null, "bounds": null },
             ])
         );
     }
