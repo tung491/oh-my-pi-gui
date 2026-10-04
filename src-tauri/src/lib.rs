@@ -11,6 +11,7 @@ pub mod paths;
 pub mod ports;
 pub mod prefs;
 pub mod product;
+mod relaunch;
 pub mod runtime_log;
 pub mod test_hooks;
 pub mod webview;
@@ -262,8 +263,12 @@ impl Host for TauriHost {
 /// the plugins' own exit hooks released the single-instance D-Bus name.
 fn start_pending_relaunch(relaunch: &PendingRelaunch) {
     let Some(program) = relaunch.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() else { return };
+    // An AppImage's mount: the relaunch must not inherit anything under it, or
+    // the old image stays mounted until the new app quits.
+    let old_appdir = std::env::var_os("APPDIR").filter(|value| !value.is_empty()).map(PathBuf::from);
+    let cwd = relaunch::relaunch_cwd(std::env::current_dir().ok().as_deref(), old_appdir.as_deref(), dirs::home_dir().as_deref());
     let spawned = tauri::async_runtime::block_on(async {
-        tokio::process::Command::new(&program).env_remove("APPIMAGE_EXIT_AFTER_INSTALL").spawn()
+        relaunch::relaunch_command(&program, std::env::vars_os().collect(), old_appdir.as_deref(), &cwd).spawn()
     });
     match spawned {
         Ok(_child) => runtime_log::note("unknown", format!("relaunching {}", program.display()), json!({ "program": program.display().to_string() })),
