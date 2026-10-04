@@ -14,7 +14,8 @@
  *
  * The package is unpacked with `dpkg-deb -R`, changed, given fresh md5sums and
  * rebuilt with `dpkg-deb --root-owner-group -Zgzip -b` (gzip like the bundler)
- * under the same file name.
+ * under the same file name. Every ELF file in the package is checked against
+ * the glibc floor (`glibc-floor.ts`) first.
  */
 
 import { spawnSync } from "node:child_process";
@@ -36,6 +37,7 @@ import {
 } from "node:fs";
 import * as path from "node:path";
 import { APP_ID } from "../../src/shared/product";
+import { assertGlibcFloor } from "./glibc-floor";
 
 /** The desktop entry's file name: the app id, which is also the Wayland app_id and StartupWMClass. */
 export const DESKTOP_ENTRY_ID = `${APP_ID}.desktop`;
@@ -98,6 +100,7 @@ export function finalizeDeb(debPath: string): void {
 	try {
 		const root = path.join(scratch, "root");
 		dpkgDeb(["-R", debPath, root]);
+		assertGlibcFloor(root, debPath);
 
 		const applications = path.join(root, "usr/share/applications");
 		const entries = readdirSync(applications).filter(name => name.endsWith(".desktop"));

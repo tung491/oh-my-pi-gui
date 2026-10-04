@@ -27,6 +27,10 @@
  * new size and hash, so release feeds must be written after this step
  * (`scripts/release-feeds.ts` reads the bundle directory after
  * `package:tauri:linux`).
+ *
+ * Before repacking, every ELF file in the AppDir is checked against the glibc
+ * floor (`glibc-floor.ts`): linuxdeploy bundles the build host's libraries, so
+ * an AppImage built on a distro newer than Ubuntu 24.04 is refused here.
  */
 
 import { spawnSync } from "node:child_process";
@@ -48,6 +52,7 @@ import {
 } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { assertGlibcFloor } from "./glibc-floor";
 
 /** The bundled library the GTK plugin relocates, relative to the AppDir. */
 export const WEBKIT_LIBRARY = "usr/lib/libwebkit2gtk-4.1.so.0";
@@ -182,6 +187,7 @@ export async function finalizeAppImage(appImagePath: string): Promise<void> {
 		const mode = statSync(library).mode;
 		writeFileSync(library, patchWebKitLibrary(readFileSync(library)));
 		chmodSync(library, mode);
+		assertGlibcFloor(appDir, source);
 
 		const rebuilt = path.join(scratch, path.basename(source));
 		run(tool, ["--appimage-extract-and-run", "--no-appstream", "--runtime-file", runtime, appDir, rebuilt], scratch, {
