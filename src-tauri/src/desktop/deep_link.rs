@@ -301,6 +301,65 @@ mod tests {
     fn a_debug_build_never_registers_the_url_scheme_at_startup() {
         let Harness { backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
         assert!(!backend.log.calls().iter().any(|call| call.starts_with("register_deep_link_scheme")));
+        // Nor once its renderer has attached.
+        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        desktop.on_renderer_attached();
+        assert!(!backend.log.calls().iter().any(|call| call.starts_with("register_deep_link_scheme")));
+    }
+
+    fn scheme_registrations(backend: &crate::desktop::testing::FakeBackend) -> usize {
+        backend.log.calls().iter().filter(|call| call.as_str() == "register_deep_link_scheme()").count()
+    }
+
+    #[test]
+    fn a_release_build_claims_the_url_scheme_only_after_the_first_renderer_attaches() {
+        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        assert!(!desktop.records().is_empty(), "startup opened its window");
+        assert_eq!(scheme_registrations(&backend), 0, "a window whose page never ran proves nothing");
+        desktop.claim_url_scheme_once(BuildKind::Release);
+        let calls = backend.log.calls();
+        let registered = calls.iter().position(|call| call == "register_deep_link_scheme()").unwrap();
+        let built = calls.iter().position(|call| call.starts_with("build_main_window(")).unwrap();
+        assert!(built < registered, "{calls:?}");
+        assert_eq!(scheme_registrations(&backend), 1);
+    }
+
+    #[test]
+    fn a_release_build_claims_the_url_scheme_once_across_attaches_and_windows() {
+        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        desktop.claim_url_scheme_once(BuildKind::Release);
+        // A reload of the first window, and the pages of later windows, attach again.
+        desktop.claim_url_scheme_once(BuildKind::Release);
+        desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
+        desktop.claim_url_scheme_once(BuildKind::Release);
+        desktop.claim_url_scheme_once(BuildKind::Release);
+        assert_eq!(scheme_registrations(&backend), 1);
+    }
+
+    #[test]
+    fn a_release_build_never_claims_the_url_scheme_without_an_attached_renderer() {
+        let Harness { ctx, desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas", "omp://new"], &[]);
+        let first = desktop.main_window().unwrap();
+        let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
+        // The second instance's link goes to the most recently focused window.
+        desktop.on_second_instance(vec!["sai-atlas".into(), "omp://session/abc".into()], None);
+        assert_eq!(scheme_registrations(&backend), 0);
+        // Links reach the renderers without the registration; the sinks attach
+        // through the bridge, not `omp_attach`, so they do not claim it.
+        let first_sink = attach_recording_sink(&ctx, first);
+        let second_sink = attach_recording_sink(&ctx, second);
+        assert_eq!(deep_links(&first_sink.sent()), vec![json!({ "action": "new-session" })]);
+        assert_eq!(deep_links(&second_sink.sent()), vec![json!({ "action": "switch-session", "sessionId": "abc" })]);
+        assert_eq!(scheme_registrations(&backend), 0);
+    }
+
+    #[test]
+    fn a_release_build_off_linux_never_claims_the_url_scheme() {
+        for platform in [Platform::Darwin, Platform::Win32] {
+            let Harness { desktop, backend, .. } = cold_start(platform, &["sai-atlas"], &[]);
+            desktop.claim_url_scheme_once(BuildKind::Release);
+            assert_eq!(scheme_registrations(&backend), 0, "{platform:?}");
+        }
     }
 
     #[test]

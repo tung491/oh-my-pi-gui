@@ -137,6 +137,16 @@ pub(crate) fn survive<T>(what: &str, call: impl FnOnce() -> T) -> Option<T> {
     }
 }
 
+/// A window's renderer attached its bridge channel: `bridge::omp_attach`
+/// reports it here once the page has booted and called into the core.
+pub(crate) fn renderer_attached(ctx: &AppCtx) {
+    survive("desktop.renderer_attached", || {
+        if let Some(desktop) = Desktop::of(ctx) {
+            desktop.on_renderer_attached();
+        }
+    });
+}
+
 /// Production `DesktopPort`.
 pub struct Desktop {
     backend: Arc<dyn Backend>,
@@ -152,6 +162,8 @@ pub struct Desktop {
     progress: Mutex<BTreeMap<WindowId, RunProgressState>>,
     quit: QuitState,
     links: PendingLinks,
+    /// Set once the first attached renderer has claimed the `omp://` scheme.
+    url_scheme_claimed: AtomicBool,
     /// Native Wayland: shortcuts go through the portal and the compositor places the bar.
     wayland_portal: bool,
 }
@@ -183,6 +195,7 @@ impl Desktop {
             progress: Mutex::new(BTreeMap::new()),
             quit: QuitState::default(),
             links: PendingLinks::default(),
+            url_scheme_claimed: AtomicBool::new(false),
             wayland_portal,
         }
     }
@@ -352,8 +365,6 @@ impl Desktop {
             }))
         });
 
-        self.register_url_scheme();
-
         let argv = launch_arguments(&self.backend.argv(), false);
         let request = parse_launch_argv(&argv, DEEP_LINK_PROTOCOL, |path| self.backend.directory_exists(path));
         let explicit_cwd = match &request {
@@ -386,24 +397,40 @@ impl Desktop {
         registry.start();
     }
 
-    /// Make this binary the system `omp://` handler. Only a release build does:
-    /// a debug or e2e build would point every link on the desktop at a binary
-    /// that runs without the profile it was started with.
-    fn register_url_scheme(&self) {
-        if registers_url_scheme(BuildKind::current(), self.backend.platform()) {
-            self.register_url_scheme_now();
-        }
+    /// A renderer attached its bridge channel. The first one proves this build
+    /// can start a web process and run its page, so only then does it make
+    /// itself the system `omp://` handler: a build that dies before any page
+    /// runs must not take links away from a working install. A finished page
+    /// load would not prove it, since WebKitGTK reports a failed load as
+    /// finished too. Links for this launch never wait on the registration:
+    /// they arrive through argv and the single-instance handoff.
+    pub(crate) fn on_renderer_attached(&self) {
+        self.claim_url_scheme_once(BuildKind::current());
     }
 
-    #[cfg(not(debug_assertions))]
+    /// Register the scheme on the first call only, and only where `build`
+    /// registers at all: a debug or e2e build would point every link on the
+    /// desktop at a binary that runs without the profile it was started with.
+    fn claim_url_scheme_once(&self, build: BuildKind) {
+        if !registers_url_scheme(build, self.backend.platform()) {
+            return;
+        }
+        if self.url_scheme_claimed.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        self.register_url_scheme_now();
+    }
+
+    #[cfg(any(test, not(debug_assertions)))]
     fn register_url_scheme_now(&self) {
         if let Err(error) = self.backend.register_deep_link_scheme() {
             runtime_log::note("unknown", format!("could not register the omp:// scheme: {error}"), json!({}));
         }
     }
 
-    /// The registration is not even compiled into a debug build.
-    #[cfg(debug_assertions)]
+    /// The registration is not even compiled into a debug app build; unit tests
+    /// compile it so they can drive the gate with a release build kind.
+    #[cfg(all(debug_assertions, not(test)))]
     fn register_url_scheme_now(&self) {}
 
     fn links_offer_cold_start(&self, url: String) {

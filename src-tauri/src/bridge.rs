@@ -1067,6 +1067,8 @@ pub async fn omp_attach(
     let label = window.label();
     let caller = Caller::from_label(label).ok_or_else(|| IpcError::new(format!("unknown window label: {label}")))?;
     ctx.bridge.attach(ctx.inner(), caller, gen, Arc::new(on_message));
+    // A page that got this far runs: the desktop may now claim `omp://`.
+    crate::desktop::renderer_attached(ctx.inner());
     Ok(())
 }
 
