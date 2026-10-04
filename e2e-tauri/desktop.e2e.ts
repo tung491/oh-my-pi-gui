@@ -817,6 +817,9 @@ describe("desktop", () => {
 
 describe("window geometry", () => {
 	it("a restored window opens at its saved footprint and a restart leaves the saved state unchanged", async () => {
+		// Needs the WM-less virtual display (scripts/virtual-display.sh): a real
+		// window manager may move the window or add a frame, so neither the
+		// position nor the decoration-free size would hold there.
 		// The saved outer footprint, as Electron's `getBounds()` wrote it. A
 		// window corrected against a size cache that still held its position
 		// came back as 2*1300-40 by 2*850-30 and saved that.

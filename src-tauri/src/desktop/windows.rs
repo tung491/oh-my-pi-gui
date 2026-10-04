@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::tab_layout::{sanitize_persisted_tab_layouts, DiskPathChecks};
-use super::window_bounds::{restore_within_displays, Rect};
+pub(crate) use super::window_bounds::{MIN_HEIGHT, MIN_WIDTH};
+use super::window_bounds::{corrected_inner_size, restore_within_displays, Rect};
 use super::{lock, survive, Desktop, Platform};
 use crate::bridge;
 use crate::ctx::AppCtx;
@@ -22,8 +23,6 @@ use crate::runtime_log;
 
 const DEFAULT_WIDTH: f64 = 1400.0;
 const DEFAULT_HEIGHT: f64 = 900.0;
-pub(crate) const MIN_WIDTH: f64 = 800.0;
-pub(crate) const MIN_HEIGHT: f64 = 600.0;
 /// Parallel windows share one saved geometry; each additional one is offset by this many pixels.
 const CASCADE_STEP: f64 = 28.0;
 /// Bounds are written this long after the last move or resize.
@@ -162,6 +161,96 @@ pub(crate) trait Backend: Send + Sync {
     fn home_dir(&self) -> Option<PathBuf>;
     fn argv(&self) -> Vec<String>;
     fn env(&self) -> super::wayland_portal::Env;
+}
+
+// ---------------------------------------------------------------------------
+// Outer-footprint correction
+// ---------------------------------------------------------------------------
+
+/// A window as the outer-footprint correction reads and resizes it.
+pub(crate) trait CorrectableWindow {
+    /// The full footprint in logical pixels, `None` when it cannot be read.
+    fn outer_size(&self) -> Option<(f64, f64)>;
+    /// Whether the window has had its first configure. tao on Linux fills the
+    /// outer size and outer position from the same origin until then, so
+    /// "not yet" reads as the two being equal; after a configure they match
+    /// only for a window whose position equals its size, which then waits for
+    /// its next `Resized` like a window built on the main thread.
+    fn configured(&self) -> bool;
+    /// A maximized or fullscreen window's size is the window manager's, not the request's.
+    fn maximized_or_fullscreen(&self) -> bool;
+    /// Ask for a new content size; the window reports it at its next configure.
+    fn request_inner_size(&self, size: (f64, f64));
+}
+
+/// Request the content size whose footprint lands on `target_outer`, for a
+/// window built with `target_outer` requested as its content size (the only
+/// size a builder takes). True when a resize was requested.
+pub(crate) fn correct_to_outer(window: &impl CorrectableWindow, target_outer: (f64, f64)) -> bool {
+    if window.maximized_or_fullscreen() {
+        return false;
+    }
+    let Some(measured_outer) = window.outer_size() else { return false };
+    match corrected_inner_size(target_outer, target_outer, measured_outer) {
+        Some(corrected) if corrected != target_outer => {
+            window.request_inner_size(corrected);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Linux's deferred corrections, by window: a window's decoration is unknown
+/// until its first configure, so its correction waits for that and runs once.
+/// The window events and the catch-up check all run on the main thread.
+#[derive(Default)]
+pub(crate) struct PendingCorrections {
+    targets: Mutex<BTreeMap<WindowId, (f64, f64)>>,
+}
+
+impl PendingCorrections {
+    pub(crate) fn arm(&self, id: WindowId, target_outer: (f64, f64)) {
+        lock(&self.targets).insert(id, target_outer);
+    }
+
+    pub(crate) fn disarm(&self, id: WindowId) {
+        lock(&self.targets).remove(&id);
+    }
+
+    fn is_armed(&self, id: WindowId) -> bool {
+        lock(&self.targets).contains_key(&id)
+    }
+
+    /// Correct once and disarm. Never re-armed, so a later theme or scale
+    /// change cannot fight the user's own resize. A window the window manager
+    /// maximized or made fullscreen at its first configure is disarmed as is.
+    fn apply(&self, id: WindowId, window: &impl CorrectableWindow) -> bool {
+        let Some(target_outer) = lock(&self.targets).remove(&id) else { return false };
+        correct_to_outer(window, target_outer)
+    }
+
+    /// Run once the window's event listener is registered. Tauri registers it
+    /// asynchronously, so a window built off the main thread can have its
+    /// first configure, and that configure's `Resized`, go by unseen; then
+    /// the correction runs here instead of waiting for a later configure,
+    /// which could be the user's first resize drag.
+    pub(crate) fn catch_up(&self, id: WindowId, window: &impl CorrectableWindow) {
+        if self.is_armed(id) && window.configured() {
+            self.apply(id, window);
+        }
+    }
+
+    /// A `Moved` (`resized == false`) or `Resized` event: whether the desktop
+    /// should see it. While a correction is armed the footprint is not final,
+    /// so the events are held back; the `Resized` that requests a resize is
+    /// held back too, because the corrected footprint follows in the next
+    /// configure. Until then a close still saves the uncorrected footprint.
+    pub(crate) fn admit_geometry_event(&self, id: WindowId, resized: bool, window: &impl CorrectableWindow) -> bool {
+        if !self.is_armed(id) {
+            return true;
+        }
+        resized && !self.apply(id, window)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -328,9 +417,11 @@ impl WindowRegistry {
 
     /// Remember the geometry the window just reported; returns the generation a debounced write must match.
     ///
-    /// A footprint smaller than the minimum content size cannot be real: it is
-    /// what a Linux window reports before its first configure (its position
-    /// standing in for its size), so it is dropped rather than saved.
+    /// A footprint smaller than the minimum content size cannot be a usable
+    /// window, so it is never saved. That covers a Linux window closed before
+    /// its first configure while it sits within 800x600 of the origin (its
+    /// position stands in for its size until then; further out, that
+    /// position-as-size passes this check) and a minimized window's placeholder size.
     fn note_bounds(&self, win_id: WindowId, bounds: Option<Rect>, maximized: bool) -> Option<u64> {
         let mut state = lock(&self.state);
         let entry = state.records.get_mut(&win_id)?;
@@ -606,39 +697,65 @@ pub(crate) fn saved_state_value(ctx: &AppCtx) -> Option<serde_json::Value> {
 pub(crate) use tauri_backend::TauriBackend;
 
 mod tauri_backend {
-    use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
+    use serde_json::json;
     use tauri::{AppHandle, Manager, WebviewWindow, WindowEvent};
     use tauri_plugin_deep_link::DeepLinkExt;
 
-    use super::{Backend, MainWindowSpec, MenuItemModel, QuickEntrySpec, WinEvent};
+    use super::{correct_to_outer, Backend, CorrectableWindow, MainWindowSpec, MenuItemModel, PendingCorrections, QuickEntrySpec, WinEvent};
     use crate::desktop::quick_entry_core::QUICK_ENTRY_SIZE;
-    use crate::desktop::window_bounds::{corrected_inner_size, Rect};
+    use crate::desktop::window_bounds::Rect;
     use crate::desktop::{lock, menu, survive, tray, Desktop, Platform};
     use crate::ports::{CtxRef, WindowId, WindowKind};
     use crate::webview::{self, WindowSpec};
-    use crate::{paths, product};
+    use crate::{paths, product, runtime_log};
 
-    /// Outer footprints new windows still have to be corrected to, by window.
-    type PendingOuter = Arc<Mutex<BTreeMap<WindowId, (f64, f64)>>>;
+    /// A live window, read and resized through Tauri. Its getters are cache
+    /// reads on the main thread, where every caller here runs.
+    struct Live<'a>(&'a WebviewWindow);
+
+    impl CorrectableWindow for Live<'_> {
+        fn outer_size(&self) -> Option<(f64, f64)> {
+            let scale = self.0.scale_factor().ok()?;
+            let size = self.0.outer_size().ok()?.to_logical::<f64>(scale);
+            Some((size.width, size.height))
+        }
+
+        fn configured(&self) -> bool {
+            if !cfg!(target_os = "linux") {
+                return true;
+            }
+            // Both caches hold the same origin (as i32, the size cast to u32)
+            // until the first configure-event.
+            match (self.0.outer_size(), self.0.outer_position()) {
+                (Ok(size), Ok(position)) => size.width != position.x as u32 || size.height != position.y as u32,
+                _ => false,
+            }
+        }
+
+        fn maximized_or_fullscreen(&self) -> bool {
+            self.0.is_maximized().unwrap_or(false) || self.0.is_fullscreen().unwrap_or(false)
+        }
+
+        fn request_inner_size(&self, size: (f64, f64)) {
+            let _ = self.0.set_size(tauri::LogicalSize::new(size.0, size.1));
+        }
+    }
 
     /// The production backend: Tauri windows through `webview::build_window`.
     pub(crate) struct TauriBackend {
         app: AppHandle,
         ctx: CtxRef,
         tray: Mutex<Option<tauri::tray::TrayIcon>>,
-        /// Linux only: a window's decoration is unknown until its first
-        /// configure (tao seeds the outer-size cache with the window's
-        /// position until then), so the outer-footprint correction waits for
-        /// the window's first `Resized` and runs exactly once.
-        pending_outer: PendingOuter,
+        /// Linux only: corrections waiting for each new window's first configure.
+        pending: Arc<PendingCorrections>,
     }
 
     impl TauriBackend {
         pub(crate) fn new(app: AppHandle, ctx: CtxRef) -> Self {
-            Self { app, ctx, tray: Mutex::new(None), pending_outer: Arc::default() }
+            Self { app, ctx, tray: Mutex::new(None), pending: Arc::default() }
         }
 
         fn window(&self, id: WindowId) -> Option<WebviewWindow> {
@@ -649,28 +766,49 @@ mod tauri_backend {
         fn observe(&self, window: &WebviewWindow, id: WindowId) {
             let ctx = self.ctx.clone();
             let app = self.app.clone();
-            let pending_outer = self.pending_outer.clone();
+            let pending = self.pending.clone();
             window.on_window_event(move |event| {
                 survive("window event", || {
-                    match event {
-                        WindowEvent::Resized(_) => Self::apply_pending_outer(&app, &pending_outer, id),
-                        WindowEvent::Destroyed => {
-                            lock(&pending_outer).remove(&id);
+                    let admitted = match event {
+                        WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                            let resized = matches!(event, WindowEvent::Resized(_));
+                            match app.get_webview_window(&id.label()) {
+                                Some(window) => pending.admit_geometry_event(id, resized, &Live(&window)),
+                                None => true,
+                            }
                         }
-                        _ => {}
+                        WindowEvent::Destroyed => {
+                            pending.disarm(id);
+                            true
+                        }
+                        _ => true,
+                    };
+                    if admitted {
+                        Self::route_window_event(&ctx, id, event);
                     }
-                    Self::route_window_event(&ctx, id, event)
                 });
             });
         }
 
-        /// The window's first configure: its caches now describe the realized
-        /// window, so correct its size once and disarm. Never re-armed, so a
-        /// later theme or scale change cannot fight the user's own resize.
-        fn apply_pending_outer(app: &AppHandle, pending_outer: &PendingOuter, id: WindowId) {
-            let Some(target_outer) = lock(pending_outer).remove(&id) else { return };
-            if let Some(window) = app.get_webview_window(&id.label()) {
-                Self::correct_to_outer(&window, target_outer);
+        /// Queue the correction's catch-up check behind the listener `observe`
+        /// just registered: Tauri adds window listeners through the main
+        /// thread's event queue, and this task travels the same queue, so it
+        /// runs after the listener exists. From the main thread it runs at
+        /// once, before the window can have been configured, and leaves the
+        /// correction to the listener.
+        fn schedule_catch_up(&self, id: WindowId) {
+            let app = self.app.clone();
+            let pending = self.pending.clone();
+            let scheduled = self.app.run_on_main_thread(move || {
+                survive("window size catch-up", || {
+                    if let Some(window) = app.get_webview_window(&id.label()) {
+                        pending.catch_up(id, &Live(&window));
+                    }
+                });
+            });
+            if let Err(error) = scheduled {
+                // Only an event loop that has already stopped refuses the task.
+                runtime_log::note("unknown", format!("window {id}: size catch-up not scheduled: {error}"), json!({ "winId": id.0 }));
             }
         }
 
@@ -700,22 +838,6 @@ mod tauri_backend {
             let position = window.outer_position().ok()?.to_logical::<f64>(scale);
             let size = window.outer_size().ok()?.to_logical::<f64>(scale);
             Some(Rect { x: position.x, y: position.y, width: size.width, height: size.height })
-        }
-
-        /// A main window is built with its target footprint requested as its
-        /// content size (`WindowSpec::inner_size`, the only size a builder
-        /// takes); once the window's decoration (GTK's client-side header bar
-        /// and shadow, or a title bar and border elsewhere) can be measured,
-        /// shrink the content so the footprint lands on `target_outer`.
-        fn correct_to_outer(window: &WebviewWindow, target_outer: (f64, f64)) {
-            let Ok(scale) = window.scale_factor() else { return };
-            let Ok(outer) = window.outer_size() else { return };
-            let measured_outer = outer.to_logical::<f64>(scale);
-            let requested_inner = target_outer;
-            let Some(corrected) = corrected_inner_size(target_outer, requested_inner, (measured_outer.width, measured_outer.height)) else { return };
-            if corrected != requested_inner {
-                let _ = window.set_size(tauri::LogicalSize::new(corrected.0, corrected.1));
-            }
         }
 
         fn monitor_rect(monitor: &tauri::Monitor) -> Rect {
@@ -750,17 +872,7 @@ mod tauri_backend {
         }
 
         fn build_main_window(&self, spec: MainWindowSpec) -> Result<(), String> {
-            // Linux: no GTK main-loop iteration runs between `build` and the
-            // end of this method, so the outer size still holds the window's
-            // position here; the correction runs at the window's first
-            // configure instead (`apply_pending_outer`), armed before the build
-            // so the entry is in place however early that event arrives. macOS and Windows read the
-            // live frame, so the correction is exact right after the build.
-            let defer_correction = cfg!(target_os = "linux") && !spec.maximize;
-            if defer_correction {
-                lock(&self.pending_outer).insert(spec.win_id, spec.size);
-            }
-            let built = webview::build_window(
+            let window = webview::build_window(
                 &self.app,
                 WindowSpec {
                     kind: WindowKind::Main,
@@ -773,22 +885,27 @@ mod tauri_backend {
                     background_color: Some(tauri::window::Color(0x0a, 0x1a, 0x33, 0xff)),
                     ..Default::default()
                 },
-            );
-            let window = match built {
-                Ok(window) => window,
-                Err(error) => {
-                    lock(&self.pending_outer).remove(&spec.win_id);
-                    return Err(error.to_string());
-                }
-            };
+            )
+            .map_err(|error| error.to_string())?;
+            // `spec.size` was requested as the content size; the decoration
+            // still has to come off it. On Linux the outer size holds the
+            // window's position until its first configure, so the correction
+            // waits for that (`PendingCorrections`); macOS and Windows read
+            // the live frame, so it is exact right away.
+            let defer_correction = cfg!(target_os = "linux") && !spec.maximize;
+            if defer_correction {
+                self.pending.arm(spec.win_id, spec.size);
+            }
             self.observe(&window, spec.win_id);
             if let Some(icon) = self.window_icon() {
                 let _ = window.set_icon(icon);
             }
             if spec.maximize {
                 let _ = window.maximize();
-            } else if !defer_correction {
-                Self::correct_to_outer(&window, spec.size);
+            } else if defer_correction {
+                self.schedule_catch_up(spec.win_id);
+            } else {
+                correct_to_outer(&Live(&window), spec.size);
             }
             Ok(())
         }
@@ -1033,9 +1150,9 @@ pub(crate) mod fake {
     use std::path::PathBuf;
     use std::sync::Mutex;
 
-    use super::{Backend, MainWindowSpec, MenuItemModel, QuickEntrySpec};
-    use crate::desktop::window_bounds::{corrected_inner_size, Rect};
-    use crate::desktop::{lock, Platform};
+    use super::{correct_to_outer, Backend, CorrectableWindow, MainWindowSpec, MenuItemModel, PendingCorrections, QuickEntrySpec, WinEvent};
+    use crate::desktop::window_bounds::Rect;
+    use crate::desktop::{lock, Desktop, Platform};
     use crate::ports::WindowId;
     use crate::testing::CallLog;
 
@@ -1047,8 +1164,24 @@ pub(crate) mod fake {
         pub bounds: Rect,
         /// False until the window's first configure ([`FakeBackend::configure`]).
         pub configured: bool,
-        /// The outer footprint the deferred correction still has to reach.
-        pub pending_outer: Option<(f64, f64)>,
+        /// The content size last asked for; like GTK, the window only reports
+        /// it (plus its decoration) at its next configure.
+        pub requested_inner: (f64, f64),
+    }
+
+    /// When a deferred window's first configure happens relative to its event
+    /// listener and the catch-up check `build_main_window` queues behind it.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub(crate) enum FirstConfigure {
+        /// After the check: the listener sees it (a window built on the main thread).
+        #[default]
+        AfterCheck,
+        /// Before the listener was registered: its events are lost and the check
+        /// finds the window configured (a window built off the main thread).
+        BeforeListener,
+        /// After the listener was registered but before the check ran: the
+        /// listener sees it and the check finds nothing left to do.
+        BeforeCheck,
     }
 
     /// A window system in memory: windows, their geometry, the tray and menu models.
@@ -1087,6 +1220,11 @@ pub(crate) mod fake {
         /// when set: tao on Linux seeds that cache with the window's position.
         /// A synchronous correction measures this value.
         pub outer_before_configure: Mutex<Option<(f64, f64)>>,
+        /// The deferred corrections, shared logic with the real backend.
+        pub pending: PendingCorrections,
+        pub first_configure: Mutex<FirstConfigure>,
+        /// The window manager maximizes a window at its first configure.
+        pub maximize_on_first_configure: Mutex<bool>,
         /// When set, every main-window build fails with this message.
         pub build_failure: Mutex<Option<String>>,
         /// The context whose bridge a built window registers with, as `build_window` does.
@@ -1122,6 +1260,9 @@ pub(crate) mod fake {
                 decoration_physical: Mutex::new((0.0, 0.0)),
                 defer_correction: Mutex::new(false),
                 outer_before_configure: Mutex::new(None),
+                pending: PendingCorrections::default(),
+                first_configure: Mutex::new(FirstConfigure::default()),
+                maximize_on_first_configure: Mutex::new(false),
                 build_failure: Mutex::new(None),
                 ctx: Mutex::new(None),
                 on_destroy_tray: Mutex::new(None),
@@ -1164,28 +1305,88 @@ pub(crate) mod fake {
             (width / scale, height / scale)
         }
 
-        /// The outer footprint of a window whose content was requested at
-        /// `target_outer` and then corrected against `measured_outer`, the
-        /// way the real backend does it.
-        fn corrected_outer(&self, target_outer: (f64, f64), measured_outer: (f64, f64)) -> (f64, f64) {
+        /// One configure-event: the window now reports its last requested
+        /// content size plus its decoration (or the work area, when the window
+        /// manager maximizes it), and, when `deliver`, its `Moved` and
+        /// `Resized` pass through the same filter as the real backend's.
+        fn configure_window(&self, id: WindowId, deliver: bool) {
             let decoration = self.decoration_logical();
-            let inner = corrected_inner_size(target_outer, target_outer, measured_outer).unwrap_or(target_outer);
-            (inner.0 + decoration.0, inner.1 + decoration.1)
+            let maximize = *lock(&self.maximize_on_first_configure);
+            let work_area = lock(&self.work_areas).first().copied();
+            {
+                let mut windows = lock(&self.windows);
+                let Some(window) = windows.get_mut(&id) else { return };
+                match work_area {
+                    Some(area) if maximize && !window.configured => {
+                        window.maximized = true;
+                        window.bounds = area;
+                    }
+                    _ if window.maximized => {}
+                    _ => {
+                        window.bounds.width = window.requested_inner.0 + decoration.0;
+                        window.bounds.height = window.requested_inner.1 + decoration.1;
+                    }
+                }
+                window.configured = true;
+            }
+            if !deliver {
+                return;
+            }
+            let handle = FakeHandle { backend: self, id };
+            for (event, resized) in [(WinEvent::Moved, false), (WinEvent::Resized, true)] {
+                if self.pending.admit_geometry_event(id, resized, &handle) {
+                    self.deliver(id, event);
+                }
+            }
         }
 
-        /// The window's first configure, as the real backend sees it: the
-        /// window now reports its realized footprint, and a pending correction
-        /// runs once. A test follows it with `WinEvent::Resized`, mirroring the
-        /// real backend, which corrects before routing that event.
+        /// The window's next configure, as the window system reports it.
         pub(crate) fn configure(&self, id: WindowId) {
-            let mut windows = lock(&self.windows);
-            let Some(window) = windows.get_mut(&id) else { return };
-            window.configured = true;
-            if let Some(target_outer) = window.pending_outer.take() {
-                let measured_outer = (window.bounds.width, window.bounds.height);
-                let (width, height) = self.corrected_outer(target_outer, measured_outer);
-                window.bounds.width = width;
-                window.bounds.height = height;
+            self.configure_window(id, true);
+        }
+
+        fn deliver(&self, id: WindowId, event: WinEvent) {
+            let ctx = lock(&self.ctx).as_ref().and_then(|ctx| ctx.upgrade());
+            if let Some(ctx) = ctx {
+                if let Some(desktop) = Desktop::of(&ctx) {
+                    desktop.on_window_event(&ctx, id, event);
+                }
+            }
+        }
+
+        /// How many content-size requests the corrections made.
+        pub(crate) fn size_requests(&self) -> usize {
+            self.log.calls().iter().filter(|call| call.starts_with("request_inner_size(")).count()
+        }
+    }
+
+    /// One fake window as the shared correction logic sees it.
+    struct FakeHandle<'a> {
+        backend: &'a FakeBackend,
+        id: WindowId,
+    }
+
+    impl CorrectableWindow for FakeHandle<'_> {
+        fn outer_size(&self) -> Option<(f64, f64)> {
+            let seeded = *lock(&self.backend.outer_before_configure);
+            lock(&self.backend.windows).get(&self.id).map(|window| match seeded {
+                Some(size) if !window.configured => size,
+                _ => (window.bounds.width, window.bounds.height),
+            })
+        }
+
+        fn configured(&self) -> bool {
+            lock(&self.backend.windows).get(&self.id).is_some_and(|window| window.configured)
+        }
+
+        fn maximized_or_fullscreen(&self) -> bool {
+            lock(&self.backend.windows).get(&self.id).is_some_and(|window| window.maximized)
+        }
+
+        fn request_inner_size(&self, size: (f64, f64)) {
+            self.backend.log.record(format!("request_inner_size({}, {size:?})", self.id));
+            if let Some(window) = lock(&self.backend.windows).get_mut(&self.id) {
+                window.requested_inner = size;
             }
         }
     }
@@ -1207,21 +1408,12 @@ pub(crate) mod fake {
             self.log.record(format!("build_main_window({})", spec.win_id));
             self.register_with_bridge(crate::ports::Caller::main(spec.win_id));
             let (x, y) = spec.position.unwrap_or((100.0, 100.0));
-            // Mirror the real backend: `spec.size` is first requested as a
-            // content size, so the realized footprint carries the decoration
-            // on top, then corrected so the footprint matches `spec.size` —
-            // now (macOS/Windows), or at the first configure (Linux).
+            // Mirror the real backend: `spec.size` is requested as the content
+            // size, so the realized footprint carries the decoration on top,
+            // then corrected so the footprint matches `spec.size` — now
+            // (macOS/Windows), or at the first configure (Linux).
             let decoration = self.decoration_logical();
-            let requested_outer = (spec.size.0 + decoration.0, spec.size.1 + decoration.1);
-            let defer = *lock(&self.defer_correction);
-            let (size, pending_outer) = if spec.maximize {
-                (spec.size, None)
-            } else if defer {
-                (requested_outer, Some(spec.size))
-            } else {
-                let measured_outer = lock(&self.outer_before_configure).unwrap_or(requested_outer);
-                (self.corrected_outer(spec.size, measured_outer), None)
-            };
+            let size = if spec.maximize { spec.size } else { (spec.size.0 + decoration.0, spec.size.1 + decoration.1) };
             lock(&self.windows).insert(
                 spec.win_id,
                 FakeWindow {
@@ -1229,10 +1421,28 @@ pub(crate) mod fake {
                     minimized: false,
                     maximized: spec.maximize,
                     bounds: Rect { x, y, width: size.0, height: size.1 },
-                    configured: !defer,
-                    pending_outer,
+                    configured: false,
+                    requested_inner: spec.size,
                 },
             );
+            let handle = FakeHandle { backend: self, id: spec.win_id };
+            let defer = *lock(&self.defer_correction) && !spec.maximize;
+            if defer {
+                self.pending.arm(spec.win_id, spec.size);
+                let first_configure = *lock(&self.first_configure);
+                match first_configure {
+                    FirstConfigure::BeforeListener => self.configure_window(spec.win_id, false),
+                    FirstConfigure::BeforeCheck => self.configure_window(spec.win_id, true),
+                    FirstConfigure::AfterCheck => {}
+                }
+                self.pending.catch_up(spec.win_id, &handle);
+            } else {
+                if !spec.maximize {
+                    correct_to_outer(&handle, spec.size);
+                }
+                // A live frame: the request shows at once.
+                self.configure_window(spec.win_id, false);
+            }
             lock(&self.main_specs).push(spec);
             Ok(())
         }
@@ -1249,7 +1459,7 @@ pub(crate) mod fake {
                     maximized: false,
                     bounds: Rect { x, y, width: 680.0, height: 168.0 },
                     configured: true,
-                    pending_outer: None,
+                    requested_inner: (680.0, 168.0),
                 },
             );
             lock(&self.quick_entry_specs).push(spec);
@@ -1286,11 +1496,13 @@ pub(crate) mod fake {
         fn close(&self, id: WindowId) {
             self.log.record(format!("close({id})"));
             lock(&self.windows).remove(&id);
+            self.pending.disarm(id);
         }
 
         fn destroy(&self, id: WindowId) {
             self.log.record(format!("destroy({id})"));
             lock(&self.windows).remove(&id);
+            self.pending.disarm(id);
         }
 
         fn is_visible(&self, id: WindowId) -> bool {
@@ -1310,11 +1522,8 @@ pub(crate) mod fake {
         }
 
         fn bounds(&self, id: WindowId) -> Option<Rect> {
-            let seeded = *lock(&self.outer_before_configure);
-            lock(&self.windows).get(&id).map(|window| match seeded {
-                Some((width, height)) if !window.configured => Rect { width, height, ..window.bounds },
-                _ => window.bounds,
-            })
+            let (width, height) = FakeHandle { backend: self, id }.outer_size()?;
+            lock(&self.windows).get(&id).map(|window| Rect { width, height, ..window.bounds })
         }
 
         fn set_bounds(&self, id: WindowId, bounds: Rect) {
@@ -1415,8 +1624,6 @@ pub(crate) mod fake {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
     use crate::desktop::testing::{harness, DesktopPort as _, Harness};
     use crate::ports::Caller;
@@ -1543,31 +1750,79 @@ mod tests {
         assert_eq!(saved_state_value(&ctx), Some(saved), "no window move or resize happened; the saved bounds must not drift");
     }
 
-    /// The window's first configure as the real backend routes it: the size
-    /// correction runs, then the desktop sees `Resized`.
-    fn emit_first_configure(backend: &fake::FakeBackend, desktop: &Desktop, ctx: &Arc<AppCtx>, id: WindowId) {
-        backend.configure(id);
-        desktop.on_window_event(ctx, id, WinEvent::Resized);
+    /// A Linux backend restoring a 1452x989 footprint under a 52x89 logical
+    /// decoration (GTK's header bar and shadow at scale 2).
+    fn deferred_restore(first_configure: fake::FirstConfigure) -> (Harness, serde_json::Value) {
+        let harness = harness(Platform::Linux);
+        *harness.backend.defer_correction.lock().unwrap() = true;
+        *harness.backend.first_configure.lock().unwrap() = first_configure;
+        harness.backend.set_decoration((104.0, 178.0), 2.0);
+        let saved = json!({ "width": 1452.0, "height": 989.0, "x": 0.0, "y": 0.0, "isMaximized": false });
+        harness.ctx.window_state.set(WINDOW_STATE_KEY, saved.clone()).unwrap();
+        (harness, saved)
     }
 
     #[test]
     fn a_restored_window_keeps_its_requested_size_until_its_first_configure_then_matches_the_saved_footprint() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
-        *backend.defer_correction.lock().unwrap() = true;
-        backend.set_decoration((104.0, 178.0), 2.0); // 52x89 logical
-        let saved = json!({ "width": 1452.0, "height": 989.0, "x": 0.0, "y": 0.0, "isMaximized": false });
-        ctx.window_state.set(WINDOW_STATE_KEY, saved.clone()).unwrap();
+        let (Harness { ctx, desktop, backend, .. }, saved) = deferred_restore(fake::FirstConfigure::AfterCheck);
 
         let id = desktop.spawn_window(None, None, None).unwrap();
         assert_eq!(backend.bounds(id), Some(rect(0.0, 0.0, 1504.0, 1078.0)), "uncorrected until the first configure");
-        emit_first_configure(&backend, &desktop, &ctx, id);
+        assert_eq!(backend.size_requests(), 0, "nothing to measure before the first configure");
+
+        backend.configure(id);
+        assert_eq!(backend.size_requests(), 1);
+        // The resize shows at the next configure; until then the uncorrected
+        // footprint must not be noted for saving.
+        assert_eq!(backend.bounds(id), Some(rect(0.0, 0.0, 1504.0, 1078.0)));
+        assert_eq!(desktop.windows.saved_state_for(id, None), None);
+
+        backend.configure(id);
         assert_eq!(backend.bounds(id), Some(rect(0.0, 0.0, 1452.0, 989.0)));
         // A later configure must not correct again.
-        emit_first_configure(&backend, &desktop, &ctx, id);
+        backend.configure(id);
+        assert_eq!(backend.size_requests(), 1);
         assert_eq!(backend.bounds(id), Some(rect(0.0, 0.0, 1452.0, 989.0)));
         desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
 
         assert_eq!(saved_state_value(&ctx), Some(saved));
+    }
+
+    #[test]
+    fn a_first_configure_the_listener_missed_is_corrected_by_the_catch_up_exactly_once() {
+        for first_configure in [fake::FirstConfigure::BeforeListener, fake::FirstConfigure::BeforeCheck] {
+            let (Harness { ctx, desktop, backend, .. }, saved) = deferred_restore(first_configure);
+
+            let id = desktop.spawn_window(None, None, None).unwrap();
+            assert_eq!(backend.size_requests(), 1, "{first_configure:?}: corrected during the build");
+            backend.configure(id);
+            assert_eq!(backend.bounds(id), Some(rect(0.0, 0.0, 1452.0, 989.0)), "{first_configure:?}");
+            // A user's resize drag after that is left alone.
+            backend.windows.lock().unwrap().get_mut(&id).unwrap().requested_inner = (1500.0, 950.0);
+            backend.configure(id);
+            assert_eq!(backend.size_requests(), 1, "{first_configure:?}: never a second correction");
+            assert_eq!(backend.bounds(id), Some(rect(0.0, 0.0, 1552.0, 1039.0)), "{first_configure:?}");
+
+            backend.windows.lock().unwrap().get_mut(&id).unwrap().requested_inner = (1400.0, 900.0);
+            backend.configure(id);
+            desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
+            assert_eq!(saved_state_value(&ctx), Some(saved), "{first_configure:?}");
+        }
+    }
+
+    #[test]
+    fn a_window_the_window_manager_maximizes_at_its_first_configure_is_never_resized() {
+        let (Harness { ctx, desktop, backend, .. }, _) = deferred_restore(fake::FirstConfigure::AfterCheck);
+        *backend.maximize_on_first_configure.lock().unwrap() = true;
+
+        let id = desktop.spawn_window(None, None, None).unwrap();
+        backend.configure(id);
+        backend.configure(id);
+
+        assert_eq!(backend.size_requests(), 0, "the maximized size is the window manager's, not a decoration");
+        assert_eq!(backend.windows.lock().unwrap().get(&id).map(|window| window.requested_inner), Some((1452.0, 989.0)));
+        desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
+        assert_eq!(saved_state_value(&ctx).map(|saved| saved["isMaximized"].clone()), Some(json!(true)));
     }
 
     #[test]

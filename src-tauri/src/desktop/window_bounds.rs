@@ -2,7 +2,9 @@
 //! A saved rect may name a display that is no longer attached; a window that
 //! "opens" there is unreachable, so it is recentered on the fallback display.
 
-use super::windows::{MIN_HEIGHT, MIN_WIDTH};
+/// The smallest content size a chat window may have, in logical pixels.
+pub(crate) const MIN_WIDTH: f64 = 800.0;
+pub(crate) const MIN_HEIGHT: f64 = 600.0;
 
 /// A rectangle in logical pixels, as the renderer and the saved state use it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -52,9 +54,13 @@ const MAX_DECORATION_HEIGHT: f64 = 300.0;
 /// a fixed theme and scale factor.
 ///
 /// `None` means the measurement is not a plausible decoration (negative, or
-/// past the ceilings above) and the window keeps its requested content size:
-/// skipping the correction costs at most one decoration of growth, applying a
-/// bogus one can double the window. The result never goes below the window's
+/// past the ceilings above) and the window keeps its requested content size,
+/// so its footprint is one decoration larger than the target. That footprint
+/// is what gets saved, so while the measurement keeps failing the window grows
+/// by one decoration per launch; applying a bogus decoration instead can double
+/// it at once. A tiling window manager's first configure (the tile, not the
+/// requested size) is a known gap: a tile up to the ceilings larger than the
+/// target reads as a decoration. The result never goes below the window's
 /// minimum content size.
 pub(crate) fn corrected_inner_size(target_outer: (f64, f64), requested_inner: (f64, f64), measured_outer: (f64, f64)) -> Option<(f64, f64)> {
     let decoration = (measured_outer.0 - requested_inner.0, measured_outer.1 - requested_inner.1);
