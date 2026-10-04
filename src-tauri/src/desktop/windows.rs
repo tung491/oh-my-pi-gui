@@ -283,11 +283,19 @@ impl PendingCorrections {
         }
         self.disarm(id);
         // One line per window, so a field log shows what the first measurement
-        // found on a desktop no harness covers.
+        // found on a desktop no harness covers. The log keeps flat scalar details only.
+        let (measured_width, measured_height) = measured_outer.unzip();
         runtime_log::note(
             "unknown",
             format!("window {id} size correction: {correction:?}"),
-            json!({ "winId": id.0, "path": format!("{settler:?}"), "target": [target_outer.0, target_outer.1], "measured": measured_outer.map(|(width, height)| [width, height]) }),
+            json!({
+                "winId": id.0,
+                "path": format!("{settler:?}"),
+                "targetWidth": target_outer.0,
+                "targetHeight": target_outer.1,
+                "measuredWidth": measured_width,
+                "measuredHeight": measured_height,
+            }),
         );
         Some(correction)
     }
