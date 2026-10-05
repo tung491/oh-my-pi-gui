@@ -12,6 +12,7 @@ import { type PlistObject, parsePlistFile } from "app-builder-lib/out/util/plist
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { APP_ID, PRODUCT_NAME } from "../src/shared/product";
+import { BUNDLED_GSTREAMER_PLUGINS } from "../src-tauri/linux/finalize-appimage";
 import { COMPAT_SYMLINKS, DESKTOP_ENTRY_ID, finalizeDeb } from "../src-tauri/linux/finalize-deb";
 import { MAC_UPDATE_FLOOR } from "./mac-update-floor";
 import { assetNames, darwinReleaseFor } from "./release-feeds";
@@ -41,7 +42,10 @@ interface TauriConfig {
 		resources?: Record<string, string> | string[];
 		macOS?: { minimumSystemVersion?: string; signingIdentity?: string; entitlements?: string };
 		windows?: { nsis?: { installMode?: string; installerHooks?: string } };
-		linux?: { deb?: { depends?: string[]; desktopTemplate?: string; files?: Record<string, string> } };
+		linux?: {
+			appimage?: { bundleMediaFramework?: boolean };
+			deb?: { depends?: string[]; desktopTemplate?: string; files?: Record<string, string> };
+		};
 	};
 }
 
@@ -388,6 +392,23 @@ describe("Linux package", () => {
 		expect(scripts()["package:tauri:linux"]).toMatch(
 			/ && bun src-tauri\/linux\/finalize-deb\.ts \S+ && bun src-tauri\/linux\/finalize-appimage\.ts src-tauri\/target\/x86_64-unknown-linux-gnu\/release\/bundle\/appimage$/,
 		);
+	});
+
+	it("the AppImage bundles the GStreamer plugins the build image stages, and only those", () => {
+		// Without bundleMediaFramework the AppImage carries the GStreamer core but no plugins, and
+		// the host's plugins cannot load into it: no microphone capture and no audio playback.
+		expect(bundled("linux").bundle?.linux?.appimage?.bundleMediaFramework).toBe(true);
+		const build = fs.readFileSync(path.join(ROOT, "scripts", "tauri-linux-build.sh"), "utf8");
+		const staged = build.match(/-e GSTREAMER_PLUGINS_DIR=(\S+)\)/)?.[1];
+		expect(staged).toBe("/opt/sai-atlas/gstreamer-1.0");
+		const dockerfile = fs.readFileSync(path.join(ROOT, "scripts", "tauri-linux-build", "Dockerfile"), "utf8");
+		expect(dockerfile).toContain(`mkdir -p ${staged}`);
+		const loop = dockerfile.match(/for plugin in ([\s\S]*?); do/)?.[1] ?? "";
+		const plugins = loop
+			.split(/[\s\\]+/)
+			.filter(Boolean)
+			.map(name => `libgst${name}.so`);
+		expect(plugins.sort()).toEqual([...BUNDLED_GSTREAMER_PLUGINS].sort());
 	});
 
 	it("no AppArmor profile is bundled", () => {

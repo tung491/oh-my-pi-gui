@@ -31,6 +31,15 @@
  * Before repacking, every ELF file in the AppDir is checked against the glibc
  * floor (`glibc-floor.ts`): linuxdeploy bundles the build host's libraries, so
  * an AppImage built on a distro newer than Ubuntu 24.04 is refused here.
+ *
+ * The AppImage also carries a curated GStreamer plugin set (tauri-bundler's
+ * `bundleMediaFramework`, fed from the build image's staged plugin directory),
+ * built against the GStreamer core linuxdeploy bundles; WebKit needs it for
+ * microphone capture and audio playback, and the host's plugins cannot load
+ * into the bundled core. `assertMediaFramework` refuses an AppImage whose
+ * plugin set differs from `BUNDLED_GSTREAMER_PLUGINS`, that lacks the libpulse
+ * client or the plugin scanner, or that bundles glibc's own `libc`/`libmvec`
+ * or libpipewire (the sandbox cannot reach the PipeWire socket).
  */
 
 import { spawnSync } from "node:child_process";
@@ -39,6 +48,7 @@ import {
 	chmodSync,
 	closeSync,
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	openSync,
@@ -52,7 +62,7 @@ import {
 } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { assertGlibcFloor } from "./glibc-floor";
+import { assertGlibcFloor, regularFilesUnder } from "./glibc-floor";
 
 /** The bundled library the GTK plugin relocates, relative to the AppDir. */
 export const WEBKIT_LIBRARY = "usr/lib/libwebkit2gtk-4.1.so.0";
@@ -64,6 +74,66 @@ const SYSTEM_PREFIX = "/usr";
 const HELPER_DIR = "/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1";
 const BUNDLED_HELPER_DIR = `${RELOCATED}${HELPER_DIR.slice(SYSTEM_PREFIX.length)}`;
 const HELPER_DIR_USES = 2;
+
+/**
+ * The GStreamer plugins the AppImage bundles, and nothing else: capture through
+ * the PulseAudio socket (pulsesrc via the pulse device provider) into an
+ * AudioContext with a pulsesink destination, and `<audio>` playback of WAV.
+ * scripts/tauri-linux-build/Dockerfile stages exactly these.
+ */
+export const BUNDLED_GSTREAMER_PLUGINS: readonly string[] = [
+	"libgstapp.so",
+	"libgstaudioconvert.so",
+	"libgstaudioresample.so",
+	"libgstautodetect.so",
+	"libgstcoreelements.so",
+	"libgstplayback.so",
+	"libgstpulseaudio.so",
+	"libgsttypefindfunctions.so",
+	"libgstvolume.so",
+	"libgstwavparse.so",
+];
+
+/** Where linuxdeploy's gstreamer plugin puts the plugins and their scanner, relative to the AppDir. */
+export const GSTREAMER_PLUGIN_DIR = "usr/lib/gstreamer-1.0";
+export const GSTREAMER_SCANNER = "usr/lib/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner";
+/** The PulseAudio client the pulseaudio plugin links; the second linuxdeploy pass deploys it. */
+export const PULSE_CLIENT = "usr/lib/libpulse.so.0";
+/** glibc's own libraries and libpipewire must stay on the host. */
+const FORBIDDEN_LIBRARY = /^lib(?:c|mvec|pipewire-[0-9.]+)\.so(?:\.|$)/;
+
+/** Throw unless the AppDir holds exactly the allowlisted GStreamer plugins and what they need, and no forbidden library. */
+export function assertMediaFramework(appDir: string): void {
+	const pluginDir = path.join(appDir, GSTREAMER_PLUGIN_DIR);
+	if (!existsSync(pluginDir)) {
+		throw new Error(
+			`${GSTREAMER_PLUGIN_DIR} is missing; the bundler did not run its gstreamer plugin (bundleMediaFramework)`,
+		);
+	}
+	const found = readdirSync(pluginDir).sort();
+	const wanted = [...BUNDLED_GSTREAMER_PLUGINS].sort();
+	const extra = found.filter(name => !wanted.includes(name));
+	const missing = wanted.filter(name => !found.includes(name));
+	if (extra.length > 0 || missing.length > 0) {
+		throw new Error(
+			`${GSTREAMER_PLUGIN_DIR} must hold exactly the allowlisted plugins; ` +
+				`missing: ${missing.join(", ") || "none"}; unexpected: ${extra.join(", ") || "none"}`,
+		);
+	}
+	for (const name of found) {
+		if (!lstatSync(path.join(pluginDir, name)).isFile())
+			throw new Error(`${GSTREAMER_PLUGIN_DIR}/${name} is not a regular file`);
+	}
+	for (const required of [PULSE_CLIENT, GSTREAMER_SCANNER]) {
+		if (!existsSync(path.join(appDir, required))) throw new Error(`${required} is missing from the AppImage`);
+	}
+	const forbidden = regularFilesUnder(appDir).filter(file => FORBIDDEN_LIBRARY.test(path.basename(file)));
+	if (forbidden.length > 0) {
+		throw new Error(
+			`the AppImage bundles libraries that must come from the host: ${forbidden.map(file => path.relative(appDir, file)).join(", ")}`,
+		);
+	}
+}
 
 /** appimagetool, pinned by release and digest, cached where tauri-bundler caches its own tools. */
 export const APPIMAGETOOL = {
@@ -161,7 +231,7 @@ function run(command: string, args: string[], cwd: string, env: NodeJS.ProcessEn
 	return result.stdout;
 }
 
-/** Rewrite `appImagePath` in place with the patched WebKit library. */
+/** Rewrite `appImagePath` in place with the patched WebKit library, after checking its media framework and glibc floor. */
 export async function finalizeAppImage(appImagePath: string): Promise<void> {
 	const tool = await appimagetool();
 	const source = path.resolve(appImagePath);
@@ -187,6 +257,7 @@ export async function finalizeAppImage(appImagePath: string): Promise<void> {
 		const mode = statSync(library).mode;
 		writeFileSync(library, patchWebKitLibrary(readFileSync(library)));
 		chmodSync(library, mode);
+		assertMediaFramework(appDir);
 		assertGlibcFloor(appDir, source);
 
 		const rebuilt = path.join(scratch, path.basename(source));

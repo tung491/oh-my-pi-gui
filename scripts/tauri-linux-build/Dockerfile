@@ -19,6 +19,28 @@ RUN apt-get update \
 		squashfs-tools binutils dpkg \
 	&& rm -rf /var/lib/apt/lists/*
 
+# The GStreamer plugins the AppImage bundles, staged where scripts/tauri-linux-build.sh
+# points GSTREAMER_PLUGINS_DIR: linuxdeploy's gstreamer plugin copies every file
+# there and deploys their dependencies (the libpulse client among them). They
+# come from the same apt state as the GStreamer core libraries linuxdeploy
+# bundles, so plugins and core always match. Inside the web-process sandbox the
+# microphone is reachable only through the PulseAudio socket, so capture is
+# pulsesrc found by the pulse device provider, and the AudioContext needs a sink:
+# coreelements, app, audioconvert, audioresample, autodetect and pulseaudio.
+# Playback of synthesized speech (an <audio> WAV) adds playback,
+# typefindfunctions, volume and wavparse. Nothing else: the whole plugin
+# directory would pull in tens of MB of codecs, and libpipewire would be dead
+# weight because the sandbox cannot reach the PipeWire socket.
+# src-tauri/linux/finalize-appimage.ts refuses an AppImage with any other set.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+	&& rm -rf /var/lib/apt/lists/* \
+	&& mkdir -p /opt/sai-atlas/gstreamer-1.0 \
+	&& for plugin in coreelements app audioconvert audioresample autodetect pulseaudio \
+		playback typefindfunctions volume wavparse; do \
+		cp -L "/usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgst${plugin}.so" /opt/sai-atlas/gstreamer-1.0/ || exit 1; \
+	done
+
 # The build writes into the mounted repo, so it runs as the host user's uid/gid.
 # The image's own "ubuntu" user holds uid 1000, the usual host uid.
 ARG UID=1000

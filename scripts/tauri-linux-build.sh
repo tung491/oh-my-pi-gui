@@ -24,7 +24,10 @@ mkdir -p "$target" "$root/src-tauri/target" "$HOME/.cache/tauri"
 # Tauri keeps earlier bundles, and finalize-deb.ts needs exactly one .deb.
 rm -rf "$bundle"
 
-env_args=(-e CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-8}")
+# linuxdeploy's gstreamer plugin (bundleMediaFramework) copies every file in
+# GSTREAMER_PLUGINS_DIR into the AppImage; the image stages exactly the plugins
+# WebKit needs for microphone capture and audio playback there.
+env_args=(-e CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-8}" -e GSTREAMER_PLUGINS_DIR=/opt/sai-atlas/gstreamer-1.0)
 [[ -n ${SAI_ATLAS_UPDATE_BASE-} ]] && env_args+=(-e SAI_ATLAS_UPDATE_BASE)
 
 docker run --rm --init \
