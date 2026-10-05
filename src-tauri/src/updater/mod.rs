@@ -513,6 +513,16 @@ impl Updater {
                 if asks {
                     ctx.desktop.withdraw_quit_approval();
                 }
+                // The banner can be dismissed, so a failed install also lands in the
+                // runtime log, where a user's report can show what apt said.
+                match &error {
+                    InstallError::ReopenRequired => {}
+                    InstallError::UnresolvedDependencies { detail, .. } | InstallError::Failed(detail) => runtime_log::note(
+                        "unknown",
+                        format!("the update could not be installed: {detail}"),
+                        json!({ "version": version, "package": path.display().to_string() }),
+                    ),
+                }
                 match error {
                     InstallError::ReopenRequired => self.ask_for_reopen(version, mode),
                     InstallError::UnresolvedDependencies { detail, command } => self.set_status(UpdateStatus::Error {
@@ -1315,6 +1325,12 @@ mod tests {
         assert!(h.fakes.host.relaunches.lock().unwrap().is_empty());
         assert!(h.fakes.host.exit_codes.lock().unwrap().is_empty());
         assert!(!h.updater().inner().install_done);
+        let log = std::fs::read_to_string(runtime_log::path()).unwrap_or_default();
+        let package = package.display().to_string();
+        assert!(
+            log.lines().any(|line| line.contains("the update could not be installed: E: Unable to correct problems") && line.contains(&package)),
+            "the failure is in the runtime log"
+        );
     }
 
     #[tokio::test]
