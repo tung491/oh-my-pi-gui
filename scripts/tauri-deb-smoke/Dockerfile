@@ -19,8 +19,9 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# The .deb's Depends (dpkg-deb -f <deb> Depends) are preinstalled so the run
-# needs no package index; apt still checks them when it installs the .deb.
+# The .deb's Depends and Recommends (dpkg-deb -f <deb> Depends Recommends) are
+# preinstalled, as on a stock Ubuntu desktop, so the run needs no package index;
+# apt still checks the Depends when it installs the .deb.
 # The rest is what the harness and e2e-tauri/outside.ts run: WebKitWebDriver
 # (webkit2gtk-driver), a session bus (dbus), the accessibility bus the window
 # list is read from (at-spi2-core), gdbus (libglib2.0-bin), pgrep (procps),

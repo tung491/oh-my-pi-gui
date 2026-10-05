@@ -7,8 +7,9 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# The .deb's Depends (dpkg-deb -f <deb> Depends) are preinstalled so the run
-# needs no package index; apt still checks them when it installs the .deb.
+# The .deb's Depends and Recommends (dpkg-deb -f <deb> Depends Recommends) are
+# preinstalled, as on a stock Ubuntu desktop, so the run needs no package index;
+# apt still checks the Depends when it installs the .deb.
 # The rest is the check itself: an X server (xvfb) and window manager
 # (openbox), a session bus (dbus), and the X clients that find, measure and
 # close the window (xdotool, x11-utils for xwininfo/xprop/xdpyinfo, wmctrl),
