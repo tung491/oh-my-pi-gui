@@ -120,12 +120,20 @@ pub fn import(prefs: &JsonStore, profile_dir: &Path) {
     }
     match read_renderer_storage(&leveldb_dir) {
         Ok(values) => {
+            let mut imported = Vec::new();
             for key in RENDERER_STORAGE_KEYS {
                 let Some(value) = values.get(key) else { continue };
-                if let Err(error) = prefs.set(&renderer_storage_pref_key(key), serde_json::Value::String(value.clone())) {
-                    crate::runtime_log::note("unknown", format!("could not write imported {key}: {error}"), serde_json::json!({}));
+                match prefs.set(&renderer_storage_pref_key(key), serde_json::Value::String(value.clone())) {
+                    Ok(()) => imported.push(key),
+                    Err(error) => crate::runtime_log::note("unknown", format!("could not write imported {key}: {error}"), serde_json::json!({})),
                 }
             }
+            // Key names only, never values: a support report must tell an import from a skip.
+            crate::runtime_log::note(
+                "unknown",
+                format!("imported {} legacy renderer storage keys", imported.len()),
+                serde_json::json!({ "keys": imported.join(","), "path": leveldb_dir.display().to_string() }),
+            );
         }
         Err(error) => {
             crate::runtime_log::note(
@@ -185,6 +193,11 @@ mod tests {
         import(&prefs, profile.path());
         assert_eq!(prefs.get_string(&renderer_storage_pref_key("omp.lang")), Some("vi".to_string()));
         assert_eq!(prefs.get_string(&renderer_storage_pref_key("omp.themeScheme")), Some("dark".to_string()));
+        let log = std::fs::read_to_string(crate::runtime_log::path()).unwrap_or_default();
+        let leveldb = profile.path().join("Local Storage").join("leveldb").display().to_string();
+        let line = log.lines().find(|line| line.contains("imported 2 legacy renderer storage keys") && line.contains(&leveldb)).expect("the import is in the runtime log");
+        assert!(line.contains("omp.lang") && line.contains("omp.themeScheme"));
+        assert!(!line.contains("\"vi\"") && !line.contains("\"dark\""), "values never reach the log: {line}");
     }
 
     #[test]
