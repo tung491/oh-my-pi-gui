@@ -6,6 +6,10 @@
 #   bash scripts/tauri-deb-smoke.sh                  # the .deb scripts/tauri-linux-build.sh built
 #   bash scripts/tauri-deb-smoke.sh path/to/sai-atlas.deb
 #   bash scripts/tauri-deb-smoke.sh path/to/sai-atlas.deb --mochaOpts.grep "boots sandboxed"   # extra wdio args
+#   OMP_E2E_FAKE_MIC=1 bash scripts/tauri-deb-smoke.sh path/to/sai-atlas.deb   # the audio probe instead
+#
+# OMP_E2E_FAKE_MIC, OMP_E2E_FAKE_MIC_APP_LOG (a path under the repo, which is
+# mounted at /repo), GST_DEBUG and GST_DEBUG_NO_COLOR pass into the container when set.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -51,6 +55,7 @@ exec docker run --rm --init --name "$name" \
 	--security-opt systempaths=unconfined \
 	--ulimit core=1 \
 	-e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+	-e OMP_E2E_FAKE_MIC -e OMP_E2E_FAKE_MIC_APP_LOG -e GST_DEBUG -e GST_DEBUG_NO_COLOR \
 	-v "$root:/repo" \
 	-v "$deb:/tmp/sai-atlas.deb:ro" \
 	"$name" "$@"

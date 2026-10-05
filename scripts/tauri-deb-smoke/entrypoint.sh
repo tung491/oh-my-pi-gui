@@ -7,6 +7,10 @@
 # headless weston and runs WebdriverIO against it. Headless weston has no seat,
 # so GTK logs `gdk_seat_get_keyboard` criticals by the hundred; WebDriver
 # delivers input inside WebKit and needs none.
+#
+# With OMP_E2E_FAKE_MIC=1 the session also starts the audio stack with a fake
+# microphone (fake-mic.sh) and wdio.packaged.conf.ts runs the audio probe
+# (e2e-tauri/fake-mic.probe.ts) instead of the smoke spec.
 set -euo pipefail
 
 if [[ ${1:-} == --session ]]; then
@@ -24,6 +28,9 @@ if [[ ${1:-} == --session ]]; then
 		echo "weston did not start:" >&2
 		cat "$XDG_RUNTIME_DIR/weston.log" >&2 || true
 		exit 1
+	fi
+	if [[ ${OMP_E2E_FAKE_MIC:-} == 1 ]]; then
+		fake-mic
 	fi
 	cd /repo
 	# Not exec: the trap stops weston once the run ends.
