@@ -385,7 +385,14 @@ fn unit_name(purpose: &str, pid: u32, nanos: u32) -> String {
 /// fail when the exec itself fails; `ExitType=cgroup` keeps the unit (and so
 /// an app relaunched from it later) alive while any of its processes runs,
 /// where the default would stop the unit, killing the rest, when the first
-/// process exits. `--setenv=NAME` without a value passes `systemd-run`'s own
+/// process exits. `KillMode=mixed` makes a stop (`systemctl --user stop`, or
+/// logout) send SIGTERM to the main process only, which is the app itself (the
+/// AppImage handover waiter execs the image, whose runtime execs AppRun in
+/// place; a `.deb` runs the binary directly), so the app runs its shutdown
+/// while the AppImage's FUSE server, a forked child, keeps serving its files;
+/// under the default `control-group` the FUSE server got SIGTERM too and the
+/// app died of SIGBUS. The FUSE server exits once the app does, and whatever
+/// still runs after `TimeoutStopSec=15` gets SIGKILL. `--setenv=NAME` without a value passes `systemd-run`'s own
 /// value, so no value ever appears on a command line (the values do land in
 /// the transient unit, readable by this user only, until it is collected).
 /// The program path is passed as it is: `systemd-run` looks it up itself, so
@@ -395,7 +402,10 @@ fn unit_name(purpose: &str, pid: u32, nanos: u32) -> String {
 #[cfg(target_os = "linux")]
 fn systemd_run_args<'a>(unit: &str, program: &Path, program_args: &[OsString], env_names: impl IntoIterator<Item = &'a OsStr>, cwd: &Path) -> Vec<OsString> {
     let mut args: Vec<OsString> =
-        ["--user", "--quiet", "--collect", "-p", "Type=exec", "-p", "ExitType=cgroup"].into_iter().map(OsString::from).collect();
+        ["--user", "--quiet", "--collect", "-p", "Type=exec", "-p", "ExitType=cgroup", "-p", "KillMode=mixed", "-p", "TimeoutStopSec=15"]
+            .into_iter()
+            .map(OsString::from)
+            .collect();
     args.push(OsString::from(format!("--unit={unit}")));
     let mut working_directory = OsString::from("--working-directory=");
     working_directory.push(cwd);
@@ -848,6 +858,10 @@ mod tests {
             "Type=exec",
             "-p",
             "ExitType=cgroup",
+            "-p",
+            "KillMode=mixed",
+            "-p",
+            "TimeoutStopSec=15",
             "--unit=app-vn.io.vif.saiatlas-handover-42-0000abcd.service",
             "--working-directory=/home/u/my projects",
             "--setenv=DISPLAY",
