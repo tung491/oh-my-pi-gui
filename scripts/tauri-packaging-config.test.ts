@@ -117,6 +117,14 @@ describe("product identity", () => {
 		expect(base().version).toBe("../package.json");
 	});
 
+	it("keeps the crate version equal to package.json's", () => {
+		// Runtime-log lines written before the Tauri context exists (helper modes,
+		// the install child) report the crate version, so the release bumps both.
+		const cargo = fs.readFileSync(path.join(TAURI, "Cargo.toml"), "utf8");
+		const crateVersion = cargo.match(/^\[package\]\n(?:[^[\n].*\n|\n)*?version = "([^"]+)"$/m)?.[1];
+		expect(crateVersion).toBe(readJson<{ version: string }>("package.json").version);
+	});
+
 	it("registers the omp deep-link scheme", () => {
 		expect(base().plugins?.["deep-link"]?.desktop?.schemes).toEqual(["omp"]);
 		expect(base().plugins?.["deep-link"]?.mobile).toEqual([]);
