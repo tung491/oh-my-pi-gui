@@ -7,6 +7,7 @@ import { useTabRpc } from "../../lib/tab-rpc";
 import { useSessionStore } from "../../stores/session";
 import { useUpdaterStore } from "../../stores/updater";
 import { Button, Spinner } from "../common";
+import { updateErrorText } from "../layout/UpdateBanner";
 
 function appLatest(status: UpdateStatus): string {
 	if ("version" in status) return status.version;
@@ -82,7 +83,9 @@ export function UpdatesSettingsPage() {
 
 	const coreUpdateAvailable = core?.updateAvailable === true;
 	const overview = updateOverviewState(status, core, coreError, checking);
-	const errorMessage = [status.state === "error" ? status.message : undefined, coreError].filter(Boolean).join(" · ");
+	const errorMessage = [status.state === "error" ? updateErrorText(t, status) : undefined, coreError]
+		.filter(Boolean)
+		.join(" · ");
 
 	return (
 		<div>

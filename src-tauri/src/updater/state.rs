@@ -59,6 +59,11 @@ pub(crate) enum UpdateStatus {
         message: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         show_in_banner: Option<bool>,
+        /// A terminal command that installs the downloaded package by hand: set
+        /// when apt could not resolve the package's dependencies, so the
+        /// renderer can say what to run instead of only apt's output.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        manual_install_command: Option<String>,
     },
 }
 
@@ -156,7 +161,7 @@ pub(crate) fn has_stable_mac_signing_identity(codesign_details: &str) -> bool {
 /// `no_result_message`, a background check goes quietly back to idle.
 pub(crate) fn settle_incomplete_update_check(status: &UpdateStatus, manual: bool, no_result_message: &str) -> UpdateStatus {
     match status {
-        UpdateStatus::Checking if manual => UpdateStatus::Error { message: no_result_message.to_string(), show_in_banner: None },
+        UpdateStatus::Checking if manual => UpdateStatus::Error { message: no_result_message.to_string(), show_in_banner: None, manual_install_command: None },
         UpdateStatus::Checking => UpdateStatus::Idle,
         other => other.clone(),
     }
@@ -301,7 +306,7 @@ pub(crate) fn installs_on_quit(mode: UpdateInstallMode, kind: Option<LinuxPackag
     mode == UpdateInstallMode::Automatic && kind != Some(LinuxPackageKind::Deb)
 }
 
-/// Linux installs that replace the app before it quits (a deb's pkexec + dpkg,
+/// Linux installs that replace the app before it quits (a deb's pkexec + apt-get,
 /// an AppImage's file swap) must pass the working-tabs quit prompt first: a
 /// quit cancelled afterwards would keep the old process running on top of the
 /// new install.
@@ -368,7 +373,7 @@ mod tests {
     fn does_not_leave_a_completed_manual_check_spinning_forever() {
         assert_eq!(
             settle_incomplete_update_check(&UpdateStatus::Checking, true, NO_RESULT),
-            UpdateStatus::Error { message: NO_RESULT.into(), show_in_banner: None }
+            UpdateStatus::Error { message: NO_RESULT.into(), show_in_banner: None, manual_install_command: None }
         );
         assert_eq!(
             serde_json::to_value(settle_incomplete_update_check(&UpdateStatus::Checking, true, NO_RESULT)).unwrap(),

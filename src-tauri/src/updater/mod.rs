@@ -16,8 +16,8 @@
 //! - **Download location.** macOS DMGs go to Downloads (the user keeps them);
 //!   Linux and Windows packages go to a cache directory this module owns and
 //!   clears before each download.
-//! - **Installs.** A deb runs `pkexec dpkg -i` after the quit prompt and
-//!   relaunches `/usr/bin/sai-atlas`; an AppImage swaps `$APPIMAGE` and
+//! - **Installs.** A deb runs `pkexec apt-get install -y --no-remove --
+//!   <package>` after the quit prompt and relaunches `/usr/bin/sai-atlas`; an AppImage swaps `$APPIMAGE` and
 //!   relaunches it; Windows starts the NSIS installer. Installs on quit cover
 //!   the AppImage and Windows cases only (`installs_on_quit`).
 
@@ -238,7 +238,7 @@ impl Updater {
     }
 
     fn error(&self, message: String, show_in_banner: Option<bool>) {
-        self.set_status(UpdateStatus::Error { message, show_in_banner });
+        self.set_status(UpdateStatus::Error { message, show_in_banner, manual_install_command: None });
     }
 
     // -- check ---------------------------------------------------------------
@@ -491,7 +491,7 @@ impl Updater {
             self.ask_for_reopen(version, mode);
             return;
         }
-        // A deb runs pkexec + dpkg and an AppImage swaps its file before this
+        // A deb runs pkexec + apt-get and an AppImage swaps its file before this
         // process quits, so the working-tabs prompt must come first: a quit
         // cancelled afterwards would keep the old process running on top of
         // the new install.
@@ -515,6 +515,11 @@ impl Updater {
                 }
                 match error {
                     InstallError::ReopenRequired => self.ask_for_reopen(version, mode),
+                    InstallError::UnresolvedDependencies { detail, command } => self.set_status(UpdateStatus::Error {
+                        message: format!("{} ({detail})", self.text(MainTextKey::UpdatesInstallFailed)),
+                        show_in_banner: Some(true),
+                        manual_install_command: Some(command),
+                    }),
                     InstallError::Failed(detail) => self.error(format!("{} ({detail})", self.text(MainTextKey::UpdatesInstallFailed)), Some(true)),
                 }
             }
@@ -1007,7 +1012,7 @@ mod tests {
         assert!(reply["message"].as_str().unwrap().contains("404"), "{reply}");
 
         assert_eq!(h.updater().check(CheckKind::Startup).await, UpdateStatus::Idle);
-        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Error { message: format!("{} could not be fetched (404)", feed::FEED_FILE), show_in_banner: Some(false) });
+        assert_eq!(h.updater().check(CheckKind::Periodic).await, UpdateStatus::Error { message: format!("{} could not be fetched (404)", feed::FEED_FILE), show_in_banner: Some(false), manual_install_command: None });
     }
 
     #[tokio::test]
@@ -1017,7 +1022,7 @@ mod tests {
         let h = harness(Setup { release_base: base, ..Setup::default() });
         let reply = h.call("updater:check").await;
         assert_eq!(reply, json!({ "state": "error", "message": h.ctx.i18n.t(MainTextKey::UpdatesInstallerMissing) }));
-        assert_eq!(h.updater().check(CheckKind::Startup).await, UpdateStatus::Error { message: h.ctx.i18n.t(MainTextKey::UpdatesInstallerMissing), show_in_banner: None });
+        assert_eq!(h.updater().check(CheckKind::Startup).await, UpdateStatus::Error { message: h.ctx.i18n.t(MainTextKey::UpdatesInstallerMissing), show_in_banner: None, manual_install_command: None });
     }
 
     #[tokio::test]
@@ -1211,7 +1216,7 @@ mod tests {
 
         assert_eq!(h.call("updater:apply").await, Value::Null);
 
-        assert_eq!(h.runner.calls.lock().unwrap().clone(), [["/usr/bin/pkexec", "/usr/bin/dpkg", "-i", "--", package.to_str().unwrap()]]);
+        assert_eq!(h.runner.calls.lock().unwrap().clone(), [["/usr/bin/pkexec", "/usr/bin/apt-get", "install", "-y", "--no-remove", "--", package.to_str().unwrap()]]);
         assert_eq!(*h.fakes.host.relaunches.lock().unwrap(), [PathBuf::from("/usr/bin/sai-atlas")]);
         assert_eq!(*h.fakes.host.exit_codes.lock().unwrap(), [0]);
         assert_eq!(h.fakes.desktop.log.calls(), ["approve_quit_before_install()"]);
@@ -1288,18 +1293,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn apply_fixes_dependencies_after_a_failed_dpkg_run() {
+    async fn apply_reports_unresolvable_dependencies_with_the_manual_install_command() {
         let h = harness(Setup::default());
         *h.fakes.desktop.approve_install.lock().unwrap() = true;
-        *h.runner.answers.lock().unwrap() = vec![Err(install::RunFailure { code: Some(1), detail: "dependency problems".into() }), Ok(())];
-        h.seed_downloaded(UpdateInstallMode::Automatic, b"deb bytes", DEB_NAME);
+        let apt = "E: Unable to correct problems, you have held broken packages.";
+        *h.runner.answers.lock().unwrap() = vec![Err(install::RunFailure { code: Some(100), detail: apt.into() })];
+        let package = h.seed_downloaded(UpdateInstallMode::Automatic, b"deb bytes", DEB_NAME);
 
         h.call("updater:apply").await;
 
-        let calls = h.runner.calls.lock().unwrap();
-        assert_eq!(calls.len(), 2);
-        assert_eq!(calls[1], ["/usr/bin/pkexec", "/usr/bin/apt-get", "install", "-f", "-y"]);
-        assert_eq!(*h.fakes.host.exit_codes.lock().unwrap(), [0]);
+        assert_eq!(h.runner.calls.lock().unwrap().len(), 1, "no repair command after apt fails");
+        assert_eq!(h.fakes.desktop.log.calls(), ["approve_quit_before_install()", "withdraw_quit_approval()"]);
+        let expected = json!({
+            "state": "error",
+            "message": format!("{} ({apt})", h.ctx.i18n.t(MainTextKey::UpdatesInstallFailed)),
+            "showInBanner": true,
+            "manualInstallCommand": format!("sudo apt install {}", package.to_str().unwrap()),
+        });
+        assert_eq!(h.updater().status(), expected);
+        assert_eq!(h.statuses().last(), Some(&expected));
+        assert!(h.fakes.host.relaunches.lock().unwrap().is_empty());
+        assert!(h.fakes.host.exit_codes.lock().unwrap().is_empty());
+        assert!(!h.updater().inner().install_done);
     }
 
     #[tokio::test]

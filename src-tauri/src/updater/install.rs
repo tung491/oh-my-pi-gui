@@ -1,6 +1,15 @@
-//! Installing a downloaded package: the deb's privileged `dpkg` run, the
+//! Installing a downloaded package: the deb's privileged `apt-get` run, the
 //! AppImage file swap and the Windows installer start. Every command is an
 //! argv vector of absolute paths; nothing here goes through a shell.
+//!
+//! A deb installs with one command, `pkexec apt-get install -y --no-remove --
+//! <package>`, never with `dpkg -i` and a later `apt-get install -f`. apt
+//! resolves the dependencies before dpkg touches anything, so a package whose
+//! dependencies cannot be installed fails with the installed version intact
+//! instead of being left unconfigured, and `-f`'s resolver, which may remove
+//! the very package it repairs, never runs. `--no-remove` turns "remove other
+//! packages to make this fit" into a failure: an unattended `-y` run as root
+//! must not decide that. One command also means one authentication prompt.
 
 use std::path::{Path, PathBuf};
 
@@ -12,7 +21,6 @@ use super::state::sha512_file_base64;
 pub(crate) const DEB_BINARY: &str = "/usr/bin/sai-atlas";
 
 const PKEXEC: &str = "/usr/bin/pkexec";
-const DPKG: &str = "/usr/bin/dpkg";
 const APT_GET: &str = "/usr/bin/apt-get";
 
 /// pkexec's own exit statuses: the user dismissed the authentication dialog,
@@ -24,28 +32,53 @@ const PKEXEC_NOT_AUTHORIZED: i32 = 127;
 /// runs with `no_new_privs`; it exits with `PKEXEC_NOT_AUTHORIZED` then too.
 const PKEXEC_NOT_SETUID: &str = "must be setuid root";
 
-/// The two privileged commands a deb install may run, in order.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct DebInstallPlan {
-    /// `pkexec dpkg -i -- <package>`: install the downloaded package.
-    pub install: Vec<String>,
-    /// `pkexec apt-get install -f -y`: when dpkg left the package unconfigured
-    /// over missing dependencies, install them and finish the configuration.
-    pub fix_dependencies: Vec<String>,
+/// apt's words when it cannot install the package without breaking the system:
+/// unmet or unsatisfiable dependencies (apt 2.x and the apt 3 solver), or a
+/// resolution that would remove other packages, which `--no-remove` refuses.
+/// Matched case-insensitively against apt's English output.
+const APT_UNRESOLVABLE: &[&str] = &[
+    "unmet dependencies",
+    "unable to correct problems",
+    "unable to satisfy dependencies",
+    "packages need to be removed but remove is disabled",
+];
+
+/// The privileged deb install, `pkexec apt-get install -y --no-remove --
+/// <package>`, as an argv vector with absolute paths. The path must be
+/// absolute: apt reads an argument as a package file only when it contains a
+/// slash. `--` ends apt's options, so the path is never read as one.
+pub(crate) fn deb_install_command(package: &Path) -> Result<Vec<String>, String> {
+    let package = deb_package_path(package)?;
+    Ok([PKEXEC, APT_GET, "install", "-y", "--no-remove", "--", package].iter().map(|part| part.to_string()).collect())
 }
 
-/// electron-updater's `DebUpdater.installWithCommandRunner` (`dpkg -i`, then
-/// `apt-get install -f -y` after a failure) as argv vectors with absolute
-/// paths. `--` ends dpkg's options, so the package path is never read as one.
-pub(crate) fn deb_install_plan(package: &Path) -> Result<DebInstallPlan, String> {
+fn deb_package_path(package: &Path) -> Result<&str, String> {
     if !package.is_absolute() {
         return Err(format!("the package path is not absolute: {}", package.display()));
     }
-    let package = package.to_str().ok_or_else(|| format!("the package path is not valid UTF-8: {}", package.display()))?;
-    Ok(DebInstallPlan {
-        install: [PKEXEC, DPKG, "-i", "--", package].iter().map(|part| part.to_string()).collect(),
-        fix_dependencies: [PKEXEC, APT_GET, "install", "-f", "-y"].iter().map(|part| part.to_string()).collect(),
-    })
+    package.to_str().ok_or_else(|| format!("the package path is not valid UTF-8: {}", package.display()))
+}
+
+/// The command a user can run in a terminal to install the package by hand:
+/// interactive apt shows what it would install or remove and asks first. The
+/// path is single-quoted for the shell when it holds anything but plain path
+/// characters.
+pub(crate) fn manual_deb_install_command(package: &str) -> String {
+    let plain = !package.is_empty() && package.chars().all(|c| c.is_ascii_alphanumeric() || "/._-+@%=:,".contains(c));
+    let quoted = if plain { package.to_string() } else { format!("'{}'", package.replace('\'', "'\\''")) };
+    format!("sudo apt install {quoted}")
+}
+
+/// Whether apt's output says it could not resolve the package's dependencies.
+fn apt_could_not_resolve(stderr: &str) -> bool {
+    let stderr = stderr.to_lowercase();
+    APT_UNRESOLVABLE.iter().any(|words| stderr.contains(words))
+}
+
+/// The last `STDERR_TAIL_CHARS` characters of a failure's output, for the banner.
+fn tail(detail: &str) -> String {
+    let skip = detail.chars().count().saturating_sub(STDERR_TAIL_CHARS);
+    detail.chars().skip(skip).collect()
 }
 
 /// Why a privileged command did not succeed.
@@ -53,6 +86,7 @@ pub(crate) fn deb_install_plan(package: &Path) -> Result<DebInstallPlan, String>
 pub(crate) struct RunFailure {
     /// The exit status, when the command ran at all.
     pub code: Option<i32>,
+    /// The command's whole standard error, trimmed, or what kept it from running.
     pub detail: String,
 }
 
@@ -76,6 +110,9 @@ pub(crate) enum InstallError {
     /// it), so pkexec cannot work until the app is quit and opened again. The
     /// downloaded package stays usable.
     ReopenRequired,
+    /// apt could not install the package's dependencies, or only by removing
+    /// other packages; nothing changed. `command` installs it by hand.
+    UnresolvedDependencies { detail: String, command: String },
     Failed(String),
 }
 
@@ -94,7 +131,11 @@ pub(crate) trait PrivilegedRunner: Send + Sync {
 }
 
 /// The production runner: spawns `argv[0]` (pkexec) with the rest as its
-/// arguments through `tokio::process`, with no shell in between.
+/// arguments through `tokio::process`, with no shell in between. pkexec passes
+/// the locale variables on to the command, so they are pinned to `C`: apt's
+/// failures are then the English words `APT_UNRESOLVABLE` matches, whatever
+/// language the session uses. The authentication dialog comes from the
+/// session's polkit agent and keeps the user's language.
 pub(crate) struct PkexecRunner;
 
 const STDERR_TAIL_CHARS: usize = 400;
@@ -107,6 +148,8 @@ impl PrivilegedRunner for PkexecRunner {
             };
             let output = tokio::process::Command::new(program)
                 .args(args)
+                .env("LC_ALL", "C")
+                .env_remove("LANGUAGE")
                 .stdin(std::process::Stdio::null())
                 .output()
                 .await
@@ -116,8 +159,7 @@ impl PrivilegedRunner for PkexecRunner {
             }
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stderr = stderr.trim();
-            let tail: String = stderr.chars().rev().take(STDERR_TAIL_CHARS).collect::<Vec<_>>().into_iter().rev().collect();
-            let detail = if tail.is_empty() { format!("{program} exited with {}", output.status) } else { tail };
+            let detail = if stderr.is_empty() { format!("{program} exited with {}", output.status) } else { stderr.to_string() };
             Err(RunFailure { code: output.status.code(), detail })
         })
     }
@@ -143,29 +185,27 @@ pub(crate) async fn verify_package(package: &Path, expected_sha512: &str) -> Res
 /// The hash check and the privileged read are two separate opens of a file in
 /// a location this user can write, so a process running as the same user could
 /// swap the package between them. This process cannot close that window: the
-/// check runs here, dpkg reads the file as root, and nothing hands dpkg an
+/// check runs here, apt reads the file as root, and nothing hands apt an
 /// already-verified descriptor. The remaining exposure is to code already
 /// running as this user, which could also edit anything else the user owns;
 /// users who want no window at all install the package by hand with `sudo apt
 /// install ./<package>.deb`.
 pub(crate) async fn install_deb(runner: &dyn PrivilegedRunner, package: &Path, expected_sha512: &str) -> Result<(), InstallError> {
-    let plan = deb_install_plan(package)?;
+    let command = deb_install_command(package)?;
     verify_package(package, expected_sha512).await?;
     if !runner.can_elevate() {
         return Err(InstallError::ReopenRequired);
     }
-    let Err(install) = runner.run(plan.install).await else { return Ok(()) };
-    if install.pkexec_blocked() {
+    let Err(failure) = runner.run(command).await else { return Ok(()) };
+    if failure.pkexec_blocked() {
         return Err(InstallError::ReopenRequired);
     }
-    // pkexec refusing means the user said no; a second prompt would only ask again.
-    if install.pkexec_refused() {
-        return Err(install.detail.into());
+    // A refused prompt means apt never ran, so the output cannot be apt's.
+    if !failure.pkexec_refused() && apt_could_not_resolve(&failure.detail) {
+        let command = manual_deb_install_command(deb_package_path(package)?);
+        return Err(InstallError::UnresolvedDependencies { detail: tail(&failure.detail), command });
     }
-    match runner.run(plan.fix_dependencies).await {
-        Ok(()) => Ok(()),
-        Err(fix) => Err(format!("{}; {}", install.detail, fix.detail).into()),
-    }
+    Err(InstallError::Failed(tail(&failure.detail)))
 }
 
 /// Replace the AppImage at `target` with `downloaded`: copy next to it, make it
@@ -256,76 +296,128 @@ pub(crate) mod tests {
 
     // deb command builder
 
+    const PACKAGE: &str = "/home/u/.cache/updates/sai-atlas_0.9.16_amd64.deb";
+
     #[test]
-    fn uses_absolute_dpkg_path() {
-        let plan = deb_install_plan(Path::new("/var/cache/sai-atlas/sai-atlas_0.9.16_amd64.deb")).unwrap();
-        assert_eq!(plan.install[0], "/usr/bin/pkexec");
-        assert_eq!(plan.install[1], "/usr/bin/dpkg");
-        assert_eq!(plan.fix_dependencies[0], "/usr/bin/pkexec");
-        assert_eq!(plan.fix_dependencies[1], "/usr/bin/apt-get");
-        for part in plan.install.iter().take(2).chain(plan.fix_dependencies.iter().take(2)) {
+    fn installs_with_one_absolute_apt_get_command_and_never_repairs_with_f() {
+        let command = deb_install_command(Path::new(PACKAGE)).unwrap();
+        assert_eq!(command, ["/usr/bin/pkexec", "/usr/bin/apt-get", "install", "-y", "--no-remove", "--", PACKAGE]);
+        for part in command.iter().take(2) {
             assert!(Path::new(part).is_absolute(), "{part}");
         }
-        assert_eq!(plan.fix_dependencies[2..], ["install", "-f", "-y"]);
+        assert!(!command.iter().any(|part| part == "-f" || part == "--fix-broken" || part.ends_with("/dpkg")), "{command:?}");
     }
 
     #[test]
     fn passes_the_package_after_double_dash() {
-        let plan = deb_install_plan(Path::new("/home/u/.cache/updates/sai-atlas_0.9.16_amd64.deb")).unwrap();
-        assert_eq!(plan.install[2..], ["-i", "--", "/home/u/.cache/updates/sai-atlas_0.9.16_amd64.deb"]);
-        assert!(deb_install_plan(Path::new("sai-atlas_0.9.16_amd64.deb")).unwrap_err().contains("not absolute"));
+        let command = deb_install_command(Path::new(PACKAGE)).unwrap();
+        assert_eq!(command[command.len() - 2..], ["--", PACKAGE]);
+        assert!(deb_install_command(Path::new("sai-atlas_0.9.16_amd64.deb")).unwrap_err().contains("not absolute"));
     }
 
     #[test]
     fn never_builds_a_shell_string() {
         let hostile = Path::new("/tmp/odd dir/$(touch pwned); sai-atlas_0.9.16_amd64.deb");
-        let plan = deb_install_plan(hostile).unwrap();
+        let command = deb_install_command(hostile).unwrap();
         // One argv element per word; the path stays one verbatim element.
-        assert_eq!(plan.install.len(), 5);
-        assert_eq!(plan.install[4], hostile.to_str().unwrap());
-        for part in plan.install.iter().chain(plan.fix_dependencies.iter()) {
+        assert_eq!(command.len(), 7);
+        assert_eq!(command[6], hostile.to_str().unwrap());
+        for part in &command {
             assert!(!part.contains("bash") && !part.contains("sh -c") && part != "-c", "{part}");
             assert!(!part.starts_with('\'') && !part.starts_with('"'), "{part}");
         }
-        assert!(!plan.install.iter().any(|part| part.contains(' ') && part != hostile.to_str().unwrap()));
+        assert!(!command.iter().any(|part| part.contains(' ') && part != hostile.to_str().unwrap()));
+    }
+
+    #[test]
+    fn quotes_the_manual_command_s_path_only_when_the_shell_needs_it() {
+        assert_eq!(manual_deb_install_command(PACKAGE), format!("sudo apt install {PACKAGE}"));
+        assert_eq!(manual_deb_install_command("/home/my user/a.deb"), "sudo apt install '/home/my user/a.deb'");
+        assert_eq!(manual_deb_install_command("/tmp/it's $(x).deb"), "sudo apt install '/tmp/it'\\''s $(x).deb'");
+    }
+
+    #[test]
+    fn recognises_apt_s_unresolvable_dependency_failures() {
+        // apt 2.x (Ubuntu 24.04).
+        assert!(apt_could_not_resolve(" sai-atlas : Depends: libwebkit2gtk-4.1-0 but it is not installable\nE: Unable to correct problems, you have held broken packages."));
+        assert!(apt_could_not_resolve("E: Unmet dependencies. Try 'apt --fix-broken install' with no packages (or specify a solution)."));
+        // apt 3 (Ubuntu 26.04).
+        assert!(apt_could_not_resolve("The following packages have unmet dependencies:\n sai-atlas : Depends: x but it is not installable"));
+        assert!(apt_could_not_resolve("E: Unable to satisfy dependencies. Reached two conflicting assignments:\n   1. sai-atlas:amd64=0.9.17 is selected for install"));
+        // --no-remove refusing a resolution that removes other packages.
+        assert!(apt_could_not_resolve("E: Packages need to be removed but remove is disabled."));
+        assert!(!apt_could_not_resolve("E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 4242 (unattended-upgr)"));
+        assert!(!apt_could_not_resolve("debconf: unable to initialize frontend: Dialog"));
+    }
+
+    #[test]
+    fn keeps_the_end_of_a_long_failure() {
+        let long = format!("{}E: the reason", "x".repeat(1000));
+        assert_eq!(tail(&long).chars().count(), STDERR_TAIL_CHARS);
+        assert!(tail(&long).ends_with("E: the reason"));
+        assert_eq!(tail("short"), "short");
     }
 
     // deb install
 
-    #[tokio::test]
-    async fn runs_dpkg_then_the_dependency_fix_only_after_a_dpkg_failure() {
-        let dir = tempfile::tempdir().unwrap();
+    async fn downloaded_package(dir: &tempfile::TempDir) -> (PathBuf, String) {
         let package = dir.path().join("sai-atlas_0.9.16_amd64.deb");
         tokio::fs::write(&package, b"deb bytes").await.unwrap();
         let sha = sha512_file_base64(&package).await.unwrap();
-
-        let runner = FakeRunner::default();
-        install_deb(&runner, &package, &sha).await.unwrap();
-        assert_eq!(runner.calls.lock().unwrap().len(), 1);
-
-        let runner = FakeRunner::default();
-        *runner.answers.lock().unwrap() = vec![Err(failure(1, "dependency problems")), Ok(())];
-        install_deb(&runner, &package, &sha).await.unwrap();
-        let calls = runner.calls.lock().unwrap();
-        assert_eq!(calls.len(), 2);
-        assert_eq!(calls[1][1..], ["/usr/bin/apt-get", "install", "-f", "-y"]);
+        (package, sha)
     }
 
     #[tokio::test]
-    async fn skips_the_dependency_fix_when_pkexec_itself_refused() {
+    async fn runs_the_single_apt_get_command_once_and_reports_its_failure() {
         let dir = tempfile::tempdir().unwrap();
-        let package = dir.path().join("sai-atlas_0.9.16_amd64.deb");
-        tokio::fs::write(&package, b"deb bytes").await.unwrap();
-        let sha = sha512_file_base64(&package).await.unwrap();
+        let (package, sha) = downloaded_package(&dir).await;
+
+        let runner = FakeRunner::default();
+        install_deb(&runner, &package, &sha).await.unwrap();
+        assert_eq!(runner.calls.lock().unwrap().clone(), [deb_install_command(&package).unwrap()]);
+
+        let runner = FakeRunner::default();
+        *runner.answers.lock().unwrap() = vec![Err(failure(100, "E: Could not get lock /var/lib/dpkg/lock-frontend"))];
+        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("E: Could not get lock /var/lib/dpkg/lock-frontend".into()));
+        assert_eq!(runner.calls.lock().unwrap().len(), 1, "no second command after a failure");
+    }
+
+    #[tokio::test]
+    async fn maps_unresolvable_dependencies_to_the_manual_apt_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let (package, sha) = downloaded_package(&dir).await;
+        let stderr = format!("{}\nE: Unable to correct problems, you have held broken packages.", "debconf: noise ".repeat(60));
+        let runner = FakeRunner::default();
+        *runner.answers.lock().unwrap() = vec![Err(failure(100, &stderr))];
+
+        let error = install_deb(&runner, &package, &sha).await.unwrap_err();
+
+        let command = format!("sudo apt install {}", package.to_str().unwrap());
+        assert_eq!(error, InstallError::UnresolvedDependencies { detail: tail(&stderr), command });
+        assert_eq!(runner.calls.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn matches_apt_s_words_anywhere_in_the_output_not_only_in_the_banner_tail() {
+        let dir = tempfile::tempdir().unwrap();
+        let (package, sha) = downloaded_package(&dir).await;
+        let stderr = format!("The following packages have unmet dependencies:\n{}", "      [no choices]\n".repeat(60));
+        let runner = FakeRunner::default();
+        *runner.answers.lock().unwrap() = vec![Err(failure(100, &stderr))];
+        assert!(!tail(&stderr).contains("unmet"));
+        assert!(matches!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::UnresolvedDependencies { .. }));
+    }
+
+    #[tokio::test]
+    async fn reports_a_refused_pkexec_prompt_as_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let (package, sha) = downloaded_package(&dir).await;
         for code in [PKEXEC_DISMISSED, PKEXEC_NOT_AUTHORIZED] {
             let runner = FakeRunner::default();
             *runner.answers.lock().unwrap() = vec![Err(failure(code, "dismissed"))];
             assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("dismissed".into()));
             assert_eq!(runner.calls.lock().unwrap().len(), 1);
         }
-        let runner = FakeRunner::default();
-        *runner.answers.lock().unwrap() = vec![Err(failure(1, "first")), Err(failure(100, "second"))];
-        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("first; second".into()));
     }
 
     #[tokio::test]
@@ -350,11 +442,11 @@ pub(crate) mod tests {
         let runner = FakeRunner::default();
         *runner.answers.lock().unwrap() = vec![Err(failure(PKEXEC_NOT_AUTHORIZED, "pkexec must be setuid root"))];
         assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::ReopenRequired);
-        assert_eq!(runner.calls.lock().unwrap().len(), 1, "no dependency fix after a blocked pkexec");
+        assert_eq!(runner.calls.lock().unwrap().len(), 1, "nothing runs after a blocked pkexec");
         // The same words with another status are an ordinary failure.
         let runner = FakeRunner::default();
-        *runner.answers.lock().unwrap() = vec![Err(failure(1, "must be setuid root")), Err(failure(1, "again"))];
-        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("must be setuid root; again".into()));
+        *runner.answers.lock().unwrap() = vec![Err(failure(1, "must be setuid root"))];
+        assert_eq!(install_deb(&runner, &package, &sha).await.unwrap_err(), InstallError::Failed("must be setuid root".into()));
     }
 
     #[tokio::test]

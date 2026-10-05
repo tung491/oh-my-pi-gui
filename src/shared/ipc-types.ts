@@ -301,7 +301,13 @@ export type UpdateStatus =
 			reopenRequired?: boolean;
 	  }
 	| { state: "not-available"; version: string }
-	| { state: "error"; message: string; showInBanner?: boolean };
+	| {
+			state: "error";
+			message: string;
+			showInBanner?: boolean;
+			/** apt could not resolve the package's dependencies; this terminal command installs it by hand. */
+			manualInstallCommand?: string;
+	  };
 
 export type MenuAction =
 	| "new-session"

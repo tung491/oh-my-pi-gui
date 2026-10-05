@@ -1421,6 +1421,8 @@ export const en: Record<string, string> = {
 	"updater.openInstaller": "Open installer",
 	"updater.manualInstructions":
 		"Quit Sai ATLAS, drag Sai ATLAS into Applications, choose Replace, then reopen it. If macOS blocks it, use System Settings → Privacy & Security → Open Anyway.",
+	"updater.unresolvedDependencies":
+		"The update was not installed because apt could not resolve the packages it needs. Run this in a terminal to see why and install it: {command}",
 	"updater.retry": "Check again",
 	"updater.dismiss": "Dismiss this version",
 	"updater.dismissFailure": "Dismiss this update notice",

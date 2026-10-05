@@ -1353,6 +1353,8 @@ export const vi: Record<string, string> = {
 	"updater.openInstaller": "Mở trình cài đặt",
 	"updater.manualInstructions":
 		"Thoát Sai ATLAS, kéo Sai ATLAS vào Applications, chọn Thay thế, sau đó mở lại. Nếu macOS chặn, hãy vào Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Vẫn mở.",
+	"updater.unresolvedDependencies":
+		"Bản cập nhật chưa được cài đặt vì apt không thể giải quyết các gói phụ thuộc cần thiết. Hãy chạy lệnh này trong terminal để xem nguyên nhân và cài đặt: {command}",
 	"updater.retry": "Kiểm tra lại",
 	"updater.dismiss": "Bỏ qua phiên bản này",
 	"updater.dismissFailure": "Bỏ qua thông báo cập nhật này",

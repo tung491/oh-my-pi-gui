@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RpcOmpUpdateResult } from "../../../shared/rpc-types";
+import { updateErrorText } from "../layout/UpdateBanner";
 import { updateOverviewState } from "./UpdatesSettingsPage";
 
 const CURRENT_CORE: RpcOmpUpdateResult = {
@@ -43,5 +44,23 @@ describe("updates overview state", () => {
 		expect(updateOverviewState({ state: "not-available", version: "0.7.1" }, CURRENT_CORE, undefined, false)).toBe(
 			"healthy",
 		);
+	});
+});
+
+describe("update error text", () => {
+	const t = (key: string, params?: Record<string, string | number>) => `${key}: ${params?.command ?? ""}`;
+
+	it("shows the manual install command instead of apt's output when apt could not resolve dependencies", () => {
+		expect(
+			updateErrorText(t, {
+				state: "error",
+				message: "The update could not be installed. (E: Unmet dependencies)",
+				manualInstallCommand: "sudo apt install /tmp/a.deb",
+			}),
+		).toBe("updater.unresolvedDependencies: sudo apt install /tmp/a.deb");
+	});
+
+	it("shows every other failure as the updater reported it", () => {
+		expect(updateErrorText(t, { state: "error", message: "offline" })).toBe("offline");
 	});
 });
