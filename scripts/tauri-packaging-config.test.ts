@@ -481,10 +481,14 @@ describe("Tauri CI job", () => {
 			"bun run build:renderer:tauri",
 			"cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
 			"cargo test --manifest-path src-tauri/Cargo.toml --all-features",
-			'BASE="$(git merge-base HEAD origin/main)" bash scripts/check-module.sh foundation',
+			'for parity in src-tauri/contracts/*.parity.json; do bun scripts/check-test-parity.ts "$(basename "$parity" .parity.json)"; done',
+			"bash scripts/check-module.sh snapshots",
 		]) {
 			expect(runs).toContain(command);
 		}
+		// Diff-based ownership gates need a merge base and fail by design once the
+		// cross-module work lands on main, so CI runs only whole-tree checks.
+		for (const command of runs) expect(command).not.toContain("merge-base");
 		const setup = runs.join("\n");
 		for (const needle of [
 			"bubblewrap",

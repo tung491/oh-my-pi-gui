@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Module gate for the Tauri port. Usage: bash scripts/check-module.sh <module>
 # Modules: foundation, omp, tabs, desktop, services, ollama, updater, renderer.
+# `snapshots` instead runs only the whole-tree gate that needs no merge base: every
+# src-tauri/contracts/*.api.txt against `cargo public-api` (CI runs it on every branch).
 # Stops at the first failing gate and prints `check-module <module>: PASS` last on success.
 set -u
 
@@ -9,8 +11,8 @@ cd "$ROOT" || exit 1
 
 MODULE="${1:-}"
 case "$MODULE" in
-  foundation|omp|tabs|desktop|services|ollama|updater|renderer) ;;
-  *) echo "usage: bash scripts/check-module.sh <foundation|omp|tabs|desktop|services|ollama|updater|renderer>" >&2; exit 2 ;;
+  foundation|omp|tabs|desktop|services|ollama|updater|renderer|snapshots) ;;
+  *) echo "usage: bash scripts/check-module.sh <foundation|omp|tabs|desktop|services|ollama|updater|renderer|snapshots>" >&2; exit 2 ;;
 esac
 
 # --- toolchain --------------------------------------------------------------
@@ -66,6 +68,9 @@ case "$MODULE" in
     RUST_FILES=(); while IFS= read -r f; do RUST_FILES+=("$f"); done < <(find src-tauri/src/updater -name '*.rs' | sort)
     SNAPSHOTS=(updater ports)
     ;;
+  snapshots)
+    SNAPSHOTS=(); for f in src-tauri/contracts/*.api.txt; do f="${f##*/}"; SNAPSHOTS+=("${f%.api.txt}"); done
+    ;;
   renderer)
     OWNED=("src/renderer/" "plans/")
     FROZEN=("src/renderer/boot/" "src/renderer/main.tsx" "src/renderer/quick-entry/main.tsx" "src/renderer/global.d.ts" "src/renderer/index.html" "src/renderer/quick-entry.html")
@@ -93,6 +98,43 @@ frozen_path() {
   done
   return 1
 }
+
+# Gate 3, whole-tree: needs no merge base, so `snapshots` runs it alone.
+check_snapshots() {
+  step 3 "cargo public-api snapshots match contracts/*.api.txt"
+  if [[ ! -f out/renderer-tauri/index.html ]]; then
+    echo "  out/renderer-tauri is missing; building it (tauri::generate_context! needs it)"
+    bun run build:renderer:tauri >/dev/null || fail 3 "could not build the Tauri renderer"
+  fi
+  PUBLIC_API_TOOLCHAIN="${PUBLIC_API_TOOLCHAIN:?PUBLIC_API_TOOLCHAIN missing from scripts/rust-pins.env}"
+  CARGO_PUBLIC_API_VERSION="${CARGO_PUBLIC_API_VERSION:?CARGO_PUBLIC_API_VERSION missing from scripts/rust-pins.env}"
+  INSTALLED_PA=$("$CARGO" public-api --version 2>/dev/null | awk '{print $2}')
+  if [[ "$INSTALLED_PA" != "$CARGO_PUBLIC_API_VERSION" ]]; then
+    fail 3 "cargo-public-api $CARGO_PUBLIC_API_VERSION is required (installed: ${INSTALLED_PA:-none}); run: $CARGO install cargo-public-api --version $CARGO_PUBLIC_API_VERSION --locked"
+  fi
+  if ! "$CARGO_HOME_BIN/rustup" run "$PUBLIC_API_TOOLCHAIN" rustc --version >/dev/null 2>&1; then
+    fail 3 "toolchain $PUBLIC_API_TOOLCHAIN is missing; run: $CARGO_HOME_BIN/rustup toolchain install $PUBLIC_API_TOOLCHAIN --profile minimal"
+  fi
+  SNAP_DIR=$(mktemp -d)
+  trap 'rm -rf "$SNAP_DIR"' EXIT
+  if ! (cd src-tauri && "$CARGO" "+$PUBLIC_API_TOOLCHAIN" public-api -ss > "$SNAP_DIR/full.txt" 2> "$SNAP_DIR/err.txt"); then
+    cat "$SNAP_DIR/err.txt" >&2
+    fail 3 "cargo public-api failed"
+  fi
+  for snap in "${SNAPSHOTS[@]}"; do
+    grep "sai_atlas_lib::${snap}::" "$SNAP_DIR/full.txt" > "$SNAP_DIR/$snap.api.txt" || true
+    if ! cmp -s "$SNAP_DIR/$snap.api.txt" "src-tauri/contracts/$snap.api.txt"; then
+      diff -u "src-tauri/contracts/$snap.api.txt" "$SNAP_DIR/$snap.api.txt" >&2 || true
+      fail 3 "public API of $snap changed (frozen in src-tauri/contracts/$snap.api.txt)"
+    fi
+  done
+}
+
+if [[ "$MODULE" == "snapshots" ]]; then
+  check_snapshots
+  echo "check-module $MODULE: PASS (${SNAPSHOTS[*]})"
+  exit 0
+fi
 
 # --- gate 1: changed files stay inside the module ----------------------------
 BASE="${BASE:-$(git merge-base HEAD tauri/foundation 2>/dev/null || git rev-parse HEAD)}"
@@ -130,33 +172,7 @@ if [[ -n "$STUBS" ]]; then
 fi
 
 # --- gate 3: API snapshots are byte-identical ---------------------------------
-step 3 "cargo public-api snapshots match contracts/*.api.txt"
-if [[ ! -f out/renderer-tauri/index.html ]]; then
-  echo "  out/renderer-tauri is missing; building it (tauri::generate_context! needs it)"
-  bun run build:renderer:tauri >/dev/null || fail 3 "could not build the Tauri renderer"
-fi
-PUBLIC_API_TOOLCHAIN="${PUBLIC_API_TOOLCHAIN:?PUBLIC_API_TOOLCHAIN missing from scripts/rust-pins.env}"
-CARGO_PUBLIC_API_VERSION="${CARGO_PUBLIC_API_VERSION:?CARGO_PUBLIC_API_VERSION missing from scripts/rust-pins.env}"
-INSTALLED_PA=$("$CARGO" public-api --version 2>/dev/null | awk '{print $2}')
-if [[ "$INSTALLED_PA" != "$CARGO_PUBLIC_API_VERSION" ]]; then
-  fail 3 "cargo-public-api $CARGO_PUBLIC_API_VERSION is required (installed: ${INSTALLED_PA:-none}); run: $CARGO install cargo-public-api --version $CARGO_PUBLIC_API_VERSION --locked"
-fi
-if ! "$CARGO_HOME_BIN/rustup" run "$PUBLIC_API_TOOLCHAIN" rustc --version >/dev/null 2>&1; then
-  fail 3 "toolchain $PUBLIC_API_TOOLCHAIN is missing; run: $CARGO_HOME_BIN/rustup toolchain install $PUBLIC_API_TOOLCHAIN --profile minimal"
-fi
-SNAP_DIR=$(mktemp -d)
-trap 'rm -rf "$SNAP_DIR"' EXIT
-if ! (cd src-tauri && "$CARGO" "+$PUBLIC_API_TOOLCHAIN" public-api -ss > "$SNAP_DIR/full.txt" 2> "$SNAP_DIR/err.txt"); then
-  cat "$SNAP_DIR/err.txt" >&2
-  fail 3 "cargo public-api failed"
-fi
-for snap in "${SNAPSHOTS[@]}"; do
-  grep "sai_atlas_lib::${snap}::" "$SNAP_DIR/full.txt" > "$SNAP_DIR/$snap.api.txt" || true
-  if ! cmp -s "$SNAP_DIR/$snap.api.txt" "src-tauri/contracts/$snap.api.txt"; then
-    diff -u "src-tauri/contracts/$snap.api.txt" "$SNAP_DIR/$snap.api.txt" >&2 || true
-    fail 3 "public API of $snap changed (frozen in src-tauri/contracts/$snap.api.txt)"
-  fi
-done
+check_snapshots
 
 # --- gate 4: clippy ------------------------------------------------------------
 step 4 "cargo clippy (deny warnings, unwrap_used, expect_used)"

@@ -26,8 +26,9 @@ jobs:
       - run: bunx vitest run
       - run: bun run build
 
-  # The Tauri core: clippy, the Rust tests and the foundation module gate, which
-  # checks the frozen API snapshots with the pinned cargo-public-api. No sidecar
+  # The Tauri core: clippy, the Rust tests, test parity with the Electron suite and
+  # the frozen API snapshots (checked with the pinned cargo-public-api). Every check
+  # here covers the whole tree, so it holds on main and on any branch. No sidecar
   # is needed: the bundle configs that name it are passed only to package builds.
   tauri-linux:
     runs-on: ubuntu-latest
@@ -39,8 +40,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          # The module gate diffs against the merge base with main.
-          fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: "1.4.2"
@@ -77,5 +76,7 @@ jobs:
       - run: bun run build:renderer:tauri
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --all-features
-      - name: Foundation module gate
-        run: BASE="$(git merge-base HEAD origin/main)" bash scripts/check-module.sh foundation
+      - name: Test parity with the Electron suite
+        run: for parity in src-tauri/contracts/*.parity.json; do bun scripts/check-test-parity.ts "$(basename "$parity" .parity.json)"; done
+      - name: Public API snapshots
+        run: bash scripts/check-module.sh snapshots
