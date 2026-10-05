@@ -291,18 +291,20 @@ describe("Linux package", () => {
 		expect(bundle?.longDescription).toBe(description);
 	});
 
-	it("deb depends on bubblewrap, xdg-dbus-proxy and the gstreamer pipewire plugin", () => {
+	it("deb depends on the sandbox, gstreamer and omp:// registration tools, without the bundler's own entries", () => {
 		// WebKit treats a missing bwrap as fatal once its web-process sandbox is on.
-		expect(depends()).toEqual(
-			expect.arrayContaining([
-				"libwebkit2gtk-4.1-0",
-				"libayatana-appindicator3-1",
-				"gstreamer1.0-pipewire",
-				"gstreamer1.0-plugins-good",
-				"bubblewrap",
-				"xdg-dbus-proxy",
-			]),
-		);
+		// The deep-link plugin registers omp:// by running update-desktop-database
+		// (desktop-file-utils) and xdg-mime (xdg-utils); without them every start logs
+		// a failed registration. The bundler appends libwebkit2gtk-4.1-0, libgtk-3-0 and
+		// the tray's appindicator itself, so listing them here would duplicate them.
+		expect(depends()).toEqual([
+			"gstreamer1.0-pipewire",
+			"gstreamer1.0-plugins-good",
+			"bubblewrap",
+			"xdg-dbus-proxy",
+			"desktop-file-utils",
+			"xdg-utils",
+		]);
 	});
 
 	it("deb does not depend on gstreamer1.0-plugins-bad", () => {
