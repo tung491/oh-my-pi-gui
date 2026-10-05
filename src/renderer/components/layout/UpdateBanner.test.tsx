@@ -89,6 +89,19 @@ describe("UpdateBanner", () => {
 		expect(container.textContent).not.toMatch(/Finder|DMG/i);
 	});
 
+	it("asks for a reopen instead of offering an install that cannot ask for administrator access", async () => {
+		useUpdaterStore.setState({
+			status: { state: "downloaded", version: "0.9.18", mode: "automatic", reopenRequired: true },
+			dismissed: {},
+		});
+		await mount(<UpdateBanner />);
+
+		expect(container.textContent).toContain("0.9.18 is downloaded");
+		expect(container.textContent).toContain("Quit and reopen Sai ATLAS, then try again.");
+		expect(container.textContent).not.toContain("Restart & install");
+		expect(container.querySelectorAll("button")).toHaveLength(0);
+	});
+
 	it("keeps user-initiated verification failures visible with a retry action", async () => {
 		useUpdaterStore.setState({
 			status: { state: "error", message: "Installer failed SHA-512 verification.", showInBanner: true },
@@ -104,6 +117,28 @@ describe("UpdateBanner", () => {
 			retryButton?.click();
 		});
 		expect(check).toHaveBeenCalledOnce();
+	});
+
+	it("tells the user which command installs the update when apt could not resolve its dependencies", async () => {
+		const command = "sudo apt install /home/u/.cache/sai-atlas/sai-atlas_0.9.18_amd64.deb";
+		useUpdaterStore.setState({
+			status: {
+				state: "error",
+				message:
+					"The update could not be installed. (E: Unable to correct problems, you have held broken packages.)",
+				showInBanner: true,
+				manualInstallCommand: command,
+			},
+			dismissed: {},
+		});
+		await mount(<UpdateBanner />);
+
+		expect(container.textContent).toContain("apt could not resolve the packages it needs");
+		expect(container.textContent).toContain(`Run this in a terminal to see why and install it: ${command}`);
+		expect(container.textContent).not.toContain("held broken packages");
+		expect(container.querySelectorAll("button").some(button => button.textContent?.includes("Check again"))).toBe(
+			true,
+		);
 	});
 
 	it("lets a user close a failure banner, and keeps the closed notice closed", async () => {

@@ -1,0 +1,78 @@
+impl sai_atlas_lib::ports::TabsPort for sai_atlas_lib::tabs::Tabs
+pub fn sai_atlas_lib::tabs::Tabs::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::adopt_session_cwd(&self, &str, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::tabs::Tabs::at_cap(&self) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'static, core::option::Option<serde_json::value::Value>>
+pub fn sai_atlas_lib::tabs::Tabs::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::dispose_all(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::tabs::Tabs::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::note_session_file(&self, &str, core::option::Option<&str>)
+pub fn sai_atlas_lib::tabs::Tabs::on_window_tabs_changed(&self, sai_atlas_lib::ports::WindowTabsChangedListener)
+pub fn sai_atlas_lib::tabs::Tabs::release_tab(&self, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::release_window(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::tabs::Tabs::restore_layout(&self, sai_atlas_lib::ports::WindowId, sai_atlas_lib::ports::PersistedTabLayout) -> usize
+pub fn sai_atlas_lib::tabs::Tabs::route_side_channel(&self, &str, serde_json::value::Value, bool) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::session_owner(&self, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::session_owner_is_live(&self, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::set_active_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::set_tab_view(&self, sai_atlas_lib::ports::WindowId, &str, &[alloc::string::String], core::option::Option<sai_atlas_lib::ports::IpcTabViewSplit>) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::size(&self) -> usize
+pub fn sai_atlas_lib::tabs::Tabs::tab_inventory(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowTabFact>
+pub fn sai_atlas_lib::tabs::Tabs::tab_layout_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::PersistedTabLayout>
+pub fn sai_atlas_lib::tabs::Tabs::tabs_for_window(&self, sai_atlas_lib::ports::WindowId) -> alloc::vec::Vec<sai_atlas_lib::ports::IpcTabInfo>
+pub mod sai_atlas_lib::tabs::ipc
+pub fn sai_atlas_lib::tabs::ipc::extension_ui_respond(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::host_tool_result(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::host_tool_update(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::host_uri_result(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::prefs_update_launch_profile(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::rpc_command(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::rpc_command_for_tab(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_default_workspace(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_restart(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_select_project(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_set_project(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_status_get(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_close(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_get_all(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_get_session_owner(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_set_active(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_set_view(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_spawn(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub struct sai_atlas_lib::tabs::Tabs
+impl sai_atlas_lib::tabs::Tabs
+pub fn sai_atlas_lib::tabs::Tabs::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::TabsPort for sai_atlas_lib::tabs::Tabs
+pub fn sai_atlas_lib::tabs::Tabs::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::adopt_session_cwd(&self, &str, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::tabs::Tabs::at_cap(&self) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'static, core::option::Option<serde_json::value::Value>>
+pub fn sai_atlas_lib::tabs::Tabs::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::dispose_all(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::tabs::Tabs::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::note_session_file(&self, &str, core::option::Option<&str>)
+pub fn sai_atlas_lib::tabs::Tabs::on_window_tabs_changed(&self, sai_atlas_lib::ports::WindowTabsChangedListener)
+pub fn sai_atlas_lib::tabs::Tabs::release_tab(&self, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::release_window(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::tabs::Tabs::restore_layout(&self, sai_atlas_lib::ports::WindowId, sai_atlas_lib::ports::PersistedTabLayout) -> usize
+pub fn sai_atlas_lib::tabs::Tabs::route_side_channel(&self, &str, serde_json::value::Value, bool) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::session_owner(&self, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::session_owner_is_live(&self, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::set_active_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::set_tab_view(&self, sai_atlas_lib::ports::WindowId, &str, &[alloc::string::String], core::option::Option<sai_atlas_lib::ports::IpcTabViewSplit>) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::size(&self) -> usize
+pub fn sai_atlas_lib::tabs::Tabs::tab_inventory(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowTabFact>
+pub fn sai_atlas_lib::tabs::Tabs::tab_layout_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::PersistedTabLayout>
+pub fn sai_atlas_lib::tabs::Tabs::tabs_for_window(&self, sai_atlas_lib::ports::WindowId) -> alloc::vec::Vec<sai_atlas_lib::ports::IpcTabInfo>
+pub const sai_atlas_lib::tabs::CHANNELS: &[(&str, sai_atlas_lib::bridge::Scope)]
+pub const sai_atlas_lib::tabs::EMITS: &[&str]
+pub fn sai_atlas_lib::tabs::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, &tauri::app::AppHandle) -> tauri::error::Result<()>
+pub fn sai_atlas_lib::tabs::register(&mut sai_atlas_lib::bridge::Registry)

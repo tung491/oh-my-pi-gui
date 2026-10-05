@@ -1,0 +1,42 @@
+[
+  {
+    "ts": "src/main/quick-entry-core.test.ts",
+    "rust": "src-tauri/src/desktop/quick_entry_core.rs"
+  },
+  {
+    "ts": "src/main/quick-entry-shortcut-core.test.ts",
+    "rust": "src-tauri/src/desktop/shortcut_core.rs"
+  },
+  {
+    "ts": "src/main/quick-entry-shortcut.test.ts",
+    "rust": "src-tauri/src/desktop/shortcut.rs"
+  },
+  {
+    "ts": "src/main/wayland-portal.test.ts",
+    "rust": "src-tauri/src/desktop/wayland_portal.rs"
+  },
+  {
+    "ts": "src/main/tray-labels.test.ts",
+    "rust": "src-tauri/src/desktop/tray_labels.rs"
+  },
+  {
+    "ts": "src/main/tab-layout.test.ts",
+    "rust": "src-tauri/src/desktop/tab_layout.rs"
+  },
+  {
+    "ts": "src/main/window-bounds.test.ts",
+    "rust": "src-tauri/src/desktop/window_bounds.rs"
+  },
+  {
+    "ts": "src/main/launch-argv.test.ts",
+    "rust": "src-tauri/src/desktop/launch_argv.rs"
+  },
+  {
+    "ts": "src/main/quit-guard.test.ts",
+    "rust": "src-tauri/src/desktop/quit_guard.rs"
+  },
+  {
+    "ts": "src/main/app-icons.test.ts",
+    "rust": "src-tauri/src/desktop/app_icons.rs"
+  }
+]

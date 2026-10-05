@@ -293,9 +293,21 @@ export type UpdateStatus =
 			transferred: number;
 			total: number;
 	  }
-	| { state: "downloaded"; version: string; mode: UpdateInstallMode }
+	| {
+			state: "downloaded";
+			version: string;
+			mode: UpdateInstallMode;
+			/** The install could not ask for administrator access in this process; quit and reopen, then install. */
+			reopenRequired?: boolean;
+	  }
 	| { state: "not-available"; version: string }
-	| { state: "error"; message: string; showInBanner?: boolean };
+	| {
+			state: "error";
+			message: string;
+			showInBanner?: boolean;
+			/** apt could not resolve the package's dependencies; this terminal command installs it by hand. */
+			manualInstallCommand?: string;
+	  };
 
 export type MenuAction =
 	| "new-session"

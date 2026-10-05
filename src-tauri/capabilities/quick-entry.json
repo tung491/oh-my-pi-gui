@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "quick-entry",
+  "description": "The quick-entry bar reaches Rust only through its own bridge command.",
+  "windows": ["quick-entry"],
+  "permissions": ["allow-omp-quick-entry-invoke", "allow-omp-attach"]
+}

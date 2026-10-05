@@ -362,6 +362,9 @@ export function FirstRunOnboardingDialog() {
 				case "unavailable":
 					setRemedyNotice(t("welcome.ollama.remedyUnavailable"));
 					break;
+				case "reopen-required":
+					setRemedyNotice(t("welcome.ollama.remedyReopen"));
+					break;
 				case "failed":
 					setStatus(result.status);
 					setRemedyNotice(

@@ -27,3 +27,11 @@ dev-app-update.yml
 # Desktop functional audit artifacts
 playwright-report/
 test-results/
+
+# Tauri shell build output and staged sidecars
+src-tauri/target/
+# scripts/tauri-linux-build.sh (the Ubuntu 24.04 container build)
+src-tauri/target-linux-2404/
+src-tauri/gen/
+src-tauri/binaries/
+dist-release/

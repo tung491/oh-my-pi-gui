@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Chat windows reach Rust only through the omp bridge commands.",
+  "windows": ["main-*"],
+  "permissions": ["allow-omp-invoke", "allow-omp-attach"]
+}

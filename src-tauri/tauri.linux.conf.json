@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": [
+      "appimage",
+      "deb"
+    ],
+    "publisher": "Tung Son Do <dosontung007@gmail.com>",
+    "homepage": "https://github.com/tung491/oh-my-pi-gui",
+    "shortDescription": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
+    "longDescription": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "depends": [
+          "bubblewrap",
+          "xdg-dbus-proxy"
+        ],
+        "recommends": [
+          "desktop-file-utils",
+          "xdg-utils",
+          "gstreamer1.0-plugins-good",
+          "gstreamer1.0-pipewire"
+        ],
+        "desktopTemplate": "linux/vn.io.vif.saiatlas.desktop",
+        "files": {
+          "/usr/lib/Sai ATLAS/package-type": "linux/package-type"
+        }
+      }
+    }
+  }
+}

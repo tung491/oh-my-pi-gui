@@ -1,0 +1,69 @@
+pub mod sai_atlas_lib::desktop::ipc
+pub fn sai_atlas_lib::desktop::ipc::app_quit(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::progress_set(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_ack(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_claim(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_consume_restored(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_dismiss(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_return(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_get(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_notice(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_set(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_suspend(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_submit(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::tray_state_push(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub struct sai_atlas_lib::desktop::Desktop
+impl sai_atlas_lib::desktop::Desktop
+pub fn sai_atlas_lib::desktop::Desktop::new(tauri::app::AppHandle, sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::DesktopPort for sai_atlas_lib::desktop::Desktop
+pub fn sai_atlas_lib::desktop::Desktop::approve_quit_before_install(&self) -> futures_core::future::BoxFuture<'_, bool>
+pub fn sai_atlas_lib::desktop::Desktop::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::desktop::Desktop::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::desktop::Desktop::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::is_main_owned_pref_key(&self, &str) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::is_quitting(&self) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::mark_quitting(&self)
+pub fn sai_atlas_lib::desktop::Desktop::on_exit_requested(&self, core::option::Option<i32>) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::on_reopen(&self, bool)
+pub fn sai_atlas_lib::desktop::Desktop::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
+pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
+pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::desktop::Desktop::rebuild_menu(&self)
+pub fn sai_atlas_lib::desktop::Desktop::record(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::records(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::request_quit(&self)
+pub fn sai_atlas_lib::desktop::Desktop::set_cwd(&self, sai_atlas_lib::ports::WindowId, &str)
+pub fn sai_atlas_lib::desktop::Desktop::set_run_progress(&self, sai_atlas_lib::ports::RunProgressState)
+pub fn sai_atlas_lib::desktop::Desktop::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::desktop::Desktop::spawn_window(&self, core::option::Option<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<sai_atlas_lib::ports::SessionKind>) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::target_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::withdraw_quit_approval(&self)
+pub const sai_atlas_lib::desktop::CHANNELS: &[(&str, sai_atlas_lib::bridge::Scope)]
+pub const sai_atlas_lib::desktop::EMITS: &[&str]
+pub fn sai_atlas_lib::desktop::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, &tauri::app::AppHandle) -> tauri::error::Result<()>
+pub fn sai_atlas_lib::desktop::register(&mut sai_atlas_lib::bridge::Registry)
+impl sai_atlas_lib::ports::DesktopPort for sai_atlas_lib::desktop::Desktop
+pub fn sai_atlas_lib::desktop::Desktop::approve_quit_before_install(&self) -> futures_core::future::BoxFuture<'_, bool>
+pub fn sai_atlas_lib::desktop::Desktop::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::desktop::Desktop::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::desktop::Desktop::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::is_main_owned_pref_key(&self, &str) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::is_quitting(&self) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::mark_quitting(&self)
+pub fn sai_atlas_lib::desktop::Desktop::on_exit_requested(&self, core::option::Option<i32>) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::on_reopen(&self, bool)
+pub fn sai_atlas_lib::desktop::Desktop::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
+pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
+pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::desktop::Desktop::rebuild_menu(&self)
+pub fn sai_atlas_lib::desktop::Desktop::record(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::records(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::request_quit(&self)
+pub fn sai_atlas_lib::desktop::Desktop::set_cwd(&self, sai_atlas_lib::ports::WindowId, &str)
+pub fn sai_atlas_lib::desktop::Desktop::set_run_progress(&self, sai_atlas_lib::ports::RunProgressState)
+pub fn sai_atlas_lib::desktop::Desktop::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::desktop::Desktop::spawn_window(&self, core::option::Option<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<sai_atlas_lib::ports::SessionKind>) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::target_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::withdraw_quit_approval(&self)

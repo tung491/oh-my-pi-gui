@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-omp-quick-entry-invoke"
+description = "Enables the omp_quick_entry_invoke command without any pre-configured scope."
+commands.allow = ["omp_quick_entry_invoke"]
+
+[[permission]]
+identifier = "deny-omp-quick-entry-invoke"
+description = "Denies the omp_quick_entry_invoke command without any pre-configured scope."
+commands.deny = ["omp_quick_entry_invoke"]

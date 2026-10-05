@@ -7,6 +7,7 @@ import { useTabRpc } from "../../lib/tab-rpc";
 import { useSessionStore } from "../../stores/session";
 import { useUpdaterStore } from "../../stores/updater";
 import { Button, Spinner } from "../common";
+import { updateErrorText } from "../layout/UpdateBanner";
 
 function appLatest(status: UpdateStatus): string {
 	if ("version" in status) return status.version;
@@ -82,7 +83,9 @@ export function UpdatesSettingsPage() {
 
 	const coreUpdateAvailable = core?.updateAvailable === true;
 	const overview = updateOverviewState(status, core, coreError, checking);
-	const errorMessage = [status.state === "error" ? status.message : undefined, coreError].filter(Boolean).join(" · ");
+	const errorMessage = [status.state === "error" ? updateErrorText(t, status) : undefined, coreError]
+		.filter(Boolean)
+		.join(" · ");
 
 	return (
 		<div>
@@ -132,6 +135,11 @@ export function UpdatesSettingsPage() {
 						{status.state === "downloaded" && status.mode === "manual" && (
 							<p className="mt-1 text-omp-xs text-(--omp-muted)">{t("updater.manualInstructions")}</p>
 						)}
+						{status.state === "downloaded" && status.reopenRequired && (
+							<p className="mt-1 text-omp-xs text-(--omp-muted)">
+								{t("updater.reopenToInstall", { version: status.version })}
+							</p>
+						)}
 					</div>
 					<div className="updates-current">
 						<div className="text-omp-xxs uppercase tracking-wider text-(--omp-dim)">{t("updates.current")}</div>
@@ -157,7 +165,7 @@ export function UpdatesSettingsPage() {
 						{status.state === "downloading" && (
 							<span className="text-omp-sm text-(--omp-muted)">{status.percent}%</span>
 						)}
-						{status.state === "downloaded" && (
+						{status.state === "downloaded" && !status.reopenRequired && (
 							<Button
 								icon={status.mode === "manual" ? <FolderOpen size={13} /> : <RotateCcw size={13} />}
 								onClick={() => void window.omp.updater.apply()}

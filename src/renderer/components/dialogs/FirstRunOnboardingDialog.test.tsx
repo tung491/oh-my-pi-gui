@@ -512,6 +512,17 @@ describe("FirstRunOnboardingDialog", () => {
 		);
 	});
 
+	it("asks for a reopen when this session cannot ask for administrator access", async () => {
+		const stopped = status({ state: "stopped", remedy: "linux-start", modelCount: 0 });
+		const omp = installFakeOmp({ statuses: [stopped] });
+		omp.ollama.runRemedy.mockResolvedValue({ outcome: "reopen-required", status: stopped, fault: "no_new_privs" });
+		await mountReady();
+		await click(action("remedy"));
+		const notice = document.querySelector('[data-notice="remedy"]')?.textContent;
+		expect(notice).toContain("Quit and reopen Sai ATLAS, then try again.");
+		expect(notice).not.toContain("Run the command above in a terminal");
+	});
+
 	it("shows a failed remedy inline", async () => {
 		const stopped = status({ state: "stopped", remedy: "linux-start", modelCount: 0 });
 		const omp = installFakeOmp({ statuses: [stopped] });

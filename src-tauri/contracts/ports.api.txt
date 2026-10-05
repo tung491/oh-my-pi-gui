@@ -1,0 +1,916 @@
+pub fn sai_atlas_lib::bridge::Bridge::attach(&self, &alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::string::String, alloc::rcs::arc::Arc<dyn sai_atlas_lib::bridge::OutboundSink>)
+pub fn sai_atlas_lib::bridge::Bridge::detach(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::bridge::Bridge::emit_to_window(&self, sai_atlas_lib::ports::WindowId, &str, serde_json::value::Value)
+pub fn sai_atlas_lib::bridge::Bridge::invoke(&self, &alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::string::String, u64, alloc::string::String, alloc::vec::Vec<serde_json::value::Value>) -> impl core::future::future::Future<Output = core::result::Result<serde_json::value::Value, sai_atlas_lib::bridge::IpcError>> + core::marker::Send + 'static
+pub fn sai_atlas_lib::bridge::Bridge::is_attached(&self, sai_atlas_lib::ports::WindowId) -> bool
+pub fn sai_atlas_lib::bridge::Bridge::register_window(&self, sai_atlas_lib::ports::Caller)
+pub fn sai_atlas_lib::bridge::Bridge::unregister_window(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::bridge::Bridge::windows(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::Caller>
+pub fn sai_atlas_lib::bridge::bootstrap_script(&sai_atlas_lib::ctx::AppCtx, sai_atlas_lib::ports::Caller) -> alloc::string::String
+pub type sai_atlas_lib::bridge::Handler = fn(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub sai_atlas_lib::ctx::AppCtx::desktop: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::DesktopPort>
+pub sai_atlas_lib::ctx::AppCtx::host: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::Host>
+pub sai_atlas_lib::ctx::AppCtx::ollama: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::OllamaPort>
+pub sai_atlas_lib::ctx::AppCtx::omp: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::OmpPort>
+pub sai_atlas_lib::ctx::AppCtx::services: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::ServicesPort>
+pub sai_atlas_lib::ctx::AppCtx::tabs: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::TabsPort>
+pub sai_atlas_lib::ctx::AppCtx::updater: alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::UpdaterPort>
+pub fn sai_atlas_lib::desktop::ipc::app_quit(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::progress_set(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_ack(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_claim(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_consume_restored(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_dismiss(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_return(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_get(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_notice(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_set(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_shortcut_suspend(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::quick_entry_submit(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::ipc::tray_state_push(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::desktop::Desktop::new(tauri::app::AppHandle, sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::DesktopPort for sai_atlas_lib::desktop::Desktop
+pub fn sai_atlas_lib::desktop::Desktop::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::desktop::Desktop::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
+pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::desktop::Desktop::record(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::records(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::set_cwd(&self, sai_atlas_lib::ports::WindowId, &str)
+pub fn sai_atlas_lib::desktop::Desktop::set_run_progress(&self, sai_atlas_lib::ports::RunProgressState)
+pub fn sai_atlas_lib::desktop::Desktop::spawn_window(&self, core::option::Option<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<sai_atlas_lib::ports::SessionKind>) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::target_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::ollama::ipc::ollama_model_screen(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_open_download(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_pull(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_pull_cancel(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_remedy(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_status(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_warm(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::Ollama::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::OllamaPort for sai_atlas_lib::ollama::Ollama
+pub fn sai_atlas_lib::omp::ipc::bench_abort(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::omp::ipc::bench_run(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::omp::ipc::stats_fetch(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::omp::Omp::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::OmpPort for sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
+pub fn sai_atlas_lib::omp::Omp::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
+pub enum sai_atlas_lib::ports::HostError
+pub sai_atlas_lib::ports::HostError::Failed(alloc::string::String)
+pub sai_atlas_lib::ports::HostError::Unsupported(&'static str)
+impl core::clone::Clone for sai_atlas_lib::ports::HostError
+pub fn sai_atlas_lib::ports::HostError::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::HostError
+impl core::cmp::PartialEq for sai_atlas_lib::ports::HostError
+pub fn sai_atlas_lib::ports::HostError::eq(&self, &Self) -> bool
+impl core::error::Error for sai_atlas_lib::ports::HostError
+impl core::fmt::Debug for sai_atlas_lib::ports::HostError
+pub fn sai_atlas_lib::ports::HostError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for sai_atlas_lib::ports::HostError
+pub fn sai_atlas_lib::ports::HostError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::HostError
+pub enum sai_atlas_lib::ports::MessageKind
+pub sai_atlas_lib::ports::MessageKind::Error
+pub sai_atlas_lib::ports::MessageKind::Info
+pub sai_atlas_lib::ports::MessageKind::Warning
+impl core::clone::Clone for sai_atlas_lib::ports::MessageKind
+pub fn sai_atlas_lib::ports::MessageKind::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::MessageKind
+impl core::cmp::PartialEq for sai_atlas_lib::ports::MessageKind
+pub fn sai_atlas_lib::ports::MessageKind::eq(&self, &Self) -> bool
+impl core::default::Default for sai_atlas_lib::ports::MessageKind
+pub fn sai_atlas_lib::ports::MessageKind::default() -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::MessageKind
+pub fn sai_atlas_lib::ports::MessageKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for sai_atlas_lib::ports::MessageKind
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::MessageKind
+pub enum sai_atlas_lib::ports::RunProgressState
+pub sai_atlas_lib::ports::RunProgressState::Idle
+pub sai_atlas_lib::ports::RunProgressState::Waiting
+pub sai_atlas_lib::ports::RunProgressState::Working
+impl core::clone::Clone for sai_atlas_lib::ports::RunProgressState
+pub fn sai_atlas_lib::ports::RunProgressState::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::RunProgressState
+impl core::cmp::PartialEq for sai_atlas_lib::ports::RunProgressState
+pub fn sai_atlas_lib::ports::RunProgressState::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::RunProgressState
+pub fn sai_atlas_lib::ports::RunProgressState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for sai_atlas_lib::ports::RunProgressState
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::RunProgressState
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::RunProgressState
+pub fn sai_atlas_lib::ports::RunProgressState::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::RunProgressState
+pub fn sai_atlas_lib::ports::RunProgressState::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::ServiceError
+pub sai_atlas_lib::ports::ServiceError::Io(alloc::string::String)
+pub sai_atlas_lib::ports::ServiceError::Refused(alloc::string::String)
+impl core::clone::Clone for sai_atlas_lib::ports::ServiceError
+pub fn sai_atlas_lib::ports::ServiceError::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::ServiceError
+impl core::cmp::PartialEq for sai_atlas_lib::ports::ServiceError
+pub fn sai_atlas_lib::ports::ServiceError::eq(&self, &Self) -> bool
+impl core::error::Error for sai_atlas_lib::ports::ServiceError
+impl core::fmt::Debug for sai_atlas_lib::ports::ServiceError
+pub fn sai_atlas_lib::ports::ServiceError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for sai_atlas_lib::ports::ServiceError
+pub fn sai_atlas_lib::ports::ServiceError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::ServiceError
+pub enum sai_atlas_lib::ports::SessionKind
+pub sai_atlas_lib::ports::SessionKind::Agent
+pub sai_atlas_lib::ports::SessionKind::Chat
+impl core::clone::Clone for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SessionKind
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::eq(&self, &Self) -> bool
+impl core::default::Default for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::default() -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::SessionKind
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SessionKind
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SessionKind::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::SessionScope
+pub sai_atlas_lib::ports::SessionScope::Global
+pub sai_atlas_lib::ports::SessionScope::Local
+impl core::clone::Clone for sai_atlas_lib::ports::SessionScope
+pub fn sai_atlas_lib::ports::SessionScope::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SessionScope
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SessionScope
+pub fn sai_atlas_lib::ports::SessionScope::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SessionScope
+pub fn sai_atlas_lib::ports::SessionScope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::SessionScope
+pub fn sai_atlas_lib::ports::SessionScope::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::SessionScope
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SessionScope
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SessionScope
+pub fn sai_atlas_lib::ports::SessionScope::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SessionScope
+pub fn sai_atlas_lib::ports::SessionScope::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::SessionStatus
+pub sai_atlas_lib::ports::SessionStatus::Aborted
+pub sai_atlas_lib::ports::SessionStatus::Complete
+pub sai_atlas_lib::ports::SessionStatus::Error
+pub sai_atlas_lib::ports::SessionStatus::Interrupted
+pub sai_atlas_lib::ports::SessionStatus::Pending
+pub sai_atlas_lib::ports::SessionStatus::Unknown
+impl core::clone::Clone for sai_atlas_lib::ports::SessionStatus
+pub fn sai_atlas_lib::ports::SessionStatus::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SessionStatus
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SessionStatus
+pub fn sai_atlas_lib::ports::SessionStatus::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SessionStatus
+pub fn sai_atlas_lib::ports::SessionStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for sai_atlas_lib::ports::SessionStatus
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SessionStatus
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SessionStatus
+pub fn sai_atlas_lib::ports::SessionStatus::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SessionStatus
+pub fn sai_atlas_lib::ports::SessionStatus::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::SidecarError
+pub sai_atlas_lib::ports::SidecarError::Closed
+pub sai_atlas_lib::ports::SidecarError::NotRunning
+pub sai_atlas_lib::ports::SidecarError::Other(alloc::string::String)
+pub sai_atlas_lib::ports::SidecarError::Timeout
+pub sai_atlas_lib::ports::SidecarError::Timeout::command_type: alloc::string::String
+pub sai_atlas_lib::ports::SidecarError::Timeout::timeout_ms: u64
+impl core::clone::Clone for sai_atlas_lib::ports::SidecarError
+pub fn sai_atlas_lib::ports::SidecarError::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SidecarError
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SidecarError
+pub fn sai_atlas_lib::ports::SidecarError::eq(&self, &Self) -> bool
+impl core::error::Error for sai_atlas_lib::ports::SidecarError
+impl core::fmt::Debug for sai_atlas_lib::ports::SidecarError
+pub fn sai_atlas_lib::ports::SidecarError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for sai_atlas_lib::ports::SidecarError
+pub fn sai_atlas_lib::ports::SidecarError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SidecarError
+pub enum sai_atlas_lib::ports::SidecarEvent
+pub sai_atlas_lib::ports::SidecarEvent::CommandOutput(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::CommandsUpdate(alloc::vec::Vec<serde_json::value::Value>)
+pub sai_atlas_lib::ports::SidecarEvent::ConfigUpdate(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::Events(alloc::vec::Vec<serde_json::value::Value>)
+pub sai_atlas_lib::ports::SidecarEvent::ExtensionError(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::ExtensionUi(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::Frame(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::HostToolCall(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::HostUriRequest(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::LiveUpdate(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::ModelCatalogUpdate(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::PromptResult(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::SessionInfoUpdate(serde_json::value::Value)
+pub sai_atlas_lib::ports::SidecarEvent::Status(sai_atlas_lib::ports::SidecarStatusPayload)
+pub sai_atlas_lib::ports::SidecarEvent::Stderr(alloc::string::String)
+pub sai_atlas_lib::ports::SidecarEvent::SubagentFrame(serde_json::value::Value)
+impl core::clone::Clone for sai_atlas_lib::ports::SidecarEvent
+pub fn sai_atlas_lib::ports::SidecarEvent::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SidecarEvent
+pub fn sai_atlas_lib::ports::SidecarEvent::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SidecarEvent
+pub fn sai_atlas_lib::ports::SidecarEvent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SidecarEvent
+pub enum sai_atlas_lib::ports::SidecarStatus
+pub sai_atlas_lib::ports::SidecarStatus::Asleep
+pub sai_atlas_lib::ports::SidecarStatus::Error
+pub sai_atlas_lib::ports::SidecarStatus::Exited
+pub sai_atlas_lib::ports::SidecarStatus::Ready
+pub sai_atlas_lib::ports::SidecarStatus::Restarting
+pub sai_atlas_lib::ports::SidecarStatus::Starting
+impl core::clone::Clone for sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarStatus::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SidecarStatus
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarStatus::eq(&self, &Self) -> bool
+impl core::convert::From<sai_atlas_lib::ports::SidecarStatus> for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::from(sai_atlas_lib::ports::SidecarStatus) -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarStatus::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::SidecarStatus
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SidecarStatus
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarStatus::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarStatus::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::TabSplitAxis
+pub sai_atlas_lib::ports::TabSplitAxis::Columns
+pub sai_atlas_lib::ports::TabSplitAxis::Rows
+impl core::clone::Clone for sai_atlas_lib::ports::TabSplitAxis
+pub fn sai_atlas_lib::ports::TabSplitAxis::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::TabSplitAxis
+impl core::cmp::PartialEq for sai_atlas_lib::ports::TabSplitAxis
+pub fn sai_atlas_lib::ports::TabSplitAxis::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::TabSplitAxis
+pub fn sai_atlas_lib::ports::TabSplitAxis::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for sai_atlas_lib::ports::TabSplitAxis
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::TabSplitAxis
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::TabSplitAxis
+pub fn sai_atlas_lib::ports::TabSplitAxis::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::TabSplitAxis
+pub fn sai_atlas_lib::ports::TabSplitAxis::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::TabStatus
+pub sai_atlas_lib::ports::TabStatus::Asleep
+pub sai_atlas_lib::ports::TabStatus::Error
+pub sai_atlas_lib::ports::TabStatus::Exited
+pub sai_atlas_lib::ports::TabStatus::Ready
+pub sai_atlas_lib::ports::TabStatus::Restarting
+pub sai_atlas_lib::ports::TabStatus::Running
+pub sai_atlas_lib::ports::TabStatus::Starting
+impl core::clone::Clone for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::TabStatus
+impl core::cmp::PartialEq for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::eq(&self, &Self) -> bool
+impl core::convert::From<sai_atlas_lib::ports::SidecarStatus> for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::from(sai_atlas_lib::ports::SidecarStatus) -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::TabStatus
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::TabStatus
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::TabStatus
+pub fn sai_atlas_lib::ports::TabStatus::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum sai_atlas_lib::ports::WindowKind
+pub sai_atlas_lib::ports::WindowKind::Main
+pub sai_atlas_lib::ports::WindowKind::QuickEntry
+impl sai_atlas_lib::ports::WindowKind
+pub const sai_atlas_lib::ports::WindowKind::MAIN_LABEL_PREFIX: &'static str
+pub const sai_atlas_lib::ports::WindowKind::QUICK_ENTRY_LABEL: &'static str
+impl core::clone::Clone for sai_atlas_lib::ports::WindowKind
+pub fn sai_atlas_lib::ports::WindowKind::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::WindowKind
+impl core::cmp::PartialEq for sai_atlas_lib::ports::WindowKind
+pub fn sai_atlas_lib::ports::WindowKind::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::WindowKind
+pub fn sai_atlas_lib::ports::WindowKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::WindowKind
+pub fn sai_atlas_lib::ports::WindowKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::WindowKind
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::WindowKind
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::WindowKind
+pub fn sai_atlas_lib::ports::WindowKind::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::WindowKind
+pub fn sai_atlas_lib::ports::WindowKind::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::AcquireOptions
+pub sai_atlas_lib::ports::AcquireOptions::cwd: alloc::string::String
+pub sai_atlas_lib::ports::AcquireOptions::defer_start: bool
+pub sai_atlas_lib::ports::AcquireOptions::fresh: bool
+pub sai_atlas_lib::ports::AcquireOptions::kind: sai_atlas_lib::ports::SessionKind
+pub sai_atlas_lib::ports::AcquireOptions::placeholder: bool
+pub sai_atlas_lib::ports::AcquireOptions::session_path: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::AcquireOptions::tab_id: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::AcquireOptions::title: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::AcquireOptions::win_id: sai_atlas_lib::ports::WindowId
+pub sai_atlas_lib::ports::AcquireOptions::worktree: core::option::Option<sai_atlas_lib::ports::IpcTabWorktree>
+impl sai_atlas_lib::ports::AcquireOptions
+pub fn sai_atlas_lib::ports::AcquireOptions::new(impl core::convert::Into<alloc::string::String>, sai_atlas_lib::ports::WindowId) -> Self
+impl core::clone::Clone for sai_atlas_lib::ports::AcquireOptions
+pub fn sai_atlas_lib::ports::AcquireOptions::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::AcquireOptions
+impl core::cmp::PartialEq for sai_atlas_lib::ports::AcquireOptions
+pub fn sai_atlas_lib::ports::AcquireOptions::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::AcquireOptions
+pub fn sai_atlas_lib::ports::AcquireOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::AcquireOptions
+pub struct sai_atlas_lib::ports::Caller
+pub sai_atlas_lib::ports::Caller::kind: sai_atlas_lib::ports::WindowKind
+pub sai_atlas_lib::ports::Caller::win_id: sai_atlas_lib::ports::WindowId
+impl sai_atlas_lib::ports::Caller
+pub fn sai_atlas_lib::ports::Caller::from_label(&str) -> core::option::Option<Self>
+pub fn sai_atlas_lib::ports::Caller::label(&self) -> alloc::string::String
+pub fn sai_atlas_lib::ports::Caller::main(sai_atlas_lib::ports::WindowId) -> Self
+pub fn sai_atlas_lib::ports::Caller::quick_entry() -> Self
+impl core::clone::Clone for sai_atlas_lib::ports::Caller
+pub fn sai_atlas_lib::ports::Caller::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::Caller
+impl core::cmp::PartialEq for sai_atlas_lib::ports::Caller
+pub fn sai_atlas_lib::ports::Caller::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::Caller
+pub fn sai_atlas_lib::ports::Caller::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::Caller
+pub fn sai_atlas_lib::ports::Caller::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::Caller
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::Caller
+pub struct sai_atlas_lib::ports::FileFilter
+pub sai_atlas_lib::ports::FileFilter::extensions: alloc::vec::Vec<alloc::string::String>
+pub sai_atlas_lib::ports::FileFilter::name: alloc::string::String
+impl core::clone::Clone for sai_atlas_lib::ports::FileFilter
+pub fn sai_atlas_lib::ports::FileFilter::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::FileFilter
+impl core::cmp::PartialEq for sai_atlas_lib::ports::FileFilter
+pub fn sai_atlas_lib::ports::FileFilter::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::FileFilter
+pub fn sai_atlas_lib::ports::FileFilter::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::FileFilter
+pub struct sai_atlas_lib::ports::IpcSessionOwner
+pub sai_atlas_lib::ports::IpcSessionOwner::tab_id: alloc::string::String
+pub sai_atlas_lib::ports::IpcSessionOwner::win_id: sai_atlas_lib::ports::WindowId
+impl core::clone::Clone for sai_atlas_lib::ports::IpcSessionOwner
+pub fn sai_atlas_lib::ports::IpcSessionOwner::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::IpcSessionOwner
+impl core::cmp::PartialEq for sai_atlas_lib::ports::IpcSessionOwner
+pub fn sai_atlas_lib::ports::IpcSessionOwner::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::IpcSessionOwner
+pub fn sai_atlas_lib::ports::IpcSessionOwner::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::IpcSessionOwner
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::IpcSessionOwner
+pub fn sai_atlas_lib::ports::IpcSessionOwner::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::IpcSessionOwner
+pub fn sai_atlas_lib::ports::IpcSessionOwner::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::IpcTabInfo
+pub sai_atlas_lib::ports::IpcTabInfo::active: core::option::Option<bool>
+pub sai_atlas_lib::ports::IpcTabInfo::compacting: core::option::Option<bool>
+pub sai_atlas_lib::ports::IpcTabInfo::cwd: alloc::string::String
+pub sai_atlas_lib::ports::IpcTabInfo::kind: sai_atlas_lib::ports::SessionKind
+pub sai_atlas_lib::ports::IpcTabInfo::placeholder: core::option::Option<bool>
+pub sai_atlas_lib::ports::IpcTabInfo::session_id: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::IpcTabInfo::session_path: core::option::Option<core::option::Option<alloc::string::String>>
+pub sai_atlas_lib::ports::IpcTabInfo::split: core::option::Option<sai_atlas_lib::ports::IpcTabSplit>
+pub sai_atlas_lib::ports::IpcTabInfo::status: sai_atlas_lib::ports::TabStatus
+pub sai_atlas_lib::ports::IpcTabInfo::tab_id: alloc::string::String
+pub sai_atlas_lib::ports::IpcTabInfo::title: core::option::Option<core::option::Option<alloc::string::String>>
+pub sai_atlas_lib::ports::IpcTabInfo::visible: core::option::Option<bool>
+pub sai_atlas_lib::ports::IpcTabInfo::worktree: core::option::Option<sai_atlas_lib::ports::IpcTabWorktree>
+impl core::clone::Clone for sai_atlas_lib::ports::IpcTabInfo
+pub fn sai_atlas_lib::ports::IpcTabInfo::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::IpcTabInfo
+pub fn sai_atlas_lib::ports::IpcTabInfo::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::IpcTabInfo
+pub fn sai_atlas_lib::ports::IpcTabInfo::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::IpcTabInfo
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::IpcTabInfo
+pub fn sai_atlas_lib::ports::IpcTabInfo::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::IpcTabInfo
+pub fn sai_atlas_lib::ports::IpcTabInfo::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::IpcTabSplit
+pub sai_atlas_lib::ports::IpcTabSplit::axis: sai_atlas_lib::ports::TabSplitAxis
+pub sai_atlas_lib::ports::IpcTabSplit::index: u8
+pub sai_atlas_lib::ports::IpcTabSplit::ratio: f64
+impl core::clone::Clone for sai_atlas_lib::ports::IpcTabSplit
+pub fn sai_atlas_lib::ports::IpcTabSplit::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::IpcTabSplit
+pub fn sai_atlas_lib::ports::IpcTabSplit::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::IpcTabSplit
+pub fn sai_atlas_lib::ports::IpcTabSplit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::IpcTabSplit
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::IpcTabSplit
+pub fn sai_atlas_lib::ports::IpcTabSplit::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::IpcTabSplit
+pub fn sai_atlas_lib::ports::IpcTabSplit::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::IpcTabViewSplit
+pub sai_atlas_lib::ports::IpcTabViewSplit::axis: sai_atlas_lib::ports::TabSplitAxis
+pub sai_atlas_lib::ports::IpcTabViewSplit::first_tab_id: alloc::string::String
+pub sai_atlas_lib::ports::IpcTabViewSplit::ratio: f64
+pub sai_atlas_lib::ports::IpcTabViewSplit::second_tab_id: alloc::string::String
+impl core::clone::Clone for sai_atlas_lib::ports::IpcTabViewSplit
+pub fn sai_atlas_lib::ports::IpcTabViewSplit::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::IpcTabViewSplit
+pub fn sai_atlas_lib::ports::IpcTabViewSplit::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::IpcTabViewSplit
+pub fn sai_atlas_lib::ports::IpcTabViewSplit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::IpcTabViewSplit
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::IpcTabViewSplit
+pub fn sai_atlas_lib::ports::IpcTabViewSplit::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::IpcTabViewSplit
+pub fn sai_atlas_lib::ports::IpcTabViewSplit::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::IpcTabWorktree
+pub sai_atlas_lib::ports::IpcTabWorktree::base_cwd: alloc::string::String
+pub sai_atlas_lib::ports::IpcTabWorktree::branch: alloc::string::String
+pub sai_atlas_lib::ports::IpcTabWorktree::name: alloc::string::String
+impl core::clone::Clone for sai_atlas_lib::ports::IpcTabWorktree
+pub fn sai_atlas_lib::ports::IpcTabWorktree::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::IpcTabWorktree
+impl core::cmp::PartialEq for sai_atlas_lib::ports::IpcTabWorktree
+pub fn sai_atlas_lib::ports::IpcTabWorktree::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::IpcTabWorktree
+pub fn sai_atlas_lib::ports::IpcTabWorktree::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::IpcTabWorktree
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::IpcTabWorktree
+pub fn sai_atlas_lib::ports::IpcTabWorktree::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::IpcTabWorktree
+pub fn sai_atlas_lib::ports::IpcTabWorktree::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::MessageDialogOptions
+pub sai_atlas_lib::ports::MessageDialogOptions::buttons: alloc::vec::Vec<alloc::string::String>
+pub sai_atlas_lib::ports::MessageDialogOptions::detail: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::MessageDialogOptions::kind: sai_atlas_lib::ports::MessageKind
+pub sai_atlas_lib::ports::MessageDialogOptions::message: alloc::string::String
+pub sai_atlas_lib::ports::MessageDialogOptions::parent: core::option::Option<sai_atlas_lib::ports::WindowId>
+pub sai_atlas_lib::ports::MessageDialogOptions::title: alloc::string::String
+impl core::clone::Clone for sai_atlas_lib::ports::MessageDialogOptions
+pub fn sai_atlas_lib::ports::MessageDialogOptions::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::MessageDialogOptions
+impl core::cmp::PartialEq for sai_atlas_lib::ports::MessageDialogOptions
+pub fn sai_atlas_lib::ports::MessageDialogOptions::eq(&self, &Self) -> bool
+impl core::default::Default for sai_atlas_lib::ports::MessageDialogOptions
+pub fn sai_atlas_lib::ports::MessageDialogOptions::default() -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::MessageDialogOptions
+pub fn sai_atlas_lib::ports::MessageDialogOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::MessageDialogOptions
+pub struct sai_atlas_lib::ports::OpenDialogOptions
+pub sai_atlas_lib::ports::OpenDialogOptions::can_create_directories: bool
+pub sai_atlas_lib::ports::OpenDialogOptions::default_path: core::option::Option<std::path::PathBuf>
+pub sai_atlas_lib::ports::OpenDialogOptions::directory: bool
+pub sai_atlas_lib::ports::OpenDialogOptions::filters: alloc::vec::Vec<sai_atlas_lib::ports::FileFilter>
+pub sai_atlas_lib::ports::OpenDialogOptions::multiple: bool
+pub sai_atlas_lib::ports::OpenDialogOptions::parent: core::option::Option<sai_atlas_lib::ports::WindowId>
+pub sai_atlas_lib::ports::OpenDialogOptions::title: core::option::Option<alloc::string::String>
+impl core::clone::Clone for sai_atlas_lib::ports::OpenDialogOptions
+pub fn sai_atlas_lib::ports::OpenDialogOptions::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::OpenDialogOptions
+impl core::cmp::PartialEq for sai_atlas_lib::ports::OpenDialogOptions
+pub fn sai_atlas_lib::ports::OpenDialogOptions::eq(&self, &Self) -> bool
+impl core::default::Default for sai_atlas_lib::ports::OpenDialogOptions
+pub fn sai_atlas_lib::ports::OpenDialogOptions::default() -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::OpenDialogOptions
+pub fn sai_atlas_lib::ports::OpenDialogOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::OpenDialogOptions
+pub struct sai_atlas_lib::ports::PersistedTabDescriptor
+pub sai_atlas_lib::ports::PersistedTabDescriptor::cwd: alloc::string::String
+pub sai_atlas_lib::ports::PersistedTabDescriptor::kind: sai_atlas_lib::ports::SessionKind
+pub sai_atlas_lib::ports::PersistedTabDescriptor::placeholder: core::option::Option<bool>
+pub sai_atlas_lib::ports::PersistedTabDescriptor::session_path: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::PersistedTabDescriptor::title: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::PersistedTabDescriptor::worktree: core::option::Option<sai_atlas_lib::ports::IpcTabWorktree>
+impl core::clone::Clone for sai_atlas_lib::ports::PersistedTabDescriptor
+pub fn sai_atlas_lib::ports::PersistedTabDescriptor::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::PersistedTabDescriptor
+pub fn sai_atlas_lib::ports::PersistedTabDescriptor::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::PersistedTabDescriptor
+pub fn sai_atlas_lib::ports::PersistedTabDescriptor::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::PersistedTabDescriptor
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::PersistedTabDescriptor
+pub fn sai_atlas_lib::ports::PersistedTabDescriptor::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::PersistedTabDescriptor
+pub fn sai_atlas_lib::ports::PersistedTabDescriptor::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::PersistedTabLayout
+pub sai_atlas_lib::ports::PersistedTabLayout::active_index: usize
+pub sai_atlas_lib::ports::PersistedTabLayout::split: core::option::Option<sai_atlas_lib::ports::PersistedTabSplit>
+pub sai_atlas_lib::ports::PersistedTabLayout::tabs: alloc::vec::Vec<sai_atlas_lib::ports::PersistedTabDescriptor>
+pub sai_atlas_lib::ports::PersistedTabLayout::version: u32
+impl core::clone::Clone for sai_atlas_lib::ports::PersistedTabLayout
+pub fn sai_atlas_lib::ports::PersistedTabLayout::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::PersistedTabLayout
+pub fn sai_atlas_lib::ports::PersistedTabLayout::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::PersistedTabLayout
+pub fn sai_atlas_lib::ports::PersistedTabLayout::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::PersistedTabLayout
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::PersistedTabLayout
+pub fn sai_atlas_lib::ports::PersistedTabLayout::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::PersistedTabLayout
+pub fn sai_atlas_lib::ports::PersistedTabLayout::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::PersistedTabSplit
+pub sai_atlas_lib::ports::PersistedTabSplit::axis: sai_atlas_lib::ports::TabSplitAxis
+pub sai_atlas_lib::ports::PersistedTabSplit::first_index: usize
+pub sai_atlas_lib::ports::PersistedTabSplit::ratio: f64
+pub sai_atlas_lib::ports::PersistedTabSplit::second_index: usize
+impl core::clone::Clone for sai_atlas_lib::ports::PersistedTabSplit
+pub fn sai_atlas_lib::ports::PersistedTabSplit::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::PersistedTabSplit
+pub fn sai_atlas_lib::ports::PersistedTabSplit::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::PersistedTabSplit
+pub fn sai_atlas_lib::ports::PersistedTabSplit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::PersistedTabSplit
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::PersistedTabSplit
+pub fn sai_atlas_lib::ports::PersistedTabSplit::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::PersistedTabSplit
+pub fn sai_atlas_lib::ports::PersistedTabSplit::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::QuitRisk
+pub sai_atlas_lib::ports::QuitRisk::total_tabs: usize
+pub sai_atlas_lib::ports::QuitRisk::working_tabs: usize
+pub sai_atlas_lib::ports::QuitRisk::working_windows: usize
+impl core::clone::Clone for sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::QuitRisk::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::QuitRisk
+impl core::cmp::PartialEq for sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::QuitRisk::eq(&self, &Self) -> bool
+impl core::default::Default for sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::QuitRisk::default() -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::QuitRisk::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for sai_atlas_lib::ports::QuitRisk
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::QuitRisk
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::QuitRisk::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::QuitRisk::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::SaveDialogOptions
+pub sai_atlas_lib::ports::SaveDialogOptions::default_path: core::option::Option<std::path::PathBuf>
+pub sai_atlas_lib::ports::SaveDialogOptions::filters: alloc::vec::Vec<sai_atlas_lib::ports::FileFilter>
+pub sai_atlas_lib::ports::SaveDialogOptions::parent: core::option::Option<sai_atlas_lib::ports::WindowId>
+pub sai_atlas_lib::ports::SaveDialogOptions::title: core::option::Option<alloc::string::String>
+impl core::clone::Clone for sai_atlas_lib::ports::SaveDialogOptions
+pub fn sai_atlas_lib::ports::SaveDialogOptions::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SaveDialogOptions
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SaveDialogOptions
+pub fn sai_atlas_lib::ports::SaveDialogOptions::eq(&self, &Self) -> bool
+impl core::default::Default for sai_atlas_lib::ports::SaveDialogOptions
+pub fn sai_atlas_lib::ports::SaveDialogOptions::default() -> Self
+impl core::fmt::Debug for sai_atlas_lib::ports::SaveDialogOptions
+pub fn sai_atlas_lib::ports::SaveDialogOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SaveDialogOptions
+pub struct sai_atlas_lib::ports::SessionInfo
+pub sai_atlas_lib::ports::SessionInfo::created: alloc::string::String
+pub sai_atlas_lib::ports::SessionInfo::cwd: alloc::string::String
+pub sai_atlas_lib::ports::SessionInfo::first_message: alloc::string::String
+pub sai_atlas_lib::ports::SessionInfo::id: alloc::string::String
+pub sai_atlas_lib::ports::SessionInfo::kind: core::option::Option<sai_atlas_lib::ports::SessionKind>
+pub sai_atlas_lib::ports::SessionInfo::message_count: u64
+pub sai_atlas_lib::ports::SessionInfo::modified: alloc::string::String
+pub sai_atlas_lib::ports::SessionInfo::parent_session_path: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::SessionInfo::path: alloc::string::String
+pub sai_atlas_lib::ports::SessionInfo::size: u64
+pub sai_atlas_lib::ports::SessionInfo::status: sai_atlas_lib::ports::SessionStatus
+pub sai_atlas_lib::ports::SessionInfo::title: core::option::Option<alloc::string::String>
+impl core::clone::Clone for sai_atlas_lib::ports::SessionInfo
+pub fn sai_atlas_lib::ports::SessionInfo::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SessionInfo
+pub fn sai_atlas_lib::ports::SessionInfo::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SessionInfo
+pub fn sai_atlas_lib::ports::SessionInfo::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SessionInfo
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SessionInfo
+pub fn sai_atlas_lib::ports::SessionInfo::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SessionInfo
+pub fn sai_atlas_lib::ports::SessionInfo::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::SidecarOptions
+pub sai_atlas_lib::ports::SidecarOptions::binary_path: std::path::PathBuf
+pub sai_atlas_lib::ports::SidecarOptions::cwd: alloc::string::String
+pub sai_atlas_lib::ports::SidecarOptions::extra_flags: alloc::vec::Vec<alloc::string::String>
+pub sai_atlas_lib::ports::SidecarOptions::fresh: bool
+pub sai_atlas_lib::ports::SidecarOptions::kind: sai_atlas_lib::ports::SessionKind
+pub sai_atlas_lib::ports::SidecarOptions::packaged: bool
+pub sai_atlas_lib::ports::SidecarOptions::resume_session_path: core::option::Option<alloc::string::String>
+impl core::clone::Clone for sai_atlas_lib::ports::SidecarOptions
+pub fn sai_atlas_lib::ports::SidecarOptions::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::SidecarOptions
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SidecarOptions
+pub fn sai_atlas_lib::ports::SidecarOptions::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SidecarOptions
+pub fn sai_atlas_lib::ports::SidecarOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SidecarOptions
+pub struct sai_atlas_lib::ports::SidecarRestartProgress
+pub sai_atlas_lib::ports::SidecarRestartProgress::attempt: u32
+pub sai_atlas_lib::ports::SidecarRestartProgress::max_attempts: u32
+impl core::clone::Clone for sai_atlas_lib::ports::SidecarRestartProgress
+pub fn sai_atlas_lib::ports::SidecarRestartProgress::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SidecarRestartProgress
+pub fn sai_atlas_lib::ports::SidecarRestartProgress::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SidecarRestartProgress
+pub fn sai_atlas_lib::ports::SidecarRestartProgress::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SidecarRestartProgress
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SidecarRestartProgress
+pub fn sai_atlas_lib::ports::SidecarRestartProgress::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SidecarRestartProgress
+pub fn sai_atlas_lib::ports::SidecarRestartProgress::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::SidecarStatusPayload
+pub sai_atlas_lib::ports::SidecarStatusPayload::cwd: alloc::string::String
+pub sai_atlas_lib::ports::SidecarStatusPayload::message: core::option::Option<alloc::string::String>
+pub sai_atlas_lib::ports::SidecarStatusPayload::restart: core::option::Option<sai_atlas_lib::ports::SidecarRestartProgress>
+pub sai_atlas_lib::ports::SidecarStatusPayload::status: sai_atlas_lib::ports::SidecarStatus
+impl core::clone::Clone for sai_atlas_lib::ports::SidecarStatusPayload
+pub fn sai_atlas_lib::ports::SidecarStatusPayload::clone(&self) -> Self
+impl core::cmp::PartialEq for sai_atlas_lib::ports::SidecarStatusPayload
+pub fn sai_atlas_lib::ports::SidecarStatusPayload::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::SidecarStatusPayload
+pub fn sai_atlas_lib::ports::SidecarStatusPayload::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::SidecarStatusPayload
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::SidecarStatusPayload
+pub fn sai_atlas_lib::ports::SidecarStatusPayload::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::SidecarStatusPayload
+pub fn sai_atlas_lib::ports::SidecarStatusPayload::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::WindowId(pub u32)
+impl sai_atlas_lib::ports::WindowId
+pub const sai_atlas_lib::ports::WindowId::QUICK_ENTRY: sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::label(self) -> alloc::string::String
+impl core::clone::Clone for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::WindowId
+impl core::cmp::Ord for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::cmp(&self, &Self) -> core::cmp::Ordering
+impl core::cmp::PartialEq for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::eq(&self, &Self) -> bool
+impl core::cmp::PartialOrd for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::partial_cmp(&self, &Self) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for sai_atlas_lib::ports::WindowId
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::WindowId
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::ports::WindowId::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct sai_atlas_lib::ports::WindowRecord
+pub sai_atlas_lib::ports::WindowRecord::cwd: alloc::string::String
+pub sai_atlas_lib::ports::WindowRecord::id: sai_atlas_lib::ports::WindowId
+pub sai_atlas_lib::ports::WindowRecord::pending_session_path: core::option::Option<alloc::string::String>
+impl core::clone::Clone for sai_atlas_lib::ports::WindowRecord
+pub fn sai_atlas_lib::ports::WindowRecord::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::WindowRecord
+impl core::cmp::PartialEq for sai_atlas_lib::ports::WindowRecord
+pub fn sai_atlas_lib::ports::WindowRecord::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::WindowRecord
+pub fn sai_atlas_lib::ports::WindowRecord::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::WindowRecord
+pub struct sai_atlas_lib::ports::WindowTabFact
+pub sai_atlas_lib::ports::WindowTabFact::in_flight: bool
+pub sai_atlas_lib::ports::WindowTabFact::tab_id: alloc::string::String
+pub sai_atlas_lib::ports::WindowTabFact::window_id: sai_atlas_lib::ports::WindowId
+impl core::clone::Clone for sai_atlas_lib::ports::WindowTabFact
+pub fn sai_atlas_lib::ports::WindowTabFact::clone(&self) -> Self
+impl core::cmp::Eq for sai_atlas_lib::ports::WindowTabFact
+impl core::cmp::PartialEq for sai_atlas_lib::ports::WindowTabFact
+pub fn sai_atlas_lib::ports::WindowTabFact::eq(&self, &Self) -> bool
+impl core::fmt::Debug for sai_atlas_lib::ports::WindowTabFact
+pub fn sai_atlas_lib::ports::WindowTabFact::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for sai_atlas_lib::ports::WindowTabFact
+impl serde_core::ser::Serialize for sai_atlas_lib::ports::WindowTabFact
+pub fn sai_atlas_lib::ports::WindowTabFact::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for sai_atlas_lib::ports::WindowTabFact
+pub fn sai_atlas_lib::ports::WindowTabFact::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub const sai_atlas_lib::ports::BATCH_INTERVAL_MS: u64
+pub const sai_atlas_lib::ports::MAX_BUFFER_SIZE: usize
+pub const sai_atlas_lib::ports::SUPERVISOR_ARGV: &str
+pub trait sai_atlas_lib::ports::DesktopPort: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::DesktopPort::approve_quit_before_install(&self) -> futures_core::future::BoxFuture<'_, bool>
+pub fn sai_atlas_lib::ports::DesktopPort::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::ports::DesktopPort::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::ports::DesktopPort::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
+pub fn sai_atlas_lib::ports::DesktopPort::is_main_owned_pref_key(&self, &str) -> bool
+pub fn sai_atlas_lib::ports::DesktopPort::is_quitting(&self) -> bool
+pub fn sai_atlas_lib::ports::DesktopPort::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::ports::DesktopPort::mark_quitting(&self)
+pub fn sai_atlas_lib::ports::DesktopPort::on_exit_requested(&self, core::option::Option<i32>) -> bool
+pub fn sai_atlas_lib::ports::DesktopPort::on_reopen(&self, bool)
+pub fn sai_atlas_lib::ports::DesktopPort::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
+pub fn sai_atlas_lib::ports::DesktopPort::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
+pub fn sai_atlas_lib::ports::DesktopPort::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::ports::DesktopPort::rebuild_menu(&self)
+pub fn sai_atlas_lib::ports::DesktopPort::record(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::ports::DesktopPort::records(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::ports::DesktopPort::request_quit(&self)
+pub fn sai_atlas_lib::ports::DesktopPort::set_cwd(&self, sai_atlas_lib::ports::WindowId, &str)
+pub fn sai_atlas_lib::ports::DesktopPort::set_run_progress(&self, sai_atlas_lib::ports::RunProgressState)
+pub fn sai_atlas_lib::ports::DesktopPort::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::ports::DesktopPort::spawn_window(&self, core::option::Option<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<sai_atlas_lib::ports::SessionKind>) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::ports::DesktopPort::target_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::ports::DesktopPort::withdraw_quit_approval(&self)
+impl sai_atlas_lib::ports::DesktopPort for sai_atlas_lib::desktop::Desktop
+pub fn sai_atlas_lib::desktop::Desktop::consume_pending_session(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::desktop::Desktop::focus(&self, sai_atlas_lib::ports::WindowId) -> bool
+pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
+pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
+pub fn sai_atlas_lib::desktop::Desktop::record(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::records(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowRecord>
+pub fn sai_atlas_lib::desktop::Desktop::set_cwd(&self, sai_atlas_lib::ports::WindowId, &str)
+pub fn sai_atlas_lib::desktop::Desktop::set_run_progress(&self, sai_atlas_lib::ports::RunProgressState)
+pub fn sai_atlas_lib::desktop::Desktop::spawn_window(&self, core::option::Option<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<sai_atlas_lib::ports::SessionKind>) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::desktop::Desktop::target_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub trait sai_atlas_lib::ports::EventBatcher: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::EventBatcher::dispose(&self)
+pub fn sai_atlas_lib::ports::EventBatcher::flush_now(&self)
+pub fn sai_atlas_lib::ports::EventBatcher::push(&self, serde_json::value::Value)
+pub trait sai_atlas_lib::ports::Host: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::Host::app_version(&self) -> alloc::string::String
+pub fn sai_atlas_lib::ports::Host::clipboard_read_text(&self) -> futures_core::future::BoxFuture<'_, core::result::Result<alloc::string::String, sai_atlas_lib::ports::HostError>>
+pub fn sai_atlas_lib::ports::Host::clipboard_write_text(&self, &str) -> futures_core::future::BoxFuture<'_, core::result::Result<(), sai_atlas_lib::ports::HostError>>
+pub fn sai_atlas_lib::ports::Host::exit(&self, i32)
+pub fn sai_atlas_lib::ports::Host::message_dialog(&self, sai_atlas_lib::ports::MessageDialogOptions) -> futures_core::future::BoxFuture<'_, usize>
+pub fn sai_atlas_lib::ports::Host::notify(&self, &str, core::option::Option<&str>) -> core::result::Result<(), sai_atlas_lib::ports::HostError>
+pub fn sai_atlas_lib::ports::Host::open_dialog(&self, sai_atlas_lib::ports::OpenDialogOptions) -> futures_core::future::BoxFuture<'_, core::option::Option<alloc::vec::Vec<std::path::PathBuf>>>
+pub fn sai_atlas_lib::ports::Host::open_path(&self, &std::path::Path) -> core::result::Result<(), sai_atlas_lib::ports::HostError>
+pub fn sai_atlas_lib::ports::Host::open_url(&self, &str) -> core::result::Result<(), sai_atlas_lib::ports::HostError>
+pub fn sai_atlas_lib::ports::Host::relaunch_after_exit(&self, std::path::PathBuf)
+pub fn sai_atlas_lib::ports::Host::reveal_in_folder(&self, &std::path::Path) -> core::result::Result<(), sai_atlas_lib::ports::HostError>
+pub fn sai_atlas_lib::ports::Host::save_dialog(&self, sai_atlas_lib::ports::SaveDialogOptions) -> futures_core::future::BoxFuture<'_, core::option::Option<std::path::PathBuf>>
+pub fn sai_atlas_lib::ports::Host::system_locale(&self) -> core::option::Option<alloc::string::String>
+pub trait sai_atlas_lib::ports::OllamaPort: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::OllamaPort::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::ports::OllamaPort::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+impl sai_atlas_lib::ports::OllamaPort for sai_atlas_lib::ollama::Ollama
+pub trait sai_atlas_lib::ports::OmpPort: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::OmpPort::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::ports::OmpPort::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
+pub fn sai_atlas_lib::ports::OmpPort::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
+pub fn sai_atlas_lib::ports::OmpPort::resolve_editor_command(&self) -> futures_core::future::BoxFuture<'_, core::option::Option<alloc::string::String>>
+pub fn sai_atlas_lib::ports::OmpPort::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::ports::OmpPort::spawn_env(&self) -> futures_core::future::BoxFuture<'_, std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>>
+impl sai_atlas_lib::ports::OmpPort for sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
+pub fn sai_atlas_lib::omp::Omp::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
+pub trait sai_atlas_lib::ports::ServicesPort: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::ServicesPort::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::ports::ServicesPort::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
+pub fn sai_atlas_lib::ports::ServicesPort::import_legacy_renderer_storage(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::ports::ServicesPort::on_sessions_changed(&self, alloc::boxed::Box<(dyn core::ops::function::Fn() + core::marker::Send + core::marker::Sync)>)
+pub fn sai_atlas_lib::ports::ServicesPort::session_delete(&self, &str) -> futures_core::future::BoxFuture<'_, core::result::Result<(), sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::ports::ServicesPort::session_kind_for(&self, &str) -> futures_core::future::BoxFuture<'_, sai_atlas_lib::ports::SessionKind>
+pub fn sai_atlas_lib::ports::ServicesPort::session_search(&self, &str, alloc::vec::Vec<alloc::string::String>) -> futures_core::future::BoxFuture<'_, alloc::vec::Vec<alloc::string::String>>
+pub fn sai_atlas_lib::ports::ServicesPort::sessions_dir(&self) -> std::path::PathBuf
+pub fn sai_atlas_lib::ports::ServicesPort::sessions_list(&self, sai_atlas_lib::ports::SessionScope, core::option::Option<alloc::string::String>) -> futures_core::future::BoxFuture<'_, core::result::Result<alloc::vec::Vec<sai_atlas_lib::ports::SessionInfo>, sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::ports::ServicesPort::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+impl sai_atlas_lib::ports::ServicesPort for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
+pub fn sai_atlas_lib::services::Services::session_delete(&self, &str) -> futures_core::future::BoxFuture<'_, core::result::Result<(), sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::services::Services::session_kind_for(&self, &str) -> futures_core::future::BoxFuture<'_, sai_atlas_lib::ports::SessionKind>
+pub fn sai_atlas_lib::services::Services::sessions_list(&self, sai_atlas_lib::ports::SessionScope, core::option::Option<alloc::string::String>) -> futures_core::future::BoxFuture<'_, core::result::Result<alloc::vec::Vec<sai_atlas_lib::ports::SessionInfo>, sai_atlas_lib::ports::ServiceError>>
+pub trait sai_atlas_lib::ports::SidecarHandle: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::SidecarHandle::adopt_cwd(&self, &str) -> bool
+pub fn sai_atlas_lib::ports::SidecarHandle::cwd(&self) -> alloc::string::String
+pub fn sai_atlas_lib::ports::SidecarHandle::dispose(&self) -> futures_core::future::BoxFuture<'static, ()>
+pub fn sai_atlas_lib::ports::SidecarHandle::has_rpc_client(&self) -> bool
+pub fn sai_atlas_lib::ports::SidecarHandle::kill(&self) -> futures_core::future::BoxFuture<'static, ()>
+pub fn sai_atlas_lib::ports::SidecarHandle::kind(&self) -> sai_atlas_lib::ports::SessionKind
+pub fn sai_atlas_lib::ports::SidecarHandle::mark_unhealthy(&self, &str)
+pub fn sai_atlas_lib::ports::SidecarHandle::omp_pid(&self) -> core::option::Option<u32>
+pub fn sai_atlas_lib::ports::SidecarHandle::request(&self, serde_json::value::Value, core::option::Option<u64>) -> futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, sai_atlas_lib::ports::SidecarError>>
+pub fn sai_atlas_lib::ports::SidecarHandle::restart(&self, core::option::Option<&str>, core::option::Option<&str>)
+pub fn sai_atlas_lib::ports::SidecarHandle::send_side_channel(&self, serde_json::value::Value)
+pub fn sai_atlas_lib::ports::SidecarHandle::start(&self)
+pub fn sai_atlas_lib::ports::SidecarHandle::status(&self) -> sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarHandle::supervisor_pid(&self) -> core::option::Option<u32>
+pub trait sai_atlas_lib::ports::TabsPort: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::TabsPort::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::ports::TabsPort::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::ports::TabsPort::adopt_session_cwd(&self, &str, &str) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::ports::TabsPort::at_cap(&self) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'static, core::option::Option<serde_json::value::Value>>
+pub fn sai_atlas_lib::ports::TabsPort::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::ports::TabsPort::dispose_all(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::ports::TabsPort::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::ports::TabsPort::note_session_file(&self, &str, core::option::Option<&str>)
+pub fn sai_atlas_lib::ports::TabsPort::on_window_tabs_changed(&self, sai_atlas_lib::ports::WindowTabsChangedListener)
+pub fn sai_atlas_lib::ports::TabsPort::release_tab(&self, &str) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::release_window(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::ports::TabsPort::restore_layout(&self, sai_atlas_lib::ports::WindowId, sai_atlas_lib::ports::PersistedTabLayout) -> usize
+pub fn sai_atlas_lib::ports::TabsPort::route_side_channel(&self, &str, serde_json::value::Value, bool) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::session_owner(&self, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::ports::TabsPort::session_owner_is_live(&self, &str) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::set_active_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::set_tab_view(&self, sai_atlas_lib::ports::WindowId, &str, &[alloc::string::String], core::option::Option<sai_atlas_lib::ports::IpcTabViewSplit>) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::sidecar_for_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::ports::TabsPort::sidecar_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::ports::TabsPort::size(&self) -> usize
+pub fn sai_atlas_lib::ports::TabsPort::tab_inventory(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowTabFact>
+pub fn sai_atlas_lib::ports::TabsPort::tab_layout_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::PersistedTabLayout>
+pub fn sai_atlas_lib::ports::TabsPort::tabs_for_window(&self, sai_atlas_lib::ports::WindowId) -> alloc::vec::Vec<sai_atlas_lib::ports::IpcTabInfo>
+impl sai_atlas_lib::ports::TabsPort for sai_atlas_lib::tabs::Tabs
+pub fn sai_atlas_lib::tabs::Tabs::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::on_window_tabs_changed(&self, sai_atlas_lib::ports::WindowTabsChangedListener)
+pub fn sai_atlas_lib::tabs::Tabs::release_window(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::tabs::Tabs::restore_layout(&self, sai_atlas_lib::ports::WindowId, sai_atlas_lib::ports::PersistedTabLayout) -> usize
+pub fn sai_atlas_lib::tabs::Tabs::session_owner(&self, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::set_active_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::set_tab_view(&self, sai_atlas_lib::ports::WindowId, &str, &[alloc::string::String], core::option::Option<sai_atlas_lib::ports::IpcTabViewSplit>) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::tab_inventory(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowTabFact>
+pub fn sai_atlas_lib::tabs::Tabs::tab_layout_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::PersistedTabLayout>
+pub fn sai_atlas_lib::tabs::Tabs::tabs_for_window(&self, sai_atlas_lib::ports::WindowId) -> alloc::vec::Vec<sai_atlas_lib::ports::IpcTabInfo>
+pub trait sai_atlas_lib::ports::UpdaterPort: core::marker::Send + core::marker::Sync
+pub fn sai_atlas_lib::ports::UpdaterPort::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::ports::UpdaterPort::check_now(&self)
+pub fn sai_atlas_lib::ports::UpdaterPort::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::ports::UpdaterPort::status(&self) -> serde_json::value::Value
+impl sai_atlas_lib::ports::UpdaterPort for sai_atlas_lib::updater::Updater
+pub fn sai_atlas_lib::ports::double_option<'de, T, D>(D) -> core::result::Result<core::option::Option<core::option::Option<T>>, <D as serde_core::de::Deserializer>::Error> where T: serde_core::de::Deserialize<'de>, D: serde_core::de::Deserializer<'de>
+pub type sai_atlas_lib::ports::CtxRef = alloc::rcs::arc::Weak<sai_atlas_lib::ctx::AppCtx>
+pub type sai_atlas_lib::ports::FlushCallback = alloc::boxed::Box<(dyn core::ops::function::Fn(alloc::vec::Vec<serde_json::value::Value>) + core::marker::Send + core::marker::Sync)>
+pub type sai_atlas_lib::ports::SidecarEvents = tokio::sync::mpsc::unbounded::UnboundedReceiver<sai_atlas_lib::ports::SidecarEvent>
+pub type sai_atlas_lib::ports::WindowClosedListener = alloc::boxed::Box<(dyn core::ops::function::Fn(&sai_atlas_lib::ports::WindowRecord) + core::marker::Send + core::marker::Sync)>
+pub type sai_atlas_lib::ports::WindowTabsChangedListener = alloc::boxed::Box<(dyn core::ops::function::Fn(sai_atlas_lib::ports::WindowId, core::option::Option<sai_atlas_lib::ports::PersistedTabLayout>) + core::marker::Send + core::marker::Sync)>
+pub fn sai_atlas_lib::services::ipc::editor_open_external(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_read(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_read_image(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::fs_read_plan(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::log_snapshot(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::models_providers_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::prefs_get(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::prefs_set(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::provider_cleanup_config(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::runtime_error_report(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::runtime_log_path(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::session_consume_pending(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::session_open_new_window(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_delete(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_rename(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::sessions_search(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_clipboard_read(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_notify(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_open_dialog(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_open_external(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_open_path(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::ipc::system_save_dialog(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::services::Services::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::ServicesPort for sai_atlas_lib::services::Services
+pub fn sai_atlas_lib::services::Services::execute_host_tool(&self, sai_atlas_lib::ports::Caller, &str, serde_json::value::Value) -> core::option::Option<futures_core::future::BoxFuture<'static, core::result::Result<serde_json::value::Value, alloc::string::String>>>
+pub fn sai_atlas_lib::services::Services::session_delete(&self, &str) -> futures_core::future::BoxFuture<'_, core::result::Result<(), sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::services::Services::session_kind_for(&self, &str) -> futures_core::future::BoxFuture<'_, sai_atlas_lib::ports::SessionKind>
+pub fn sai_atlas_lib::services::Services::sessions_list(&self, sai_atlas_lib::ports::SessionScope, core::option::Option<alloc::string::String>) -> futures_core::future::BoxFuture<'_, core::result::Result<alloc::vec::Vec<sai_atlas_lib::ports::SessionInfo>, sai_atlas_lib::ports::ServiceError>>
+pub fn sai_atlas_lib::tabs::ipc::extension_ui_respond(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::host_tool_result(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::host_tool_update(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::host_uri_result(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::prefs_update_launch_profile(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::rpc_command(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::rpc_command_for_tab(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_default_workspace(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_restart(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_select_project(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_set_project(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::sidecar_status_get(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_close(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_get_all(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_get_session_owner(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_set_active(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_set_view(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::ipc::tab_spawn(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::tabs::Tabs::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::TabsPort for sai_atlas_lib::tabs::Tabs
+pub fn sai_atlas_lib::tabs::Tabs::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::cwd_for(&self, sai_atlas_lib::ports::Caller, core::option::Option<&str>) -> core::option::Option<alloc::string::String>
+pub fn sai_atlas_lib::tabs::Tabs::foreign_session_owner(&self, core::option::Option<&str>, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::on_window_tabs_changed(&self, sai_atlas_lib::ports::WindowTabsChangedListener)
+pub fn sai_atlas_lib::tabs::Tabs::release_window(&self, sai_atlas_lib::ports::WindowId)
+pub fn sai_atlas_lib::tabs::Tabs::restore_layout(&self, sai_atlas_lib::ports::WindowId, sai_atlas_lib::ports::PersistedTabLayout) -> usize
+pub fn sai_atlas_lib::tabs::Tabs::session_owner(&self, &str) -> core::option::Option<sai_atlas_lib::ports::IpcSessionOwner>
+pub fn sai_atlas_lib::tabs::Tabs::set_active_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::set_tab_view(&self, sai_atlas_lib::ports::WindowId, &str, &[alloc::string::String], core::option::Option<sai_atlas_lib::ports::IpcTabViewSplit>) -> bool
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_tab(&self, sai_atlas_lib::ports::WindowId, &str) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::sidecar_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>>
+pub fn sai_atlas_lib::tabs::Tabs::tab_inventory(&self) -> alloc::vec::Vec<sai_atlas_lib::ports::WindowTabFact>
+pub fn sai_atlas_lib::tabs::Tabs::tab_layout_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<sai_atlas_lib::ports::PersistedTabLayout>
+pub fn sai_atlas_lib::tabs::Tabs::tabs_for_window(&self, sai_atlas_lib::ports::WindowId) -> alloc::vec::Vec<sai_atlas_lib::ports::IpcTabInfo>
+pub fn sai_atlas_lib::updater::ipc::updater_apply(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::updater::ipc::updater_check(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::updater::ipc::updater_download(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::updater::ipc::updater_get_status(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::updater::ipc::updater_version(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::updater::Updater::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::UpdaterPort for sai_atlas_lib::updater::Updater
+pub sai_atlas_lib::webview::WindowSpec::kind: sai_atlas_lib::ports::WindowKind
+pub sai_atlas_lib::webview::WindowSpec::win_id: sai_atlas_lib::ports::WindowId
+pub fn sai_atlas_lib::webview::WindowSpec::caller(&self) -> sai_atlas_lib::ports::Caller

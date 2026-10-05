@@ -242,10 +242,10 @@ describe("theme registry", () => {
 
 	it("paints the first frame with the default page colors", () => {
 		const prePaint = readFileSync(new URL("../public/pre-paint.js", import.meta.url), "utf8");
-		const indexHtml = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+		const firstPaint = readFileSync(new URL("../styles/first-paint.css", import.meta.url), "utf8");
 		expect(prePaint).toContain(THEMES.dark.tokens["--omp-bg-primary"]);
 		expect(prePaint).toContain(THEMES.light.tokens["--omp-bg-primary"]);
-		expect(indexHtml).toContain(THEMES.light.tokens["--omp-bg-primary"]);
+		expect(firstPaint).toContain(THEMES.light.tokens["--omp-bg-primary"]);
 	});
 });
 

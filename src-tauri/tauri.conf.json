@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Sai ATLAS",
+  "version": "../package.json",
+  "identifier": "vn.io.vif.saiatlas",
+  "mainBinaryName": "sai-atlas",
+  "build": {
+    "frontendDist": "../out/renderer-tauri",
+    "beforeBuildCommand": "bun run build:renderer:tauri"
+  },
+  "app": {
+    "windows": [],
+    "enableGTKAppId": true,
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:",
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "omp"
+        ]
+      },
+      "mobile": []
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

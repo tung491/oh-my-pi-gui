@@ -1,0 +1,27 @@
+pub mod sai_atlas_lib::omp::ipc
+pub fn sai_atlas_lib::omp::ipc::bench_abort(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::omp::ipc::bench_run(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::omp::ipc::stats_fetch(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub mod sai_atlas_lib::omp::supervisor
+pub fn sai_atlas_lib::omp::supervisor::run(alloc::vec::Vec<std::ffi::os_str::OsString>) -> std::process::ExitCode
+pub struct sai_atlas_lib::omp::Omp
+impl sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::new(sai_atlas_lib::ports::CtxRef) -> Self
+impl sai_atlas_lib::ports::OmpPort for sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::omp::Omp::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
+pub fn sai_atlas_lib::omp::Omp::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
+pub fn sai_atlas_lib::omp::Omp::resolve_editor_command(&self) -> futures_core::future::BoxFuture<'_, core::option::Option<alloc::string::String>>
+pub fn sai_atlas_lib::omp::Omp::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::omp::Omp::spawn_env(&self) -> futures_core::future::BoxFuture<'_, std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>>
+pub const sai_atlas_lib::omp::CHANNELS: &[(&str, sai_atlas_lib::bridge::Scope)]
+pub const sai_atlas_lib::omp::EMITS: &[&str]
+pub fn sai_atlas_lib::omp::init(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, &tauri::app::AppHandle) -> tauri::error::Result<()>
+pub fn sai_atlas_lib::omp::register(&mut sai_atlas_lib::bridge::Registry)
+impl sai_atlas_lib::ports::OmpPort for sai_atlas_lib::omp::Omp
+pub fn sai_atlas_lib::omp::Omp::as_any(&self) -> &dyn core::any::Any
+pub fn sai_atlas_lib::omp::Omp::new_event_batcher(&self, sai_atlas_lib::ports::FlushCallback) -> alloc::boxed::Box<dyn sai_atlas_lib::ports::EventBatcher>
+pub fn sai_atlas_lib::omp::Omp::new_sidecar(&self, sai_atlas_lib::ports::SidecarOptions) -> (alloc::rcs::arc::Arc<dyn sai_atlas_lib::ports::SidecarHandle>, sai_atlas_lib::ports::SidecarEvents)
+pub fn sai_atlas_lib::omp::Omp::resolve_editor_command(&self) -> futures_core::future::BoxFuture<'_, core::option::Option<alloc::string::String>>
+pub fn sai_atlas_lib::omp::Omp::shutdown(&self) -> futures_core::future::BoxFuture<'_, ()>
+pub fn sai_atlas_lib::omp::Omp::spawn_env(&self) -> futures_core::future::BoxFuture<'_, std::collections::hash::map::HashMap<alloc::string::String, alloc::string::String>>

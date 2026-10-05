@@ -4,9 +4,17 @@
  * installer opens in Finder.
  */
 import { AlertTriangle, Download, FolderOpen, RefreshCw, X } from "lucide-react";
+import type { UpdateStatus } from "../../../shared/ipc-types";
 import { useT } from "../../lib/i18n";
 import { useUpdaterStore } from "../../stores/updater";
 import { Button } from "../common";
+
+/** An update failure as the user should read it: apt's unresolved dependencies say what to run instead. */
+export function updateErrorText(t: ReturnType<typeof useT>, status: Extract<UpdateStatus, { state: "error" }>): string {
+	if (status.manualInstallCommand)
+		return t("updater.unresolvedDependencies", { command: status.manualInstallCommand });
+	return status.message;
+}
 
 function formatBytes(bytes: number): string {
 	if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
@@ -83,6 +91,17 @@ export function UpdateBanner() {
 				</div>
 			);
 		}
+		// Installing again here would fail the same way, so there is no button.
+		if (status.reopenRequired) {
+			return (
+				<div className="flex items-center gap-2 border-b border-(--omp-border-muted) bg-transparent px-3 py-1.5 text-omp-md">
+					<AlertTriangle size={13} className="shrink-0 text-(--omp-warning)" />
+					<span className="min-w-0 flex-1 text-(--omp-text)">
+						{t("updater.reopenToInstall", { version: status.version })}
+					</span>
+				</div>
+			);
+		}
 		return (
 			<div className="flex items-center gap-2 border-b border-(--omp-border-muted) bg-transparent px-3 py-1.5 text-omp-md">
 				<RefreshCw size={13} className="shrink-0 text-(--omp-success)" />
@@ -103,7 +122,7 @@ export function UpdateBanner() {
 		return (
 			<div className="flex items-center gap-2 border-b border-(--omp-border-muted) bg-transparent px-3 py-1.5 text-omp-md">
 				<AlertTriangle size={13} className="shrink-0 text-(--omp-error)" />
-				<span className="min-w-0 flex-1 text-(--omp-error)">{status.message}</span>
+				<span className="min-w-0 flex-1 text-(--omp-error)">{updateErrorText(t, status)}</span>
 				<Button size="sm" onClick={() => void window.omp.updater.check()}>
 					{t("updater.retry")}
 				</Button>

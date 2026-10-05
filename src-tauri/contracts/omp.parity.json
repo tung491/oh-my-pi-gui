@@ -1,0 +1,26 @@
+[
+  {
+    "ts": "src/main/rpc-bridge.test.ts",
+    "rust": "src-tauri/src/omp/rpc_bridge.rs"
+  },
+  {
+    "ts": "src/main/sidecar.test.ts",
+    "rust": "src-tauri/src/omp/manager.rs"
+  },
+  {
+    "ts": "src/main/shell-env.test.ts",
+    "rust": "src-tauri/src/omp/shell_env.rs"
+  },
+  {
+    "ts": "src/main/stats-restart-policy.test.ts",
+    "rust": "src-tauri/src/omp/stats_restart_policy.rs"
+  },
+  {
+    "ts": "src/main/stats-server.test.ts",
+    "rust": "src-tauri/src/omp/stats.rs"
+  },
+  {
+    "ts": "src/main/benchmark-runner.test.ts",
+    "rust": "src-tauri/src/omp/bench.rs"
+  }
+]

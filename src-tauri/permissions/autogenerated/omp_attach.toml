@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-omp-attach"
+description = "Enables the omp_attach command without any pre-configured scope."
+commands.allow = ["omp_attach"]
+
+[[permission]]
+identifier = "deny-omp-attach"
+description = "Denies the omp_attach command without any pre-configured scope."
+commands.deny = ["omp_attach"]
