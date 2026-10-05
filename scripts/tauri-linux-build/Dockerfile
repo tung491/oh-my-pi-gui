@@ -25,8 +25,9 @@ RUN apt-get update \
 # come from the same apt state as the GStreamer core libraries linuxdeploy
 # bundles, so plugins and core always match. Inside the web-process sandbox the
 # microphone is reachable only through the PulseAudio socket, so capture is
-# pulsesrc found by the pulse device provider, and the AudioContext needs a sink:
-# coreelements, app, audioconvert, audioresample, autodetect and pulseaudio.
+# pulsesrc found by the pulse device provider, WebKit splits the track's channels
+# for WebAudio with deinterleave, and the AudioContext needs a sink: coreelements,
+# app, audioconvert, audioresample, autodetect, interleave and pulseaudio.
 # Playback of synthesized speech (an <audio> WAV) adds playback,
 # typefindfunctions, volume and wavparse. Nothing else: the whole plugin
 # directory would pull in tens of MB of codecs, and libpipewire would be dead
@@ -36,7 +37,7 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& mkdir -p /opt/sai-atlas/gstreamer-1.0 \
-	&& for plugin in coreelements app audioconvert audioresample autodetect pulseaudio \
+	&& for plugin in coreelements app audioconvert audioresample autodetect interleave pulseaudio \
 		playback typefindfunctions volume wavparse; do \
 		cp -L "/usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgst${plugin}.so" /opt/sai-atlas/gstreamer-1.0/ || exit 1; \
 	done

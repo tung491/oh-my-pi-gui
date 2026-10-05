@@ -78,7 +78,8 @@ const HELPER_DIR_USES = 2;
 /**
  * The GStreamer plugins the AppImage bundles, and nothing else: capture through
  * the PulseAudio socket (pulsesrc via the pulse device provider) into an
- * AudioContext with a pulsesink destination, and `<audio>` playback of WAV.
+ * AudioContext (WebKit feeds a track to WebAudio through deinterleave) with a
+ * pulsesink destination, and `<audio>` playback of WAV.
  * scripts/tauri-linux-build/Dockerfile stages exactly these.
  */
 export const BUNDLED_GSTREAMER_PLUGINS: readonly string[] = [
@@ -87,6 +88,7 @@ export const BUNDLED_GSTREAMER_PLUGINS: readonly string[] = [
 	"libgstaudioresample.so",
 	"libgstautodetect.so",
 	"libgstcoreelements.so",
+	"libgstinterleave.so",
 	"libgstplayback.so",
 	"libgstpulseaudio.so",
 	"libgsttypefindfunctions.so",

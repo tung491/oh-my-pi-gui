@@ -103,7 +103,7 @@ describe("assertMediaFramework", () => {
 	}
 
 	it("accepts exactly the allowlisted plugins with the libpulse client and the scanner", () => {
-		expect(BUNDLED_GSTREAMER_PLUGINS).toHaveLength(10);
+		expect(BUNDLED_GSTREAMER_PLUGINS).toHaveLength(11);
 		expect(() => assertMediaFramework(appDir())).not.toThrow();
 	});
 
