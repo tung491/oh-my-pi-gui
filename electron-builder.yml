@@ -92,7 +92,7 @@ nsis:
 portable:
   artifactName: Sai-ATLAS-${version}-portable.${ext}
 
-# Linux packages build from electron-builder.linux.yml (bun run package:linux).
+# Linux packages build with Tauri in an Ubuntu 24.04 container (bun run package:linux).
 
 publish:
   provider: github

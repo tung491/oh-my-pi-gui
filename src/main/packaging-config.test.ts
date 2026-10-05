@@ -26,17 +26,8 @@ interface BuilderConfig {
 	nsis?: { guid?: string; shortcutName?: string; artifactName?: string };
 	portable?: { artifactName?: string };
 	electronLanguages?: string[];
-	linux?: {
-		executableName?: string;
-		syncDesktopName?: boolean;
-		maintainer?: string;
-		target?: { target?: string; arch?: string[] }[];
-		desktop?: { entry?: Record<string, string> };
-	};
-	appImage?: { executableArgs?: string[]; artifactName?: string };
-	deb?: { packageName?: string; artifactName?: string };
-	toolsets?: { appimage?: string };
-	extraMetadata?: { name?: string; productName?: string; desktopName?: string; homepage?: string };
+	linux?: unknown;
+	extraMetadata?: { name?: string; productName?: string };
 	publish?: { provider?: string; owner?: string; repo?: string };
 }
 
@@ -186,72 +177,6 @@ describe("Windows package config", () => {
 	});
 });
 
-describe("Linux package config", () => {
-	const file = "electron-builder.linux.yml";
-	const read = (name: string): BuilderConfig =>
-		parse(fs.readFileSync(path.join(PACKAGE_ROOT, name), "utf8")) as BuilderConfig;
-
-	it("ships the Linux sidecar and window icon as bundle resources", () => {
-		const config = read(file);
-		expect(config.extraResources).toContainEqual({ from: "resources/omp.linux-x64", to: "omp" });
-		expect(config.extraResources).toContainEqual({ from: "resources/icon.png", to: "icon.png" });
-		expect(
-			config.protocols?.flatMap(protocol => protocol.schemes ?? []),
-			`${file} ships no URL scheme`,
-		).toContain("omp");
-	});
-
-	it("builds an x64 AppImage and deb that share one desktop identity", () => {
-		const config = read(file);
-		expect(config.linux?.target).toEqual([
-			{ target: "AppImage", arch: ["x64"] },
-			{ target: "deb", arch: ["x64"] },
-		]);
-		expect(config.linux?.executableName).toBe("sai-atlas");
-		// package.json desktopName is the one source: Electron uses it as the Wayland
-		// app_id and X11 WM_CLASS, and syncDesktopName names the entry and
-		// StartupWMClass after it.
-		expect(config.extraMetadata?.desktopName).toBeUndefined();
-		expect(config.linux?.syncDesktopName).toBe(true);
-		expect(config.deb?.packageName).toBe("sai-atlas");
-		expect(config.linux?.desktop?.entry?.StartupWMClass).toBeUndefined();
-		expect(config.linux?.maintainer).toBe("Tung Son Do <dosontung007@gmail.com>");
-		expect(config.extraMetadata?.homepage).toBe("https://github.com/tung491/oh-my-pi-gui");
-	});
-
-	it("names the Linux desktop identity after the app id", () => {
-		// The GlobalShortcuts portal registers the app by this id, and GNOME needs
-		// a reverse-DNS one that an installed .desktop file of the same name backs.
-		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
-			desktopName?: string;
-		};
-		expect(pkg.desktopName).toBe(`${APP_ID}.desktop`);
-	});
-
-	it("never writes --no-sandbox into the AppImage launch command", () => {
-		const config = read(file);
-		expect(config.toolsets?.appimage).toBe("1.0.3");
-		expect(config.appImage?.executableArgs).toEqual([]);
-	});
-
-	it("keeps a Chromium locale pak and the release owner", () => {
-		const config = read(file);
-		expect(config.electronLanguages).toContain("en-US");
-		expect(config.publish).toEqual({ provider: "github", owner: "tung491", repo: "oh-my-pi-gui" });
-	});
-
-	it("packages Linux only through the Linux config", () => {
-		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
-			scripts: Record<string, string>;
-		};
-		expect(pkg.scripts["package:linux"]).toBe(
-			"bun run build && electron-builder --config electron-builder.linux.yml --linux --x64",
-		);
-		// The default config packages resources/omp, the macOS arm64 sidecar.
-		expect(read("electron-builder.yml").linux).toBeUndefined();
-	});
-});
-
 /**
  * electron-builder derives the NSIS GUID as
  * `UUID.v5(appId, UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3"))` (NsisTarget.js) —
@@ -267,22 +192,40 @@ function artifactFile(pattern: string | undefined, macros: Record<string, string
 }
 
 /** The option block that names each electron-builder target's output file. */
-const ARTIFACT_OPTIONS: Record<string, "nsis" | "portable" | "appImage" | "deb"> = {
+const ARTIFACT_OPTIONS: Record<string, "nsis" | "portable"> = {
 	nsis: "nsis",
 	portable: "portable",
-	AppImage: "appImage",
-	deb: "deb",
 };
 
 describe("product identity in every builder config", () => {
 	const configs = builderConfigs();
 
 	it("names the product and app id the main process uses", () => {
-		expect(configs.length).toBeGreaterThanOrEqual(4);
+		expect(configs.length).toBeGreaterThanOrEqual(3);
 		for (const { file, config } of configs) {
 			expect(config.productName, file).toBe(PRODUCT_NAME);
 			expect(config.appId, file).toBe(APP_ID);
 		}
+	});
+
+	it("leaves Linux packaging to the Tauri container build", () => {
+		// A bare host build on a newer Ubuntu links past the 24.04 glibc floor, so
+		// package:linux is the ubuntu:24.04 container build and no Electron config
+		// packages Linux (the default one would ship the macOS arm64 sidecar).
+		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+			scripts: Record<string, string>;
+		};
+		expect(pkg.scripts["package:linux"]).toBe("bash scripts/tauri-linux-build.sh");
+		for (const { file, config } of configs) expect(config.linux, file).toBeUndefined();
+	});
+
+	it("names the Linux desktop identity after the app id", () => {
+		// Electron uses package.json desktopName as the Wayland app_id when it runs
+		// on Linux (dev and the Playwright suite); GNOME needs a reverse-DNS one.
+		const pkg = JSON.parse(fs.readFileSync(path.join(PACKAGE_ROOT, "package.json"), "utf8")) as {
+			desktopName?: string;
+		};
+		expect(pkg.desktopName).toBe(`${APP_ID}.desktop`);
 	});
 
 	it("keeps the old install's NSIS GUID so Windows upgrades in place", () => {
@@ -299,7 +242,7 @@ describe("product identity in every builder config", () => {
 		for (const { file, config } of configs) {
 			const names: [string, string | undefined][] = [];
 			if (config.mac) names.push(["mac", config.mac.artifactName]);
-			for (const { target } of [...(config.win?.target ?? []), ...(config.linux?.target ?? [])]) {
+			for (const { target } of config.win?.target ?? []) {
 				const option = target ? ARTIFACT_OPTIONS[target] : undefined;
 				expect(option, `${file} builds an unknown target ${target}`).toBeDefined();
 				if (option) names.push([option, config[option]?.artifactName]);
