@@ -4,7 +4,7 @@
 use std::process::ExitCode;
 
 #[cfg(target_os = "linux")]
-use sai_atlas_lib::{appimage_handover, electron_relauncher};
+use sai_atlas_lib::{appimage_handover, electron_relauncher, gstreamer_env};
 use sai_atlas_lib::{omp, ports, product, webview};
 
 fn main() -> ExitCode {
@@ -40,6 +40,10 @@ fn main() -> ExitCode {
 
     #[cfg(target_os = "linux")]
     {
+        // The AppImage's bundled GStreamer keeps its plugin registry in the
+        // app's own cache dir. This edits the environment, so it runs while
+        // this is the only thread, before GTK, GStreamer or WebKit start.
+        gstreamer_env::isolate_registry();
         // tao sets the Wayland app_id from g_get_prgname(), which defaults to the
         // binary name; GTK only sets prgname when it is unset, so this wins.
         glib::set_prgname(Some(product::APP_ID));

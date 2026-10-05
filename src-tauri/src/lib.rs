@@ -10,6 +10,8 @@ pub mod bridge;
 pub mod ctx;
 #[cfg(target_os = "linux")]
 pub mod electron_relauncher;
+#[cfg(target_os = "linux")]
+pub mod gstreamer_env;
 pub mod i18n;
 pub mod paths;
 pub mod ports;
