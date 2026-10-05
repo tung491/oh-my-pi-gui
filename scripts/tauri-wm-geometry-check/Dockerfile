@@ -17,7 +17,7 @@ RUN apt-get update \
 	&& apt-get install -y --no-install-recommends \
 		ca-certificates fonts-dejavu-core \
 		libwebkit2gtk-4.1-0 libayatana-appindicator3-1 gstreamer1.0-pipewire gstreamer1.0-plugins-good \
-		bubblewrap xdg-dbus-proxy libgtk-3-0t64 \
+		bubblewrap xdg-dbus-proxy desktop-file-utils xdg-utils libgtk-3-0t64 \
 		xvfb openbox dbus xdotool x11-utils wmctrl jq \
 	&& rm -rf /var/lib/apt/lists/*
 
