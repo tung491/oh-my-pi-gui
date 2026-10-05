@@ -153,6 +153,9 @@ describe("desktop", () => {
 			),
 		).toBe(1);
 		await $(ABORT).click();
+		// The run is over only once Abort is gone: Send then moves back to its idle
+		// position as a new node, which the next test's first lookup must not race.
+		await expect($(ABORT)).not.toBeExisting();
 		await expect(composer).toHaveValue("");
 	});
 
