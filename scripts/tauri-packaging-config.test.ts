@@ -13,7 +13,15 @@ import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { APP_ID, PRODUCT_NAME } from "../src/shared/product";
 import { BUNDLED_GSTREAMER_PLUGINS } from "../src-tauri/linux/finalize-appimage";
-import { COMPAT_SYMLINKS, DESKTOP_ENTRY_ID, finalizeDeb } from "../src-tauri/linux/finalize-deb";
+import {
+	COMPAT_SYMLINKS,
+	DEB_DEPENDS,
+	DEB_RECOMMENDS,
+	DESKTOP_ENTRY_ID,
+	finalizeDeb,
+	TRAY_ALTERNATION,
+	TRAY_DEPENDENCY,
+} from "../src-tauri/linux/finalize-deb";
 import { MAC_UPDATE_FLOOR } from "./mac-update-floor";
 import { assetNames, darwinReleaseFor } from "./release-feeds";
 import { SIDECAR_SOURCES, stagedSidecarPath } from "./stage-tauri-sidecar";
@@ -44,7 +52,12 @@ interface TauriConfig {
 		windows?: { nsis?: { installMode?: string; installerHooks?: string } };
 		linux?: {
 			appimage?: { bundleMediaFramework?: boolean };
-			deb?: { depends?: string[]; desktopTemplate?: string; files?: Record<string, string> };
+			deb?: {
+				depends?: string[];
+				recommends?: string[];
+				desktopTemplate?: string;
+				files?: Record<string, string>;
+			};
 		};
 	};
 }
@@ -286,6 +299,7 @@ describe("renderer security", () => {
 
 describe("Linux package", () => {
 	const depends = () => platform("linux").bundle?.linux?.deb?.depends ?? [];
+	const recommends = () => platform("linux").bundle?.linux?.deb?.recommends ?? [];
 
 	it("deb control names the maintainer, homepage and description of the Electron package", () => {
 		// The bundler writes Maintainer from bundle.publisher (Cargo.toml has no authors),
@@ -303,25 +317,48 @@ describe("Linux package", () => {
 		expect(bundle?.longDescription).toBe(description);
 	});
 
-	it("deb depends on the sandbox, gstreamer and omp:// registration tools, without the bundler's own entries", () => {
-		// WebKit treats a missing bwrap as fatal once its web-process sandbox is on.
-		// The deep-link plugin registers omp:// by running update-desktop-database
-		// (desktop-file-utils) and xdg-mime (xdg-utils); without them every start logs
-		// a failed registration. The bundler appends libwebkit2gtk-4.1-0, libgtk-3-0 and
-		// the tray's appindicator itself, so listing them here would duplicate them.
-		expect(depends()).toEqual([
-			"gstreamer1.0-pipewire",
-			"gstreamer1.0-plugins-good",
-			"bubblewrap",
-			"xdg-dbus-proxy",
+	it("deb depends only on what the app cannot start without", () => {
+		// The 0.9.x Electron updater installs this package with dpkg -i and then
+		// apt-get install -f -y, which removes it when a dependency cannot be installed,
+		// so every hard dependency is a way to lose the app. WebKit treats a missing bwrap
+		// as fatal once its web-process sandbox is on, and needs xdg-dbus-proxy for it.
+		// The bundler appends the tray's appindicator, libwebkit2gtk-4.1-0 and libgtk-3-0
+		// itself, so listing them here would duplicate them.
+		expect(depends()).toEqual(["bubblewrap", "xdg-dbus-proxy"]);
+		expect([...depends(), TRAY_DEPENDENCY, "libwebkit2gtk-4.1-0", "libgtk-3-0"].join(", ")).toBe(
+			DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY),
+		);
+	});
+
+	it("deb only recommends what the app runs without", () => {
+		// dpkg -i and apt-get install -f ignore Recommends, so a missing one never blocks
+		// or undoes an update. Without desktop-file-utils and xdg-utils the deep-link plugin
+		// logs a failed omp:// registration (upgraders keep the handler 0.9.x registered);
+		// without gstreamer1.0-plugins-good dictation reports a failure (WebKit depends on it
+		// on Ubuntu anyway); gstreamer1.0-pipewire is unused by WebKit's capture.
+		expect(recommends()).toEqual([
 			"desktop-file-utils",
 			"xdg-utils",
+			"gstreamer1.0-plugins-good",
+			"gstreamer1.0-pipewire",
 		]);
+		expect(recommends().join(", ")).toBe(DEB_RECOMMENDS);
+	});
+
+	it("deb names the tray library as an alternation of the two appindicator packages", () => {
+		// The tray's loader opens libayatana-appindicator3 or libappindicator3, and panics
+		// when neither loads, so it stays a hard dependency; Ubuntu's Ayatana package conflicts
+		// with libappindicator3-1, which a 0.9.x install may carry, so a single package would
+		// force a swap during the update.
+		expect(TRAY_ALTERNATION).toBe("libayatana-appindicator3-1 | libappindicator3-1");
+		expect(DEB_DEPENDS).toBe(
+			"bubblewrap, xdg-dbus-proxy, libayatana-appindicator3-1 | libappindicator3-1, libwebkit2gtk-4.1-0, libgtk-3-0",
+		);
 	});
 
 	it("deb does not depend on gstreamer1.0-plugins-bad", () => {
 		// Dictation captures PCM through WebAudio; MediaRecorder stays unused.
-		expect(depends()).not.toContain("gstreamer1.0-plugins-bad");
+		expect([...depends(), ...recommends()]).not.toContain("gstreamer1.0-plugins-bad");
 	});
 
 	it("marks the deb install so the updater picks the dpkg path", () => {
@@ -348,7 +385,16 @@ describe("Linux package", () => {
 			};
 			put(
 				"DEBIAN/control",
-				"Package: sai-atlas\nVersion: 1.0.0\nArchitecture: amd64\nMaintainer: test\nDescription: test\n",
+				[
+					"Package: sai-atlas",
+					"Version: 1.0.0",
+					"Architecture: amd64",
+					"Maintainer: test",
+					`Depends: ${DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY)}`,
+					`Recommends: ${DEB_RECOMMENDS}`,
+					"Description: test",
+					"",
+				].join("\n"),
 			);
 			put("usr/bin/sai-atlas", "binary", 0o755);
 			put("usr/lib/Sai ATLAS/omp", "sidecar", 0o755);
@@ -381,6 +427,9 @@ describe("Linux package", () => {
 			expect(md5sums).toContain("  usr/share/applications/vn.io.vif.saiatlas.desktop\n");
 			expect(md5sums).not.toContain("opt/Sai ATLAS/sai-atlas");
 			expect(fs.readFileSync(path.join(extracted, "control"), "utf8")).toContain("Package: sai-atlas");
+			const field = (name: string) => spawnSync("dpkg-deb", ["-f", deb, name], { encoding: "utf8" }).stdout.trim();
+			expect(field("Depends")).toBe(DEB_DEPENDS);
+			expect(field("Recommends")).toBe(DEB_RECOMMENDS);
 		} finally {
 			fs.rmSync(dir, { recursive: true, force: true });
 		}

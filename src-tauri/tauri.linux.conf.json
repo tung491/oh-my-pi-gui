@@ -15,12 +15,14 @@
       },
       "deb": {
         "depends": [
-          "gstreamer1.0-pipewire",
-          "gstreamer1.0-plugins-good",
           "bubblewrap",
-          "xdg-dbus-proxy",
+          "xdg-dbus-proxy"
+        ],
+        "recommends": [
           "desktop-file-utils",
-          "xdg-utils"
+          "xdg-utils",
+          "gstreamer1.0-plugins-good",
+          "gstreamer1.0-pipewire"
         ],
         "desktopTemplate": "linux/vn.io.vif.saiatlas.desktop",
         "files": {
