@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Linux runs on Tauri**: the Linux AppImage and `.deb` now run on a Tauri 2 shell with the system's WebKitGTK instead of Electron. 0.9.16 moves to it through its own updater, and settings, sessions and the `omp://` handler carry over. Start it with `GDK_BACKEND=x11` instead of `--ozone-platform=x11` to use XWayland.
+- **WebKit sandbox, always on**: every web page runs in WebKit's bubblewrap sandbox. The `.deb` depends on `bubblewrap` and `xdg-dbus-proxy`, and the AppImage needs `libwebkit2gtk-4.1-0` on the host, which brings both.
+- **`.deb` layout**: the launcher is `/usr/bin/sai-atlas`, the bundled agent is `/usr/lib/Sai ATLAS/omp` (off `PATH`), and `/opt/Sai ATLAS/sai-atlas` stays as a link to the launcher. `desktop-file-utils`, `xdg-utils` and the GStreamer plugins are recommended rather than required.
+- **One-prompt `.deb` updates**: an in-app update checks the package's SHA-512, asks for your password once and installs with `apt-get install --no-remove`, so apt never removes other packages and a failed update keeps the installed version. When apt cannot resolve the dependencies, the update banner shows the `sudo apt install` command to run by hand.
+- **AppImage update from 0.9.16**: the new AppImage reopens by itself after the update. If Sai ATLAS does not reopen by itself after an update, start the new `.AppImage` once by hand; its file name now carries the version.
+- **Dictation and speech in the AppImage**: the AppImage bundles the audio plugins it needs and reaches the microphone and speakers through the PulseAudio socket.
+- **Memory**: with one tab at idle, the Linux shell uses 72–75 % of the Electron shell's memory (PSS), and total memory including the agent is lower than Electron's in every measured case.
+- macOS and Windows are unchanged and still run on Electron.
+
+### Removed
+
+- **AppArmor profiles on Linux**: the `.deb` no longer ships an AppArmor profile, and the AppImage no longer needs the `sai-atlas-appimage` profile; unload and delete it with `sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`.
+
+### Known issues
+
+- Updating from 0.9.16 on a desktop without GNOME, or any machine where `dpkg -s libwebkit2gtk-4.1-0` fails: run `sudo apt install libwebkit2gtk-4.1-0` first.
+- If Sai ATLAS is missing after the update: `sudo apt --fix-broken install`, or download the package and run `sudo apt install ./sai-atlas_0.9.17_amd64.deb`.
+- In the AppImage on Ubuntu 26.04, spell checking in text fields does not work; the `.deb` has it.
+- Startup needs the standard `XDG_RUNTIME_DIR` (`/run/user/<uid>`), which every desktop login session sets; without it the WebKit sandbox cannot start.
+- The first start after the update from 0.9.16 shows the local-model welcome screen once more; what you choose there is remembered from then on.
+- When an update asks you to quit and reopen Sai ATLAS before it can install, it downloads the update again after the reopen.
+
 ## [0.9.16] - 2026-10-04
 
 ### Added

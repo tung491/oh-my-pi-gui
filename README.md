@@ -22,7 +22,7 @@
 
 Keep the conversation, code changes, and agent activity in one place. Review a diff while another session works in its own Git worktree, compare two sessions in a split view, or open a tool-free Chat to think through an idea.
 
-Sai ATLAS is the AI assistant for SAI OS, a desktop GUI built on the [omp](https://github.com/can1357/oh-my-pi) coding agent. The Electron app bundles its own agent: **users of the DMG, NSIS, and portable packages do not need to install omp, Bun, or Node separately.** It complements the TUI and shares the usual `~/.omp` configuration and sessions.
+Sai ATLAS is the AI assistant for SAI OS, a desktop GUI built on the [omp](https://github.com/can1357/oh-my-pi) coding agent. Every package bundles its own agent: **users of the DMG, NSIS, portable, `.deb`, and AppImage packages do not need to install omp, Bun, or Node separately.** It complements the TUI and shares the usual `~/.omp` configuration and sessions.
 
 [Features](#en-features) · [What's new in 0.9.10](#en-recent) · [Gallery](#en-gallery) · [Install](#en-install) · [Shortcuts](#en-shortcuts) · [Development](#en-development) · [Help](#en-help) · [Releasing](#en-release)
 
@@ -168,26 +168,24 @@ Sai ATLAS builds on Electron 44 need macOS 13 or later. The updater does not off
 | Debian package (recommended) | `sai-atlas_<version>_amd64.deb` from [Releases](https://github.com/tung491/oh-my-pi-gui/releases) |
 | AppImage | `Sai-ATLAS-<version>-x86_64.AppImage` from [Releases](https://github.com/tung491/oh-my-pi-gui/releases) |
 
-On Linux, `sudo apt install ./sai-atlas_<version>_amd64.deb` installs the app to `/opt/Sai ATLAS`, the `sai-atlas` launcher (the agent CLI keeps the name `omp`), the `omp://` link handler, and an AppArmor profile that keeps Chromium's sandbox working under Ubuntu's user-namespace restriction. Start it from the app grid or with `sai-atlas /abs/project/dir`. No release has shipped a Linux package under the old name, but if you built and installed the `omp` package from source, remove it first with `sudo apt remove omp`.
+On Linux, Sai ATLAS needs Ubuntu 24.04 or later (glibc 2.39). `sudo apt install ./sai-atlas_<version>_amd64.deb` installs the `sai-atlas` launcher at `/usr/bin/sai-atlas` (the agent CLI keeps the name `omp`), the bundled agent at `/usr/lib/Sai ATLAS/omp` (off `PATH`), the `omp://` link handler, and a compatibility link at `/opt/Sai ATLAS/sai-atlas`, the path older versions started from. The package depends on `bubblewrap` and `xdg-dbus-proxy`, which run the WebKit sandbox; the sandbox is always on, and no AppArmor profile is shipped or needed. Registering `omp://` uses `desktop-file-utils` and `xdg-utils`, which `apt install` adds as recommended packages and `dpkg -i` skips. Start it from the app grid or with `sai-atlas /abs/project/dir`. No release has shipped a Linux package under the old name, but if you built and installed the `omp` package from source, remove it first with `sudo apt remove omp`.
 
-In-app `.deb` updates have one known limit: electron-updater checks the downloaded `.deb`'s SHA-512 as you, and then `dpkg -i` reads that same file as root from your user-writable cache. Another program running as your user could swap the file in between. If that matters to you, install updates by hand with `sudo apt install ./sai-atlas_<version>_amd64.deb`.
+In-app `.deb` updates download the package to `~/.cache/@oh-my-pi/omp-gui/updates/`, check its SHA-512 against the release feed, ask for your password once, and install it with `apt-get install --no-remove`. apt resolves the dependencies before it changes anything and never removes other packages to make room. When it cannot resolve them, the installed version stays and the update banner shows the command to run by hand (`sudo apt install <path-to-the-package>`). The SHA-512 check runs as you, and apt then reads the same file as root from that user-writable cache, so another program running as your user could swap the file in between. If that matters to you, install updates by hand with `sudo apt install ./sai-atlas_<version>_amd64.deb`.
 
-For the AppImage, save it as `~/Applications/Sai-ATLAS.AppImage`, run `chmod +x` on it, and install this AppArmor profile as `sai-atlas-appimage` with `sudo install -m 0644 sai-atlas-appimage /etc/apparmor.d/sai-atlas-appimage && sudo apparmor_parser -r /etc/apparmor.d/sai-atlas-appimage`:
+For the AppImage, run `chmod +x` on it and start it. It needs `libwebkit2gtk-4.1-0` on the host (stock Ubuntu GNOME desktops have it; otherwise `sudo apt install libwebkit2gtk-4.1-0`), which also brings `bubblewrap` and `xdg-dbus-proxy`. The WebKit sandbox is always on here too and needs no AppArmor profile. Dictation and speech playback reach the microphone and speakers through the PulseAudio socket, which Ubuntu's stock `pipewire-pulse` provides. A started AppImage registers itself as the `omp://` handler when `desktop-file-utils` and `xdg-utils` are installed, and in-app updates replace the file in place. In the AppImage on Ubuntu 26.04, spell checking in text fields does not work; the `.deb` has it.
 
-```
-abi <abi/4.0>,
-include <tunables/global>
+Sai ATLAS runs natively on Wayland; start it with `GDK_BACKEND=x11 sai-atlas` to use XWayland. On Wayland the compositor places windows, so the quick-entry bar may not be centred or kept on top. Under XWayland, global shortcuts fire only while a Sai ATLAS window is focused. Startup needs the standard `XDG_RUNTIME_DIR` (`/run/user/<uid>`), which every desktop login session sets; the WebKit sandbox cannot start without it.
 
-profile sai-atlas-appimage "@{HOME}/Applications/Sai-ATLAS.AppImage" flags=(unconfined) {
-  userns,
+Input methods: if Chinese or Vietnamese input through ibus or fcitx5 does not work in the composer or the quick-entry bar on native Wayland, start Sai ATLAS with `GDK_BACKEND=x11`.
 
-  include if exists <local/sai-atlas-appimage>
-}
-```
+**Migrating from 0.9.16 on Linux.** Linux builds now run on Tauri and the system's WebKitGTK instead of Electron, and 0.9.16 moves to them through its own updater. Settings and sessions carry over.
 
-The profile grants user namespaces to whatever file sits at that path, and `~/Applications` is writable by any program running as you. Keep that directory for the Sai ATLAS AppImage only. When you stop using it, unload the profile and then delete it: `sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage` (reloading AppArmor alone does not unload a deleted profile). Remove an older `omp-appimage` profile the same way. Without the profile, the AppImage runtime falls back to `--no-sandbox` on Ubuntu 24.04+, which leaves the renderer unsandboxed, so prefer the `.deb`. `omp://` links reach the AppImage only with desktop integration such as AppImageLauncher. Sai ATLAS runs natively on Wayland; start it with `--ozone-platform=x11` to use XWayland. On Wayland the compositor places windows, so the quick-entry bar may not be centred or kept on top. Under XWayland, global shortcuts fire only while a Sai ATLAS window is focused.
-
-Input methods: if Chinese or Vietnamese input through ibus or fcitx5 does not work on native Wayland, in the composer or the quick-entry bar, start Sai ATLAS with `--ozone-platform=x11`.
+- Updating from 0.9.16 on a desktop without GNOME, or any machine where `dpkg -s libwebkit2gtk-4.1-0` fails: run `sudo apt install libwebkit2gtk-4.1-0` first.
+- If Sai ATLAS is missing after the update: `sudo apt --fix-broken install`, or download the package and run `sudo apt install ./sai-atlas_0.9.17_amd64.deb`.
+- If Sai ATLAS does not reopen by itself after an update, start the new `.AppImage` once by hand; its file name now carries the version.
+- The first start after the update shows the local-model welcome screen once more; what you choose there is remembered from then on.
+- Replace `--ozone-platform=x11` in launchers and scripts with the environment variable `GDK_BACKEND=x11`. The copy that reopens by itself after the update can take its environment from your systemd user session rather than from a terminal.
+- The AppImage no longer needs the `sai-atlas-appimage` AppArmor profile. Unload it, then delete it: `sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage` (reloading AppArmor alone does not unload a deleted profile). Remove an older `omp-appimage` profile the same way.
 
 Open the DMG and drag **Sai ATLAS** into **Applications**. The build is ad-hoc signed but not notarized. If macOS blocks the first launch, use **right-click → Open**, or **System Settings → Privacy & Security → Open Anyway**, after confirming the download's source.
 
@@ -229,7 +227,7 @@ On Linux and Windows, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+S
 
 **Quick entry** opens a small bar over whatever app you are in. Choose **Chat**, or **Agent** with the Work folder or a recent workspace, type, and press Enter: the message is sent from a new tab in the main window, which comes to the front. Shift+Enter adds a line. Esc or clicking away closes the bar and keeps the draft. A shell command (`!ls`) or Python code (`$ print(1)`) opens in the new tab unsent, and a message that cannot be delivered, for example at the tab limit, stays in the bar with the reason. Change the chord or turn it off in Settings → Keyboard Shortcuts. `⇧⌘O` (`Ctrl+Shift+O`) still shows or hides the window.
 
-On GNOME Wayland with the `.deb`, the first launch asks you to allow both global shortcuts. GNOME then owns the keys: change or remove them in Settings → Apps → Sai ATLAS → Global Shortcuts. A chord changed in Sai ATLAS applies after a restart, when GNOME asks again; turning quick entry off takes effect at once. Without the portal (an AppImage without desktop integration, wlroots compositors such as Sway, or a declined dialog), bind `sai-atlas --quick-entry` as a custom keyboard shortcut, or `~/Applications/Sai-ATLAS.AppImage --quick-entry` for the AppImage; on Sway, `bindsym ctrl+shift+space exec sai-atlas --quick-entry`.
+On GNOME Wayland with the `.deb`, the first launch asks you to allow both global shortcuts. GNOME then owns the keys: change or remove them in Settings → Apps → Sai ATLAS → Global Shortcuts. A chord changed in Sai ATLAS applies after a restart, when GNOME asks again; turning quick entry off takes effect at once. Without the portal (an AppImage without desktop integration, wlroots compositors such as Sway, or a declined dialog), bind `sai-atlas --quick-entry` as a custom keyboard shortcut, or the AppImage's path followed by `--quick-entry` for the AppImage; on Sway, `bindsym ctrl+shift+space exec sai-atlas --quick-entry`.
 
 <a id="en-development"></a>
 ### Development
@@ -262,7 +260,7 @@ Never stage `packages/gui/` into the monorepo: its untracked status there is int
 
 #### Build from source
 
-**Prerequisites:** Git and [Bun](https://bun.sh) **≥ 1.4**. macOS is required for the macOS sidecar and DMG commands; Windows x64 can be cross-built from macOS or Linux when the neighboring monorepo is available. Linux x64 packages build on a Linux x64 host.
+**Prerequisites:** Git and [Bun](https://bun.sh) **≥ 1.4**. macOS is required for the macOS sidecar and DMG commands; Windows x64 can be cross-built from macOS or Linux when the neighboring monorepo is available. Linux x64 packages build on a Linux x64 host with Docker.
 
 ```bash
 # Clone the monorepo fork, then nest the GUI repository inside it.
@@ -286,12 +284,21 @@ bun run package:mac:x64 -- --publish never      # dist/Sai-ATLAS-<version>.dmg, 
 bun run build:omp:win                           # Windows x64 -> resources/omp.exe
 bun run package:win -- --publish never           # Windows NSIS + portable installers
 bun run build:omp:linux                        # Linux x64 -> resources/omp.linux-x64
-bun run package:linux -- --publish never        # dist/Sai-ATLAS-<version>-x86_64.AppImage, dist/sai-atlas_<version>_amd64.deb, dist/latest-linux.yml
+bun run package:linux                           # AppImage + .deb -> src-tauri/target-linux-2404/x86_64-unknown-linux-gnu/release/bundle/
 ```
 
-The Linux config (`electron-builder.linux.yml`) bundles `resources/omp.linux-x64`; always package Linux with `package:linux`. On a Linux host, `bun run build:omp` writes `resources/omp` for `bun run dev`.
+Linux packages are built from the Tauri shell in `src-tauri/`. `package:linux` runs `scripts/tauri-linux-build.sh`, which builds the AppImage and the `.deb` inside an `ubuntu:24.04` container, so the libraries the AppImage bundles need no newer glibc than Ubuntu 24.04's; the finalize scripts in `src-tauri/linux/` refuse anything newer. It stages `resources/omp.linux-x64` as the bundled agent (`scripts/stage-tauri-sidecar.ts`). The update feed `latest-linux.yml` is written at release time by `scripts/release-feeds.ts`. On a Linux host, `bun run build:omp` writes `resources/omp` for `bun run dev` and `bun run dev:tauri`.
 
-To try Wayland global shortcuts from `bun run dev`, the portal needs a desktop entry for the app id: create `~/.local/share/applications/vn.io.vif.saiatlas.desktop` with `Name=Sai ATLAS` and an `Exec=` line that runs your dev launcher. It shadows the `.deb`'s entry of the same id, so delete it before testing an installed `.deb`.
+To build or run the Tauri shell on the host (`bun run dev:tauri`, the Rust tests), install rustup without letting it edit `PATH` (scripts read cargo from `~/.cargo/bin`, see `scripts/rust-pins.env`, because a distro `cargo` can shadow it), the toolchain channel in `src-tauri/rust-toolchain.toml`, `tauri-cli` 2, and the WebKitGTK build and sandbox packages that CI's `tauri-linux` job also installs:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+~/.cargo/bin/rustup default stable
+~/.cargo/bin/cargo install tauri-cli --version "^2" --locked
+sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev build-essential gstreamer1.0-pipewire gstreamer1.0-plugins-good bubblewrap xdg-dbus-proxy
+```
+
+To try Wayland global shortcuts from `bun run dev:tauri` or `bun run dev`, the portal needs a desktop entry for the app id: create `~/.local/share/applications/vn.io.vif.saiatlas.desktop` with `Name=Sai ATLAS` and an `Exec=` line that runs your dev launcher. It shadows the `.deb`'s entry of the same id, so delete it before testing an installed `.deb`.
 
 Inside the monorepo, `bun install` resolves `packages/gui` as a workspace member and never updates this repository's `bun.lock`, which CI installs with `--frozen-lockfile`. After changing dependencies in `package.json`, regenerate the lockfile from a checkout outside the monorepo, for example `git worktree add --detach /tmp/omp-gui-lock HEAD`, then `bun install --ignore-scripts` there, and copy its `bun.lock` back.
 
@@ -308,12 +315,26 @@ The Windows configuration targets x64 and bundles `resources/omp.exe`. It produc
 ```bash
 bun run dev                         # HMR, using resources/omp
 OMP_SIDECAR=source bun run dev       # explicit dev override: monorepo agent source
+bun run dev:tauri -- --user-data-dir=$(mktemp -d)   # Tauri shell (Linux), throwaway profile
 bunx vitest run                     # GUI tests
 bun run check:types                 # GUI type checks
 bun run build                      # production GUI build and main-bundle check
 ```
 
 Run Biome on touched supported files as well. Changes to agent/RPC code belong in the monorepo and require rebuilding the bundled sidecar before validating a packaged GUI.
+
+On Ubuntu 24.04+, Electron's `bun run dev` needs a `userns` AppArmor profile for the dev Electron binary, because Ubuntu restricts unprivileged user namespaces; `bun run dev:tauri` needs none. Save this as `omp-dev-electron`, with the path printed by `node -p "require('electron')"`, and load it with `sudo install -m 0644 omp-dev-electron /etc/apparmor.d/omp-dev-electron && sudo apparmor_parser -r /etc/apparmor.d/omp-dev-electron`. Do not make `chrome-sandbox` setuid root.
+
+```
+abi <abi/4.0>,
+include <tunables/global>
+
+profile omp-dev-electron "/path/printed/by/node" flags=(unconfined) {
+  userns,
+
+  include if exists <local/omp-dev-electron>
+}
+```
 
 #### Reproduce the screenshots
 
@@ -344,12 +365,13 @@ Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light th
 | Native addon download fails | Check registry access and whether that version is published. If necessary, from the monorepo root run `bun --cwd=packages/natives run build` with the required Rust toolchain, then rebuild the sidecar. |
 | Intel sidecar exits immediately | Check the sidecar architecture and package with `bun run package:mac:x64`, not the default config. |
 | A command or integration is unavailable | Some slash commands pass through or are unsupported. Configure external services/tools separately; use SSH settings rather than the disabled `/ssh` management commands. |
-| The AppImage starts with `--no-sandbox` | Install the `sai-atlas-appimage` AppArmor profile above for the exact path `~/Applications/Sai-ATLAS.AppImage`, or use the `.deb`. |
-| `bun run dev` exits with `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ restricts unprivileged user namespaces. Install a `userns` profile for the dev Electron binary: use the AppImage profile above, named `omp-dev-electron`, with the path printed by `node -p "require('electron')"`. Do not make `chrome-sandbox` setuid root. |
+| The AppImage exits at once, naming a missing library such as `libEGL.so.1` | Install `libwebkit2gtk-4.1-0`. The AppImage relies on the graphics libraries and sandbox tools that package brings. |
+| Startup fails with `Failed to fully launch dbus-proxy` | Start Sai ATLAS from a desktop login session, which sets `XDG_RUNTIME_DIR=/run/user/<uid>`; shells opened with `su` or `ssh`, and cron jobs, often lack it. |
+| `bun run dev` exits with `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ restricts unprivileged user namespaces. Install the `omp-dev-electron` profile from [Daily development](#daily-development). Do not make `chrome-sandbox` setuid root. |
 | No tray icon on Ubuntu | Enable the Ubuntu AppIndicators extension. |
-| A `.deb` update asks for the password twice, or the window freezes | Cancelling pkexec triggers electron-updater's `apt-get -f` retry, and the window waits while the prompt is open. |
+| A `.deb` update says Sai ATLAS can't ask for administrator access | The running copy was started in a way that blocks the password prompt, for example by the previous version's updater. Quit and reopen Sai ATLAS, then install again; the update downloads again. |
+| A `.deb` update shows a `sudo apt install …` command instead of installing | apt could not resolve the packages the update needs, so nothing changed. Run the command in a terminal to see why and install it. |
 | Quick entry or `Ctrl+Shift+O` does nothing while another app is focused | On GNOME Wayland, use the `.deb` and allow the shortcuts when asked; if you declined, allow or reset them in Settings → Apps → Sai ATLAS. Without the portal, bind `sai-atlas --quick-entry` as a custom shortcut. Settings → Keyboard Shortcuts shows the quick-entry status, and a refused registration is logged to `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`. |
-| `Gtk-ERROR … GTK 2/3 symbols detected` | Start Sai ATLAS with `--gtk-version=3`. |
 
 <a id="en-release"></a>
 ### Release process (maintainers)
@@ -360,12 +382,12 @@ Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light th
 Releases belong only to [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui/releases). Preserve the two-repository boundary throughout:
 
 1. **Start with clean checkouts and sync upstream.** From the **monorepo root**, run `bash packages/gui/scripts/sync-upstream.sh`. It fetches/merges `upstream/main`, installs dependencies, re-provisions natives, generates the statistics assets, rebuilds/smoke-tests the sidecar, and builds/checks/tests the GUI. If there are conflicts, resolve and commit the monorepo merge, then run `SKIP_MERGE=1 bash packages/gui/scripts/sync-upstream.sh`. Do not substitute a hand-rolled merge. Review and commit any remaining monorepo changes there; push them only to the fork's `origin`.
-2. **Prepare the GUI release.** In `packages/gui/`, bump `package.json`, write the release's `CHANGELOG.md` entry, and update both language sections' install links and source/release notes.
+2. **Prepare the GUI release.** In `packages/gui/`, bump `package.json` and `src-tauri/Cargo.toml` to the same version (a packaging test fails when they differ), write the release's `CHANGELOG.md` entry, and update both language sections' install links and source/release notes.
 3. **Verify the GUI:** `bunx vitest run && bun run check:types && bun run build`; check touched supported files with Biome.
 4. **Record the release source.** Commit GUI release changes in the GUI repository, tag `vX.Y.Z`, and push `main` plus the tag to its `origin`. Keep both checkouts clean before producing release artifacts.
 5. **Build all sidecars:** `bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`. Run the two macOS sidecars and the Windows sidecar's `--smoke-test` on compatible hosts. On a Linux x64 host, run `bun run build:omp:linux` and `resources/omp.linux-x64 --smoke-test`. Cross-compilation alone is not runtime verification.
-6. **Build and inspect installers:** build both DMGs with the macOS commands and Windows installers with `bun run package:win -- --publish never`. Mount each DMG; verify its app seal with `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"`, its bundled sidecar architecture with `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"`, and the Windows package's `win-unpacked/resources/omp.exe` with `file`. On compatible hosts, launch each package, confirm sidecar `ready`, a successful `get_settings` RPC, and a settings toggle that persists. On macOS, also check that the Dock, About and menu names read Sai ATLAS, that `codesign -dv` shows `Identifier=vn.io.vif.saiatlas`, and that Finder shows the app icon (electron-builder converts it from the PNG). On Windows, install 0.9.10 and then the new setup: Apps & features must show one entry, "Sai ATLAS", the old omp shortcuts must be gone, and settings must be kept (the pinned `nsis.guid` upgrades in place). On Linux x64, run `bun run package:linux -- --publish never` and `bash scripts/deb-smoke.sh`, which installs the `.deb` in a clean Ubuntu 24.04 container and runs `e2e/packaged-smoke.e2e.ts` against it there (Docker required). Then install the `.deb` and the AppImage on the host. On each package, press the quick-entry chord and send one prompt.
-7. **Publish only verified artifacts.** Publish a GitHub Release with both DMGs, the Windows NSIS and portable installers, the Linux AppImage and `.deb` with `latest-linux.yml` (without it, Linux update checks fail), generated update metadata, and the changelog. **Until 1.0.0, every release also carries bridge copies:** byte-identical copies of the two DMGs named `omp-<version>-arm64.dmg` and `omp-<version>.dmg`, listed next to the Sai-ATLAS names in the combined `latest-mac.yml`. Macs on 0.9.x look only for the `omp-` names and otherwise report the installer missing. The combined `latest-mac.yml` must also carry `minimumSystemVersion: 22.0.0` (Darwin 22 is macOS 13; electron-builder does not write it), and `bun run check:mac-update-floor <path-to-latest-mac.yml>` must pass before you publish; the release body says the previous release is the last one for macOS 12. Those Macs keep `omp.app` after installing, and their update screen never shows release notes, so put the Mac migration steps from [Install & start](#en-install) (quit omp, install Sai ATLAS, trash `omp.app`, re-pin, grant access again) at the top of every release body until 1.0.0. Record the monorepo commit used for the sidecars, especially when it differs from upstream `main`. Never commit sidecar binaries or push to `upstream`.
+6. **Build and inspect installers:** build both DMGs with the macOS commands and Windows installers with `bun run package:win -- --publish never`. Mount each DMG; verify its app seal with `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"`, its bundled sidecar architecture with `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"`, and the Windows package's `win-unpacked/resources/omp.exe` with `file`. On compatible hosts, launch each package, confirm sidecar `ready`, a successful `get_settings` RPC, and a settings toggle that persists. On macOS, also check that the Dock, About and menu names read Sai ATLAS, that `codesign -dv` shows `Identifier=vn.io.vif.saiatlas`, and that Finder shows the app icon (electron-builder converts it from the PNG). On Windows, install 0.9.10 and then the new setup: Apps & features must show one entry, "Sai ATLAS", the old omp shortcuts must be gone, and settings must be kept (the pinned `nsis.guid` upgrades in place). On Linux x64, run `bun run package:linux` with `SAI_ATLAS_UPDATE_BASE` unset, so the binaries read this repository's release feed. Then run `bash scripts/tauri-deb-smoke.sh <deb>`, which installs the `.deb` in a clean Ubuntu 24.04 container and runs `e2e-tauri/packaged-smoke.e2e.ts` against it there, `OMP_E2E_FAKE_MIC=1 bash scripts/tauri-deb-smoke.sh <deb>` for the microphone and playback probe, and `bash scripts/tauri-wm-geometry-check.sh <deb>` (Docker required for all three). Then install the `.deb` and the AppImage on the host. On each package, press the quick-entry chord and send one prompt.
+7. **Publish only verified artifacts.** Run `bun scripts/release-feeds.ts --version <version> --linux <bundle-dir> --electron-mac-feed <dir>/latest-mac.yml --electron-windows-feed <dir>/latest.yml`: it copies the Linux bundles into `dist-release/` under their published names, writes `latest-linux.yml` for both packages, and copies the Electron feeds with the files they list. Create the GitHub Release as a draft, upload every asset, then publish; a release missing an asset breaks update checks. Publish it with both DMGs, the Windows NSIS and portable installers, the Linux AppImage and `.deb` with `latest-linux.yml` (without it, Linux update checks fail), generated update metadata, and the changelog. **Until 1.0.0, every release also carries bridge copies:** byte-identical copies of the two DMGs named `omp-<version>-arm64.dmg` and `omp-<version>.dmg`, listed next to the Sai-ATLAS names in the combined `latest-mac.yml`. Macs on 0.9.x look only for the `omp-` names and otherwise report the installer missing. The combined `latest-mac.yml` must also carry `minimumSystemVersion: 22.0.0` (Darwin 22 is macOS 13; electron-builder does not write it), and `bun run check:mac-update-floor <path-to-latest-mac.yml>` must pass before you publish; the release body says the previous release is the last one for macOS 12. Those Macs keep `omp.app` after installing, and their update screen never shows release notes, so put the Mac migration steps from [Install & start](#en-install) (quit omp, install Sai ATLAS, trash `omp.app`, re-pin, grant access again) at the top of every release body until 1.0.0. Record the monorepo commit used for the sidecars, especially when it differs from upstream `main`. Never commit sidecar binaries or push to `upstream`.
 
 </details>
 
@@ -375,7 +397,7 @@ Releases belong only to [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-m
 
 把对话、代码变更与 Agent 执行状态放在同一视野中。一边审查 diff，一边让另一段会话在独立 Git worktree 中推进任务；需要对照时打开双会话分屏，只想讨论思路时则切换到无工具 Chat。
 
-Sai ATLAS 是 SAI OS 的 AI 助手，一款基于 [omp](https://github.com/can1357/oh-my-pi) 编码 Agent 的桌面 GUI。这款 Electron 应用内置 Agent 二进制：**通过 DMG、NSIS 或便携版安装的用户无需另装 omp、Bun 或 Node。** GUI 与 TUI 互补，共享常规的 `~/.omp` 配置与会话。
+Sai ATLAS 是 SAI OS 的 AI 助手，一款基于 [omp](https://github.com/can1357/oh-my-pi) 编码 Agent 的桌面 GUI。每个安装包都内置 Agent 二进制：**通过 DMG、NSIS、便携版、`.deb` 或 AppImage 安装的用户无需另装 omp、Bun 或 Node。** GUI 与 TUI 互补，共享常规的 `~/.omp` 配置与会话。
 
 [功能全览](#zh-features) · [0.9.10 更新内容](#zh-recent) · [界面导览](#zh-gallery) · [安装](#zh-install) · [快捷键](#zh-shortcuts) · [开发](#zh-development) · [常见问题](#zh-help) · [发布](#zh-release)
 
@@ -521,26 +543,24 @@ v0.9.10 包含以下 GUI 改进与内置 Agent 更新：
 | Debian 包（推荐） | 从 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 下载 `sai-atlas_<version>_amd64.deb` |
 | AppImage | 从 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 下载 `Sai-ATLAS-<version>-x86_64.AppImage` |
 
-在 Linux 上，`sudo apt install ./sai-atlas_<version>_amd64.deb` 会把应用安装到 `/opt/Sai ATLAS`，并安装 `sai-atlas` 启动命令（Agent CLI 仍叫 `omp`）、`omp://` 链接处理程序，以及一个 AppArmor 配置文件，使 Chromium 沙箱在 Ubuntu 的用户命名空间限制下仍能工作。可从应用列表启动，或运行 `sai-atlas /abs/project/dir`。旧名称的 Linux 包从未正式发布；如果你曾从源码构建并安装 `omp` 包，请先执行 `sudo apt remove omp` 卸载。
+在 Linux 上，Sai ATLAS 需要 Ubuntu 24.04 或更高版本（glibc 2.39）。`sudo apt install ./sai-atlas_<version>_amd64.deb` 会安装位于 `/usr/bin/sai-atlas` 的 `sai-atlas` 启动命令（Agent CLI 仍叫 `omp`）、位于 `/usr/lib/Sai ATLAS/omp` 的内置 Agent（不在 `PATH` 中）、`omp://` 链接处理程序，以及兼容链接 `/opt/Sai ATLAS/sai-atlas`（旧版本的启动路径）。该包依赖 `bubblewrap` 与 `xdg-dbus-proxy`，用于运行 WebKit 沙箱；沙箱始终开启，不附带也不需要 AppArmor 配置。注册 `omp://` 需要 `desktop-file-utils` 与 `xdg-utils`：`apt install` 会把它们作为推荐包一并安装，`dpkg -i` 则会跳过。可从应用列表启动，或运行 `sai-atlas /abs/project/dir`。旧名称的 Linux 包从未正式发布；如果你曾从源码构建并安装 `omp` 包，请先执行 `sudo apt remove omp` 卸载。
 
-应用内 `.deb` 更新有一个已知限制：electron-updater 以你的用户身份校验下载的 `.deb` 的 SHA-512，随后 `dpkg -i` 以 root 身份从你可写的缓存目录读取同一文件。以你的身份运行的其他程序可能在两者之间替换该文件。如果在意这一点，请手动安装更新：`sudo apt install ./sai-atlas_<version>_amd64.deb`。
+应用内 `.deb` 更新会把安装包下载到 `~/.cache/@oh-my-pi/omp-gui/updates/`，按发布源校验其 SHA-512，只请求一次密码，然后用 `apt-get install --no-remove` 安装。apt 在改动任何内容之前先解析依赖，且绝不为腾出位置而移除其他软件包。无法解析依赖时，已安装的版本保持不变，更新横幅会显示可手动运行的命令（`sudo apt install <安装包路径>`）。SHA-512 校验以你的用户身份进行，随后 apt 以 root 身份从这个你可写的缓存目录读取同一文件，以你的身份运行的其他程序可能在两者之间替换该文件。如果在意这一点，请手动安装更新：`sudo apt install ./sai-atlas_<version>_amd64.deb`。
 
-AppImage 请保存为 `~/Applications/Sai-ATLAS.AppImage`，执行 `chmod +x`，再把下面的 AppArmor 配置保存为 `sai-atlas-appimage` 并安装：`sudo install -m 0644 sai-atlas-appimage /etc/apparmor.d/sai-atlas-appimage && sudo apparmor_parser -r /etc/apparmor.d/sai-atlas-appimage`：
+AppImage 只需执行 `chmod +x` 后启动。宿主机需要 `libwebkit2gtk-4.1-0`（Ubuntu 默认 GNOME 桌面已自带；否则运行 `sudo apt install libwebkit2gtk-4.1-0`），它也会带来 `bubblewrap` 与 `xdg-dbus-proxy`。WebKit 沙箱在这里同样始终开启，不需要 AppArmor 配置。听写与语音播放通过 PulseAudio 套接字访问麦克风和扬声器，Ubuntu 默认的 `pipewire-pulse` 即提供该套接字。已安装 `desktop-file-utils` 与 `xdg-utils` 时，AppImage 启动后会把自己注册为 `omp://` 处理程序；应用内更新会原地替换该文件。在 Ubuntu 26.04 上，AppImage 中文本框的拼写检查无法使用；`.deb` 版本可以使用。
 
-```
-abi <abi/4.0>,
-include <tunables/global>
+Sai ATLAS 在 Wayland 上原生运行；如需使用 XWayland，请以 `GDK_BACKEND=x11 sai-atlas` 启动。在 Wayland 上窗口位置由合成器决定，因此快速输入栏可能不会居中，也可能不会保持在最前。在 XWayland 下，全局快捷键只在 Sai ATLAS 窗口获得焦点时有效。启动需要标准的 `XDG_RUNTIME_DIR`（`/run/user/<uid>`），所有桌面登录会话都会设置它；缺少它时 WebKit 沙箱无法启动。
 
-profile sai-atlas-appimage "@{HOME}/Applications/Sai-ATLAS.AppImage" flags=(unconfined) {
-  userns,
+输入法：如果在原生 Wayland 上通过 ibus 或 fcitx5 输入中文或越南语时，输入框或快速输入栏无法正常输入，请以 `GDK_BACKEND=x11` 启动 Sai ATLAS。
 
-  include if exists <local/sai-atlas-appimage>
-}
-```
+**在 Linux 上从 0.9.16 迁移（Migrating from 0.9.16 on Linux）。** Linux 版本现在基于 Tauri 与系统的 WebKitGTK 运行，不再使用 Electron；0.9.16 会通过自身的更新程序升级过来。设置与会话都会保留。
 
-该配置会把用户命名空间权限授予该路径上的任意文件，而 `~/Applications` 可被以你身份运行的任何程序写入。请只把该目录用于 Sai ATLAS AppImage。不再使用时先卸载配置再删除：`sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`（仅重新加载 AppArmor 不会卸载已删除的配置）。旧的 `omp-appimage` 配置也按同样方式移除。没有该配置时，AppImage 运行时在 Ubuntu 24.04+ 上会退回 `--no-sandbox`，渲染进程将不受沙箱保护，因此推荐使用 `.deb`。`omp://` 链接只有在桌面集成（例如 AppImageLauncher）下才会送达 AppImage。Sai ATLAS 在 Wayland 上原生运行；如需使用 XWayland，请以 `--ozone-platform=x11` 启动。在 Wayland 上窗口位置由合成器决定，因此快速输入栏可能不会居中，也可能不会保持在最前。在 XWayland 下，全局快捷键只在 Sai ATLAS 窗口获得焦点时有效。
-
-输入法：如果在原生 Wayland 上通过 ibus 或 fcitx5 输入中文或越南语时，输入框或快速输入栏无法正常输入，请以 `--ozone-platform=x11` 启动 Sai ATLAS。
+- 在非 GNOME 桌面上，或在任何 `dpkg -s libwebkit2gtk-4.1-0` 失败的机器上从 0.9.16 更新：请先运行 `sudo apt install libwebkit2gtk-4.1-0`。
+- 如果更新后 Sai ATLAS 不见了：运行 `sudo apt --fix-broken install`，或下载安装包并运行 `sudo apt install ./sai-atlas_0.9.17_amd64.deb`。
+- 如果更新后 Sai ATLAS 没有自动重新打开，请手动启动一次新的 `.AppImage`；它的文件名现在带有版本号。
+- 更新后的第一次启动会再显示一次本地模型欢迎页面；你在那里的选择此后会被记住。
+- 把启动器和脚本中的 `--ozone-platform=x11` 换成环境变量 `GDK_BACKEND=x11`。更新后自动重新打开的应用可能沿用 systemd 用户会话的环境，而不是终端的环境。
+- AppImage 不再需要 `sai-atlas-appimage` AppArmor 配置。先卸载再删除：`sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`（仅重新加载 AppArmor 不会卸载已删除的配置）。旧的 `omp-appimage` 配置也按同样方式移除。
 
 打开 DMG，把 **Sai ATLAS** 拖入**应用程序**。构建采用 ad-hoc 签名，未经 Apple 公证。如果 macOS 拦截首次启动，请先确认下载来源，再使用**右键 → 打开**，或**系统设置 → 隐私与安全性 → 仍要打开**。
 
@@ -582,7 +602,7 @@ Sai ATLAS 通过 [Ollama](https://ollama.com) 在本机运行模型，请先安�
 
 **快速输入**会在当前应用之上打开一个小输入栏。选择**聊天**，或选择 **Agent** 并指定**工作**（默认工作区）或最近的工作区，输入后按 Enter：消息会从主窗口的新标签页发出，主窗口随之切到最前。Shift+Enter 换行。按 Esc 或点击别处会关闭输入栏并保留草稿。Shell 命令（`!ls`）或 Python 代码（`$ print(1)`）会在新标签页中打开但不发送；无法送达的消息（例如已达标签页上限）会留在输入栏中并说明原因。可在 设置 → 键盘快捷键 中更改组合键或关闭快速输入。`⇧⌘O`（`Ctrl+Shift+O`）仍用于显示或隐藏窗口。
 
-在通过 `.deb` 安装的 GNOME Wayland 上，首次启动会请求允许两个全局快捷键。之后这些按键由 GNOME 管理：可在 设置 → 应用 → Sai ATLAS → 全局快捷键 中更改或移除。在 Sai ATLAS 中更改的组合键会在重启后生效，届时 GNOME 会再次询问；关闭快速输入则立即生效。没有门户时（未做桌面集成的 AppImage、Sway 等 wlroots 合成器，或拒绝了对话框），请把 `sai-atlas --quick-entry` 绑定为自定义键盘快捷键，AppImage 则绑定 `~/Applications/Sai-ATLAS.AppImage --quick-entry`；在 Sway 上可用 `bindsym ctrl+shift+space exec sai-atlas --quick-entry`。
+在通过 `.deb` 安装的 GNOME Wayland 上，首次启动会请求允许两个全局快捷键。之后这些按键由 GNOME 管理：可在 设置 → 应用 → Sai ATLAS → 全局快捷键 中更改或移除。在 Sai ATLAS 中更改的组合键会在重启后生效，届时 GNOME 会再次询问；关闭快速输入则立即生效。没有门户时（未做桌面集成的 AppImage、Sway 等 wlroots 合成器，或拒绝了对话框），请把 `sai-atlas --quick-entry` 绑定为自定义键盘快捷键，AppImage 则绑定其文件路径加 `--quick-entry`；在 Sway 上可用 `bindsym ctrl+shift+space exec sai-atlas --quick-entry`。
 
 <a id="zh-development"></a>
 ### 开发
@@ -615,7 +635,7 @@ omp-monorepo/                    # nornzach/oh-my-pi：fork 与 sidecar 构建�
 
 #### 从源码构建
 
-**前置条件：**Git、[Bun](https://bun.sh) **≥ 1.4**。macOS sidecar 与 DMG 命令需要 macOS；Windows x64 sidecar 可以在 macOS 或 Linux 上交叉构建，但仍需相邻的 monorepo。Linux x64 安装包需在 Linux x64 宿主上构建。
+**前置条件：**Git、[Bun](https://bun.sh) **≥ 1.4**。macOS sidecar 与 DMG 命令需要 macOS；Windows x64 sidecar 可以在 macOS 或 Linux 上交叉构建，但仍需相邻的 monorepo。Linux x64 安装包需在装有 Docker 的 Linux x64 宿主上构建。
 
 ```bash
 # 克隆 monorepo fork，再将 GUI 仓库嵌套其中。
@@ -639,12 +659,21 @@ bun run package:mac:x64 -- --publish never      # dist/Sai-ATLAS-<版本>.dmg、
 bun run build:omp:win                           # Windows x64 -> resources/omp.exe
 bun run package:win -- --publish never           # Windows NSIS + portable 安装包
 bun run build:omp:linux                        # Linux x64 -> resources/omp.linux-x64
-bun run package:linux -- --publish never        # dist/Sai-ATLAS-<版本>-x86_64.AppImage、dist/sai-atlas_<版本>_amd64.deb、dist/latest-linux.yml
+bun run package:linux                           # AppImage + .deb -> src-tauri/target-linux-2404/x86_64-unknown-linux-gnu/release/bundle/
 ```
 
-Linux 配置（`electron-builder.linux.yml`）打包 `resources/omp.linux-x64`；Linux 必须使用 `package:linux` 打包。在 Linux 宿主上，`bun run build:omp` 会为 `bun run dev` 生成 `resources/omp`。
+Linux 安装包由 `src-tauri/` 中的 Tauri 外壳构建。`package:linux` 运行 `scripts/tauri-linux-build.sh`，在 `ubuntu:24.04` 容器中构建 AppImage 与 `.deb`，使 AppImage 内置的库所需的 glibc 不高于 Ubuntu 24.04；`src-tauri/linux/` 中的收尾脚本会拒绝更高版本。它会把 `resources/omp.linux-x64` 准备为内置 Agent（`scripts/stage-tauri-sidecar.ts`）。更新源 `latest-linux.yml` 在发布时由 `scripts/release-feeds.ts` 生成。在 Linux 宿主上，`bun run build:omp` 会为 `bun run dev` 与 `bun run dev:tauri` 生成 `resources/omp`。
 
-要在 `bun run dev` 中测试 Wayland 全局快捷键，门户需要该应用 id 的桌面条目：创建 `~/.local/share/applications/vn.io.vif.saiatlas.desktop`，写入 `Name=Sai ATLAS` 以及运行开发启动器的 `Exec=` 行。它会遮蔽 `.deb` 中同 id 的条目，因此测试已安装的 `.deb` 前请先删除它。
+要在宿主上构建或运行 Tauri 外壳（`bun run dev:tauri`、Rust 测试），请安装 rustup 但不让它修改 `PATH`（脚本从 `~/.cargo/bin` 读取 cargo，见 `scripts/rust-pins.env`，因为发行版自带的 `cargo` 可能遮蔽它），安装 `src-tauri/rust-toolchain.toml` 中的工具链通道、`tauri-cli` 2，以及 CI 的 `tauri-linux` 作业同样安装的 WebKitGTK 构建与沙箱软件包：
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+~/.cargo/bin/rustup default stable
+~/.cargo/bin/cargo install tauri-cli --version "^2" --locked
+sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev build-essential gstreamer1.0-pipewire gstreamer1.0-plugins-good bubblewrap xdg-dbus-proxy
+```
+
+要在 `bun run dev:tauri` 或 `bun run dev` 中测试 Wayland 全局快捷键，门户需要该应用 id 的桌面条目：创建 `~/.local/share/applications/vn.io.vif.saiatlas.desktop`，写入 `Name=Sai ATLAS` 以及运行开发启动器的 `Exec=` 行。它会遮蔽 `.deb` 中同 id 的条目，因此测试已安装的 `.deb` 前请先删除它。
 
 在 monorepo 内，`bun install` 会把 `packages/gui` 当作 workspace 成员解析，不会更新本仓库的 `bun.lock`，而 CI 使用 `--frozen-lockfile` 安装。修改 `package.json` 依赖后，请在 monorepo 之外的检出中重新生成锁文件，例如 `git worktree add --detach /tmp/omp-gui-lock HEAD`，在其中运行 `bun install --ignore-scripts`，再把生成的 `bun.lock` 复制回来。
 
@@ -661,12 +690,26 @@ Windows 配置目标为 x64，并将 `resources/omp.exe` 放入应用包；它�
 ```bash
 bun run dev                         # HMR，使用 resources/omp
 OMP_SIDECAR=source bun run dev       # 显式开发覆盖：使用 monorepo Agent 源码
+bun run dev:tauri -- --user-data-dir=$(mktemp -d)   # Tauri 外壳（Linux），临时配置目录
 bunx vitest run                     # GUI 测试
 bun run check:types                 # GUI 类型检查
 bun run build                      # GUI 生产构建与主进程 bundle 检查
 ```
 
 同时用 Biome 检查修改过且受其支持的文件。Agent/RPC 改动归属 monorepo；验证打包 GUI 前，需要重新构建内置 sidecar。
+
+在 Ubuntu 24.04+ 上，Electron 的 `bun run dev` 需要为开发用 Electron 二进制安装一个 `userns` AppArmor 配置，因为 Ubuntu 限制了非特权用户命名空间；`bun run dev:tauri` 不需要。把下面的内容保存为 `omp-dev-electron`，路径改为 `node -p "require('electron')"` 输出的路径，再用 `sudo install -m 0644 omp-dev-electron /etc/apparmor.d/omp-dev-electron && sudo apparmor_parser -r /etc/apparmor.d/omp-dev-electron` 加载。不要把 `chrome-sandbox` 设为 setuid root。
+
+```
+abi <abi/4.0>,
+include <tunables/global>
+
+profile omp-dev-electron "/path/printed/by/node" flags=(unconfined) {
+  userns,
+
+  include if exists <local/omp-dev-electron>
+}
+```
 
 #### 复现截图
 
@@ -697,12 +740,13 @@ bun scripts/capture-showcase.ts
 | 原生插件下载失败 | 检查 registry 访问及该版本是否已发布。必要时安装所需 Rust 工具链，在 monorepo 根目录运行 `bun --cwd=packages/natives run build`，然后重建 sidecar。 |
 | Intel sidecar 立即退出 | 检查 sidecar 架构，并使用 `bun run package:mac:x64` 打包，不要使用默认配置。 |
 | 命令或集成不可用 | 部分 slash 命令转交 Agent 或尚未支持。外部工具和服务需另行配置；SSH 管理使用设置页面，而非已停用的 `/ssh` 管理命令。 |
-| AppImage 以 `--no-sandbox` 启动 | 为确切路径 `~/Applications/Sai-ATLAS.AppImage` 安装上文的 `sai-atlas-appimage` AppArmor 配置，或改用 `.deb`。 |
-| `bun run dev` 报错 `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ 限制了非特权用户命名空间。为开发用 Electron 二进制安装一个 `userns` 配置：沿用上文的 AppImage 配置，命名为 `omp-dev-electron`，路径改为 `node -p "require('electron')"` 输出的路径。不要把 `chrome-sandbox` 设为 setuid root。 |
+| AppImage 立即退出，并提示缺少 `libEGL.so.1` 等库 | 安装 `libwebkit2gtk-4.1-0`。AppImage 依赖该包带来的图形库与沙箱工具。 |
+| 启动失败并提示 `Failed to fully launch dbus-proxy` | 请从桌面登录会话启动 Sai ATLAS，该会话会设置 `XDG_RUNTIME_DIR=/run/user/<uid>`；通过 `su`、`ssh` 打开的 shell 以及 cron 任务往往没有它。 |
+| `bun run dev` 报错 `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ 限制了非特权用户命名空间。请安装[日常开发](#日常开发)中的 `omp-dev-electron` 配置。不要把 `chrome-sandbox` 设为 setuid root。 |
 | Ubuntu 上没有托盘图标 | 启用 Ubuntu AppIndicators 扩展。 |
-| `.deb` 更新要求输入两次密码，或窗口卡住 | 取消 pkexec 会触发 electron-updater 的 `apt-get -f` 重试，提示框打开期间窗口会等待。 |
+| `.deb` 更新提示 Sai ATLAS 无法请求管理员权限 | 当前运行的应用以阻止密码提示的方式启动，例如由上一版本的更新程序启动。退出并重新打开 Sai ATLAS 后再安装；更新会重新下载。 |
+| `.deb` 更新没有安装，而是显示一条 `sudo apt install …` 命令 | apt 无法解析更新所需的软件包，因此没有做任何改动。请在终端运行该命令查看原因并完成安装。 |
 | 其他应用获得焦点时快速输入或 `Ctrl+Shift+O` 无效 | 在 GNOME Wayland 上请使用 `.deb`，并在询问时允许这些快捷键；如果当时拒绝了，可在 设置 → 应用 → Sai ATLAS 中允许或重置。没有门户时，请把 `sai-atlas --quick-entry` 绑定为自定义快捷键。设置 → 键盘快捷键 会显示快速输入的状态，注册被拒绝时会记录到 `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`。 |
-| `Gtk-ERROR … GTK 2/3 symbols detected` | 以 `--gtk-version=3` 启动 Sai ATLAS。 |
 
 <a id="zh-release"></a>
 ### 发布流程（维护者）
@@ -713,12 +757,12 @@ bun scripts/capture-showcase.ts
 发布只属于 [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui/releases)，全程保持两个仓库的边界：
 
 1. **从干净检出开始并同步上游。**在 **monorepo 根目录**执行 `bash packages/gui/scripts/sync-upstream.sh`。脚本拉取/合并 `upstream/main`、安装依赖、准备原生插件、生成统计资源、重建并烟测 sidecar，再构建、检查和测试 GUI。冲突需在 monorepo 中解决并提交合并，然后运行 `SKIP_MERGE=1 bash packages/gui/scripts/sync-upstream.sh`。不要用手动拼装的 merge 流程替代。检查并在 monorepo 中提交其余改动，只推送到 fork 的 `origin`。
-2. **准备 GUI 发布。**在 `packages/gui/` 提升 `package.json` 版本，撰写本次发布的 `CHANGELOG.md`，更新两种语言的安装链接与源码/发布说明。
+2. **准备 GUI 发布。**在 `packages/gui/` 把 `package.json` 与 `src-tauri/Cargo.toml` 提升到同一版本（两者不一致时打包测试会失败），撰写本次发布的 `CHANGELOG.md`，更新两种语言的安装链接与源码/发布说明。
 3. **验证 GUI：**`bunx vitest run && bun run check:types && bun run build`，并用 Biome 检查修改过且受其支持的文件。
 4. **记录发布源码。**GUI 发布改动在 GUI 仓库提交，打 `vX.Y.Z` 标签，向它的 `origin` 推送 `main` 与标签。生成发布产物前保持两个检出干净。
 5. **构建全部 sidecar：**`bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`。在兼容宿主上运行两个 macOS sidecar 与 Windows sidecar 的 `--smoke-test`；在 Linux x64 宿主上运行 `bun run build:omp:linux` 与 `resources/omp.linux-x64 --smoke-test`。交叉编译成功不等于运行验证通过。
-6. **构建并检查安装包：**按 macOS 命令构建两个 DMG，按 `bun run package:win -- --publish never` 构建 Windows 安装包。逐个挂载 DMG，用 `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"` 验证应用签名封装，用 `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"` 检查内置 sidecar 架构，并用 `file` 检查 Windows 包的 `win-unpacked/resources/omp.exe`。在兼容宿主上启动各平台应用，确认 sidecar `ready`、`get_settings` RPC 成功，以及设置开关可以持久化。在 macOS 上还需确认程序坞、“关于”与菜单中的名称均为 Sai ATLAS，`codesign -dv` 显示 `Identifier=vn.io.vif.saiatlas`，且访达能显示应用图标（由 electron-builder 从 PNG 转换）。在 Windows 上先安装 0.9.10 再运行新安装程序：“应用和功能”中只能有一个名为 “Sai ATLAS” 的条目，旧的 omp 快捷方式应已移除，设置应保留（固定的 `nsis.guid` 使其就地升级）。在 Linux x64 上运行 `bun run package:linux -- --publish never` 和 `bash scripts/deb-smoke.sh`：后者在干净的 Ubuntu 24.04 容器中安装 `.deb`，并在容器内对其运行 `e2e/packaged-smoke.e2e.ts`（需要 Docker）。然后在宿主上安装 `.deb` 与 AppImage。在每个安装包上按一次快速输入组合键并发送一条提示。
-7. **只发布验证过的产物。**GitHub Release 附带两个 DMG、Windows NSIS 与便携版安装包、Linux AppImage 与 `.deb` 及 `latest-linux.yml`（缺少它，Linux 更新检查会失败）、更新元数据和 changelog。**1.0.0 之前的每次发布还要附带桥接副本：**两个 DMG 的逐字节相同副本，命名为 `omp-<version>-arm64.dmg` 与 `omp-<version>.dmg`，并与 Sai-ATLAS 名称一起列入合并后的 `latest-mac.yml`。0.9.x 的 Mac 只查找 `omp-` 名称，否则会报告缺少安装包。合并后的 `latest-mac.yml` 还必须带有 `minimumSystemVersion: 22.0.0`（Darwin 22 即 macOS 13；electron-builder 不会写入该字段），发布前 `bun run check:mac-update-floor <latest-mac.yml 路径>` 必须通过；发布说明需写明上一个版本是 macOS 12 可用的最后一个版本。这些 Mac 安装后仍会保留 `omp.app`，且其更新界面从不显示发布说明，因此 1.0.0 之前每次发布说明的开头都要写上[安装与开始使用](#zh-install)中的 Mac 迁移步骤（退出 omp、安装 Sai ATLAS、把 `omp.app` 移到废纸篓、重新固定、再次授权）。记录构建 sidecar 使用的 monorepo commit，尤其在其不同于上游 `main` 时。绝不提交 sidecar 二进制，也不向 `upstream` 推送。
+6. **构建并检查安装包：**按 macOS 命令构建两个 DMG，按 `bun run package:win -- --publish never` 构建 Windows 安装包。逐个挂载 DMG，用 `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"` 验证应用签名封装，用 `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"` 检查内置 sidecar 架构，并用 `file` 检查 Windows 包的 `win-unpacked/resources/omp.exe`。在兼容宿主上启动各平台应用，确认 sidecar `ready`、`get_settings` RPC 成功，以及设置开关可以持久化。在 macOS 上还需确认程序坞、“关于”与菜单中的名称均为 Sai ATLAS，`codesign -dv` 显示 `Identifier=vn.io.vif.saiatlas`，且访达能显示应用图标（由 electron-builder 从 PNG 转换）。在 Windows 上先安装 0.9.10 再运行新安装程序：“应用和功能”中只能有一个名为 “Sai ATLAS” 的条目，旧的 omp 快捷方式应已移除，设置应保留（固定的 `nsis.guid` 使其就地升级）。在 Linux x64 上，在未设置 `SAI_ATLAS_UPDATE_BASE` 的情况下运行 `bun run package:linux`，使二进制读取本仓库的发布源。然后运行 `bash scripts/tauri-deb-smoke.sh <deb>`（在干净的 Ubuntu 24.04 容器中安装 `.deb`，并在容器内对其运行 `e2e-tauri/packaged-smoke.e2e.ts`）、用于麦克风与播放探测的 `OMP_E2E_FAKE_MIC=1 bash scripts/tauri-deb-smoke.sh <deb>`，以及 `bash scripts/tauri-wm-geometry-check.sh <deb>`（三者都需要 Docker）。然后在宿主上安装 `.deb` 与 AppImage。在每个安装包上按一次快速输入组合键并发送一条提示。
+7. **只发布验证过的产物。**运行 `bun scripts/release-feeds.ts --version <版本> --linux <bundle 目录> --electron-mac-feed <目录>/latest-mac.yml --electron-windows-feed <目录>/latest.yml`：它把 Linux 安装包以发布名称复制到 `dist-release/`，为两个安装包写入 `latest-linux.yml`，并连同所列文件一起复制 Electron 更新源。先把 GitHub Release 创建为草稿，上传全部资源后再发布；缺少任一资源都会让更新检查失败。GitHub Release 附带两个 DMG、Windows NSIS 与便携版安装包、Linux AppImage 与 `.deb` 及 `latest-linux.yml`（缺少它，Linux 更新检查会失败）、更新元数据和 changelog。**1.0.0 之前的每次发布还要附带桥接副本：**两个 DMG 的逐字节相同副本，命名为 `omp-<version>-arm64.dmg` 与 `omp-<version>.dmg`，并与 Sai-ATLAS 名称一起列入合并后的 `latest-mac.yml`。0.9.x 的 Mac 只查找 `omp-` 名称，否则会报告缺少安装包。合并后的 `latest-mac.yml` 还必须带有 `minimumSystemVersion: 22.0.0`（Darwin 22 即 macOS 13；electron-builder 不会写入该字段），发布前 `bun run check:mac-update-floor <latest-mac.yml 路径>` 必须通过；发布说明需写明上一个版本是 macOS 12 可用的最后一个版本。这些 Mac 安装后仍会保留 `omp.app`，且其更新界面从不显示发布说明，因此 1.0.0 之前每次发布说明的开头都要写上[安装与开始使用](#zh-install)中的 Mac 迁移步骤（退出 omp、安装 Sai ATLAS、把 `omp.app` 移到废纸篓、重新固定、再次授权）。记录构建 sidecar 使用的 monorepo commit，尤其在其不同于上游 `main` 时。绝不提交 sidecar 二进制，也不向 `upstream` 推送。
 
 </details>
 
