@@ -1,6 +1,9 @@
 # Pinned settings for every Sai ATLAS session, passed with --config. An overlay wins only for
 # the keys it sets, so every approval-relevant key is set here.
 temperature: 0.2
+# Never resume the folder's newest session on a sessionless start: it could be an old chat or
+# coding session the pack cannot run.
+autoResume: false
 # No bash tool is loaded: shellPath and bash.* are inert, kept as a deny-all guard
 # for any shell path omp still has.
 shellPath: /bin/sh

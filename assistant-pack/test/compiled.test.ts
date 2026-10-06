@@ -106,6 +106,7 @@ describe.skipIf(process.env.SKIP_COMPILED === "1")("the pack in the compiled sid
 			expect(stdout).toMatch(/^setting\s+bash\.direnv = "off"\s+\[.*overlay.*\]$/m);
 			expect(stdout).toMatch(/^append\s+workspace APPEND_SYSTEM\.md ignored$/m);
 			for (const path of [
+				"autoResume",
 				"plan.enabled",
 				"plan.defaultOnStartup",
 				"commands.enableClaudeUser",

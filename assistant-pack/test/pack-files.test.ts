@@ -22,6 +22,7 @@ function skill(name: string): { meta: Record<string, unknown>; body: string } {
 
 const EXPECTED_CONFIG = {
 	temperature: 0.2,
+	autoResume: false,
 	shellPath: "/bin/sh",
 	bash: {
 		patterns: [{ match: "*", approval: "deny" }],
