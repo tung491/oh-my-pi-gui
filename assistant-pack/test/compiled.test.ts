@@ -1,0 +1,125 @@
+// Drives the built pack through the compiled sidecar: its tools.js running inside the sidecar's
+// own Bun runtime, and the whole pack loaded by omp through the spawn flags. CI has no sidecar
+// and sets SKIP_COMPILED=1; anywhere else a missing sidecar fails the suite loudly.
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import ExcelJS from "exceljs";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const OMP_BIN = join(ROOT, "resources", process.platform === "linux" ? "omp.linux-x64" : "omp");
+const PACK = join(ROOT, "resources", "assistant-pack");
+const CALL_TOOL = join(ROOT, "assistant-pack", "test", "fixtures", "call-tool.mjs");
+const CHECK = join(ROOT, "scripts", "check-assistant-pack.ts");
+const TIMEOUT_MS = 180_000;
+
+const TOOLS = [
+	"read",
+	"glob",
+	"write",
+	"ask",
+	"diagnose",
+	"system_status",
+	"open_item",
+	"os_setting",
+	"office_report",
+	"office_slides",
+	"office_clean",
+];
+const SKILLS = ["sai-os-helpdesk", "slides-from-report", "spreadsheet-cleanup", "word-report"];
+
+let home: string;
+
+function callTool(name: string, params: unknown): { status: number | null; result: Record<string, unknown> } {
+	const run = spawnSync(OMP_BIN, [CALL_TOOL, PACK, name, JSON.stringify(params)], {
+		env: { BUN_BE_BUN: "1", PATH: "/usr/bin:/bin", HOME: home, SAI_ATLAS_LANG: "en" },
+		encoding: "utf8",
+		timeout: TIMEOUT_MS,
+	});
+	if (run.status !== 0) throw new Error(`call-tool exited ${run.status}: ${run.stdout}\n${run.stderr}`);
+	const lines = run.stdout.trim().split("\n");
+	return { status: run.status, result: JSON.parse(lines[lines.length - 1]) as Record<string, unknown> };
+}
+
+function savedFiles(): string[] {
+	const dir = join(home, "Documents", "Sai ATLAS");
+	return existsSync(dir) ? readdirSync(dir) : [];
+}
+
+describe.skipIf(process.env.SKIP_COMPILED === "1")("the pack in the compiled sidecar", () => {
+	beforeAll(() => {
+		if (!existsSync(OMP_BIN)) throw new Error(`sidecar binary missing: ${OMP_BIN}`);
+		if (!existsSync(join(PACK, "tools.js")))
+			throw new Error(`assistant pack missing: ${PACK} (run bun run build:pack)`);
+	});
+
+	beforeEach(() => {
+		home = mkdtempSync(join(tmpdir(), "sai-atlas-compiled-"));
+	});
+
+	afterEach(() => {
+		rmSync(home, { recursive: true, force: true });
+	});
+
+	it(
+		"office_report writes a Word file through tools.js",
+		() => {
+			const markdown = readFileSync(join(ROOT, "assistant-pack", "test", "fixtures", "notes-en.md"), "utf8");
+			const { result } = callTool("office_report", { markdown });
+			expect(result.isError).not.toBe(true);
+			expect(savedFiles().filter(name => name.endsWith(".docx"))).toHaveLength(1);
+		},
+		TIMEOUT_MS,
+	);
+
+	it(
+		"office_clean writes a cleaned copy through tools.js",
+		async () => {
+			const workbook = new ExcelJS.Workbook();
+			workbook.addWorksheet("Data").addRows([
+				["Name", "Amount"],
+				[" Ann ", "1,500"],
+			]);
+			const input = join(home, "messy.xlsx");
+			await workbook.xlsx.writeFile(input);
+			const { result } = callTool("office_clean", { file: input });
+			expect(result.isError).not.toBe(true);
+			expect(savedFiles()).toContain("messy (cleaned).xlsx");
+		},
+		TIMEOUT_MS,
+	);
+
+	it(
+		"loads the pack into the sidecar",
+		() => {
+			const stdout = execFileSync("bun", [CHECK, OMP_BIN, PACK], {
+				cwd: ROOT,
+				env: { ...process.env, HOME: home },
+				encoding: "utf8",
+				timeout: TIMEOUT_MS,
+			});
+			for (const tool of TOOLS) expect(stdout).toMatch(new RegExp(`^tool\\s+${tool}$`, "m"));
+			for (const skill of SKILLS) expect(stdout).toMatch(new RegExp(`^skill\\s+${skill}$`, "m"));
+			expect(stdout).toMatch(/^setting\s+bash\.direnv = "off"\s+\[.*overlay.*\]$/m);
+		},
+		TIMEOUT_MS,
+	);
+
+	it(
+		"refuses a wrong tool list",
+		() => {
+			const run = spawnSync("bun", [CHECK, OMP_BIN, PACK, "--tools", "read,glob,write,ask,find"], {
+				cwd: ROOT,
+				env: { ...process.env, HOME: home },
+				encoding: "utf8",
+				timeout: TIMEOUT_MS,
+			});
+			expect(run.status).toBe(1);
+			expect(`${run.stdout}${run.stderr}`).toContain("find");
+		},
+		TIMEOUT_MS,
+	);
+});
