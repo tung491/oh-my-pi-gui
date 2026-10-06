@@ -262,30 +262,19 @@ function provider(partial: Partial<ProviderInfo> & { id: string }): ProviderInfo
 }
 
 describe("hasUsableModelProvider", () => {
-	it("counts only an enabled Ollama provider with a credential and a model", () => {
-		expect(hasUsableModelProvider([], [])).toBe(false);
-		expect(hasUsableModelProvider([provider({ id: "openai", authenticated: true, modelCount: 3 })], [])).toBe(false);
-		expect(hasUsableModelProvider([provider({ id: "ollama", authenticated: true, modelCount: 0 })], [])).toBe(false);
+	it("counts only an enabled Ollama provider with a model", () => {
+		expect(hasUsableModelProvider([])).toBe(false);
+		expect(hasUsableModelProvider([provider({ id: "openai", authenticated: true, modelCount: 3 })])).toBe(false);
+		expect(hasUsableModelProvider([provider({ id: "lmstudio", modelCount: 2 })])).toBe(false);
+		expect(hasUsableModelProvider([provider({ id: "ollama", authenticated: true, modelCount: 0 })])).toBe(false);
 		expect(
-			hasUsableModelProvider([provider({ id: "ollama", authenticated: true, modelCount: 1, disabled: true })], []),
+			hasUsableModelProvider([provider({ id: "ollama", authenticated: true, modelCount: 1, disabled: true })]),
 		).toBe(false);
-		expect(hasUsableModelProvider([provider({ id: "ollama", authenticated: true, modelCount: 1 })], [])).toBe(true);
+		expect(hasUsableModelProvider([provider({ id: "ollama", authenticated: true, modelCount: 1 })])).toBe(true);
 	});
 
-	it("accepts a keyless Ollama config only when the agent lists its models", () => {
-		const local: CustomProviderView = {
-			id: "ollama",
-			api: "openai-completions",
-			baseUrl: "http://127.0.0.1:11434/v1",
-			hasApiKey: false,
-			auth: "none",
-			models: [],
-			builtin: false,
-		};
-		expect(hasUsableModelProvider([provider({ id: "ollama", modelCount: 2 })], [local])).toBe(true);
-		expect(hasUsableModelProvider([provider({ id: "ollama", modelCount: 0 })], [local])).toBe(false);
-		const other = { ...local, id: "lmstudio" };
-		expect(hasUsableModelProvider([provider({ id: "lmstudio", modelCount: 2 })], [other])).toBe(false);
+	it("counts a local Ollama with models although it has no sign-in", () => {
+		expect(hasUsableModelProvider([provider({ id: "ollama", authenticated: false, modelCount: 4 })])).toBe(true);
 	});
 });
 

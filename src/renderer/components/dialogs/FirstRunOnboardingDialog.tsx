@@ -9,7 +9,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CustomProviderView } from "../../../shared/ipc-types";
 import type {
 	ModelChoice,
 	ModelScreen,
@@ -57,25 +56,14 @@ function isProviderInfo(value: unknown): value is ProviderInfo {
 }
 
 /**
- * A usable setup needs an allowed (Ollama) provider with both a model and a
- * non-disabled credential/config path. Other providers never count, even if
- * leftovers from an earlier version are still signed in.
+ * A usable setup is an allowed (Ollama) provider that is not disabled and
+ * lists at least one model. Local Ollama needs no sign-in, so its
+ * `authenticated` flag stays false and does not count against it. Other
+ * providers never count, even if leftovers from an earlier version are still
+ * signed in.
  */
-export function hasUsableModelProvider(
-	providers: readonly ProviderInfo[],
-	configs: readonly CustomProviderView[],
-): boolean {
-	const allowed = providers.filter(provider => isAllowedProvider(provider.id));
-	if (allowed.some(provider => provider.authenticated && !provider.disabled && provider.modelCount > 0)) {
-		return true;
-	}
-
-	const providerById = new Map(allowed.map(provider => [provider.id, provider]));
-	return configs.some(config => {
-		if (!isAllowedProvider(config.id)) return false;
-		const provider = providerById.get(config.id);
-		return config.auth === "none" && provider !== undefined && !provider.disabled && provider.modelCount > 0;
-	});
+export function hasUsableModelProvider(providers: readonly ProviderInfo[]): boolean {
+	return providers.some(provider => isAllowedProvider(provider.id) && !provider.disabled && provider.modelCount > 0);
 }
 
 /**
@@ -154,14 +142,10 @@ export function FirstRunOnboardingDialog() {
 			try {
 				const completed = await window.omp.prefs.get(WELCOME_COMPLETED_PREF).catch(() => null);
 				if (typeof completed === "string" && completed.length > 0) return;
-				const [providerResult, configResult] = await Promise.allSettled([
-					tabRpc.getProviders(),
-					window.omp.models.listProviders(),
-				]);
+				const providerResult = await tabRpc.getProviders();
 				if (cancelled) return;
-				if (providerResult.status === "rejected") throw providerResult.reason;
-				if (!providerResult.value.success) throw new Error(providerResult.value.error);
-				const data = providerResult.value.data;
+				if (!providerResult.success) throw new Error(providerResult.error);
+				const data = providerResult.data;
 				const providers =
 					data &&
 					typeof data === "object" &&
@@ -170,8 +154,7 @@ export function FirstRunOnboardingDialog() {
 					data.providers.every(isProviderInfo)
 						? data.providers
 						: [];
-				const configs = configResult.status === "fulfilled" ? configResult.value : [];
-				if (hasUsableModelProvider(providers, configs)) return;
+				if (hasUsableModelProvider(providers)) return;
 				// A slow startup check must not cover a page the user already opened.
 				if (document.querySelector('[role="dialog"]')) return;
 				if (!dismissed.current) setAutoOpen(true);
