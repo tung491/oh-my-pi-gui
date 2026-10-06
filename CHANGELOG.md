@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **Sai ATLAS is now an assistant for everyday work**: it writes Word reports, cleans up spreadsheets, turns reports into slides and helps with computer problems on SAI OS, with a model that runs on this computer through Ollama. The developer features were removed: the code lane, git, pull requests, statistics, extensions, MCP, SSH, the debug tools, live voice and collaboration. Power users keep all of them in the omp terminal app. Windows builds are no longer made.
+- Closing a worktree tab no longer asks about its checkout; the checkout stays on disk.
 - **Linux runs on Tauri**: the Linux AppImage and `.deb` now run on a Tauri 2 shell with the system's WebKitGTK instead of Electron. 0.9.16 moves to it through its own updater, and settings, sessions and the `omp://` handler carry over. Start it with `GDK_BACKEND=x11` instead of `--ozone-platform=x11` to use XWayland.
 - **WebKit sandbox, always on**: every web page runs in WebKit's bubblewrap sandbox. The `.deb` depends on `bubblewrap` and `xdg-dbus-proxy`, and the AppImage needs `libwebkit2gtk-4.1-0` on the host, which brings both.
 - **`.deb` layout**: the launcher is `/usr/bin/sai-atlas`, the bundled agent is `/usr/lib/Sai ATLAS/omp` (off `PATH`), and `/opt/Sai ATLAS/sai-atlas` stays as a link to the launcher. `desktop-file-utils`, `xdg-utils` and the GStreamer plugins are recommended rather than required.
@@ -11,7 +13,7 @@
 - **AppImage update from 0.9.16**: the new AppImage reopens by itself after the update. If Sai ATLAS does not reopen by itself after an update, start the new `.AppImage` once by hand; its file name now carries the version.
 - **Dictation and speech in the AppImage**: the AppImage bundles the audio plugins it needs and reaches the microphone and speakers through the PulseAudio socket.
 - **Memory**: with one tab at idle, the Linux shell uses 72–75 % of the Electron shell's memory (PSS), and total memory including the agent is lower than Electron's in every measured case.
-- macOS and Windows are unchanged and still run on Electron.
+- macOS is unchanged and still runs on Electron.
 
 ### Removed
 
