@@ -126,6 +126,21 @@ describe("ModelCard", () => {
 		expect(calls.downloads).toEqual(["qwen3:8b"]);
 	});
 
+	it("labels the Download button as an action, apart from the download size, in Vietnamese", async () => {
+		globals.localStorage = {
+			getItem: (key: string) => (key === "omp.lang" ? "vi" : null),
+			setItem: () => {},
+			removeItem: () => {},
+		};
+		try {
+			await render();
+			expect(button("download-model")?.textContent).toBe("Tải về");
+			expect(container.textContent).toContain("Dung lượng tải");
+		} finally {
+			delete globals.localStorage;
+		}
+	});
+
 	it("disables Download while another model downloads", async () => {
 		await render({ downloadDisabled: true });
 		expect(button("download-model")?.disabled).toBe(true);

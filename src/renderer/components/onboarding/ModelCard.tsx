@@ -105,7 +105,7 @@ export function ModelCard({ choice, progress, picked, downloadDisabled, onUse, o
 							size="sm"
 							variant="secondary"
 						>
-							{t("welcome.card.download")}
+							{t("welcome.card.downloadAction")}
 						</Button>
 					)
 				)}

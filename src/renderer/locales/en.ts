@@ -1574,6 +1574,7 @@ export const en: Record<string, string> = {
 	"welcome.card.params": "Parameters",
 	"welcome.card.active": "Active per token",
 	"welcome.card.download": "Download",
+	"welcome.card.downloadAction": "Download",
 	"welcome.card.needs": "Needs",
 	"welcome.card.runsIn": "Runs in",
 	"welcome.card.speed": "Speed",

@@ -1452,6 +1452,7 @@ export const vi: Record<string, string> = {
 	"welcome.card.params": "Tham số",
 	"welcome.card.active": "Hoạt động mỗi token",
 	"welcome.card.download": "Dung lượng tải",
+	"welcome.card.downloadAction": "Tải về",
 	"welcome.card.needs": "Cần",
 	"welcome.card.runsIn": "Chạy trên",
 	"welcome.card.speed": "Tốc độ",
