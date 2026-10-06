@@ -91,7 +91,7 @@ import { useSettingsStore } from "./stores/settings";
 import { ensureTabRuntime } from "./stores/tab-runtime";
 import { useSessionTabs, useTabsStore } from "./stores/tabs";
 import { toast } from "./stores/toast";
-import { type PanelTab, useUiStore } from "./stores/ui";
+import { panelTabFromPref, useUiStore } from "./stores/ui";
 import { subscribeUpdaterStatus } from "./stores/updater";
 
 // Heavy overlays code-split: they render null while closed, so they download
@@ -283,12 +283,9 @@ export function App() {
 					useUiStore.setState({ transcriptDetail: prefs.transcriptDetail });
 				}
 				// Restore the default workspace panel tab (written by Settings → GUI).
-				if (
-					!changedPreferences.has("panelTab") &&
-					typeof prefs.defaultPanelTab === "string" &&
-					["diff", "files", "logs"].includes(prefs.defaultPanelTab)
-				) {
-					useUiStore.setState({ panelTab: prefs.defaultPanelTab as PanelTab });
+				const defaultPanelTab = panelTabFromPref(prefs.defaultPanelTab);
+				if (!changedPreferences.has("panelTab") && defaultPanelTab !== null) {
+					useUiStore.setState({ panelTab: defaultPanelTab });
 				}
 			})
 			.catch(() => {})

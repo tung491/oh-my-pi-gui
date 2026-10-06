@@ -8,6 +8,14 @@ import { useTabsStore } from "./tabs";
 export type { ThemeMode };
 
 export type PanelTab = "diff" | "files" | "logs";
+
+/**
+ * The workspace panel tab a persisted `defaultPanelTab` preference restores,
+ * or null when the stored value names no tab.
+ */
+export function panelTabFromPref(value: unknown): PanelTab | null {
+	return value === "diff" || value === "files" || value === "logs" ? value : null;
+}
 /** Center-dock card identifiers: todo/plan/agents render as live cards above the composer. */
 export type DockCardId = "todo" | "plan" | "agents";
 export type TranscriptDetail = "compact" | "full";

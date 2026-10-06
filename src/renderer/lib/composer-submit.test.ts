@@ -432,6 +432,24 @@ describe("planComposerSubmit GUI-only routing", () => {
 	});
 });
 
+describe("planComposerSubmit removed commands", () => {
+	it.each(["/share", "/collab x", "/mcp"])("blocks %s instead of handing it to the agent's own command", message => {
+		const omp = installMockOmp();
+		const name = message.slice(1).split(" ")[0] ?? "";
+		const submit = planComposerSubmit({
+			message,
+			images: [],
+			isStreaming: false,
+			mode: "prompt",
+			commands: [{ name, description: "x", source: "builtin", textModeExecutable: true }],
+			rpc: omp.rpc,
+		});
+		expect(submit.kind).toBe("blocked");
+		expect(omp.rpc.prompt).not.toHaveBeenCalled();
+		expect(useToastStore.getState().toasts.some(toast => toast.variant === "warning")).toBe(true);
+	});
+});
+
 describe("settleComposerResponse", () => {
 	it("rehydrates on agentInvoked:false (local-only slash command)", async () => {
 		const omp = installMockOmp();

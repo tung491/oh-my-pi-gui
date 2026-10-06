@@ -659,6 +659,7 @@ export function Sidebar() {
 				key={item.id}
 				type="button"
 				onClick={item.onClick}
+				data-sidebar-nav={item.id}
 				data-command-center-entry={item.id === "commands" ? true : undefined}
 				title={
 					item.title ??

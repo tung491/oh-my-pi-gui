@@ -271,6 +271,18 @@ describe("hotkey reference table", () => {
 	});
 });
 
+describe("everyday-work hotkeys", () => {
+	it("drops the developer hotkeys and keeps the core ones", () => {
+		const ids = KEYMAP_ACTIONS.map(action => action.id as string);
+		for (const removed of ["plan.toggle", "pr.center", "tab.newChat", "tab.newWorktree"]) {
+			expect(ids, removed).not.toContain(removed);
+		}
+		for (const kept of ["agents.hub", "palette", "settings", "tab.new"]) {
+			expect(ids, kept).toContain(kept);
+		}
+	});
+});
+
 describe("sanitizeOverrides", () => {
 	it("drops unknown actions, non-arrays, unparsable and duplicate chords", () => {
 		const raw = {

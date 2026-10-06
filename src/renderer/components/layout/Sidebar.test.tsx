@@ -810,6 +810,27 @@ describe("Sidebar menus and pinned ordering", () => {
 	});
 });
 
+describe("Sidebar single task lane", () => {
+	it("keeps only the everyday nav items, no lane switch and one New task button", async () => {
+		installMockOmp(LIST);
+		seedStores();
+		await mount(<Sidebar />);
+
+		const navIds = [...container.querySelectorAll("[data-sidebar-nav]")].map(item =>
+			item.getAttribute("data-sidebar-nav"),
+		);
+		expect(navIds).toEqual(["commands", "providers", "settings"]);
+		const codeLabel = en["sidebar.mode.code"];
+		expect(
+			[...container.querySelectorAll("*")].filter(element => (element.textContent ?? "").trim() === codeLabel),
+		).toHaveLength(0);
+		const newWork = en["sidebar.newWork"];
+		expect(
+			[...container.querySelectorAll("button")].filter(button => (button.textContent ?? "").trim() === newWork),
+		).toHaveLength(1);
+	});
+});
+
 describe("Sidebar VIF rail", () => {
 	it("renders the VIF rail", async () => {
 		const omp = installMockOmp(LIST);
