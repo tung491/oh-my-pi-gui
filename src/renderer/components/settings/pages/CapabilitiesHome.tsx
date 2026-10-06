@@ -25,11 +25,7 @@ import { Button } from "../../common";
 
 export type CapabilityTarget =
 	| "model"
-	| "modelRoles"
-	| "modelCompare"
-	| "benchmark"
 	| "providers"
-	| "usage"
 	| "agents"
 	| "skills"
 	| "mcp"
@@ -61,7 +57,6 @@ export type CapabilityTarget =
 	| "workspaceDirs"
 	| "prCenter"
 	| "tools"
-	| "stats"
 	| "jobs"
 	| "hotkeys"
 	| "theme"
@@ -78,7 +73,6 @@ interface CapabilitiesHomeProps {
 	memoryBackend: string;
 	onConfigureTtsr: () => void;
 	onOpenAgents: () => void;
-	onOpenModelRoles: () => void;
 	onConfigureAdvisor: () => void;
 	onOpenGoal: () => void;
 	onOpenLoop: () => void;
@@ -167,7 +161,6 @@ export function CapabilitiesHome({
 	memoryBackend,
 	onConfigureTtsr,
 	onOpenAgents,
-	onOpenModelRoles,
 	onConfigureAdvisor,
 	onOpenGoal,
 	onOpenLoop,
@@ -252,16 +245,6 @@ export function CapabilitiesHome({
 				</CapabilityCard>
 
 				<CapabilityCard
-					description={t("settings.capabilities.modelRolesDesc")}
-					icon={<Bot size={16} />}
-					title={t("settings.capabilities.modelRoles")}
-				>
-					<Button onClick={onOpenModelRoles} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.configureModelRoles")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
 					description={t("settings.capabilities.advisorDesc")}
 					icon={<BrainCircuit size={16} />}
 					status={
@@ -320,14 +303,10 @@ export function CapabilitiesHome({
 				</CapabilityCard>
 				<CapabilityCard description={t("cmd.model.desc")} icon={<Bot size={16} />} title={t("cmd.model")}>
 					<TargetButton label={t("cmd.model")} onOpen={onOpenTarget} target="model" variant="secondary" />
-					<TargetButton label={t("cmd.modelRoles")} onOpen={onOpenTarget} target="modelRoles" />
-					<TargetButton label={t("cmd.modelCompare")} onOpen={onOpenTarget} target="modelCompare" />
-					<TargetButton label={t("cmd.benchmark")} onOpen={onOpenTarget} target="benchmark" />
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.providers.desc")} icon={<Plug size={16} />} title={t("cmd.providers")}>
 					<TargetButton label={t("cmd.providers")} onOpen={onOpenTarget} target="providers" variant="secondary" />
-					<TargetButton label={t("cmd.usage")} onOpen={onOpenTarget} target="usage" />
 				</CapabilityCard>
 
 				<CapabilityCard
@@ -373,7 +352,6 @@ export function CapabilitiesHome({
 
 				<CapabilityCard description={t("cmd.context.desc")} icon={<BarChart3 size={16} />} title={t("cmd.stats")}>
 					<TargetButton label={t("cmd.tools")} onOpen={onOpenTarget} target="tools" />
-					<TargetButton label={t("cmd.stats")} onOpen={onOpenTarget} target="stats" />
 					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" />
 				</CapabilityCard>
 

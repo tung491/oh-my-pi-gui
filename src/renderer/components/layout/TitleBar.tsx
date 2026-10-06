@@ -63,8 +63,6 @@ export function TitleBar() {
 	const panelVisible = useUiStore(s => s.panelVisible);
 	const togglePanel = useUiStore(s => s.togglePanel);
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
-	const openUsage = useUiStore(s => s.openUsage);
-	const openStatsDashboard = useUiStore(s => s.openStatsDashboard);
 	const openActiveTools = useUiStore(s => s.openActiveTools);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
 	const openBranchPicker = useUiStore(s => s.openBranchPicker);
@@ -233,26 +231,6 @@ export function TitleBar() {
 			onSelect: () => {
 				setActionsMenu(null);
 				openActiveTools();
-			},
-		},
-		{
-			id: "usage",
-			label: t("cmd.usage"),
-			description: t("cmd.usage.desc"),
-			icon: Gauge,
-			onSelect: () => {
-				setActionsMenu(null);
-				openUsage();
-			},
-		},
-		{
-			id: "stats",
-			label: t("cmd.stats"),
-			description: t("cmd.stats.desc"),
-			icon: Database,
-			onSelect: () => {
-				setActionsMenu(null);
-				openStatsDashboard();
 			},
 		},
 	];

@@ -139,7 +139,7 @@ afterEach(async () => {
 	await act(async () => root?.unmount());
 	container?.remove();
 	document.body.innerHTML = "";
-	useUiStore.setState({ modelPickerOpen: false, modelRolesOpen: false, providersOpen: false });
+	useUiStore.setState({ modelPickerOpen: false, providersOpen: false });
 	useModelStore.getState().reset();
 	useSessionStore.getState().reset();
 });
@@ -193,13 +193,6 @@ describe("filters and count", () => {
 });
 
 describe("footer", () => {
-	it("Assign roles closes the picker and opens the model roles window", async () => {
-		await mount();
-		await click(button("Assign roles"));
-		expect(useUiStore.getState().modelRolesOpen).toBe(true);
-		expect(useUiStore.getState().modelPickerOpen).toBe(false);
-	});
-
 	it("Open Ollama settings closes the picker and opens the Ollama window", async () => {
 		await mount();
 		await click(button("Open Ollama settings"));

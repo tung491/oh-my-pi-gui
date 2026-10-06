@@ -54,7 +54,6 @@ export function ComposerModes({
 	const autoRetry = useSettingsStore(s => s.autoRetry);
 	const steeringMode = useSettingsStore(s => s.steeringMode);
 	const interruptMode = useSettingsStore(s => s.interruptMode);
-	const openModelRoles = useUiStore(s => s.openModelRoles);
 	const openModes = useUiStore(s => s.openModes);
 
 	const [pending, setPending] = useState(false);
@@ -212,13 +211,6 @@ export function ComposerModes({
 								checked={vibeModeEnabled}
 								navigates
 								onSelect={() => select(() => openModes("vibe"))}
-							/>
-							<ModeRow
-								label={t("input.roles.label")}
-								title={t("input.roles.title")}
-								checked={false}
-								navigates
-								onSelect={() => select(openModelRoles)}
 							/>
 							<div className="mx-2 my-1 border-t border-[var(--omp-border-muted)]" />
 							<div className="px-2.5 pt-1 pb-0.5 text-omp-xs font-semibold uppercase tracking-wide text-[var(--omp-dim)]">

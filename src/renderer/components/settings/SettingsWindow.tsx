@@ -727,20 +727,8 @@ export function SettingsWindow() {
 				case "model":
 					external(() => useUiStore.getState().openModelPicker());
 					return;
-				case "modelRoles":
-					external(() => useUiStore.getState().openModelRoles());
-					return;
-				case "modelCompare":
-					external(() => useUiStore.getState().openModelCompare());
-					return;
-				case "benchmark":
-					external(() => useUiStore.getState().openBenchmark());
-					return;
 				case "providers":
 					external(() => useUiStore.getState().openProviders());
-					return;
-				case "usage":
-					external(() => useUiStore.getState().openUsage());
 					return;
 				case "agents":
 					external(() => useUiStore.getState().openAgentHub());
@@ -846,9 +834,6 @@ export function SettingsWindow() {
 					return;
 				case "tools":
 					external(() => useUiStore.getState().openActiveTools());
-					return;
-				case "stats":
-					external(() => useUiStore.getState().openStatsDashboard());
 					return;
 				case "jobs":
 					external(() => useUiStore.getState().openJobs());
@@ -1049,10 +1034,6 @@ export function SettingsWindow() {
 											useUiStore.getState().openCommandPalette();
 										}}
 										onOpenTarget={openCapabilityTarget}
-										onOpenModelRoles={() => {
-											close();
-											useUiStore.getState().openModelRoles();
-										}}
 										ready={loadState === "ready" && sidecarReady}
 										ttsrEnabled={values["ttsr.enabled"] === true}
 									/>

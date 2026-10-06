@@ -1,12 +1,10 @@
 import {
-	BarChart3,
 	Bot,
 	BriefcaseBusiness,
 	ChevronDown,
 	ChevronRight,
 	ChevronUp,
 	Code2,
-	Coins,
 	ExternalLink,
 	Folder,
 	GitBranchPlus,
@@ -605,12 +603,6 @@ export function Sidebar() {
 			onClick: () => useUiStore.getState().openPrCenter(),
 		},
 		{
-			id: "stats",
-			icon: BarChart3,
-			label: t("titlebar.stats"),
-			onClick: () => useUiStore.getState().openStatsDashboard(),
-		},
-		{
 			id: "providers",
 			icon: Plug,
 			label: t("ollama.settings.title"),
@@ -618,12 +610,6 @@ export function Sidebar() {
 		},
 	];
 	const secondaryNavItems: SidebarNavItem[] = [
-		{
-			id: "usage",
-			icon: Coins,
-			label: t("titlebar.usage"),
-			onClick: () => useUiStore.getState().openUsage(),
-		},
 		{
 			id: "capabilities",
 			icon: Sparkles,

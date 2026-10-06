@@ -64,7 +64,6 @@ describe("CapabilitiesHome", () => {
 					onOpenGoal={noop}
 					onOpenLoop={noop}
 					onOpenMemory={noop}
-					onOpenModelRoles={noop}
 					onOpenTools={noop}
 					onOpenCommandCenter={noop}
 					onOpenTarget={noop}
@@ -78,7 +77,6 @@ describe("CapabilitiesHome", () => {
 		expect(html.indexOf("Mid-stream correction · TTSR")).toBeLessThan(html.indexOf("Parallel subagents"));
 		expect(html).toContain("Configure rules");
 		expect(html).toContain("Open Agent Hub");
-		expect(html).toContain("Configure model roles");
 		expect(html).toContain("Advisor settings");
 		expect(html).toContain("Goal mode");
 		expect(html).toContain("Loop mode");

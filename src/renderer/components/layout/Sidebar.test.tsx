@@ -230,9 +230,7 @@ afterEach(async () => {
 		panelVisible: false,
 		sessionPickerOpen: false,
 		hotkeysOpen: false,
-		usageOpen: false,
 		providersOpen: false,
-		statsDashboardOpen: false,
 	});
 });
 
@@ -268,8 +266,6 @@ describe("Sidebar menus and pinned ordering", () => {
 			"Start with what makes OMP different",
 			"Agent Hub",
 			"Ollama",
-			"Usage & quotas",
-			"Session stats",
 			"PR Center",
 			"Open workspace",
 			"Keyboard shortcuts",
@@ -849,7 +845,7 @@ describe("Sidebar VIF rail", () => {
 		const navigation = container.querySelector("[data-sidebar-navigation]");
 		if (!navigation) throw new Error("sidebar navigation missing");
 		const navButtons = navigation.querySelectorAll("button");
-		for (const [index, label] of ["Commands", "Agent Hub", "PR Center", "Session stats", "Ollama"].entries()) {
+		for (const [index, label] of ["Commands", "Agent Hub", "PR Center", "Ollama"].entries()) {
 			expect((navButtons[index]?.textContent ?? "").startsWith(label), `navigation item ${index}: ${label}`).toBe(
 				true,
 			);

@@ -230,7 +230,7 @@ function resetAll(): void {
 	usePlanApprovalStore.getState().clearProposal();
 	useExtensionUiStore.getState().clearAll();
 	useUiStore.getState().closeSessionOverlays();
-	useUiStore.getState().closeStatsDashboard();
+	useUiStore.getState().closeProviders();
 	useForkHandoffStore.getState().closeHandoffDialog();
 }
 
@@ -452,7 +452,7 @@ describe("tabs store switch", () => {
 		useUiStore.getState().openSettings();
 		useUiStore.getState().openSessionInfo();
 		useUiStore.getState().openModes("goal");
-		useUiStore.getState().openStatsDashboard();
+		useUiStore.getState().openProviders();
 		useForkHandoffStore.getState().openHandoffDialog();
 
 		await useTabsStore.getState().switchTab("t1");
@@ -461,7 +461,7 @@ describe("tabs store switch", () => {
 		expect(useUiStore.getState().sessionInfoOpen).toBe(false);
 		expect(useUiStore.getState().modesOpen).toBe(false);
 		expect(useForkHandoffStore.getState().handoffDialogOpen).toBe(false);
-		expect(useUiStore.getState().statsDashboardOpen).toBe(true);
+		expect(useUiStore.getState().providersOpen).toBe(true);
 	});
 
 	it("serializes rapid switches and hydrates only the latest visible tab", async () => {

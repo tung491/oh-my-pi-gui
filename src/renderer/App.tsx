@@ -96,13 +96,6 @@ const ComposerEditorDialog = lazy(() =>
 const SettingsWindow = lazy(() =>
 	import("./components/settings/SettingsWindow").then(m => ({ default: m.SettingsWindow })),
 );
-const StatsDashboard = lazy(() =>
-	import("./components/stats/StatsDashboard").then(m => ({ default: m.StatsDashboard })),
-);
-const ModelCompare = lazy(() => import("./components/settings/ModelCompare").then(m => ({ default: m.ModelCompare })));
-const BenchmarkDialog = lazy(() =>
-	import("./components/dialogs/BenchmarkDialog").then(m => ({ default: m.BenchmarkDialog })),
-);
 const ExtensionsPanel = lazy(() =>
 	import("./components/panels/ExtensionsPanel").then(m => ({ default: m.ExtensionsPanel })),
 );
@@ -115,10 +108,6 @@ const AgentHubWindow = lazy(() =>
 );
 const PrCenterWindow = lazy(() =>
 	import("./components/panels/PrCenterWindow").then(m => ({ default: m.PrCenterWindow })),
-);
-const UsageWindow = lazy(() => import("./components/settings/UsageWindow").then(m => ({ default: m.UsageWindow })));
-const ModelRolesWindow = lazy(() =>
-	import("./components/settings/ModelRolesWindow").then(m => ({ default: m.ModelRolesWindow })),
 );
 const ProvidersWindow = lazy(() =>
 	import("./components/settings/ProvidersWindow").then(m => ({ default: m.ProvidersWindow })),
@@ -184,12 +173,6 @@ export function App() {
 	const theme = useUiStore(s => s.theme);
 	const fontSize = useUiStore(s => s.fontSize);
 	const followAgentTheme = useUiStore(s => s.followAgentTheme);
-	const statsDashboardOpen = useUiStore(s => s.statsDashboardOpen);
-	const closeStatsDashboard = useUiStore(s => s.closeStatsDashboard);
-	const modelCompareOpen = useUiStore(s => s.modelCompareOpen);
-	const closeModelCompare = useUiStore(s => s.closeModelCompare);
-	const benchmarkOpen = useUiStore(s => s.benchmarkOpen);
-	const closeBenchmark = useUiStore(s => s.closeBenchmark);
 	const extensionsOpen = useUiStore(s => s.extensionsOpen);
 	const extensionsTab = useUiStore(s => s.extensionsTab);
 	const closeExtensions = useUiStore(s => s.closeExtensions);
@@ -502,8 +485,6 @@ export function App() {
 				ui.commandPaletteOpen ||
 				ui.modelPickerOpen ||
 				ui.settingsOpen ||
-				ui.statsDashboardOpen ||
-				ui.benchmarkOpen ||
 				ui.sessionPickerOpen ||
 				ui.branchPickerOpen ||
 				ui.hotkeysOpen;
@@ -595,10 +576,6 @@ export function App() {
 				ui.openSettings();
 				return;
 			}
-			if (action === "open-usage") {
-				ui.openUsage();
-				return;
-			}
 			if (action === "open-model-picker") {
 				ui.openModelPicker();
 				return;
@@ -636,10 +613,6 @@ export function App() {
 				ui.openJobs();
 				return;
 			}
-			if (action === "open-stats") {
-				ui.openStatsDashboard();
-				return;
-			}
 			if (action === "open-hotkeys") {
 				ui.openHotkeys();
 				return;
@@ -662,10 +635,6 @@ export function App() {
 			}
 			if (action === "open-providers") {
 				ui.openProviders();
-				return;
-			}
-			if (action === "open-model-roles") {
-				ui.openModelRoles();
 				return;
 			}
 			if (action === "open-extensions") {
@@ -767,11 +736,7 @@ export function App() {
 			<HandoffDialog />
 			<Suspense fallback={null}>
 				<SettingsWindow />
-				<UsageWindow />
 				<ProvidersWindow />
-				<ModelRolesWindow />
-				<ModelCompare open={modelCompareOpen} onClose={closeModelCompare} />
-				<BenchmarkDialog open={benchmarkOpen} onClose={closeBenchmark} />
 				<ExtensionsPanel open={extensionsOpen} onClose={closeExtensions} initialTab={extensionsTab} />
 				<InventoryPanel open={inventoryOpen} onClose={closeInventory} initialTab={inventoryTab} />
 				<ModesPanel open={modesOpen} onClose={closeModes} initialTab={modesTab} />
@@ -786,9 +751,6 @@ export function App() {
 					<ComposerEditorDialog />
 				</Suspense>
 			)}
-			<Suspense fallback={null}>
-				<StatsDashboard open={statsDashboardOpen} onClose={closeStatsDashboard} />
-			</Suspense>
 			<ToastStack />
 		</div>
 	);

@@ -144,17 +144,12 @@ export function CommandPalette() {
 	const close = useUiStore(state => state.closeCommandPalette);
 	const openModelPicker = useUiStore(state => state.openModelPicker);
 	const openSettings = useUiStore(state => state.openSettings);
-	const openUsage = useUiStore(state => state.openUsage);
 	const openProviders = useUiStore(state => state.openProviders);
-	const openModelRoles = useUiStore(state => state.openModelRoles);
-	const openStatsDashboard = useUiStore(state => state.openStatsDashboard);
 	const openRenameDialog = useUiStore(state => state.openRenameDialog);
 	const openSessionPicker = useUiStore(state => state.openSessionPicker);
 	const openBranchPicker = useUiStore(state => state.openBranchPicker);
 	const openSessionTree = useUiStore(state => state.openSessionTree);
 	const openSessionInfo = useUiStore(state => state.openSessionInfo);
-	const openModelCompare = useUiStore(state => state.openModelCompare);
-	const openBenchmark = useUiStore(state => state.openBenchmark);
 	const openExtensions = useUiStore(state => state.openExtensions);
 	const openInventory = useUiStore(state => state.openInventory);
 	const openThemePicker = useUiStore(state => state.openThemePicker);
@@ -319,17 +314,12 @@ export function CommandPalette() {
 				availableCommands,
 				openModelPicker,
 				openSettings,
-				openUsage,
 				openProviders,
-				openModelRoles,
-				openStatsDashboard,
 				openRenameDialog,
 				openSessionPicker,
 				openBranchPicker,
 				openSessionTree,
 				openSessionInfo,
-				openModelCompare,
-				openBenchmark,
 				openHandoffDialog,
 				forkSession: forkSessionFromGui,
 				hydrateSession: () => (tabId ? hydrateTabSession(tabId) : hydrateSession()),
@@ -378,10 +368,7 @@ export function CommandPalette() {
 			availableCommands,
 			openModelPicker,
 			openSettings,
-			openUsage,
 			openProviders,
-			openModelRoles,
-			openStatsDashboard,
 			openRenameDialog,
 			openSessionPicker,
 			openBranchPicker,
@@ -391,8 +378,6 @@ export function CommandPalette() {
 			retryTurn,
 			openModes,
 			focusDockCard,
-			openModelCompare,
-			openBenchmark,
 			openAgentHub,
 			openPrCenter,
 			openHotkeys,

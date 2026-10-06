@@ -170,18 +170,13 @@ export interface CommandRegistryContext {
 	availableCommands: AvailableCommand[];
 	openModelPicker: () => void;
 	openSettings: (tab?: string) => void;
-	openUsage: () => void;
 	openProviders: () => void;
 	openCommandPalette: () => void;
-	openModelRoles: () => void;
-	openStatsDashboard: () => void;
 	openRenameDialog: () => void;
 	openSessionPicker: () => void;
 	openBranchPicker: () => void;
 	openSessionTree: () => void;
 	openSessionInfo: () => void;
-	openModelCompare: () => void;
-	openBenchmark: () => void;
 	openHandoffDialog: () => void;
 	openExtensions: (tab?: "hooks" | "mcp" | "commands") => void;
 	openInventory: (tab?: "plugins" | "marketplaces" | "templates" | "memory") => void;
@@ -762,29 +757,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 			],
 		},
 	});
-	add({
-		name: "model-roles",
-		label: t("cmd.modelRoles"),
-		description: t("cmd.modelRoles.desc"),
-		category: "model",
-		affordance: { kind: "window", open: ctx.openModelRoles },
-	});
-	add({
-		name: "model-compare",
-		label: t("cmd.modelCompare"),
-		description: t("cmd.modelCompare.desc"),
-		category: "model",
-		aliases: ["compare"],
-		affordance: { kind: "window", open: ctx.openModelCompare },
-	});
-	add({
-		name: "benchmark",
-		label: t("cmd.benchmark"),
-		description: t("cmd.benchmark.desc"),
-		category: "model",
-		aliases: ["bench", "performance"],
-		affordance: { kind: "window", open: ctx.openBenchmark },
-	});
 
 	// ═══════════════════════════════════════════════════════════════════
 	// CONTEXT
@@ -960,13 +932,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		category: "providers",
 		aliases: ["setup"],
 		affordance: { kind: "window", open: ctx.openProviders },
-	});
-	add({
-		name: "usage",
-		label: t("cmd.usage"),
-		description: t("cmd.usage.desc"),
-		category: "providers",
-		affordance: { kind: "window", open: ctx.openUsage },
 	});
 
 	// ═══════════════════════════════════════════════════════════════════
@@ -1302,13 +1267,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		category: "view",
 		shortcut: "⌘,",
 		affordance: { kind: "window", open: ctx.openSettings },
-	});
-	add({
-		name: "stats",
-		label: t("cmd.stats"),
-		description: t("cmd.stats.desc"),
-		category: "view",
-		affordance: { kind: "window", open: ctx.openStatsDashboard },
 	});
 	add({
 		name: "jobs",
@@ -1701,18 +1659,13 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 		availableCommands,
 		openModelPicker: ui.openModelPicker,
 		openSettings: ui.openSettings,
-		openUsage: ui.openUsage,
 		openProviders: ui.openProviders,
 		openCommandPalette: ui.openCommandPalette,
-		openModelRoles: ui.openModelRoles,
-		openStatsDashboard: ui.openStatsDashboard,
 		openRenameDialog: ui.openRenameDialog,
 		openSessionPicker: ui.openSessionPicker,
 		openBranchPicker: ui.openBranchPicker,
 		openSessionTree: ui.openSessionTree,
 		openSessionInfo: ui.openSessionInfo,
-		openModelCompare: ui.openModelCompare,
-		openBenchmark: ui.openBenchmark,
 		openHandoffDialog,
 		openExtensions: ui.openExtensions,
 		openInventory: ui.openInventory,

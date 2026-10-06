@@ -43,14 +43,9 @@ interface UiStore {
 	modelPickerOpen: boolean;
 	settingsOpen: boolean;
 	settingsTab: string;
-	usageOpen: boolean;
 	providersOpen: boolean;
 	/** The local-model welcome screen (first run, or reopened from Settings › Ollama). */
 	welcomeOpen: boolean;
-	modelRolesOpen: boolean;
-	statsDashboardOpen: boolean;
-	modelCompareOpen: boolean;
-	benchmarkOpen: boolean;
 	extensionsOpen: boolean;
 	extensionsTab: "hooks" | "mcp" | "commands";
 	inventoryOpen: boolean;
@@ -130,20 +125,10 @@ interface UiStore {
 	closeModelPicker: () => void;
 	openSettings: (tab?: string) => void;
 	closeSettings: () => void;
-	openUsage: () => void;
-	closeUsage: () => void;
 	openProviders: () => void;
 	closeProviders: () => void;
 	openWelcome: () => void;
 	closeWelcome: () => void;
-	openModelRoles: () => void;
-	closeModelRoles: () => void;
-	openStatsDashboard: () => void;
-	closeStatsDashboard: () => void;
-	openModelCompare: () => void;
-	closeModelCompare: () => void;
-	openBenchmark: () => void;
-	closeBenchmark: () => void;
 	openExtensions: (tab?: "hooks" | "mcp" | "commands") => void;
 	closeExtensions: () => void;
 	openInventory: (tab?: "plugins" | "marketplaces" | "templates" | "memory") => void;
@@ -277,27 +262,12 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			settingsTab: tab ?? (state.settingsOpen ? state.settingsTab : "capabilities"),
 		})),
 	closeSettings: () => set({ settingsOpen: false }),
-	usageOpen: false,
 	providersOpen: false,
-	openUsage: () => set({ usageOpen: true }),
-	closeUsage: () => set({ usageOpen: false }),
 	openProviders: () => set({ providersOpen: true }),
 	closeProviders: () => set({ providersOpen: false }),
 	welcomeOpen: false,
 	openWelcome: () => set({ welcomeOpen: true }),
 	closeWelcome: () => set({ welcomeOpen: false }),
-	modelRolesOpen: false,
-	openModelRoles: () => set({ modelRolesOpen: true }),
-	closeModelRoles: () => set({ modelRolesOpen: false }),
-	statsDashboardOpen: false,
-	openStatsDashboard: () => set({ statsDashboardOpen: true }),
-	closeStatsDashboard: () => set({ statsDashboardOpen: false }),
-	modelCompareOpen: false,
-	openModelCompare: () => set({ modelCompareOpen: true }),
-	closeModelCompare: () => set({ modelCompareOpen: false }),
-	benchmarkOpen: false,
-	openBenchmark: () => set({ benchmarkOpen: true }),
-	closeBenchmark: () => set({ benchmarkOpen: false }),
 	extensionsOpen: false,
 	extensionsTab: "hooks" as const,
 	inventoryOpen: false,
