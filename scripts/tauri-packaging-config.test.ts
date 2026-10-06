@@ -197,8 +197,13 @@ describe("sidecar placement", () => {
 
 	it("the Linux config ships the sidecar as the omp resource and sets no externalBin", () => {
 		// Installs as /usr/lib/Sai ATLAS/omp (deb) and $APPDIR/usr/lib/Sai ATLAS/omp
-		// (AppImage), where paths::resolve_bundled_omp looks, never on PATH.
-		expect(bundled("linux").bundle?.resources).toEqual({ "binaries/omp-x86_64-unknown-linux-gnu": "omp" });
+		// (AppImage), where paths::resolve_bundled_omp looks, never on PATH. The
+		// assistant pack sits beside it, where the manager looks for it; the
+		// trailing slashes copy the directory tree (a glob key flattens the skill folders).
+		expect(bundled("linux").bundle?.resources).toEqual({
+			"binaries/omp-x86_64-unknown-linux-gnu": "omp",
+			"../resources/assistant-pack/": "assistant-pack/",
+		});
 		expect(bundled("linux").bundle?.externalBin).toBeUndefined();
 		expect(stagedSidecarPath("x86_64-unknown-linux-gnu")).toBe("src-tauri/binaries/omp-x86_64-unknown-linux-gnu");
 	});

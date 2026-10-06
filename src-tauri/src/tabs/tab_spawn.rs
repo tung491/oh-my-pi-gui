@@ -1,10 +1,12 @@
 //! Port of `src/main/tab-spawn.ts`: the `tab:spawn` decision (acquire a sidecar
 //! for a new tab of the calling window, or refuse).
 //!
-//! Two refusal codes:
+//! Every tab spawns an assistant session (`Agent`), whatever kind the payload
+//! asks for. Two refusal codes:
 //! - `owned`: the session file is already attached to a tab (double attach);
-//! - `kind-mismatch`: the payload's explicit kind disagrees with the kind stamped
-//!   in the file (reject, never degrade). Without a payload kind the file wins.
+//! - `kind-mismatch`: the session file is stamped `chat`. omp would resume it
+//!   restricted to its stamped tools, without the assistant pack, so the user is
+//!   told to start a new task instead.
 
 use serde_json::{json, Value};
 
@@ -43,20 +45,16 @@ pub(crate) async fn spawn_tab_for_window(ctx: &AppCtx, win_id: WindowId, payload
         return Err(IpcError::bad_payload("tab:spawn", "expected an object"));
     }
     let session_path = non_empty_str(payload, "sessionPath").map(str::to_string);
-    // `kind !== undefined` in TS: an explicit value, even an unknown one, counts as a request.
-    let requested_kind = payload.get("kind");
-    let mut kind = if requested_kind.and_then(Value::as_str) == Some("chat") { SessionKind::Chat } else { SessionKind::Agent };
+    let kind = SessionKind::Agent;
     if let Some(session_path) = &session_path {
         // A live owner wins over every other consideration.
         if let Some(owner) = ctx.tabs.session_owner(session_path) {
             return Ok(json!({ "tabId": null, "ownerTabId": owner.tab_id, "ownerWinId": owner.win_id, "refusal": "owned" }));
         }
-        // The kind stamped in the file is authoritative.
-        let file_kind = ctx.services.session_kind_for(session_path).await;
-        if requested_kind.is_some() && file_kind != kind {
+        // A chat-stamped file cannot carry the pack: refuse it whatever the payload says.
+        if ctx.services.session_kind_for(session_path).await == SessionKind::Chat {
             return Ok(json!({ "tabId": null, "refusal": "kind-mismatch" }));
         }
-        kind = file_kind;
     }
     if ctx.tabs.at_cap() {
         return Ok(Value::Null);
@@ -146,41 +144,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refuses_an_explicit_chat_payload_against_an_agent_file_i3_reject_never_degrade() {
+    async fn spawns_an_agent_session_for_a_chat_request() {
         let (fakes, ctx) = harness();
-        let result = spawn(&ctx, json!({ "sessionPath": "/s/agent.jsonl", "kind": "chat" })).await;
+        let fresh = spawn(&ctx, json!({ "cwd": "/work", "kind": "chat" })).await;
 
-        assert_eq!(result, json!({ "tabId": null, "refusal": "kind-mismatch" }));
-        assert!(acquires(&fakes).is_empty());
-        assert_eq!(kind_lookups(&fakes), ["session_kind_for(/s/agent.jsonl)"]);
+        assert_eq!(acquires(&fakes), [expected_acquire(&fresh, "/work", None, SessionKind::Agent, None, true)]);
+        assert!(kind_lookups(&fakes).is_empty());
+
+        // An agent file opened with a chat request resumes as an agent session.
+        let resumed = spawn(&ctx, json!({ "sessionPath": "/s/agent.jsonl", "kind": "chat" })).await;
+
+        assert_eq!(acquires(&fakes).last(), Some(&expected_acquire(&resumed, "/fallback", Some("/s/agent.jsonl"), SessionKind::Agent, None, false)));
     }
 
     #[tokio::test]
-    async fn refuses_an_explicit_agent_payload_against_a_chat_file() {
+    async fn refuses_a_chat_stamped_session_file_with_kind_mismatch() {
         let (fakes, ctx) = harness();
         fakes.services.kinds.lock().unwrap().insert("/s/chat.jsonl".into(), SessionKind::Chat);
-        let result = spawn(&ctx, json!({ "sessionPath": "/s/chat.jsonl", "kind": "agent" })).await;
+        for kind in ["agent", "chat"] {
+            let result = spawn(&ctx, json!({ "sessionPath": "/s/chat.jsonl", "kind": kind })).await;
 
-        assert_eq!(result, json!({ "tabId": null, "refusal": "kind-mismatch" }));
+            assert_eq!(result, json!({ "tabId": null, "refusal": "kind-mismatch" }));
+        }
         assert!(acquires(&fakes).is_empty());
+        assert_eq!(kind_lookups(&fakes), ["session_kind_for(/s/chat.jsonl)", "session_kind_for(/s/chat.jsonl)"]);
     }
 
     #[tokio::test]
-    async fn spawns_with_the_file_s_kind_when_the_payload_omits_it_file_is_authoritative() {
+    async fn refuses_a_chat_stamped_session_file_even_when_the_payload_omits_kind() {
         let (fakes, ctx) = harness();
         fakes.services.kinds.lock().unwrap().insert("/s/chat.jsonl".into(), SessionKind::Chat);
         let result = spawn(&ctx, json!({ "sessionPath": "/s/chat.jsonl" })).await;
 
-        assert_eq!(acquires(&fakes), [expected_acquire(&result, "/fallback", Some("/s/chat.jsonl"), SessionKind::Chat, None, false)]);
-    }
-
-    #[tokio::test]
-    async fn acquires_with_the_requested_kind_when_it_matches_the_file() {
-        let (fakes, ctx) = harness();
-        fakes.services.kinds.lock().unwrap().insert("/s/chat.jsonl".into(), SessionKind::Chat);
-        let result = spawn(&ctx, json!({ "sessionPath": "/s/chat.jsonl", "kind": "chat" })).await;
-
-        assert_eq!(acquires(&fakes), [expected_acquire(&result, "/fallback", Some("/s/chat.jsonl"), SessionKind::Chat, None, false)]);
+        assert_eq!(result, json!({ "tabId": null, "refusal": "kind-mismatch" }));
+        assert!(acquires(&fakes).is_empty());
     }
 
     #[tokio::test]

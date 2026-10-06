@@ -20,6 +20,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot, watch};
 
+use super::assistant_pack;
 use super::rpc_bridge::{attach_ndjson_parser, supports_rpc_protocol_v2};
 use super::rpc_client::RpcClient;
 use crate::bridge::spawn_task;
@@ -129,24 +130,85 @@ fn stderr_excerpt(lines: &[String]) -> String {
 // Launch profiles (`src/shared/launch-profile.ts`)
 // ---------------------------------------------------------------------------
 
-/// Flags the GUI owns; a launch profile must never override them.
+/// Flags the GUI owns, plus every flag that changes what an assistant session
+/// loads or approves; a launch profile must never override them.
 const DENYLISTED_FLAGS: &[&str] = &[
-    "--session", "--mode", "--print", "--print-thoughts", "--export", "--cwd", "--resume", "--fork", "--help", "--version", "--no-pty", "--no-title", "--no-auto-resume", "--api-key", "--chat",
+    "--session",
+    "--mode",
+    "--print",
+    "--print-thoughts",
+    "--export",
+    "--cwd",
+    "--resume",
+    "--fork",
+    "--help",
+    "--version",
+    "--no-pty",
+    "--no-title",
+    "--no-auto-resume",
+    "--api-key",
+    "--chat",
+    "--no-tools",
+    "--no-extensions",
+    "--no-skills",
+    "--auto-approve",
+    "--yolo",
+    "--plan-yolo",
+    "--no-rules",
+    "--extension",
+    "--hook",
+    "--tools",
+    "--system-prompt",
+    "--system-prompt-template",
+    "--append-system-prompt",
+    "--config",
+    "--approval-mode",
+    "--skills",
+    "--plugin-dir",
+    "--trusted-extension",
+    "--profile",
+    "--plan-yolo-into",
+    "--add-dir",
 ];
 /// Denylisted flags that consume a separate value token.
-const DENYLISTED_WITH_VALUE: &[&str] = &["--session", "--mode", "--export", "--cwd", "--resume", "--fork", "--api-key"];
+const DENYLISTED_WITH_VALUE: &[&str] = &[
+    "--session",
+    "--mode",
+    "--export",
+    "--cwd",
+    "--resume",
+    "--fork",
+    "--api-key",
+    "--extension",
+    "--hook",
+    "--tools",
+    "--system-prompt",
+    "--system-prompt-template",
+    "--append-system-prompt",
+    "--config",
+    "--approval-mode",
+    "--skills",
+    "--plugin-dir",
+    "--trusted-extension",
+    "--profile",
+    "--plan-yolo-into",
+    "--add-dir",
+];
 /// Non-denylisted flags whose next token is data, never inspected as a flag.
-const VALUED_FLAGS: &[&str] = &["--system-prompt", "--append-system-prompt", "--add-dir", "--tools", "--profile", "--session-dir", "--config"];
+const VALUED_FLAGS: &[&str] = &["--session-dir"];
 
 /// Drop denylisted flags (and their value tokens) from a flag list, pair-aware.
+/// Every other token that is not a `--` flag is dropped: no short option is
+/// allowed (`-e <path>` loads an extension), and a value left behind by a
+/// dropped flag must not reach omp as a positional argument. A bare `--` goes
+/// too, since it would turn the flags after it into positional arguments.
 pub(crate) fn strip_denylisted_flags(flags: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     let mut index = 0;
     while index < flags.len() {
         let token = &flags[index];
         index += 1;
-        if !token.starts_with("--") {
-            out.push(token.clone());
+        if !token.starts_with("--") || token == "--" {
             continue;
         }
         let (name, has_eq) = match token.find('=') {
@@ -180,45 +242,18 @@ fn trimmed_string(value: Option<&Value>) -> Option<String> {
     value.and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty()).map(str::to_string)
 }
 
-fn string_list(value: Option<&Value>) -> Vec<String> {
-    value.and_then(Value::as_array).map(|items| items.iter().filter_map(Value::as_str).map(str::trim).filter(|item| !item.is_empty()).map(str::to_string).collect()).unwrap_or_default()
-}
-
 /// Sanitize untrusted prefs JSON into agent CLI flags in the fixed profile order.
-/// Unknown keys (a hand-edited `"--session"`) never reach the mapping.
+/// Unknown keys (a hand-edited `"--session"`) never reach the mapping, and only
+/// the fields that cannot change what an assistant session loads or approves
+/// still map (`--no-lsp`, `--session-dir`).
 pub(crate) fn launch_profile_to_flags(raw: &Value) -> Vec<String> {
     let Some(record) = raw.as_object() else { return Vec::new() };
     let mut flags = Vec::new();
-    if let Some(prompt) = record.get("systemPrompt").and_then(Value::as_str).filter(|text| !text.trim().is_empty()) {
-        flags.extend(["--system-prompt".to_string(), prompt.to_string()]);
-    }
-    if let Some(prompt) = record.get("appendSystemPrompt").and_then(Value::as_str).filter(|text| !text.trim().is_empty()) {
-        flags.extend(["--append-system-prompt".to_string(), prompt.to_string()]);
-    }
-    if record.get("noRules") == Some(&Value::Bool(true)) {
-        flags.push("--no-rules".to_string());
-    }
-    for dir in string_list(record.get("addDirs")) {
-        flags.extend(["--add-dir".to_string(), dir]);
-    }
-    let tools = string_list(record.get("tools"));
-    if !tools.is_empty() {
-        flags.extend(["--tools".to_string(), tools.join(",")]);
-    }
     if record.get("noLsp") == Some(&Value::Bool(true)) {
         flags.push("--no-lsp".to_string());
     }
-    if record.get("planYolo") == Some(&Value::Bool(true)) {
-        flags.push("--plan-yolo".to_string());
-    }
-    if let Some(profile) = trimmed_string(record.get("profile")) {
-        flags.extend(["--profile".to_string(), profile]);
-    }
     if let Some(dir) = trimmed_string(record.get("sessionDir")) {
         flags.extend(["--session-dir".to_string(), dir]);
-    }
-    if let Some(config) = trimmed_string(record.get("config")) {
-        flags.extend(["--config".to_string(), config]);
     }
     flags
 }
@@ -402,6 +437,8 @@ struct State {
     start_seq: u64,
     last_stderr: Vec<String>,
     spawn_env: HashMap<String, String>,
+    /// Pack directory checked by the last `start()`; every spawn of this cycle loads it.
+    pack_dir: PathBuf,
     resume_session_path: Option<String>,
     fresh_launch_pending: bool,
     disposed: bool,
@@ -443,6 +480,7 @@ impl SidecarManager {
             start_seq: 0,
             last_stderr: Vec::new(),
             spawn_env: HashMap::new(),
+            pack_dir: PathBuf::new(),
             resume_session_path: resume,
             fresh_launch_pending: fresh,
             disposed: false,
@@ -451,6 +489,17 @@ impl SidecarManager {
         };
         let inner = Arc::new(Inner { ctx, state: Mutex::new(state), events, spawn_env, report_failure });
         (Arc::new(Self { inner }), receiver)
+    }
+}
+
+/// Roots searched for `resources/assistant-pack` when no pack sits beside the
+/// binary: only dev and e2e builds, whose fixture sidecar lives outside the
+/// tree. A shipped build loads the pack it bundles.
+fn pack_search_from() -> Vec<PathBuf> {
+    if tauri::is_dev() || cfg!(feature = "e2e-hooks") {
+        vec![PathBuf::from(env!("CARGO_MANIFEST_DIR"))]
+    } else {
+        Vec::new()
     }
 }
 
@@ -485,19 +534,27 @@ impl Inner {
     }
 
     fn start(self: &Arc<Self>) {
-        let (packaged, missing) = {
+        let (packaged, binary) = {
             let state = lock(&self.state);
             if state.disposed {
                 return;
             }
-            (state.options.packaged, state.options.binary_path.as_os_str().is_empty())
+            (state.options.packaged, state.options.binary_path.clone())
         };
         // Closed loop: only the bundled binary may run. Missing it is an
         // actionable error, never an external fallback.
-        if missing {
+        if binary.as_os_str().is_empty() {
             self.set_status(SidecarStatus::Error, Some(missing_sidecar_message(packaged, None)), None);
             return;
         }
+        // The session is only an assistant with the whole pack: omp skips a missing
+        // extension silently and reads a missing prompt path as literal text.
+        let pack_dir = assistant_pack::resolve_pack_dir(&binary, &pack_search_from());
+        if let Some(file) = assistant_pack::missing_pack_file(&pack_dir) {
+            self.set_status(SidecarStatus::Error, Some(assistant_pack::missing_pack_message(file, packaged)), None);
+            return;
+        }
+        lock(&self.state).pack_dir = pack_dir;
         self.set_status(SidecarStatus::Starting, None, None);
         // Env resolution takes up to 4 s. A restart()/start() landing inside that
         // window supersedes this pending spawn, so spawning here would orphan the
@@ -546,11 +603,11 @@ impl Inner {
             } else if state.fresh_launch_pending {
                 args.push("--no-auto-resume".to_string());
             }
-            if state.options.kind == SessionKind::Chat {
-                args.push("--chat".to_string());
-            }
+            args.extend(assistant_pack::pack_flags(&state.pack_dir, std::env::consts::OS));
             (state.options.clone(), args, state.generation, state.spawn_env.clone())
         };
+        // `en` covers a context already gone at shutdown.
+        let language = self.ctx.upgrade().map_or("en", |ctx| ctx.i18n.language().code());
         // User-controllable flags ride the extra_flags seam plus the launch
         // profile. The denylist is applied over both, so neither can override the
         // code-controlled argv above, while a profile value that merely looks
@@ -570,6 +627,12 @@ impl Inner {
             // Ollama's native api carries `num_ctx`; over the OpenAI-compatible one
             // the server keeps its default context, below the agent's first request.
             command.env("PI_OLLAMA_API", "ollama-chat");
+            // The pack's tools start system programs, some of them shell scripts:
+            // no startup file may ride along into them.
+            command.env_remove("BASH_ENV").env_remove("ENV");
+            for (key, value) in assistant_pack::pack_env(language) {
+                command.env(key, value);
+            }
         });
         let mut supervised = match spawned {
             Ok(supervised) => supervised,
@@ -1026,6 +1089,44 @@ pub(crate) mod tests {
         SidecarOptions { binary_path: binary, cwd: cwd.to_string_lossy().into_owned(), extra_flags: Vec::new(), packaged: false, fresh: false, kind: SessionKind::Agent, resume_session_path: None }
     }
 
+    /// The pack a fixture sidecar outside the tree resolves through the dev fallback.
+    fn dev_pack() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("resources").join("assistant-pack")
+    }
+
+    /// The `--tools` value of the spawn contract for the platform running the suite.
+    fn pack_tools() -> &'static str {
+        if cfg!(target_os = "linux") {
+            "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean"
+        } else {
+            "read,glob,write,ask,office_report,office_slides,office_clean"
+        }
+    }
+
+    /// The pack part of the spawn argv, written out so the test does not restate the code it checks.
+    fn expected_pack_flags(pack: &Path) -> Vec<String> {
+        vec![
+            "--no-extensions".to_string(),
+            "--extension".to_string(),
+            pack.to_string_lossy().into_owned(),
+            "--tools".to_string(),
+            pack_tools().to_string(),
+            "--system-prompt".to_string(),
+            pack.join("system-prompt.md").to_string_lossy().into_owned(),
+            "--config".to_string(),
+            pack.join("config.yml").to_string_lossy().into_owned(),
+            "--approval-mode".to_string(),
+            "always-ask".to_string(),
+        ]
+    }
+
+    fn argv(head: &[&str], pack: &Path, tail: &[&str]) -> Vec<String> {
+        let mut argv: Vec<String> = head.iter().map(|arg| arg.to_string()).collect();
+        argv.extend(expected_pack_flags(pack));
+        argv.extend(tail.iter().map(|arg| arg.to_string()));
+        argv
+    }
+
     /// A bun script standing in for omp, as the TS tests write them.
     fn write_script(dir: &Path, body: &str) -> PathBuf {
         let path = dir.join("fake-sidecar.ts");
@@ -1086,10 +1187,60 @@ pub(crate) mod tests {
         statuses
     }
 
+    fn strip(flags: &[&str]) -> Vec<String> {
+        strip_denylisted_flags(&flags.iter().map(|flag| flag.to_string()).collect::<Vec<_>>())
+    }
+
     #[test]
     fn strips_denylisted_flags_pair_aware() {
-        let flags: Vec<String> = ["--session", "x", "--append-system-prompt", "--session", "--mode=print", "--no-rules", "positional"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(strip_denylisted_flags(&flags), vec!["--append-system-prompt", "--session", "--no-rules", "positional"]);
+        // The value of an allowed valued flag is data, even when it looks like a flag.
+        assert_eq!(strip(&["--session", "x", "--session-dir", "--session", "--mode=print", "--no-lsp", "positional"]), vec!["--session-dir", "--session", "--no-lsp"]);
+        assert_eq!(strip(&["--session", "--session-dir", "/s"]), vec!["--session-dir", "/s"]);
+        // Bare flags that change what a session loads or approves.
+        for flag in ["--no-tools", "--no-extensions", "--no-skills", "--auto-approve", "--yolo", "--plan-yolo", "--no-rules", "--chat"] {
+            assert_eq!(strip(&[flag, "--no-lsp"]), vec!["--no-lsp"], "{flag}");
+            assert_eq!(strip(&[&format!("{flag}=1"), "--no-lsp"]), vec!["--no-lsp"], "{flag}=1");
+        }
+        // Valued ones lose their value too, in both forms.
+        for flag in [
+            "--extension",
+            "--hook",
+            "--tools",
+            "--system-prompt",
+            "--system-prompt-template",
+            "--append-system-prompt",
+            "--config",
+            "--approval-mode",
+            "--skills",
+            "--plugin-dir",
+            "--trusted-extension",
+            "--profile",
+            "--plan-yolo-into",
+            "--add-dir",
+        ] {
+            assert_eq!(strip(&[flag, "/value", "--no-lsp"]), vec!["--no-lsp"], "{flag}");
+            assert_eq!(strip(&[&format!("{flag}=/value"), "--no-lsp"]), vec!["--no-lsp"], "{flag}=");
+        }
+        assert_eq!(strip(&["--config", "--mode=text"]), Vec::<String>::new());
+        // No short option is allowed, and a dropped flag's value never stays behind as a positional.
+        assert_eq!(strip(&["-e", "/y", "--no-lsp"]), vec!["--no-lsp"]);
+        assert_eq!(strip(&["-e/y", "--session-dir", "/s"]), vec!["--session-dir", "/s"]);
+        assert_eq!(strip(&["-x", "value", "--no-lsp"]), vec!["--no-lsp"]);
+        assert_eq!(strip(&["stray", "--no-lsp", "-", "--"]), vec!["--no-lsp"]);
+        // A stored profile maps only the fields that cannot change what a session loads.
+        let profile = json!({
+            "systemPrompt": "s",
+            "appendSystemPrompt": "a",
+            "noRules": true,
+            "addDirs": ["/a"],
+            "tools": ["bash"],
+            "noLsp": true,
+            "planYolo": true,
+            "profile": "p",
+            "sessionDir": " /s ",
+            "config": "/c.yml",
+        });
+        assert_eq!(launch_profile_to_flags(&profile), vec!["--no-lsp", "--session-dir", "/s"]);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1103,21 +1254,92 @@ pub(crate) mod tests {
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
         sidecar.dispose().await;
-        assert_eq!(launch, vec!["--mode", "rpc-ui", "--session", &session_path.to_string_lossy()]);
+        assert_eq!(launch, argv(&["--mode", "rpc-ui", "--session", &session_path.to_string_lossy()], &dev_pack(), &[]));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn spawns_a_chat_sidecar_with_chat_in_the_code_controlled_argv() {
+    async fn spawns_every_sidecar_with_the_assistant_pack_flags_and_never_chat() {
         let dir = tempfile::tempdir().unwrap();
         let mut options = options(fixture_path(), dir.path());
+        // A tab created as a chat still gets the pack: the chat branch is gone.
         options.kind = SessionKind::Chat;
-        let (sidecar, mut events) = manager(options);
+        options.fresh = true;
+        // Shell startup files reaching the spawn env are removed; the app language
+        // is set last (`en` without an app context).
+        let (sidecar, mut events) = SidecarManager::new(Weak::new(), options, fixed_env(&[("BASH_ENV", "/rc/bash_env"), ("ENV", "/rc/env"), ("SAI_ATLAS_LANG", "xx")]));
         sidecar.start();
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
-        assert_eq!(sidecar.kind(), SessionKind::Chat);
+        let pid = wait_for_pid(&sidecar).await;
+        let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
         sidecar.dispose().await;
-        assert_eq!(launch, vec!["--mode", "rpc-ui", "--chat"]);
+        let child_env: HashMap<String, String> = environ
+            .split(|byte| *byte == 0)
+            .filter_map(|entry| String::from_utf8_lossy(entry).split_once('=').map(|(key, value)| (key.to_string(), value.to_string())))
+            .collect();
+        assert_eq!(child_env.get("SAI_ATLAS_LANG").map(String::as_str), Some("en"));
+        assert_eq!(child_env.get("BASH_ENV"), None);
+        assert_eq!(child_env.get("ENV"), None);
+        let pack = dev_pack();
+        let expected = vec![
+            "--mode".to_string(),
+            "rpc-ui".to_string(),
+            "--no-auto-resume".to_string(),
+            "--no-extensions".to_string(),
+            "--extension".to_string(),
+            pack.to_string_lossy().into_owned(),
+            "--tools".to_string(),
+            pack_tools().to_string(),
+            "--system-prompt".to_string(),
+            pack.join("system-prompt.md").to_string_lossy().into_owned(),
+            "--config".to_string(),
+            pack.join("config.yml").to_string_lossy().into_owned(),
+            "--approval-mode".to_string(),
+            "always-ask".to_string(),
+        ];
+        assert_eq!(launch, expected);
+        assert!(!launch.iter().any(|arg| arg == "--chat"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn surfaces_a_reinstall_instruction_when_a_pack_file_is_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let spawned = dir.path().join("spawned");
+        let script = write_script(
+            dir.path(),
+            &format!(
+                r#"import * as fs from "node:fs";
+fs.writeFileSync({spawned:?}, "1");
+process.stdout.write(JSON.stringify({{ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }}) + "\n");
+process.stdin.resume();"#,
+                spawned = spawned.to_string_lossy()
+            ),
+        );
+        // The directory exists with one listed file left out, so no fallback applies.
+        let pack = dir.path().join("assistant-pack");
+        for file in crate::omp::assistant_pack::ASSISTANT_PACK_FILES.iter().filter(|file| **file != "config.yml") {
+            let path = pack.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "x").unwrap();
+        }
+        std::fs::create_dir_all(&pack).unwrap();
+        let mut options = options(script, dir.path());
+        options.packaged = true;
+        let (sidecar, mut events) = manager(options);
+        sidecar.start();
+        let first = events.try_recv().expect("a status right away");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let later: Vec<SidecarEvent> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+        let has_rpc = sidecar.has_rpc_client();
+        sidecar.dispose().await;
+        let SidecarEvent::Status(payload) = first else { panic!("expected a status") };
+        assert_eq!(payload.status, SidecarStatus::Error);
+        let message = payload.message.unwrap_or_default();
+        assert!(message.contains("config.yml"), "{message}");
+        assert!(message.contains("Reinstall Sai ATLAS"), "{message}");
+        assert!(later.iter().all(|event| !matches!(event, SidecarEvent::Status(_))));
+        assert!(!has_rpc);
+        assert!(!spawned.exists());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1129,12 +1351,12 @@ pub(crate) mod tests {
         sidecar.start();
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
-        assert_eq!(launch, vec!["--mode", "rpc-ui", "--no-auto-resume"]);
+        assert_eq!(launch, argv(&["--mode", "rpc-ui", "--no-auto-resume"], &dev_pack(), &[]));
         sidecar.restart(None, None);
         wait_for_ready(&mut events).await;
         let restart_launch = launch_argv(&sidecar).await;
         sidecar.dispose().await;
-        assert_eq!(restart_launch, vec!["--mode", "rpc-ui"]);
+        assert_eq!(restart_launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &[]));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1186,7 +1408,10 @@ process.stdin.resume();"#,
                         "appendSystemPrompt": "GUI injected",
                         "noRules": true,
                         "addDirs": ["/data/extra"],
-                        "tools": ["read", "bash"],
+                        "tools": ["edit"],
+                        "config": "/x",
+                        "noLsp": true,
+                        "sessionDir": "/data/sessions",
                         // Smuggled keys that could reach code-controlled flags are dropped before the mapping.
                         "--session": "hijack",
                         "session": "hijack",
@@ -1194,12 +1419,25 @@ process.stdin.resume();"#,
                 }),
             )
             .unwrap();
-        let (sidecar, mut events) = SidecarManager::new(Arc::downgrade(&ctx), options(fixture_path(), &workspace), fixed_env(&[]));
+        // The extra-flags seam carries what a stored profile cannot express.
+        let smuggled = ["--tools", "edit", "--yolo", "--config", "/x", "-e", "/y", "--hook", "/z"];
+        let mut options = options(fixture_path(), &workspace);
+        options.extra_flags = smuggled.iter().map(|flag| flag.to_string()).collect();
+        let (sidecar, mut events) = SidecarManager::new(Arc::downgrade(&ctx), options, fixed_env(&[]));
         sidecar.start();
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
         sidecar.dispose().await;
-        assert_eq!(launch, vec!["--mode", "rpc-ui", "--append-system-prompt", "GUI injected", "--no-rules", "--add-dir", "/data/extra", "--tools", "read,bash"]);
+        // Only the profile flags that cannot change what the session loads survive.
+        assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &["--no-lsp", "--session-dir", "/data/sessions"]));
+        for token in smuggled.iter().chain(["GUI injected", "--append-system-prompt", "--no-rules", "--add-dir", "/data/extra"].iter()) {
+            if *token == "--tools" || *token == "--config" {
+                continue;
+            }
+            assert!(!launch.iter().any(|arg| arg == token), "{token} survived");
+        }
+        assert_eq!(launch.iter().filter(|arg| *arg == "--tools").count(), 1);
+        assert_eq!(launch.iter().filter(|arg| *arg == "--config").count(), 1);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1217,8 +1455,10 @@ process.stdin.resume();"#,
         wait_for_ready(&mut events).await;
         let pid = wait_for_pid(&sidecar).await;
         let spawn_cwd = std::fs::read_link(format!("/proc/{pid}/cwd")).unwrap();
+        let launch = launch_argv(&sidecar).await;
         sidecar.dispose().await;
         assert_eq!(spawn_cwd, adopted_cwd);
+        assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &[]));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

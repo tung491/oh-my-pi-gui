@@ -10,6 +10,8 @@ files:
 extraResources:
   - from: resources/omp.x64
     to: omp
+  - from: resources/assistant-pack
+    to: assistant-pack
 # Must match electron-builder.yml: the x64 bundle is a separate config, so the
 # `omp://` scheme has to be declared here too or Intel Macs get no deep links.
 protocols:

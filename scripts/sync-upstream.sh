@@ -66,9 +66,13 @@ fi
 say "5/7 gen:stats (embed stats dashboard)"
 bun --cwd=packages/stats run gen:stats
 
-say "6/7 build:omp (rebuild bundled sidecar)"
+say "6/7 build:omp (rebuild bundled sidecar) + assistant pack load check"
 bun --cwd="$GUI" run build:omp
 "$GUI/resources/omp" --smoke-test
+# The new sidecar must still load the assistant pack exactly (tools, skills,
+# prompt, pinned settings). resources/assistant-pack is gitignored, so build it first.
+bun --cwd="$GUI" run build:pack
+bun --cwd="$GUI" scripts/check-assistant-pack.ts resources/omp
 
 say "7/7 GUI build + typecheck + tests"
 bun --cwd="$GUI" run build

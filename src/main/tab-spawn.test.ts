@@ -44,56 +44,56 @@ function harness(options: { atCap?: boolean } = {}): Harness {
 }
 
 describe("spawnTabForWindow refusal contracts", () => {
-	it("refuses an explicit chat payload against an agent file (I3: reject, never degrade)", async () => {
+	it("spawns an agent session for a chat request", async () => {
 		const { deps, acquire, kindFor } = harness();
-		const result = await spawnTabForWindow(deps, fakeWindow(), { sessionPath: "/s/agent.jsonl", kind: "chat" });
+		const fresh = await spawnTabForWindow(deps, fakeWindow(), { cwd: "/work", kind: "chat" });
 
-		expect(result).toEqual({ tabId: null, refusal: "kind-mismatch" });
-		expect(acquire).not.toHaveBeenCalled();
-		expect(kindFor).toHaveBeenCalledWith("/s/agent.jsonl");
+		expect(fresh?.tabId).toEqual(expect.any(String));
+		expect(acquire).toHaveBeenLastCalledWith(
+			"/work",
+			expect.anything(),
+			expect.any(String),
+			undefined,
+			"agent",
+			undefined,
+			true,
+		);
+		expect(kindFor).not.toHaveBeenCalled();
+
+		// An agent file opened with a chat request resumes as an agent session.
+		const resumed = await spawnTabForWindow(deps, fakeWindow(), { sessionPath: "/s/agent.jsonl", kind: "chat" });
+
+		expect(resumed?.tabId).toEqual(expect.any(String));
+		expect(acquire).toHaveBeenLastCalledWith(
+			"/fallback",
+			expect.anything(),
+			expect.any(String),
+			"/s/agent.jsonl",
+			"agent",
+			undefined,
+			false,
+		);
 	});
 
-	it("refuses an explicit agent payload against a chat file", async () => {
+	it("refuses a chat-stamped session file with kind-mismatch", async () => {
 		const { deps, acquire, kindFor } = harness();
 		kindFor.mockResolvedValue("chat");
-		const result = await spawnTabForWindow(deps, fakeWindow(), { sessionPath: "/s/chat.jsonl", kind: "agent" });
+		for (const kind of ["agent", "chat"] as const) {
+			const result = await spawnTabForWindow(deps, fakeWindow(), { sessionPath: "/s/chat.jsonl", kind });
 
-		expect(result).toEqual({ tabId: null, refusal: "kind-mismatch" });
+			expect(result).toEqual({ tabId: null, refusal: "kind-mismatch" });
+		}
 		expect(acquire).not.toHaveBeenCalled();
+		expect(kindFor).toHaveBeenCalledWith("/s/chat.jsonl");
 	});
 
-	it("spawns with the file's kind when the payload omits it (file is authoritative)", async () => {
+	it("refuses a chat-stamped session file even when the payload omits kind", async () => {
 		const { deps, acquire, kindFor } = harness();
 		kindFor.mockResolvedValue("chat");
 		const result = await spawnTabForWindow(deps, fakeWindow(), { sessionPath: "/s/chat.jsonl" });
 
-		expect(result?.tabId).toEqual(expect.any(String));
-		expect(acquire).toHaveBeenCalledWith(
-			"/fallback",
-			expect.anything(),
-			expect.any(String),
-			"/s/chat.jsonl",
-			"chat",
-			undefined,
-			false,
-		);
-	});
-
-	it("acquires with the requested kind when it matches the file", async () => {
-		const { deps, acquire, kindFor } = harness();
-		kindFor.mockResolvedValue("chat");
-		const result = await spawnTabForWindow(deps, fakeWindow(), { sessionPath: "/s/chat.jsonl", kind: "chat" });
-
-		expect(result?.tabId).toEqual(expect.any(String));
-		expect(acquire).toHaveBeenCalledWith(
-			"/fallback",
-			expect.anything(),
-			expect.any(String),
-			"/s/chat.jsonl",
-			"chat",
-			undefined,
-			false,
-		);
+		expect(result).toEqual({ tabId: null, refusal: "kind-mismatch" });
+		expect(acquire).not.toHaveBeenCalled();
 	});
 
 	it("owner wins over kind resolution (F-OWN checked first, kindFor not consulted)", async () => {

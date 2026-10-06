@@ -86,6 +86,14 @@ describe("mac bundle configs", () => {
 		}
 	});
 
+	it("ships the assistant pack beside the sidecar", () => {
+		// The main process loads the pack from `dirname(omp)/assistant-pack` and
+		// refuses to spawn without it.
+		for (const { file, config } of configs) {
+			expect(config.extraResources, file).toContainEqual({ from: "resources/assistant-pack", to: "assistant-pack" });
+		}
+	});
+
 	it("names the app in every privacy prompt the bundle can trigger", () => {
 		for (const { file, config } of configs) {
 			const info = config.mac?.extendInfo ?? {};

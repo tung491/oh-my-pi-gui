@@ -1,33 +1,21 @@
-// Pack load check: starts the sidecar with the assistant-pack spawn flags and proves it loaded
-// exactly the pack: the tool list, the four skills, the system prompt, no pack agent, and every
-// config.yml setting read back with the pack's value from the overlay layer.
-//   bun scripts/check-assistant-pack.ts <omp binary> <pack dir> [--tools <comma list>] [--lang en|vi]
-// Prints one row per tool, skill and setting; exits 1 naming every failed check, 2 on bad usage.
+// Pack load check: starts the sidecar with the shells' assistant-pack spawn flags and env and
+// proves it loaded exactly the pack: the tool list, the four skills, the system prompt, no pack
+// agent, and every config.yml setting read back with the pack's value from the overlay layer.
+//   bun scripts/check-assistant-pack.ts <omp binary> [<pack dir>] [--tools <comma list>] [--lang en|vi]
+// The pack dir defaults to the one the shells resolve for that binary. Prints one row per tool,
+// skill and setting; exits 1 naming every failed check, 2 on bad usage.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
+import { assistantPackEnv, assistantPackFlags, resolveAssistantPackDir } from "../src/main/assistant-pack";
 
-/** The Linux `--tools` value of the spawn contract. */
-const DEFAULT_TOOLS = [
-	"read",
-	"glob",
-	"write",
-	"ask",
-	"diagnose",
-	"system_status",
-	"open_item",
-	"os_setting",
-	"office_report",
-	"office_slides",
-	"office_clean",
-];
 const PACK_SKILLS = ["sai-os-helpdesk", "slides-from-report", "spreadsheet-cleanup", "word-report"];
 const READY_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const KILL_GRACE_MS = 5_000;
 const USAGE =
-	"usage: bun scripts/check-assistant-pack.ts <omp binary> <pack dir> [--tools <comma list>] [--lang en|vi]";
+	"usage: bun scripts/check-assistant-pack.ts <omp binary> [<pack dir>] [--tools <comma list>] [--lang en|vi]";
 
 type Frame = { type: string; [key: string]: unknown };
 
@@ -312,12 +300,12 @@ async function main(): Promise<number> {
 	}
 	const [ompArg, packArg] = parsed.positionals;
 	const lang = parsed.values.lang ?? "en";
-	if (!ompArg || !packArg || parsed.positionals.length !== 2 || (lang !== "en" && lang !== "vi")) {
+	if (!ompArg || parsed.positionals.length > 2 || (lang !== "en" && lang !== "vi")) {
 		console.error(USAGE);
 		return 2;
 	}
 	const omp = resolve(ompArg);
-	const pack = resolve(packArg);
+	const pack = packArg ? resolve(packArg) : resolveAssistantPackDir(omp);
 	if (!existsSync(omp)) {
 		console.error(`sidecar binary missing: ${omp}`);
 		return 2;
@@ -328,10 +316,14 @@ async function main(): Promise<number> {
 			return 2;
 		}
 	}
-	const tools = (parsed.values.tools ?? DEFAULT_TOOLS.join(","))
+	// The flags the shells spawn with; `--tools` replaces only the tool list.
+	const packFlags = assistantPackFlags(pack, process.platform);
+	const toolsAt = packFlags.indexOf("--tools") + 1;
+	const tools = (parsed.values.tools ?? packFlags[toolsAt])
 		.split(",")
 		.map(name => name.trim())
 		.filter(Boolean);
+	packFlags[toolsAt] = tools.join(",");
 
 	const scratch = mkdtempSync(join(tmpdir(), "sai-atlas-pack-check-"));
 	const home = join(scratch, "home");
@@ -344,24 +336,8 @@ async function main(): Promise<number> {
 	// would add layers (or hide skills) that the shells never pass to a pack session.
 	for (const key of ["BASH_ENV", "ENV", "PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR"]) delete env[key];
 	env.HOME = home;
-	env.SAI_ATLAS_LANG = lang;
-	const argv = [
-		omp,
-		"--mode",
-		"rpc-ui",
-		"--no-session",
-		"--no-extensions",
-		"--extension",
-		pack,
-		"--tools",
-		tools.join(","),
-		"--system-prompt",
-		join(pack, "system-prompt.md"),
-		"--config",
-		join(pack, "config.yml"),
-		"--approval-mode",
-		"always-ask",
-	];
+	Object.assign(env, assistantPackEnv({ language: lang }));
+	const argv = [omp, "--mode", "rpc-ui", "--no-session", ...packFlags];
 
 	const sidecar = new Sidecar(argv, env, cwd);
 	let failures: string[];

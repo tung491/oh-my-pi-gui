@@ -30,6 +30,14 @@ import type {
 	SidecarStatusPayload,
 	SubagentFrame,
 } from "../shared/rpc-types";
+import {
+	type AssistantPackLanguage,
+	assistantPackEnv,
+	assistantPackFlags,
+	missingAssistantPackFile,
+	missingAssistantPackMessage,
+	resolveAssistantPackDir,
+} from "./assistant-pack";
 import { EventBatcher } from "./event-batcher";
 import { attachNdjsonParser, supportsRpcProtocolV2 } from "./rpc-bridge";
 import { RpcClient } from "./rpc-client";
@@ -100,8 +108,19 @@ export interface SidecarOptions {
 	packaged?: boolean;
 	/** Fresh GUI tabs must not inherit the CLI's persistent autoResume setting. */
 	fresh?: boolean;
-	/** Session kind: "agent" (default) or "chat" (tool-free conversation). Immutable per sidecar. */
+	/**
+	 * Session kind the tab asked for. Every sidecar spawns as an assistant
+	 * session with the pack loaded, whatever this says.
+	 */
 	kind?: "agent" | "chat";
+	/**
+	 * Roots searched (with their ancestors) for `resources/assistant-pack` when
+	 * no pack sits beside the binary: dev trees and the e2e fixture sidecar.
+	 * A packaged build with its own binary passes none.
+	 */
+	packSearchFrom?: readonly string[];
+	/** The app language at spawn, handed to the pack's tools; `en` when absent. */
+	language?: () => AssistantPackLanguage;
 	/** When set, spawn the workspace source CLI via bun instead of the installed binary. */
 	sourceCli?: string;
 	/**
@@ -229,6 +248,8 @@ export class SidecarManager extends EventEmitter {
 	#proxyEnvVars: Record<string, string> = {};
 	#shellEnvVars: Record<string, string> = {};
 	#resumeSessionPath: string | null = null;
+	/** Pack directory checked by the last start(); every spawn of this cycle loads it. */
+	#packDir = "";
 	#freshLaunchPending: boolean;
 	#disposed = false;
 
@@ -258,6 +279,15 @@ export class SidecarManager extends EventEmitter {
 			this.#setStatus("error", missingSidecarMessage(!!this.#options.packaged, process.resourcesPath));
 			return;
 		}
+		// The session is only an assistant with the whole pack: omp skips a missing
+		// extension silently and reads a missing prompt path as literal text.
+		const packDir = resolveAssistantPackDir(this.#options.binaryPath, this.#options.packSearchFrom);
+		const missingPackFile = missingAssistantPackFile(packDir);
+		if (missingPackFile) {
+			this.#setStatus("error", missingAssistantPackMessage(missingPackFile, !!this.#options.packaged));
+			return;
+		}
+		this.#packDir = packDir;
 		this.#setStatus("starting");
 		const resolveProxyEnv = this.#options.proxyEnv;
 		const resolveShellEnv = this.#options.shellEnv;
@@ -298,7 +328,7 @@ export class SidecarManager extends EventEmitter {
 		const args = ["--mode", "rpc-ui"];
 		if (this.#resumeSessionPath) args.push("--session", this.#resumeSessionPath);
 		else if (this.#freshLaunchPending) args.push("--no-auto-resume");
-		if (this.#options.kind === "chat") args.push("--chat");
+		args.push(...assistantPackFlags(this.#packDir, process.platform));
 		// User-controllable flags ride the extraFlags seam + the launch profile.
 		// Strip the code-controlled-flag denylist (pair-aware) over BOTH, then
 		// append: neither can override the code-controlled argv above, while a
@@ -313,23 +343,30 @@ export class SidecarManager extends EventEmitter {
 		const spawnArgs = sourceCli ? [sourceCli, ...args] : args;
 		console.log(`[sidecar] spawning ${sourceCli ? "source" : "bundled"} omp (${args.length} args, cwd: ${cwd})`);
 
+		const env: NodeJS.ProcessEnv = {
+			...process.env,
+			// Login-shell PATH first so the GUI proxy pref (and inherited
+			// proxy env) keeps precedence over rc-file proxy exports.
+			...this.#shellEnvVars,
+			...this.#proxyEnvVars,
+			PI_RPC_EMIT_TITLE: "1",
+			PI_NO_PTY: "1",
+			PI_NOTIFICATIONS: "off",
+			// Ollama's native api carries `num_ctx`; over the OpenAI-compatible one the
+			// server keeps its default context (4096 on most GPUs), below the agent's first request.
+			PI_OLLAMA_API: "ollama-chat",
+		};
+		// The pack's tools start system programs, some of them shell scripts:
+		// no startup file may ride along into them.
+		delete env.BASH_ENV;
+		delete env.ENV;
+		Object.assign(env, assistantPackEnv({ language: this.#options.language?.() ?? "en" }));
+
 		let child: ChildProcess;
 		try {
 			child = spawn(command, spawnArgs, {
 				stdio: ["pipe", "pipe", "pipe"],
-				env: {
-					...process.env,
-					// Login-shell PATH first so the GUI proxy pref (and inherited
-					// proxy env) keeps precedence over rc-file proxy exports.
-					...this.#shellEnvVars,
-					...this.#proxyEnvVars,
-					PI_RPC_EMIT_TITLE: "1",
-					PI_NO_PTY: "1",
-					PI_NOTIFICATIONS: "off",
-					// Ollama's native api carries `num_ctx`; over the OpenAI-compatible one the
-					// server keeps its default context (4096 on most GPUs), below the agent's first request.
-					PI_OLLAMA_API: "ollama-chat",
-				},
+				env,
 				cwd,
 				windowsHide: true,
 			});
