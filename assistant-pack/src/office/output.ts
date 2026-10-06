@@ -62,7 +62,6 @@ function truncateToBytes(text: string, maxBytes: number): string {
 
 /** A file name without path separators, reserved characters or control characters. */
 export function safeBaseName(name: string): string {
-	// biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what this strips
 	const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "").trim();
 	const capped = truncateToBytes(cleaned, MAX_BASE_NAME_BYTES).trim();
 	return capped || DEFAULT_BASE_NAME;
