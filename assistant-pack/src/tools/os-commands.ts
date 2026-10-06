@@ -38,6 +38,8 @@ export interface OsEnv {
 export interface Check {
 	label: string;
 	argv: readonly string[];
+	/** Keeps only the output lines that match, for a command that prints far more than the answer. */
+	keep?: RegExp;
 }
 
 export const DIAGNOSE_AREAS = [
@@ -70,8 +72,10 @@ export const OPENABLE = [
 	"webp",
 ] as const;
 
+/** GNOME Settings panel ids, each opened as `gnome-control-center <panel>`; `background` is the Appearance page. */
 export const SETTINGS_PANELS = [
 	"network",
+	"wifi",
 	"bluetooth",
 	"display",
 	"sound",
@@ -79,7 +83,7 @@ export const SETTINGS_PANELS = [
 	"power",
 	"keyboard",
 	"notifications",
-	"themes",
+	"background",
 ] as const;
 
 const OS_SETTINGS = ["dark_mode", "night_light", "do_not_disturb", "volume", "text_size"] as const;
@@ -101,9 +105,9 @@ const CHECKS: Record<DiagnoseArea, readonly Check[]> = {
 		{ label: "Devices", argv: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"] },
 	],
 	sound: [
-		{ label: "Default output", argv: ["pactl", "get-default-sink"] },
-		{ label: "Volume", argv: ["pactl", "get-sink-volume", "@DEFAULT_SINK@"] },
-		{ label: "Muted", argv: ["pactl", "get-sink-mute", "@DEFAULT_SINK@"] },
+		{ label: "Default output", argv: ["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"], keep: /\bnode\.description\b/ },
+		// wpctl prints "Volume: 0.34", with " [MUTED]" appended when the output is muted.
+		{ label: "Volume and mute", argv: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"] },
 	],
 	printer: [
 		{ label: "Printers", argv: ["lpstat", "-p", "-d"] },
@@ -123,13 +127,16 @@ const CHECKS: Record<DiagnoseArea, readonly Check[]> = {
 		{ label: "Bluetooth adapter", argv: ["bluetoothctl", "show"] },
 	],
 	display: [
-		{ label: "Screens", argv: ["xrandr", "--listmonitors"] },
-		{ label: "Colour scheme", argv: ["gsettings", "get", "org.x.apps.portal", "color-scheme"] },
+		{
+			label: "Screens (XWayland view, may not list every screen or its real size)",
+			argv: ["xrandr", "--listmonitors"],
+		},
+		{ label: "Colour scheme", argv: ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"] },
 		{
 			label: "Night light",
-			argv: ["gsettings", "get", "org.cinnamon.settings-daemon.plugins.color", "night-light-enabled"],
+			argv: ["gsettings", "get", "org.gnome.settings-daemon.plugins.color", "night-light-enabled"],
 		},
-		{ label: "Text size", argv: ["gsettings", "get", "org.cinnamon.desktop.interface", "text-scaling-factor"] },
+		{ label: "Text size", argv: ["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"] },
 	],
 	typing: [
 		{ label: "Input method setting", argv: ["im-config", "-m"] },
@@ -139,17 +146,27 @@ const CHECKS: Record<DiagnoseArea, readonly Check[]> = {
 	updates: [{ label: "Waiting updates", argv: ["apt", "list", "--upgradable"] }],
 };
 
-const FIXES: Record<DiagnoseArea, string> = {
-	network: "open_item settings network",
+/** System monitors in order of preference: Resources ships with Ubuntu 26.04, the GNOME one with 24.04. */
+const SYSTEM_MONITORS = ["net.nokyan.Resources", "gnome-system-monitor"] as const;
+
+const FIXES: Record<Exclude<DiagnoseArea, "performance">, string> = {
+	network: "open_item settings wifi or network",
 	sound: "os_setting volume; open_item settings sound",
 	printer: "open_item settings printers",
 	storage: "open_item folder (to show the person a folder in their home folder)",
-	performance: "open_item app gnome-system-monitor",
 	bluetooth: "open_item settings bluetooth",
-	display: "os_setting dark_mode, night_light or text_size; open_item settings display",
+	display: "os_setting dark_mode, night_light or text_size; open_item settings display or background",
 	typing: "open_item settings keyboard",
-	updates: "open_item app mintupdate",
+	updates: "open_item app update-manager",
 };
+
+function fixesFor(area: DiagnoseArea, applicationsDir: string): string {
+	if (area !== "performance") return FIXES[area];
+	const monitor = SYSTEM_MONITORS.find(id => systemDesktopEntry(id, applicationsDir));
+	return monitor
+		? `open_item app ${monitor}`
+		: "none on this computer; tell the person which programs are busiest and suggest closing one";
+}
 
 /** Read-only checks of the overall system; the battery is looked up separately through upower. */
 export const STATUS_CHECKS: readonly Check[] = [
@@ -186,28 +203,35 @@ export function buildOsSettingArgv(setting: unknown, value: unknown): string[] {
 		case "do_not_disturb":
 			if (typeof value !== "boolean") throw new ArgumentError("This setting needs true or false.");
 			if (setting === "dark_mode") {
-				return ["gsettings", "set", "org.x.apps.portal", "color-scheme", value ? "prefer-dark" : "default"];
+				return [
+					"gsettings",
+					"set",
+					"org.gnome.desktop.interface",
+					"color-scheme",
+					value ? "prefer-dark" : "default",
+				];
 			}
 			if (setting === "night_light") {
 				return [
 					"gsettings",
 					"set",
-					"org.cinnamon.settings-daemon.plugins.color",
+					"org.gnome.settings-daemon.plugins.color",
 					"night-light-enabled",
 					String(value),
 				];
 			}
-			return ["gsettings", "set", "org.cinnamon.desktop.notifications", "display-notifications", String(!value)];
+			// GNOME's Do Not Disturb is the inverse of showing notification banners.
+			return ["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", String(!value)];
 		case "volume":
 			if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
 				throw new ArgumentError("The volume must be a number from 0 to 100.");
 			}
-			return ["pactl", "set-sink-volume", "@DEFAULT_SINK@", `${Math.round(value)}%`];
+			return ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", `${Math.round(value)}%`];
 		case "text_size":
 			if (typeof value !== "number" || !Number.isFinite(value) || value < 1 || value > 2) {
 				throw new ArgumentError("The text size must be a number from 1.0 to 2.0.");
 			}
-			return ["gsettings", "set", "org.cinnamon.desktop.interface", "text-scaling-factor", String(value)];
+			return ["gsettings", "set", "org.gnome.desktop.interface", "text-scaling-factor", String(value)];
 	}
 }
 
@@ -265,7 +289,7 @@ export function buildOpenItemArgv(item: { kind: unknown; value: unknown }, conte
 			if (!isPanel(value.trim())) {
 				throw new PlainError(`I can only open these settings: ${SETTINGS_PANELS.join(", ")}.`);
 			}
-			return ["cinnamon-settings", value.trim()];
+			return ["gnome-control-center", value.trim()];
 		default:
 			throw new ArgumentError("I can only open a file, a folder, an app or a settings panel.");
 	}
@@ -273,6 +297,7 @@ export function buildOpenItemArgv(item: { kind: unknown; value: unknown }, conte
 
 const PANEL_NAMES: Record<(typeof SETTINGS_PANELS)[number], { en: string; vi: string }> = {
 	network: { en: "network", vi: "mạng" },
+	wifi: { en: "Wi-Fi", vi: "Wi-Fi" },
 	bluetooth: { en: "Bluetooth", vi: "Bluetooth" },
 	display: { en: "display", vi: "màn hình" },
 	sound: { en: "sound", vi: "âm thanh" },
@@ -280,7 +305,7 @@ const PANEL_NAMES: Record<(typeof SETTINGS_PANELS)[number], { en: string; vi: st
 	power: { en: "power", vi: "nguồn điện" },
 	keyboard: { en: "keyboard", vi: "bàn phím" },
 	notifications: { en: "notification", vi: "thông báo" },
-	themes: { en: "theme", vi: "giao diện" },
+	background: { en: "appearance", vi: "giao diện" },
 };
 
 const TOGGLE_NAMES: Record<"dark_mode" | "night_light" | "do_not_disturb", { en: string; vi: string }> = {
@@ -348,6 +373,15 @@ function isEnoent(error: unknown): boolean {
 	return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
 }
 
+function keepLines(output: string, keep: RegExp | undefined): string {
+	if (!keep) return output;
+	return output
+		.split("\n")
+		.filter(line => keep.test(line))
+		.map(line => line.trim())
+		.join("\n");
+}
+
 function clip(output: string): string {
 	const lines = output.trim().split("\n").slice(0, MAX_OUTPUT_LINES).join("\n");
 	return lines.length > MAX_OUTPUT_CHARS ? `${lines.slice(0, MAX_OUTPUT_CHARS)}…` : lines;
@@ -358,7 +392,7 @@ async function runCheck(env: OsEnv, check: Check): Promise<string> {
 	const [file, ...args] = check.argv;
 	try {
 		const { stdout, stderr } = await env.execFile(file, args, { timeout: COMMAND_TIMEOUT_MS });
-		const output = clip(stdout || stderr);
+		const output = clip(keepLines(stdout || stderr, check.keep));
 		return `${check.label}: ${output || "nothing found"}`;
 	} catch (error) {
 		if (isEnoent(error)) return `${check.label}: not available`;
@@ -465,7 +499,7 @@ export function createOsTools(env: OsEnv = defaultOsEnv()): PackTool[] {
 					const { area } = asRecord(params);
 					if (!isArea(area)) throw new ArgumentError(`Choose one of these areas: ${DIAGNOSE_AREAS.join(", ")}.`);
 					const findings = await Promise.all(CHECKS[area].map(check => runCheck(env, check)));
-					const fixes = `Fixes you may offer, one at a time and each approved by the person: ${FIXES[area]}.`;
+					const fixes = `Fixes you may offer, one at a time and each approved by the person: ${fixesFor(area, env.applicationsDir)}.`;
 					return textResult([...findings, fixes].join("\n"));
 				}),
 		},

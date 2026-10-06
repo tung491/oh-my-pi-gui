@@ -17,7 +17,10 @@ Never ask for passwords, never invent commands and never delete the person's fil
 
 No tool does these. Give the person the steps:
 
-- Add a printer: open the menu, then Preferences > Printers, choose Add, pick the printer and follow the steps. `open_item` with settings printers opens this window.
-- Connect a projector or a second screen: plug in the cable, then open the menu, then Preferences > Display, and choose to mirror or extend the screens. `open_item` with settings display opens this window.
-- Pair a Bluetooth device: put the device in pairing mode, open the menu, then Preferences > Bluetooth, turn Bluetooth on, choose the device and confirm the pairing. `open_item` with settings bluetooth opens this window.
-- Change the input method for Vietnamese typing: open the menu, then Preferences > Input Method, choose the input method framework and add Vietnamese; then switch input with the keyboard shortcut shown there. `open_item` with settings keyboard opens the keyboard layouts.
+Open Settings from the system menu at the top right of the screen (the gear button), or press the Super key and type "Settings".
+
+- Add a printer: open Settings, then Printers, choose Add Printer, pick the printer and follow the steps. `open_item` with settings printers opens this page.
+- Connect to Wi-Fi: click the system menu at the top right, open the Wi-Fi list with the arrow, choose the network and type its password yourself. For more choices open Settings, then Wi-Fi. `open_item` with settings wifi opens this page.
+- Connect a projector or a second screen: plug in the cable, then open Settings, then Displays, and choose Mirror or Join Displays. `open_item` with settings display opens this page.
+- Pair a Bluetooth device: put the device in pairing mode, open Settings, then Bluetooth, turn Bluetooth on, choose the device and confirm the pairing. `open_item` with settings bluetooth opens this page.
+- Change the input method for Vietnamese typing: open Settings, then Keyboard, choose Add Input Source under Input Sources, pick Vietnamese and a Vietnamese typing method; then switch input with Super+Space. `open_item` with settings keyboard opens this page.
