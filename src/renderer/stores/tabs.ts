@@ -453,7 +453,6 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		ensureTabRuntime(id);
 		beginTabRoute(state.activeTabId, id);
 		const ui = useUiStore.getState();
-		const stopLive = ui.liveOpen ? window.omp.rpc.liveStop() : null;
 		ui.closeSessionOverlays();
 		useForkHandoffStore.getState().closeHandoffDialog();
 		const split = replaceFocusedSplitTab(state.split, state.activeTabId, id);
@@ -468,12 +467,6 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		});
 		setFocusedSessionRuntime(id);
 		try {
-			if (stopLive) {
-				const stopped = await stopLive;
-				if (!stopped.success) {
-					toast({ variant: "error", title: translate("tabs.switchFailed"), message: stopped.error });
-				}
-			}
 			const routed = await routeTabView(id, split ? [split.firstTabId, split.secondTabId] : [id], split);
 			if (!routed) throw new Error(`Tab ${id} is no longer available`);
 		} catch (error) {
@@ -516,10 +509,8 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		const version = ++switchVersion;
 		beginTabRoute(activeTabId, id);
 		// Same surface handoff as switchTab: the previously focused pane leaves
-		// the foreground role, so its overlays and live voice must not linger
-		// (voice control RPCs route to the newly focused pane's sidecar).
+		// the foreground role, so its overlays must not linger.
 		const ui = useUiStore.getState();
-		const stopLive = ui.liveOpen ? window.omp.rpc.liveStop() : null;
 		ui.closeSessionOverlays();
 		useForkHandoffStore.getState().closeHandoffDialog();
 		set({
@@ -529,12 +520,6 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		});
 		setFocusedSessionRuntime(id);
 		try {
-			if (stopLive) {
-				const stopped = await stopLive;
-				if (!stopped.success) {
-					toast({ variant: "error", title: translate("tabs.switchFailed"), message: stopped.error });
-				}
-			}
 			const routed = await routeTabView(id, [split.firstTabId, split.secondTabId], split);
 			if (!routed) throw new Error(`Tab ${id} is no longer available`);
 		} catch (error) {

@@ -61,18 +61,13 @@ interface UiStore {
 	agentHubOpen: boolean;
 	agentHubTab: "definitions" | "hub";
 	hotkeysOpen: boolean;
-	importDialogOpen: boolean;
 	copySelectorOpen: boolean;
 	changelogOpen: boolean;
 	activeToolsOpen: boolean;
-	shareSessionOpen: boolean;
 	jobsOpen: boolean;
 	workspaceDirsOpen: boolean;
 	forceToolOpen: boolean;
 	btwRequest: string | null;
-	collabOpen: boolean;
-	collabJoinLink: string | null;
-	liveOpen: boolean;
 	composerEditorOpen: boolean;
 	composerEditorInitial: string | null;
 	renameDialogOpen: boolean;
@@ -161,16 +156,12 @@ interface UiStore {
 	closeAgentHub: () => void;
 	openHotkeys: () => void;
 	closeHotkeys: () => void;
-	openImportDialog: () => void;
-	closeImportDialog: () => void;
 	openCopySelector: () => void;
 	closeCopySelector: () => void;
 	openChangelog: () => void;
 	closeChangelog: () => void;
 	openActiveTools: () => void;
 	closeActiveTools: () => void;
-	openShareSession: () => void;
-	closeShareSession: () => void;
 	openJobs: () => void;
 	closeJobs: () => void;
 	openWorkspaceDirs: () => void;
@@ -179,10 +170,6 @@ interface UiStore {
 	closeForceTool: () => void;
 	openBtw: (question: string) => void;
 	closeBtw: () => void;
-	openCollab: (joinLink?: string) => void;
-	closeCollab: () => void;
-	openLive: () => void;
-	closeLive: () => void;
 	openComposerEditor: (initial: string) => void;
 	closeComposerEditor: () => void;
 	openRenameDialog: () => void;
@@ -333,9 +320,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	hotkeysOpen: false,
 	openHotkeys: () => set({ hotkeysOpen: true }),
 	closeHotkeys: () => set({ hotkeysOpen: false }),
-	importDialogOpen: false,
-	openImportDialog: () => set({ importDialogOpen: true }),
-	closeImportDialog: () => set({ importDialogOpen: false }),
 	copySelectorOpen: false,
 	openCopySelector: () => set({ copySelectorOpen: true }),
 	closeCopySelector: () => set({ copySelectorOpen: false }),
@@ -345,9 +329,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	activeToolsOpen: false,
 	openActiveTools: () => set({ activeToolsOpen: true }),
 	closeActiveTools: () => set({ activeToolsOpen: false }),
-	shareSessionOpen: false,
-	openShareSession: () => set({ shareSessionOpen: true }),
-	closeShareSession: () => set({ shareSessionOpen: false }),
 	jobsOpen: false,
 	openJobs: () => set({ jobsOpen: true }),
 	closeJobs: () => set({ jobsOpen: false }),
@@ -360,13 +341,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	btwRequest: null,
 	openBtw: question => set({ btwRequest: question }),
 	closeBtw: () => set({ btwRequest: null }),
-	collabOpen: false,
-	collabJoinLink: null as string | null,
-	openCollab: joinLink => set({ collabOpen: true, collabJoinLink: joinLink ?? null }),
-	closeCollab: () => set({ collabOpen: false, collabJoinLink: null }),
-	liveOpen: false,
-	openLive: () => set({ liveOpen: true }),
-	closeLive: () => set({ liveOpen: false }),
 	composerEditorOpen: false,
 	composerEditorInitial: null,
 	openComposerEditor: initial => set({ composerEditorOpen: true, composerEditorInitial: initial }),
@@ -410,17 +384,12 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			inventoryOpen: false,
 			modesOpen: false,
 			agentHubOpen: false,
-			importDialogOpen: false,
 			copySelectorOpen: false,
 			activeToolsOpen: false,
-			shareSessionOpen: false,
 			jobsOpen: false,
 			workspaceDirsOpen: false,
 			forceToolOpen: false,
 			btwRequest: null,
-			collabOpen: false,
-			collabJoinLink: null,
-			liveOpen: false,
 			composerEditorOpen: false,
 			composerEditorInitial: null,
 			renameDialogOpen: false,

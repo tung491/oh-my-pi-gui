@@ -46,7 +46,6 @@ const baseCtx: CommandRegistryContext = {
 	openAgentHub: () => {},
 	openPrCenter: () => {},
 	openHotkeys: () => {},
-	openImportDialog: () => {},
 	focusDockCard: () => {},
 	retryTurn: async () => {},
 	retryLastTurn: async () => {},

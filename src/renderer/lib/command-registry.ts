@@ -49,6 +49,68 @@ import { copyTodosToClipboard, dumpTranscriptToClipboard, exportTodos, importTod
 import { addWorkspaceDirectory, moveSessionTo, pickWorkspaceDirectory } from "./workspace-dirs";
 
 /**
+ * Commands the assistant does not offer. omp advertises its own version of
+ * several of them (`/share` uploads the session, `/mcp` edits servers), so the
+ * palette skips these names when it merges advertised commands and the
+ * composer refuses them when typed, instead of handing them to the agent.
+ */
+export const REMOVED_COMMANDS: ReadonlySet<string> = new Set([
+	"new-chat-tab",
+	"import",
+	"handoff",
+	"share",
+	"branch",
+	"tree",
+	"model-roles",
+	"model-compare",
+	"benchmark",
+	"context",
+	"tools",
+	"computer",
+	"browser",
+	"force",
+	"usage",
+	"skills",
+	"hooks",
+	"commands",
+	"mcp",
+	"mcp panel",
+	"mcp list",
+	"marketplace",
+	"marketplace panel",
+	"marketplace list",
+	"marketplace installed",
+	"plugins",
+	"plugins panel",
+	"reload-plugins",
+	"memory",
+	"memory panel",
+	"security",
+	"templates",
+	"ssh",
+	"plan",
+	"vibe",
+	"goal",
+	"loop",
+	"modes",
+	"move",
+	"add-dir",
+	"remove-dir",
+	"dirs",
+	"git",
+	"stats",
+	"extensions",
+	"prs",
+	"collab",
+	"join",
+	"leave",
+	"debug",
+	"live",
+	"plan-review",
+	"guided-goal",
+]);
+
+/**
  * `action` and `prompt` carry `argUsage` when the command needs user text
  * before it can run: the palette has no argument entry, so those rows hand the
  * command back to the composer instead of dispatching it argument-less.
@@ -128,7 +190,6 @@ export interface CommandRegistryContext {
 	openAgentHub: (tab?: "definitions" | "hub") => void;
 	openPrCenter: () => void;
 	openHotkeys: () => void;
-	openImportDialog: () => void;
 	/** Deep-link a center-dock card (todo/plan/agents): expand + flash. */
 	focusDockCard: (id: DockCardId) => void;
 	/** Retry the last failed turn server-side (retry RPC). */
@@ -495,13 +556,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "picker", open: ctx.openSessionPicker },
 	});
 	add({
-		name: "import",
-		label: t("cmd.import"),
-		description: t("cmd.import.desc"),
-		category: "session",
-		affordance: { kind: "window", open: () => ctx.openImportDialog() },
-	});
-	add({
 		name: "session",
 		label: t("cmd.session"),
 		description: t("cmd.session.desc"),
@@ -541,13 +595,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		description: t("cmd.export.desc"),
 		category: "session",
 		affordance: { kind: "action", run: () => exportSessionHtml() },
-	});
-	add({
-		name: "share",
-		label: t("cmd.share"),
-		description: t("cmd.share.desc"),
-		category: "session",
-		affordance: { kind: "window", open: () => useUiStore.getState().openShareSession() },
 	});
 	add({
 		name: "dump",
@@ -1322,31 +1369,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 	});
 
 	// ═══════════════════════════════════════════════════════════════════
-	// LIVE COLLABORATION
-	// ═══════════════════════════════════════════════════════════════════
-	add({
-		name: "collab",
-		label: t("cmd.collab"),
-		description: t("cmd.collab.desc"),
-		category: "other",
-		affordance: { kind: "action", run: args => runCollabCommand(args) },
-	});
-	add({
-		name: "join",
-		label: t("cmd.join"),
-		description: t("cmd.join.desc"),
-		category: "other",
-		affordance: { kind: "action", argUsage: "<collab-link>", run: link => joinCollab(link) },
-	});
-	add({
-		name: "leave",
-		label: t("cmd.leave"),
-		description: t("cmd.leave.desc"),
-		category: "other",
-		affordance: { kind: "action", run: () => leaveCollab() },
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
 	// NATIVE INTERACTIVE SURFACES
 	// ═══════════════════════════════════════════════════════════════════
 	add({
@@ -1380,13 +1402,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		description: t("cmd.omfg.desc"),
 		category: "other",
 		affordance: { kind: "action", argUsage: "<complaint>", run: complaint => forgeTtsrRule(complaint) },
-	});
-	add({
-		name: "live",
-		label: t("cmd.live"),
-		description: t("cmd.live.desc"),
-		category: "other",
-		affordance: { kind: "window", open: () => useUiStore.getState().openLive() },
 	});
 	add({
 		name: "pause",
@@ -1439,7 +1454,7 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 	// a native item — as its name OR one of its aliases — is dropped: `/models`
 	// and `/modes` must not appear as dead rows next to the working picker.
 	for (const cmd of ctx.availableCommands) {
-		if (claimed.has(cmd.name) || HIDDEN_ACCOUNT_COMMANDS.has(cmd.name)) continue;
+		if (claimed.has(cmd.name) || HIDDEN_ACCOUNT_COMMANDS.has(cmd.name) || REMOVED_COMMANDS.has(cmd.name)) continue;
 		// Keep terminal-only commands visible as disabled rows. The palette is
 		// the GUI's command index; hiding a command makes its client limitation opaque.
 		if (cmd.textModeExecutable === false) {
@@ -1539,49 +1554,6 @@ async function reloadPluginsFromGui(hydrate: () => Promise<void>): Promise<void>
 		}),
 	});
 	await hydrate();
-}
-
-async function runCollabCommand(args?: string): Promise<void> {
-	const runtime = focusedSessionRuntime();
-	const rpc = runtime ? createTabRpc(runtime.command) : window.omp.rpc;
-	const input = args?.trim() ?? "";
-	if (!input) {
-		useUiStore.getState().openCollab();
-		return;
-	}
-	const [verb, ...rest] = input.split(/\s+/);
-	if (verb === "stop") {
-		await leaveCollab();
-		return;
-	}
-	if (verb === "status") {
-		useUiStore.getState().openCollab();
-		return;
-	}
-	const knownVerb = verb === "start" || verb === "view";
-	const relayUrl = knownVerb ? rest.join(" ").trim() : input;
-	const response = await rpc.collabStart(relayUrl || undefined, verb === "view");
-	if (!response.success) throw new Error(response.error);
-	useUiStore.getState().openCollab();
-}
-
-async function joinCollab(link?: string): Promise<void> {
-	const trimmed = link?.trim();
-	if (!trimmed) {
-		toast({ variant: "info", message: translate("collab.joinUsage") });
-		return;
-	}
-	useUiStore.getState().openCollab(trimmed);
-}
-
-async function leaveCollab(): Promise<void> {
-	const runtime = focusedSessionRuntime();
-	const rpc = runtime ? createTabRpc(runtime.command) : window.omp.rpc;
-	const response = await rpc.collabLeave();
-	if (!response.success) throw new Error(response.error);
-	if (runtime) await hydrateTabSession(runtime.tabId);
-	else await hydrateSession();
-	toast({ variant: "success", message: translate("collab.left") });
 }
 
 async function copyFromChat(args?: string): Promise<void> {
@@ -1749,7 +1721,6 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 		openAgentHub: ui.openAgentHub,
 		openPrCenter: ui.openPrCenter,
 		openHotkeys: ui.openHotkeys,
-		openImportDialog: ui.openImportDialog,
 		focusDockCard: ui.focusDockCard,
 		retryTurn: retryFailedTurn,
 		retryLastTurn: () =>

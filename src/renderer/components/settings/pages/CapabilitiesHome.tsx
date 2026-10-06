@@ -44,13 +44,9 @@ export type CapabilityTarget =
 	| "updates"
 	| "modes"
 	| "vibe"
-	| "collab"
-	| "live"
 	| "clear"
-	| "import"
 	| "sessionInfo"
 	| "sessionTree"
-	| "share"
 	| "handoff"
 	| "export"
 	| "dump"
@@ -352,16 +348,12 @@ export function CapabilitiesHome({
 				<CapabilityCard description={t("cmd.modes.desc")} icon={<Route size={16} />} title={t("cmd.modes")}>
 					<TargetButton label={t("cmd.modes")} onOpen={onOpenTarget} target="modes" variant="secondary" />
 					<TargetButton label={t("cmd.vibe")} onOpen={onOpenTarget} target="vibe" />
-					<TargetButton label={t("cmd.collab")} onOpen={onOpenTarget} target="collab" />
-					<TargetButton label={t("cmd.live")} onOpen={onOpenTarget} target="live" />
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.import.desc")} icon={<FolderOpen size={16} />} title={t("cmd.session")}>
 					<TargetButton label={t("cmd.clear")} onOpen={onOpenTarget} target="clear" variant="secondary" />
-					<TargetButton label={t("cmd.import")} onOpen={onOpenTarget} target="import" variant="secondary" />
 					<TargetButton label={t("cmd.session")} onOpen={onOpenTarget} target="sessionInfo" />
 					<TargetButton label={t("cmd.tree")} onOpen={onOpenTarget} target="sessionTree" />
-					<TargetButton label={t("cmd.share")} onOpen={onOpenTarget} target="share" />
 					<TargetButton label={t("cmd.handoff")} onOpen={onOpenTarget} target="handoff" />
 					<TargetButton label={t("cmd.export")} onOpen={onOpenTarget} target="export" />
 					<TargetButton label={t("cmd.dump")} onOpen={onOpenTarget} target="dump" />

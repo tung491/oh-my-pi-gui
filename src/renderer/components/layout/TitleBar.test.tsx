@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../../lib/i18n";
+import { en } from "../../locales/en";
 import { useMessagesStore } from "../../stores/messages";
 import { useSessionStore } from "../../stores/session";
 import { useToolsStore } from "../../stores/tools";
@@ -212,12 +213,12 @@ describe("TitleBar", () => {
 		const actions = buttons.find(button => button.title === "Session actions");
 		expect(actions).toBeDefined();
 		await act(async () => actions?.click());
-		const importItem = Array.from(document.querySelectorAll("[data-menu-item]")).find(item =>
-			item.textContent?.includes("Import External Session"),
+		const infoItem = Array.from(document.querySelectorAll("[data-menu-item]")).find(item =>
+			item.textContent?.includes(en["cmd.session"]),
 		) as unknown as TestButton | undefined;
-		expect(importItem).toBeDefined();
-		await act(async () => importItem?.click());
-		expect(useUiStore.getState().importDialogOpen).toBe(true);
+		expect(infoItem).toBeDefined();
+		await act(async () => infoItem?.click());
+		expect(useUiStore.getState().sessionInfoOpen).toBe(true);
 	});
 
 	it("renders the VIF breadcrumb, metrics group, and workspace toggle", async () => {

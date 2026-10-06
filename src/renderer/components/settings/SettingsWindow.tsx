@@ -788,26 +788,14 @@ export function SettingsWindow() {
 				case "vibe":
 					external(() => useUiStore.getState().openModes("vibe"));
 					return;
-				case "collab":
-					external(() => useUiStore.getState().openCollab());
-					return;
-				case "live":
-					external(() => useUiStore.getState().openLive());
-					return;
 				case "clear":
 					runAsync(() => clearSessionContext());
-					return;
-				case "import":
-					external(() => useUiStore.getState().openImportDialog());
 					return;
 				case "sessionInfo":
 					external(() => useUiStore.getState().openSessionInfo());
 					return;
 				case "sessionTree":
 					external(() => useUiStore.getState().openSessionTree());
-					return;
-				case "share":
-					external(() => useUiStore.getState().openShareSession());
 					return;
 				case "handoff":
 					external(() => openHandoffDialog());

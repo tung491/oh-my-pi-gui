@@ -11,7 +11,7 @@
 import type { AvailableCommand, ImageContent, RpcResponse } from "../../shared/rpc-types";
 import { hydrateSession } from "../hooks/use-rpc-events";
 import { toast } from "../stores/toast";
-import { buildCurrentCommandMenu, type CommandAffordance } from "./command-registry";
+import { buildCurrentCommandMenu, type CommandAffordance, REMOVED_COMMANDS } from "./command-registry";
 import { translate } from "./i18n";
 import type { TabRpc } from "./tab-rpc";
 
@@ -22,10 +22,10 @@ const SESSION_REPLACING_COMMANDS: Record<string, true> = { new: true, clear: tru
 // The desktop requires a visible preview/start step even when Core exposes a
 // directly executable text command, or command discovery has not completed.
 // `drop` is a GUI alias for `delete`, no longer advertised by Core.
-const GUI_CONFIRMATION_COMMANDS = new Set(["share", "live", "btw", "delete", "drop"]);
+const GUI_CONFIRMATION_COMMANDS = new Set(["btw", "delete", "drop"]);
 
 export type ComposerSubmit =
-	/** Session-replacing command while busy — draft stays, warning toasted. */
+	/** Session-replacing command while busy, or a removed command — draft stays, warning toasted. */
 	| { kind: "blocked" }
 	/** Exact `/clear` — native clear_context RPC path (lib/messages.clearSessionContext). */
 	| { kind: "clear" }
@@ -103,6 +103,11 @@ export function planComposerSubmit(input: {
 }): ComposerSubmit {
 	const { message, images, isStreaming, mode, commands, rpc = window.omp.rpc } = input;
 	const isSlashCommand = message.startsWith("/");
+	const slashName = isSlashCommand ? /^\/(\S+)/.exec(message)?.[1]?.toLowerCase() : undefined;
+	if (slashName !== undefined && REMOVED_COMMANDS.has(slashName)) {
+		toast({ variant: "warning", message: translate("unavailable.tuiOnly") });
+		return { kind: "blocked" };
+	}
 	if (isSlashCommand && isStreaming) {
 		const commandName = /^\/([a-z-]+)/i.exec(message)?.[1]?.toLowerCase();
 		if (commandName !== undefined && SESSION_REPLACING_COMMANDS[commandName]) {

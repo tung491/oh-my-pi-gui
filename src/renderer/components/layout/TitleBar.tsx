@@ -12,7 +12,6 @@ import {
 	PanelLeft,
 	PanelRight,
 	Search,
-	Share2,
 	Wrench,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -66,9 +65,7 @@ export function TitleBar() {
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
 	const openUsage = useUiStore(s => s.openUsage);
 	const openStatsDashboard = useUiStore(s => s.openStatsDashboard);
-	const openImportDialog = useUiStore(s => s.openImportDialog);
 	const openActiveTools = useUiStore(s => s.openActiveTools);
-	const openShareSession = useUiStore(s => s.openShareSession);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
 	const openBranchPicker = useUiStore(s => s.openBranchPicker);
 	const openSessionTree = useUiStore(s => s.openSessionTree);
@@ -198,16 +195,6 @@ export function TitleBar() {
 
 	const actionMenuItems: ContextMenuItem[] = [
 		{
-			id: "import",
-			label: t("cmd.import"),
-			description: t("cmd.import.desc"),
-			icon: FolderOpen,
-			onSelect: () => {
-				setActionsMenu(null);
-				openImportDialog();
-			},
-		},
-		{
 			id: "branch",
 			label: t("cmd.branch"),
 			description: t("cmd.branch.desc"),
@@ -236,16 +223,6 @@ export function TitleBar() {
 			onSelect: () => {
 				setActionsMenu(null);
 				openSessionInfo();
-			},
-		},
-		{
-			id: "share",
-			label: t("cmd.share"),
-			description: t("cmd.share.desc"),
-			icon: Share2,
-			onSelect: () => {
-				setActionsMenu(null);
-				openShareSession();
 			},
 		},
 		{

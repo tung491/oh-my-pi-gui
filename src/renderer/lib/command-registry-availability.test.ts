@@ -113,7 +113,6 @@ describe("commandArgPrefill", () => {
 
 	it("returns the slash form for a parameterized command instead of running it blind", () => {
 		expect(commandArgPrefill(menuItem("btw"))).toBe("/btw ");
-		expect(commandArgPrefill(menuItem("join"))).toBe("/join ");
 		expect(commandArgPrefill(menuItem("deploy"))).toBe("/deploy ");
 	});
 

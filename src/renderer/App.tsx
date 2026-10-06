@@ -6,7 +6,6 @@ import { ActiveToolsDialog } from "./components/dialogs/ActiveToolsDialog";
 import { BranchPickerDialog } from "./components/dialogs/BranchPickerDialog";
 import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
-import { CollabDialog } from "./components/dialogs/CollabDialog";
 import { CommandPalette } from "./components/dialogs/CommandPalette";
 import { CopySelectorDialog } from "./components/dialogs/CopySelectorDialog";
 import { ExtensionDialog } from "./components/dialogs/ExtensionDialog";
@@ -14,9 +13,7 @@ import { FirstRunOnboardingDialog } from "./components/dialogs/FirstRunOnboardin
 import { ForceToolDialog } from "./components/dialogs/ForceToolDialog";
 import { HandoffDialog } from "./components/dialogs/HandoffDialog";
 import { HotkeysDialog } from "./components/dialogs/HotkeysDialog";
-import { ImportForeignDialog } from "./components/dialogs/ImportForeignDialog";
 import { JobsDialog } from "./components/dialogs/JobsDialog";
-import { LiveVoiceDialog } from "./components/dialogs/LiveVoiceDialog";
 import { ModelPicker } from "./components/dialogs/ModelPicker";
 import { PlanApprovalDialog } from "./components/dialogs/PlanApprovalDialog";
 import { RenameSessionDialog } from "./components/dialogs/RenameSessionDialog";
@@ -24,7 +21,6 @@ import { SessionInfoDialog } from "./components/dialogs/SessionInfoDialog";
 import { SessionPickerDialog } from "./components/dialogs/SessionPickerDialog";
 import { SessionSwitchDialog } from "./components/dialogs/SessionSwitchDialog";
 import { SessionTreeDialog } from "./components/dialogs/SessionTreeDialog";
-import { ShareSessionDialog } from "./components/dialogs/ShareSessionDialog";
 import { ThemePickerDialog } from "./components/dialogs/ThemePickerDialog";
 import { WorkspaceDirsDialog } from "./components/dialogs/WorkspaceDirsDialog";
 import { WorktreeCloseDialog } from "./components/dialogs/WorktreeCloseDialog";
@@ -207,7 +203,6 @@ export function App() {
 	const agentHubTab = useUiStore(s => s.agentHubTab);
 	const closeAgentHub = useUiStore(s => s.closeAgentHub);
 	const hotkeysOpen = useUiStore(s => s.hotkeysOpen);
-	const importDialogOpen = useUiStore(s => s.importDialogOpen);
 	const composerEditorOpen = useUiStore(s => s.composerEditorOpen);
 	const activeTabId = useTabsStore(s => s.activeTabId);
 	const activeTabStatus = useTabsStore(s => s.tabs.find(tab => tab.id === s.activeTabId)?.status);
@@ -608,10 +603,6 @@ export function App() {
 				ui.openModelPicker();
 				return;
 			}
-			if (action === "open-import") {
-				ui.openImportDialog();
-				return;
-			}
 			if (action === "open-branch-picker") {
 				ui.openBranchPicker();
 				return;
@@ -655,10 +646,6 @@ export function App() {
 			}
 			if (action === "open-session-info") {
 				ui.openSessionInfo();
-				return;
-			}
-			if (action === "open-share-session") {
-				ui.openShareSession();
 				return;
 			}
 			if (action === "open-workspace-dirs") {
@@ -769,11 +756,8 @@ export function App() {
 			<SessionSwitchDialog />
 			<BranchPickerDialog />
 			<BtwDialog />
-			<CollabDialog />
-			<LiveVoiceDialog />
 			<CopySelectorDialog />
 			<ActiveToolsDialog />
-			<ShareSessionDialog />
 			<JobsDialog />
 			<ChangelogDialog />
 			<WorkspaceDirsDialog />
@@ -797,7 +781,6 @@ export function App() {
 			<ThemePickerDialog />
 			<PlanApprovalDialog />
 			<HotkeysDialog open={hotkeysOpen} />
-			{importDialogOpen && <ImportForeignDialog />}
 			{composerEditorOpen && (
 				<Suspense fallback={null}>
 					<ComposerEditorDialog />

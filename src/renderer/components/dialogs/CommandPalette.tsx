@@ -162,7 +162,6 @@ export function CommandPalette() {
 	const openAgentHub = useUiStore(state => state.openAgentHub);
 	const openPrCenter = useUiStore(state => state.openPrCenter);
 	const openHotkeys = useUiStore(state => state.openHotkeys);
-	const openImportDialog = useUiStore(state => state.openImportDialog);
 	const focusDockCard = useUiStore(state => state.focusDockCard);
 
 	const isStreaming = useSessionStore(s => s.isStreaming);
@@ -341,7 +340,6 @@ export function CommandPalette() {
 				openAgentHub,
 				openPrCenter,
 				openHotkeys,
-				openImportDialog,
 				focusDockCard,
 				openCommandPalette: () => {},
 				retryTurn,
@@ -398,7 +396,6 @@ export function CommandPalette() {
 			openAgentHub,
 			openPrCenter,
 			openHotkeys,
-			openImportDialog,
 			openThemePicker,
 			openInventory,
 			openExtensions,
