@@ -1223,6 +1223,7 @@ export const vi: Record<string, string> = {
 	"modelValue.noneAvailable": "Không có {noun} khả dụng.",
 	"modelValue.noMatch": 'Không có {noun} nào khớp với "{query}".',
 	"modelValue.useCustom": 'Sử dụng "{query}"',
+	"modelValue.localOnly": "Chỉ dùng được mô hình chạy trên máy tính này.",
 	"modelValue.clear": "Xóa (dùng mặc định)",
 	"modelValue.providerDisabled": "{name} (đã tắt)",
 	"tree.collapse": "Thu gọn",

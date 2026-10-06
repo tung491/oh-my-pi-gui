@@ -1344,6 +1344,7 @@ export const en: Record<string, string> = {
 	"modelValue.noneAvailable": "No {noun} available.",
 	"modelValue.noMatch": 'No {noun} match "{query}".',
 	"modelValue.useCustom": 'Use "{query}"',
+	"modelValue.localOnly": "Only models that run on this computer can be used.",
 	"modelValue.clear": "Clear (use default)",
 	"modelValue.providerDisabled": "{name} (disabled)",
 
