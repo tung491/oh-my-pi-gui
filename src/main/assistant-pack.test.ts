@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	ASSISTANT_PACK_FILES,
+	ASSISTANT_PACK_REMOVED_ENV,
 	assistantPackEnv,
 	assistantPackFlags,
 	isChatStampedSession,
@@ -155,6 +156,43 @@ describe("assistant pack", () => {
 	it("builds the pack env with the session language", () => {
 		expect(assistantPackEnv({ language: "vi" })).toEqual({ SAI_ATLAS_LANG: "vi" });
 		expect(assistantPackEnv({ language: "en" })).toEqual({ SAI_ATLAS_LANG: "en" });
+	});
+
+	it("strips every online provider credential from the pack env", () => {
+		// The startup files and profile selectors stay removed, and so does every
+		// credential omp would use to reach an online model or search provider:
+		// a pack session only ever talks to the local Ollama server.
+		for (const key of [
+			"BASH_ENV",
+			"ENV",
+			"OMP_PROFILE",
+			"PI_PROFILE",
+			"PI_SMOL_MODEL",
+			"PI_SLOW_MODEL",
+			"PI_PLAN_MODEL",
+			"ANTHROPIC_API_KEY",
+			"ANTHROPIC_OAUTH_TOKEN",
+			"OPENAI_API_KEY",
+			"GEMINI_API_KEY",
+			"GOOGLE_API_KEY",
+			"GOOGLE_APPLICATION_CREDENTIALS",
+			"OLLAMA_API_KEY",
+			"OLLAMA_CLOUD_API_KEY",
+			"OPENROUTER_API_KEY",
+			"AWS_ACCESS_KEY_ID",
+			"AWS_SECRET_ACCESS_KEY",
+			"AWS_BEARER_TOKEN_BEDROCK",
+			"HF_TOKEN",
+			"PERPLEXITY_COOKIES",
+			"OMP_AUTH_BROKER_URL",
+			"OMP_AUTH_BROKER_TOKEN",
+		]) {
+			expect(ASSISTANT_PACK_REMOVED_ENV).toContain(key);
+		}
+		expect(new Set(ASSISTANT_PACK_REMOVED_ENV).size).toBe(ASSISTANT_PACK_REMOVED_ENV.length);
+		// The local Ollama address and the pack's own language survive.
+		expect(ASSISTANT_PACK_REMOVED_ENV).not.toContain("OLLAMA_HOST");
+		expect(ASSISTANT_PACK_REMOVED_ENV).not.toContain("SAI_ATLAS_LANG");
 	});
 
 	it("refuses to spawn when a pack file is missing", () => {

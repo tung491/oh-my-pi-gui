@@ -388,8 +388,9 @@ export class SidecarManager extends EventEmitter {
 			// server keeps its default context (4096 on most GPUs), below the agent's first request.
 			PI_OLLAMA_API: "ollama-chat",
 		};
-		// No startup file may ride along into the pack tools' system programs, and
-		// no profile may redirect omp away from the pack's settings.
+		// No startup file may ride along into the pack tools' system programs, no
+		// profile or role override may redirect omp away from the pack's settings,
+		// and no online provider credential may reach the session.
 		for (const key of ASSISTANT_PACK_REMOVED_ENV) delete env[key];
 		Object.assign(env, assistantPackEnv({ language: this.#options.language?.() ?? "en" }));
 

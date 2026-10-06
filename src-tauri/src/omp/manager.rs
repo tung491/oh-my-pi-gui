@@ -603,7 +603,8 @@ impl Inner {
             // the server keeps its default context, below the agent's first request.
             command.env("PI_OLLAMA_API", "ollama-chat");
             // No startup file may ride along into the pack tools' system programs,
-            // and no profile may redirect omp away from the pack's settings.
+            // no profile or role override may redirect omp away from the pack's
+            // settings, and no online provider credential may reach the session.
             for key in assistant_pack::REMOVED_ENV {
                 command.env_remove(key);
             }
@@ -1269,12 +1270,25 @@ pub(crate) mod tests {
         // A tab created as a chat still gets the pack: the chat branch is gone.
         options.kind = SessionKind::Chat;
         options.fresh = true;
-        // Shell startup files and omp profile selectors reaching the spawn env are
-        // removed; the app language is set last (`en` without an app context).
+        // Shell startup files, omp profile selectors, role model overrides and
+        // online provider credentials reaching the spawn env are removed; the
+        // local Ollama address survives; the app language is set last (`en`
+        // without an app context).
         let (sidecar, mut events) = SidecarManager::new(
             Weak::new(),
             options,
-            fixed_env(&[("BASH_ENV", "/rc/bash_env"), ("ENV", "/rc/env"), ("OMP_PROFILE", "work"), ("PI_PROFILE", "work"), ("SAI_ATLAS_LANG", "xx")]),
+            fixed_env(&[
+                ("BASH_ENV", "/rc/bash_env"),
+                ("ENV", "/rc/env"),
+                ("OMP_PROFILE", "work"),
+                ("PI_PROFILE", "work"),
+                ("PI_SMOL_MODEL", "anthropic/claude-haiku-4-5"),
+                ("ANTHROPIC_API_KEY", "sk-ant"),
+                ("OPENAI_API_KEY", "sk-openai"),
+                ("OLLAMA_CLOUD_API_KEY", "cloud"),
+                ("OLLAMA_HOST", "127.0.0.1:11434"),
+                ("SAI_ATLAS_LANG", "xx"),
+            ]),
         );
         sidecar.start();
         wait_for_ready(&mut events).await;
@@ -1291,6 +1305,11 @@ pub(crate) mod tests {
         assert_eq!(child_env.get("ENV"), None);
         assert_eq!(child_env.get("OMP_PROFILE"), None);
         assert_eq!(child_env.get("PI_PROFILE"), None);
+        assert_eq!(child_env.get("PI_SMOL_MODEL"), None);
+        assert_eq!(child_env.get("ANTHROPIC_API_KEY"), None);
+        assert_eq!(child_env.get("OPENAI_API_KEY"), None);
+        assert_eq!(child_env.get("OLLAMA_CLOUD_API_KEY"), None);
+        assert_eq!(child_env.get("OLLAMA_HOST").map(String::as_str), Some("127.0.0.1:11434"));
         let pack = dev_pack();
         let expected = vec![
             "--mode".to_string(),
