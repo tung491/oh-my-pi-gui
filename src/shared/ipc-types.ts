@@ -249,6 +249,7 @@ export type RuntimeErrorSource =
 	| "renderer-unresponsive"
 	| "application-resources"
 	| "child-process"
+	| "sidecar-restart"
 	| "main-uncaught"
 	| "main-unhandled-rejection"
 	| "global-shortcut"

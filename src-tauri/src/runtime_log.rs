@@ -20,7 +20,7 @@ const MAX_DETAIL_KEYS: usize = 24;
 const MAX_DETAIL_VALUE_LENGTH: usize = 4_096;
 
 /// Every `RuntimeErrorSource` the renderer and the shell may report (`src/shared/ipc-types.ts`).
-pub const RUNTIME_ERROR_SOURCES: [&str; 18] = [
+pub const RUNTIME_ERROR_SOURCES: [&str; 19] = [
     "react-render",
     "react-uncaught",
     "react-recoverable",
@@ -33,6 +33,7 @@ pub const RUNTIME_ERROR_SOURCES: [&str; 18] = [
     "renderer-unresponsive",
     "application-resources",
     "child-process",
+    "sidecar-restart",
     "main-uncaught",
     "main-unhandled-rejection",
     "global-shortcut",
@@ -319,6 +320,17 @@ mod tests {
         assert_eq!(report.source, "unknown");
         assert!(report.message.chars().count() < 8_200);
         assert_eq!(report.details, Some(json!({ "kept": 3 }).as_object().unwrap().clone()));
+    }
+
+    #[test]
+    fn keeps_sidecar_crash_reports_under_their_own_listed_source() {
+        let report = normalize_runtime_error_report(&json!({
+            "source": "sidecar-restart",
+            "message": "omp exited with code 1",
+            "details": { "attempt": 1, "maxAttempts": 3, "stderr": "boom" }
+        }));
+        assert_eq!(report.source, "sidecar-restart");
+        assert_eq!(report.details, Some(json!({ "attempt": 1, "maxAttempts": 3, "stderr": "boom" }).as_object().unwrap().clone()));
     }
 
     #[test]
