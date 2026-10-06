@@ -46,10 +46,6 @@ interface UiStore {
 	providersOpen: boolean;
 	/** The local-model welcome screen (first run, or reopened from Settings › Ollama). */
 	welcomeOpen: boolean;
-	extensionsOpen: boolean;
-	extensionsTab: "hooks" | "mcp" | "commands";
-	inventoryOpen: boolean;
-	inventoryTab: "plugins" | "marketplaces" | "templates" | "memory";
 	themePickerOpen: boolean;
 	modesOpen: boolean;
 	modesTab: "vibe" | "goal" | "loop";
@@ -58,10 +54,8 @@ interface UiStore {
 	hotkeysOpen: boolean;
 	copySelectorOpen: boolean;
 	changelogOpen: boolean;
-	activeToolsOpen: boolean;
 	jobsOpen: boolean;
 	workspaceDirsOpen: boolean;
-	forceToolOpen: boolean;
 	btwRequest: string | null;
 	composerEditorOpen: boolean;
 	composerEditorInitial: string | null;
@@ -129,10 +123,6 @@ interface UiStore {
 	closeProviders: () => void;
 	openWelcome: () => void;
 	closeWelcome: () => void;
-	openExtensions: (tab?: "hooks" | "mcp" | "commands") => void;
-	closeExtensions: () => void;
-	openInventory: (tab?: "plugins" | "marketplaces" | "templates" | "memory") => void;
-	closeInventory: () => void;
 	openThemePicker: () => void;
 	closeThemePicker: () => void;
 	openModes: (tab?: "vibe" | "goal" | "loop") => void;
@@ -145,14 +135,10 @@ interface UiStore {
 	closeCopySelector: () => void;
 	openChangelog: () => void;
 	closeChangelog: () => void;
-	openActiveTools: () => void;
-	closeActiveTools: () => void;
 	openJobs: () => void;
 	closeJobs: () => void;
 	openWorkspaceDirs: () => void;
 	closeWorkspaceDirs: () => void;
-	openForceTool: () => void;
-	closeForceTool: () => void;
 	openBtw: (question: string) => void;
 	closeBtw: () => void;
 	openComposerEditor: (initial: string) => void;
@@ -268,14 +254,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	welcomeOpen: false,
 	openWelcome: () => set({ welcomeOpen: true }),
 	closeWelcome: () => set({ welcomeOpen: false }),
-	extensionsOpen: false,
-	extensionsTab: "hooks" as const,
-	inventoryOpen: false,
-	inventoryTab: "plugins" as const,
-	openExtensions: tab => set({ extensionsOpen: true, extensionsTab: tab ?? "hooks" }),
-	closeExtensions: () => set({ extensionsOpen: false }),
-	openInventory: tab => set({ inventoryOpen: true, inventoryTab: tab ?? "plugins" }),
-	closeInventory: () => set({ inventoryOpen: false }),
 	themePickerOpen: false,
 	openThemePicker: () => set({ themePickerOpen: true }),
 	closeThemePicker: () => set({ themePickerOpen: false }),
@@ -296,18 +274,12 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	changelogOpen: false,
 	openChangelog: () => set({ changelogOpen: true }),
 	closeChangelog: () => set({ changelogOpen: false }),
-	activeToolsOpen: false,
-	openActiveTools: () => set({ activeToolsOpen: true }),
-	closeActiveTools: () => set({ activeToolsOpen: false }),
 	jobsOpen: false,
 	openJobs: () => set({ jobsOpen: true }),
 	closeJobs: () => set({ jobsOpen: false }),
 	workspaceDirsOpen: false,
 	openWorkspaceDirs: () => set({ workspaceDirsOpen: true }),
 	closeWorkspaceDirs: () => set({ workspaceDirsOpen: false }),
-	forceToolOpen: false,
-	openForceTool: () => set({ forceToolOpen: true }),
-	closeForceTool: () => set({ forceToolOpen: false }),
 	btwRequest: null,
 	openBtw: question => set({ btwRequest: question }),
 	closeBtw: () => set({ btwRequest: null }),
@@ -350,15 +322,11 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			commandPaletteOpen: false,
 			modelPickerOpen: false,
 			settingsOpen: false,
-			extensionsOpen: false,
-			inventoryOpen: false,
 			modesOpen: false,
 			agentHubOpen: false,
 			copySelectorOpen: false,
-			activeToolsOpen: false,
 			jobsOpen: false,
 			workspaceDirsOpen: false,
-			forceToolOpen: false,
 			btwRequest: null,
 			composerEditorOpen: false,
 			composerEditorInitial: null,

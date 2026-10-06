@@ -150,8 +150,6 @@ export function CommandPalette() {
 	const openBranchPicker = useUiStore(state => state.openBranchPicker);
 	const openSessionTree = useUiStore(state => state.openSessionTree);
 	const openSessionInfo = useUiStore(state => state.openSessionInfo);
-	const openExtensions = useUiStore(state => state.openExtensions);
-	const openInventory = useUiStore(state => state.openInventory);
 	const openThemePicker = useUiStore(state => state.openThemePicker);
 	const openModes = useUiStore(state => state.openModes);
 	const openAgentHub = useUiStore(state => state.openAgentHub);
@@ -323,8 +321,6 @@ export function CommandPalette() {
 				openHandoffDialog,
 				forkSession: forkSessionFromGui,
 				hydrateSession: () => (tabId ? hydrateTabSession(tabId) : hydrateSession()),
-				openExtensions,
-				openInventory,
 				openThemePicker,
 				openModes,
 				openAgentHub,
@@ -382,8 +378,6 @@ export function CommandPalette() {
 			openPrCenter,
 			openHotkeys,
 			openThemePicker,
-			openInventory,
-			openExtensions,
 			tabRpc.setPrewalk,
 			tabRpc.setSteeringMode,
 			tabRpc.setSessionName,

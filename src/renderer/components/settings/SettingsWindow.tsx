@@ -21,20 +21,13 @@ import { useTabRpc } from "../../lib/tab-rpc";
 
 import {
 	AlertTriangle,
-	Blocks,
-	BookOpen,
-	Braces,
 	ChevronDown,
 	ChevronRight,
 	HardDriveDownload,
-	Network,
 	RefreshCw,
 	Search,
-	Server,
-	ShieldCheck,
 	SlidersHorizontal,
 	Sparkles,
-	Webhook,
 	X,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -65,8 +58,6 @@ import { useUiStore } from "../../stores/ui";
 import { CodeBlock } from "../chat/CodeBlock";
 import { Button, IconButton, Input, Kbd, SaiAtlasLogo, Spinner, type TabItem, TextArea } from "../common";
 import { isTopmostDialog, registerDialogLayer } from "../common/dialog-layer";
-import { ExtensionSettingsPage } from "../panels/ExtensionsPanel";
-import { InventorySettingsPage, type TabId as InventoryTabId } from "../panels/InventoryPanel";
 import { ArrayChipEditor } from "./editors/ArrayChipEditor";
 import { RadioGroup } from "./editors/RadioGroup";
 import { Section } from "./editors/Section";
@@ -74,32 +65,22 @@ import { Toggle } from "./editors/Toggle";
 import { AdvancedTab } from "./pages/AdvancedTab";
 import { CapabilitiesHome, type CapabilityTarget } from "./pages/CapabilitiesHome";
 import { SchemaTabContent } from "./pages/SchemaTabContent";
-import { SecuritySettingsPage } from "./SecuritySettingsPage";
-import { SkillsSettingsPage } from "./SkillsSettingsPage";
-import { SshSettingsPage } from "./SshSettingsPage";
 import { VI_SETTINGS } from "./schema-vi";
 import { isSettingVisibleInGui, matchesSettingSearch, resolveSettingsTarget } from "./settings-schema-utils";
 import {
 	ADVANCED_TAB_ID,
 	buildSettingsNavGroups,
 	CAPABILITIES_TAB_ID,
-	COMMANDS_TAB_ID,
 	GUI_SETTING_SEARCH_ITEMS,
 	GUI_TAB_ID,
-	HOOKS_TAB_ID,
 	isAgentSchemaTab,
 	LAUNCH_TEXT_FIELDS,
 	LAUNCH_VERBATIM_FIELDS,
 	type LaunchTextField,
 	type LoadState,
 	MANAGEMENT_TAB_IDS,
-	MCP_TAB_ID,
-	RESOURCES_TAB_ID,
-	SECURITY_TAB_ID,
 	type SettingsNavGroup,
 	type SettingsResponseData,
-	SKILLS_TAB_ID,
-	SSH_TAB_ID,
 	UPDATES_TAB_ID,
 } from "./settings-window-model";
 import { ThemeCards } from "./ThemeCards";
@@ -211,7 +192,6 @@ export function SettingsWindow() {
 	const clearSidecarError = useUiStore(state => state.clearSidecarError);
 
 	const [tab, setTab] = useState(CAPABILITIES_TAB_ID);
-	const [resourceTab, setResourceTab] = useState<InventoryTabId>("plugins");
 	const [query, setQuery] = useState("");
 	const [loadState, setLoadState] = useState<LoadState>("loading");
 	const [loadError, setLoadError] = useState<string | null>(null);
@@ -261,7 +241,6 @@ export function SettingsWindow() {
 	useEffect(() => {
 		if (!open) return;
 		const target = resolveSettingsTarget(requestedTab);
-		if (target.resourceTab) setResourceTab(target.resourceTab);
 		setTab(target.tab);
 		setQuery("");
 	}, [open, requestedTab]);
@@ -733,40 +712,6 @@ export function SettingsWindow() {
 				case "agents":
 					external(() => useUiStore.getState().openAgentHub());
 					return;
-				case "skills":
-					settingsPage(SKILLS_TAB_ID);
-					return;
-				case "mcp":
-					settingsPage(MCP_TAB_ID);
-					return;
-				case "resources":
-					setResourceTab("plugins");
-					settingsPage(RESOURCES_TAB_ID);
-					return;
-				case "marketplaces":
-					setResourceTab("marketplaces");
-					settingsPage(RESOURCES_TAB_ID);
-					return;
-				case "templates":
-					setResourceTab("templates");
-					settingsPage(RESOURCES_TAB_ID);
-					return;
-				case "memoryResources":
-					setResourceTab("memory");
-					settingsPage(RESOURCES_TAB_ID);
-					return;
-				case "hooks":
-					settingsPage(HOOKS_TAB_ID);
-					return;
-				case "commands":
-					settingsPage(COMMANDS_TAB_ID);
-					return;
-				case "security":
-					settingsPage(SECURITY_TAB_ID);
-					return;
-				case "ssh":
-					settingsPage(SSH_TAB_ID);
-					return;
 				case "updates":
 					settingsPage(UPDATES_TAB_ID);
 					return;
@@ -832,9 +777,6 @@ export function SettingsWindow() {
 				case "prCenter":
 					external(() => useUiStore.getState().openPrCenter());
 					return;
-				case "tools":
-					external(() => useUiStore.getState().openActiveTools());
-					return;
 				case "jobs":
 					external(() => useUiStore.getState().openJobs());
 					return;
@@ -852,9 +794,6 @@ export function SettingsWindow() {
 					return;
 				case "copy":
 					external(() => useUiStore.getState().openCopySelector());
-					return;
-				case "force":
-					external(() => useUiStore.getState().openForceTool());
 			}
 		},
 		[close, t],
@@ -946,13 +885,6 @@ export function SettingsWindow() {
 											>
 												<span className="flex size-4 shrink-0 items-center justify-center text-(--omp-dim)">
 													{tb.id === CAPABILITIES_TAB_ID && <Sparkles aria-hidden="true" size={13} />}
-													{tb.id === SKILLS_TAB_ID && <BookOpen aria-hidden="true" size={13} />}
-													{tb.id === MCP_TAB_ID && <Network aria-hidden="true" size={13} />}
-													{tb.id === RESOURCES_TAB_ID && <Blocks aria-hidden="true" size={13} />}
-													{tb.id === HOOKS_TAB_ID && <Webhook aria-hidden="true" size={13} />}
-													{tb.id === COMMANDS_TAB_ID && <Braces aria-hidden="true" size={13} />}
-													{tb.id === SECURITY_TAB_ID && <ShieldCheck aria-hidden="true" size={13} />}
-													{tb.id === SSH_TAB_ID && <Server aria-hidden="true" size={13} />}
 													{tb.id === UPDATES_TAB_ID && <HardDriveDownload aria-hidden="true" size={13} />}
 													{!MANAGEMENT_TAB_IDS.has(tb.id) &&
 														tb.id !== CAPABILITIES_TAB_ID &&
@@ -986,13 +918,6 @@ export function SettingsWindow() {
 						)}
 						{searchGroups === null ? (
 							<>
-								{tab === SKILLS_TAB_ID && <SkillsSettingsPage query={query} />}
-								{tab === MCP_TAB_ID && <ExtensionSettingsPage query={query} tabId="mcp" />}
-								{tab === RESOURCES_TAB_ID && <InventorySettingsPage initialTab={resourceTab} query={query} />}
-								{tab === HOOKS_TAB_ID && <ExtensionSettingsPage query={query} tabId="hooks" />}
-								{tab === COMMANDS_TAB_ID && <ExtensionSettingsPage query={query} tabId="commands" />}
-								{tab === SECURITY_TAB_ID && <SecuritySettingsPage />}
-								{tab === SSH_TAB_ID && <SshSettingsPage />}
 								{tab === UPDATES_TAB_ID && <UpdatesSettingsPage />}
 								{tab === CAPABILITIES_TAB_ID && (
 									<CapabilitiesHome

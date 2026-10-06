@@ -31,43 +31,19 @@ export interface SettingsResponseData {
 
 /** Settings without UI metadata (advanced): searchable flat list. */
 export const CAPABILITIES_TAB_ID = "capabilities";
-export const SKILLS_TAB_ID = "skills";
-export const MCP_TAB_ID = "mcp";
-export const RESOURCES_TAB_ID = "resources";
-export const HOOKS_TAB_ID = "hooks";
-export const COMMANDS_TAB_ID = "commands";
-export const SECURITY_TAB_ID = "security";
-export const SSH_TAB_ID = "ssh";
 export const UPDATES_TAB_ID = "updates";
 export const ADVANCED_TAB_ID = "advanced";
 export const GUI_TAB_ID = "gui";
 
-export const MANAGEMENT_TAB_IDS = new Set([
-	SKILLS_TAB_ID,
-	MCP_TAB_ID,
-	RESOURCES_TAB_ID,
-	HOOKS_TAB_ID,
-	COMMANDS_TAB_ID,
-	SECURITY_TAB_ID,
-	SSH_TAB_ID,
-	UPDATES_TAB_ID,
-]);
+export const MANAGEMENT_TAB_IDS = new Set([UPDATES_TAB_ID]);
 
 export function isAgentSchemaTab(tab: string, schema: { tabs: { id: string }[] } | null): boolean {
 	if (schema?.tabs.some(schemaTab => schemaTab.id === tab)) return true;
 	return !MANAGEMENT_TAB_IDS.has(tab) && tab !== GUI_TAB_ID && tab !== CAPABILITIES_TAB_ID && tab !== ADVANCED_TAB_ID;
 }
 
-export const SEARCHABLE_MANAGEMENT_TAB_IDS = new Set([
-	SKILLS_TAB_ID,
-	MCP_TAB_ID,
-	RESOURCES_TAB_ID,
-	HOOKS_TAB_ID,
-	COMMANDS_TAB_ID,
-]);
-
 export interface SettingsNavGroup {
-	id: "experience" | "models" | "tasks" | "tools" | "extensions" | "security" | "memory" | "system";
+	id: "experience" | "models" | "tasks" | "tools" | "extensions" | "memory" | "system";
 	items: TabItem[];
 }
 
@@ -83,23 +59,11 @@ export function buildSettingsNavGroups(
 		{ id: "models", items: [] },
 		{ id: "tasks", items: [] },
 		{ id: "tools", items: [] },
-		{
-			id: "extensions",
-			items: [
-				{ id: CAPABILITIES_TAB_ID, label: "Overview" },
-				{ id: SKILLS_TAB_ID, label: "Skills" },
-				{ id: MCP_TAB_ID, label: "MCP" },
-				{ id: RESOURCES_TAB_ID, label: "Plugins & resources" },
-				{ id: HOOKS_TAB_ID, label: "Hooks" },
-				{ id: COMMANDS_TAB_ID, label: "Commands" },
-			],
-		},
-		{ id: "security", items: [{ id: SECURITY_TAB_ID, label: "Security Center" }] },
+		{ id: "extensions", items: [{ id: CAPABILITIES_TAB_ID, label: "Overview" }] },
 		{ id: "memory", items: [] },
 		{
 			id: "system",
 			items: [
-				{ id: SSH_TAB_ID, label: "SSH Hosts" },
 				{ id: UPDATES_TAB_ID, label: "Updates" },
 				{ id: ADVANCED_TAB_ID, label: "Agent advanced" },
 			],

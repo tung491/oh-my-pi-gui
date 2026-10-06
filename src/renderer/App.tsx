@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo } from "react";
 import type { DeepLinkPayload, MenuAction, MenuActionPayload, RunProgressState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 import { ToastStack } from "./components/common";
-import { ActiveToolsDialog } from "./components/dialogs/ActiveToolsDialog";
 import { BranchPickerDialog } from "./components/dialogs/BranchPickerDialog";
 import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
@@ -10,7 +9,6 @@ import { CommandPalette } from "./components/dialogs/CommandPalette";
 import { CopySelectorDialog } from "./components/dialogs/CopySelectorDialog";
 import { ExtensionDialog } from "./components/dialogs/ExtensionDialog";
 import { FirstRunOnboardingDialog } from "./components/dialogs/FirstRunOnboardingDialog";
-import { ForceToolDialog } from "./components/dialogs/ForceToolDialog";
 import { HandoffDialog } from "./components/dialogs/HandoffDialog";
 import { HotkeysDialog } from "./components/dialogs/HotkeysDialog";
 import { JobsDialog } from "./components/dialogs/JobsDialog";
@@ -96,12 +94,6 @@ const ComposerEditorDialog = lazy(() =>
 const SettingsWindow = lazy(() =>
 	import("./components/settings/SettingsWindow").then(m => ({ default: m.SettingsWindow })),
 );
-const ExtensionsPanel = lazy(() =>
-	import("./components/panels/ExtensionsPanel").then(m => ({ default: m.ExtensionsPanel })),
-);
-const InventoryPanel = lazy(() =>
-	import("./components/panels/InventoryPanel").then(m => ({ default: m.InventoryPanel })),
-);
 const ModesPanel = lazy(() => import("./components/panels/ModesPanel").then(m => ({ default: m.ModesPanel })));
 const AgentHubWindow = lazy(() =>
 	import("./components/panels/AgentHubWindow").then(m => ({ default: m.AgentHubWindow })),
@@ -173,12 +165,6 @@ export function App() {
 	const theme = useUiStore(s => s.theme);
 	const fontSize = useUiStore(s => s.fontSize);
 	const followAgentTheme = useUiStore(s => s.followAgentTheme);
-	const extensionsOpen = useUiStore(s => s.extensionsOpen);
-	const extensionsTab = useUiStore(s => s.extensionsTab);
-	const closeExtensions = useUiStore(s => s.closeExtensions);
-	const inventoryOpen = useUiStore(s => s.inventoryOpen);
-	const inventoryTab = useUiStore(s => s.inventoryTab);
-	const closeInventory = useUiStore(s => s.closeInventory);
 	const modesOpen = useUiStore(s => s.modesOpen);
 	const modesTab = useUiStore(s => s.modesTab);
 	const closeModes = useUiStore(s => s.closeModes);
@@ -637,14 +623,6 @@ export function App() {
 				ui.openProviders();
 				return;
 			}
-			if (action === "open-extensions") {
-				ui.openExtensions();
-				return;
-			}
-			if (action === "open-inventory") {
-				ui.openInventory();
-				return;
-			}
 			if (action === "open-pr-center") {
 				ui.openPrCenter();
 				return;
@@ -726,19 +704,15 @@ export function App() {
 			<BranchPickerDialog />
 			<BtwDialog />
 			<CopySelectorDialog />
-			<ActiveToolsDialog />
 			<JobsDialog />
 			<ChangelogDialog />
 			<WorkspaceDirsDialog />
-			<ForceToolDialog />
 			<SessionTreeDialog />
 			<SessionInfoDialog />
 			<HandoffDialog />
 			<Suspense fallback={null}>
 				<SettingsWindow />
 				<ProvidersWindow />
-				<ExtensionsPanel open={extensionsOpen} onClose={closeExtensions} initialTab={extensionsTab} />
-				<InventoryPanel open={inventoryOpen} onClose={closeInventory} initialTab={inventoryTab} />
 				<ModesPanel open={modesOpen} onClose={closeModes} initialTab={modesTab} />
 				<AgentHubWindow open={agentHubOpen} onClose={closeAgentHub} initialTab={agentHubTab} />
 				<PrCenterWindow />

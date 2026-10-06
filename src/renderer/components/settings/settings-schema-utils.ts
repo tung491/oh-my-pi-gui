@@ -111,18 +111,10 @@ export function groupSchemaEntries(
 }
 
 const CAPABILITIES_TAB_ID = "capabilities";
-const RESOURCES_TAB_ID = "resources";
 
-export function resolveSettingsTarget(target: string | null | undefined): {
-	tab: string;
-	resourceTab?: "plugins" | "marketplaces" | "templates" | "memory";
-} {
-	const requested = target || CAPABILITIES_TAB_ID;
-	if (!requested.startsWith(`${RESOURCES_TAB_ID}:`)) return { tab: requested };
-	const resource = requested.slice(RESOURCES_TAB_ID.length + 1);
-	const resourceTab: "plugins" | "marketplaces" | "templates" | "memory" =
-		resource === "marketplaces" || resource === "templates" || resource === "memory" ? resource : "plugins";
-	return { tab: RESOURCES_TAB_ID, resourceTab };
+/** The settings page a deep link opens; no target opens the capabilities overview. */
+export function resolveSettingsTarget(target: string | null | undefined): { tab: string } {
+	return { tab: target || CAPABILITIES_TAB_ID };
 }
 
 /** Search the displayed Vietnamese labels as well as wire paths and English metadata. */

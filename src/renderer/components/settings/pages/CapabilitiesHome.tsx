@@ -27,16 +27,6 @@ export type CapabilityTarget =
 	| "model"
 	| "providers"
 	| "agents"
-	| "skills"
-	| "mcp"
-	| "resources"
-	| "marketplaces"
-	| "templates"
-	| "memoryResources"
-	| "hooks"
-	| "commands"
-	| "security"
-	| "ssh"
 	| "updates"
 	| "modes"
 	| "vibe"
@@ -56,14 +46,12 @@ export type CapabilityTarget =
 	| "queue"
 	| "workspaceDirs"
 	| "prCenter"
-	| "tools"
 	| "jobs"
 	| "hotkeys"
 	| "theme"
 	| "settings"
 	| "changelog"
-	| "copy"
-	| "force";
+	| "copy";
 
 interface CapabilitiesHomeProps {
 	ready: boolean;
@@ -309,21 +297,6 @@ export function CapabilitiesHome({
 					<TargetButton label={t("cmd.providers")} onOpen={onOpenTarget} target="providers" variant="secondary" />
 				</CapabilityCard>
 
-				<CapabilityCard
-					description={t("cmd.extensions.desc")}
-					icon={<Network size={16} />}
-					title={t("cmd.extensions")}
-				>
-					<TargetButton label={t("cmd.skills")} onOpen={onOpenTarget} target="skills" variant="secondary" />
-					<TargetButton label={t("cmd.mcp")} onOpen={onOpenTarget} target="mcp" />
-					<TargetButton label={t("cmd.plugins")} onOpen={onOpenTarget} target="resources" />
-					<TargetButton label={t("cmd.marketplace")} onOpen={onOpenTarget} target="marketplaces" />
-					<TargetButton label={t("cmd.templates")} onOpen={onOpenTarget} target="templates" />
-					<TargetButton label={t("cmd.memory")} onOpen={onOpenTarget} target="memoryResources" />
-					<TargetButton label={t("cmd.hooks")} onOpen={onOpenTarget} target="hooks" />
-					<TargetButton label={t("cmd.commands")} onOpen={onOpenTarget} target="commands" />
-				</CapabilityCard>
-
 				<CapabilityCard description={t("cmd.modes.desc")} icon={<Route size={16} />} title={t("cmd.modes")}>
 					<TargetButton label={t("cmd.modes")} onOpen={onOpenTarget} target="modes" variant="secondary" />
 					<TargetButton label={t("cmd.vibe")} onOpen={onOpenTarget} target="vibe" />
@@ -350,19 +323,16 @@ export function CapabilitiesHome({
 					<TargetButton label={t("cmd.dirs")} onOpen={onOpenTarget} target="workspaceDirs" />
 				</CapabilityCard>
 
-				<CapabilityCard description={t("cmd.context.desc")} icon={<BarChart3 size={16} />} title={t("cmd.stats")}>
-					<TargetButton label={t("cmd.tools")} onOpen={onOpenTarget} target="tools" />
-					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" />
+				<CapabilityCard description={t("cmd.jobs.desc")} icon={<BarChart3 size={16} />} title={t("cmd.jobs")}>
+					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" variant="secondary" />
 				</CapabilityCard>
 
 				<CapabilityCard
-					description={t("cmd.security.desc")}
+					description={t("cmd.settings.desc")}
 					icon={<ShieldCheck size={16} />}
-					title={t("cmd.security")}
+					title={t("settings.nav.application")}
 				>
-					<TargetButton label={t("cmd.security")} onOpen={onOpenTarget} target="security" variant="secondary" />
-					<TargetButton label={t("cmd.ssh")} onOpen={onOpenTarget} target="ssh" />
-					<TargetButton label={t("cmd.hotkeys")} onOpen={onOpenTarget} target="hotkeys" />
+					<TargetButton label={t("cmd.hotkeys")} onOpen={onOpenTarget} target="hotkeys" variant="secondary" />
 					<TargetButton label={t("cmd.theme")} onOpen={onOpenTarget} target="theme" />
 					<TargetButton label={t("cmd.settings")} onOpen={onOpenTarget} target="settings" />
 					<TargetButton label={t("cmd.changelog")} onOpen={onOpenTarget} target="changelog" />
@@ -371,7 +341,6 @@ export function CapabilitiesHome({
 
 				<CapabilityCard description={t("cmd.copy.desc")} icon={<Keyboard size={16} />} title={t("cmd.copy")}>
 					<TargetButton label={t("cmd.copy")} onOpen={onOpenTarget} target="copy" variant="secondary" />
-					<TargetButton label={t("cmd.force")} onOpen={onOpenTarget} target="force" />
 				</CapabilityCard>
 			</div>
 		</div>

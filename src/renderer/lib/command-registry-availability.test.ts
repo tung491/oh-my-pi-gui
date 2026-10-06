@@ -50,10 +50,9 @@ describe("chat-tab availability", () => {
 	it("downgrades a GUI-registered tool command to a disabled row that explains itself", () => {
 		seedTab("agent");
 		expect(menuItem("plan").affordance.kind).toBe("toggle");
-		expect(menuItem("security").affordance.kind).toBe("submenu");
 
 		seedTab("chat");
-		for (const name of ["plan", "security", "goal", "vibe", "tree"]) {
+		for (const name of ["plan", "goal", "vibe", "tree"]) {
 			const affordance = menuItem(name).affordance;
 			if (affordance.kind !== "unavailable") throw new Error(`${name} is still executable in a chat tab`);
 			expect(affordance.reason, name).toBe(CHAT_REASON);
@@ -117,17 +116,6 @@ describe("commandArgPrefill", () => {
 	});
 
 	it("returns null when the row needs no argument", () => {
-		// /security export is a fixed prompt the palette can dispatch; /security
-		// show takes an id.
-		const security = menuItem("security").affordance;
-		if (security.kind !== "submenu") throw new Error("security is not a submenu");
-		const sub = (name: string): CommandMenuItem => {
-			const item = security.items.find(candidate => candidate.name === name);
-			if (!item) throw new Error(`missing submenu item: ${name}`);
-			return item;
-		};
-		expect(commandArgPrefill(sub("security show"))).toBe("/security show ");
-		expect(commandArgPrefill(sub("security export"))).toBeNull();
 		expect(commandArgPrefill(menuItem("model"))).toBeNull();
 		expect(commandArgPrefill(menuItem("compact"))).toBeNull();
 	});

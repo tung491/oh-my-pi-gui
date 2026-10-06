@@ -84,12 +84,11 @@ describe("CapabilitiesHome", () => {
 		expect(html).toContain("Configure tool access");
 		expect(html).toContain("Backend: local");
 		expect(html).toContain("Switch Model");
-		expect(html).toContain("MCP Servers");
 		expect(html).toContain("Side Question");
 		expect(html).toContain("Export HTML");
-		expect(html).toContain("Plugin Marketplace");
 		expect(html).toContain("Updates");
-		for (const removed of ["Debug Tools", "Collab Session"]) expect(html).not.toContain(removed);
+		for (const removed of ["Debug Tools", "Collab Session", "MCP Servers", "Plugin Marketplace"])
+			expect(html).not.toContain(removed);
 	});
 
 	// (The pending-toggle lock test was removed with the toggle buttons —
@@ -183,7 +182,7 @@ describe("GUI settings visibility", () => {
 		expect(isAgentSchemaTab("model", { tabs: [{ id: "model" }] })).toBe(true);
 		expect(isAgentSchemaTab("gui", null)).toBe(false);
 		expect(isAgentSchemaTab("capabilities", null)).toBe(false);
-		expect(isAgentSchemaTab("skills", null)).toBe(false);
+		expect(isAgentSchemaTab("updates", null)).toBe(false);
 	});
 
 	it("explains why cached schema controls are locked while the sidecar is down", () => {
@@ -351,32 +350,16 @@ describe("SchemaTabContent vi translations", () => {
 });
 
 describe("SettingsWindow", () => {
-	it("normalizes resource deep links to one stable left-nav destination", () => {
-		expect(resolveSettingsTarget("resources:marketplaces")).toEqual({
-			tab: "resources",
-			resourceTab: "marketplaces",
-		});
-		expect(resolveSettingsTarget("resources:unknown")).toEqual({ tab: "resources", resourceTab: "plugins" });
-	});
-
-	it("supports deep-linking the first-class Skills page from commands", () => {
-		useUiStore.getState().openSettings("skills");
-		expect(useUiStore.getState()).toMatchObject({ settingsOpen: true, settingsTab: "skills" });
-	});
-
-	it("preserves resource subroutes for the Settings inventory page", () => {
-		useUiStore.getState().openSettings("resources:marketplaces");
-		expect(useUiStore.getState()).toMatchObject({
-			settingsOpen: true,
-			settingsTab: "resources:marketplaces",
-		});
+	it("opens the capabilities overview when a deep link names no page", () => {
+		expect(resolveSettingsTarget(undefined)).toEqual({ tab: "capabilities" });
+		expect(resolveSettingsTarget("updates")).toEqual({ tab: "updates" });
 	});
 
 	it("keeps the current page when ⌘, lands on an already-open window", () => {
-		useUiStore.getState().openSettings("mcp");
+		useUiStore.getState().openSettings("updates");
 		// No explicit target: reopening must not bounce the user to the first tab.
 		useUiStore.getState().openSettings();
-		expect(useUiStore.getState()).toMatchObject({ settingsOpen: true, settingsTab: "mcp" });
+		expect(useUiStore.getState()).toMatchObject({ settingsOpen: true, settingsTab: "updates" });
 		// A cold open still starts at the default page.
 		useUiStore.getState().closeSettings();
 		useUiStore.getState().openSettings();

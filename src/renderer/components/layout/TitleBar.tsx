@@ -12,7 +12,6 @@ import {
 	PanelLeft,
 	PanelRight,
 	Search,
-	Wrench,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { SessionStats } from "../../../shared/rpc-types";
@@ -63,7 +62,6 @@ export function TitleBar() {
 	const panelVisible = useUiStore(s => s.panelVisible);
 	const togglePanel = useUiStore(s => s.togglePanel);
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
-	const openActiveTools = useUiStore(s => s.openActiveTools);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
 	const openBranchPicker = useUiStore(s => s.openBranchPicker);
 	const openSessionTree = useUiStore(s => s.openSessionTree);
@@ -221,16 +219,6 @@ export function TitleBar() {
 			onSelect: () => {
 				setActionsMenu(null);
 				openSessionInfo();
-			},
-		},
-		{
-			id: "tools",
-			label: t("cmd.tools"),
-			description: t("cmd.tools.desc"),
-			icon: Wrench,
-			onSelect: () => {
-				setActionsMenu(null);
-				openActiveTools();
 			},
 		},
 	];
