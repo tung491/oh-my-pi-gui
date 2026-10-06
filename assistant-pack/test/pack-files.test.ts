@@ -38,7 +38,16 @@ const EXPECTED_CONFIG = {
 		enableClaudeUser: false,
 		enableClaudeProject: false,
 		enableCodexUser: false,
+		customDirectories: [],
+		includeSkills: [],
 	},
+	commands: {
+		enableClaudeUser: false,
+		enableClaudeProject: false,
+		enableOpencodeUser: false,
+		enableOpencodeProject: false,
+	},
+	plan: { enabled: false, defaultOnStartup: false },
 	mcp: { enableProjectConfig: false },
 	task: { disabledAgents: ["task", "sonic", "scout", "reviewer", "security-reviewer"] },
 	tools: {

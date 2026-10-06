@@ -21,6 +21,18 @@ skills:
   enableClaudeUser: false
   enableClaudeProject: false
   enableCodexUser: false
+  customDirectories: []
+  includeSkills: []
+# Prompt commands from Claude or OpenCode folders stay out of pack sessions.
+commands:
+  enableClaudeUser: false
+  enableClaudeProject: false
+  enableOpencodeUser: false
+  enableOpencodeProject: false
+# The app has no plan mode: never start in it (it also turns a resumed one off).
+plan:
+  enabled: false
+  defaultOnStartup: false
 mcp:
   enableProjectConfig: false
 # No task tool is loaded; disabledAgents stays as belt-and-braces.
