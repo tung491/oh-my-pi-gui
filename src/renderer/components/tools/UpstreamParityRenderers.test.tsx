@@ -16,8 +16,6 @@ Object.assign(globalThis as Record<string, unknown>, {
 });
 
 const { createRoot } = await import("react-dom/client");
-const { EvalRenderer } = await import("./EvalRenderer");
-const { HubRenderer } = await import("./HubRenderer");
 const { ImageRenderer } = await import("./ImageRenderer");
 const { ReadRenderer } = await import("./ReadRenderer");
 const { WaitRenderer } = await import("./CoordinationRenderer");
@@ -57,48 +55,6 @@ describe("omp 17.3.5 renderer parity", () => {
 		const image = container.querySelector("img");
 		expect(image?.getAttribute("src")).toBe("data:image/png;base64,cG5n");
 		expect(image?.getAttribute("alt")).toBe("report.pdf:page-2.png");
-	});
-
-	it("labels a hub registration with no live turn instead of showing it as running", async () => {
-		await mount(
-			<HubRenderer
-				args={{ op: "jobs" }}
-				result={{
-					content: [{ type: "text", text: "stale registration" }],
-					details: { agents: [{ id: "Zombie", ageMs: 12_000, live: false }] },
-				}}
-			/>,
-		);
-
-		expect(container.textContent).toContain("Zombie");
-		expect(container.textContent).toContain("no turn");
-		expect(container.textContent).not.toContain("running");
-	});
-});
-
-describe("omp 18.1.9 renderer parity", () => {
-	it("renders every image while an eval cell is still streaming", async () => {
-		await mount(
-			<EvalRenderer
-				args={{ code: "display(first); display(second)", language: "python" }}
-				isPartial
-				partialResult={{
-					content: [{ type: "text", text: "" }],
-					details: {
-						images: [
-							{ type: "image", data: "first", mimeType: "image/png" },
-							{ type: "image", data: "second", mimeType: "image/jpeg" },
-						],
-					},
-				}}
-				result={null}
-			/>,
-		);
-
-		expect([...container.querySelectorAll("img")].map(image => image.getAttribute("src"))).toEqual([
-			"data:image/png;base64,first",
-			"data:image/jpeg;base64,second",
-		]);
 	});
 });
 

@@ -78,6 +78,15 @@ const GENERIC_BY_DESIGN = [
 	"think",
 	"tts",
 	"yield",
+	// Developer tools an everyday-work session never loads; old transcripts
+	// carrying them fall back to the key/value view.
+	"ast_edit",
+	"ast_grep",
+	"debug",
+	"eval",
+	"github",
+	"hub",
+	"lsp",
 ] as const;
 
 /**
