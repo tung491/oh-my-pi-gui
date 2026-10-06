@@ -241,6 +241,7 @@ function SessionTranscript() {
 			// The composer owns sending: the same pipeline as its Send button.
 			send: text =>
 				window.dispatchEvent(new CustomEvent("omp:fill-composer", { detail: { text, tabId, submit: true } })),
+			warn: message => toast({ variant: "warning", message }),
 			t,
 		}).catch((error: unknown) => toast({ variant: "error", message: String(error) }));
 	};

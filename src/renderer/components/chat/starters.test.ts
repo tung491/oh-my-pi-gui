@@ -11,8 +11,9 @@ function starter(id: Starter["id"]): Starter {
 function deps(dialogResult: string[] | null) {
 	const showOpenDialog = vi.fn<StarterDeps["showOpenDialog"]>(async () => dialogResult);
 	const send = vi.fn<StarterDeps["send"]>();
+	const warn = vi.fn<StarterDeps["warn"]>();
 	const t = (key: string) => en[key] ?? key;
-	return { showOpenDialog, send, t };
+	return { showOpenDialog, send, warn, t };
 }
 
 describe("starter cards", () => {
@@ -70,6 +71,19 @@ describe("starter cards", () => {
 		await runStarter(starter("word-report"), d);
 		expect(d.send).toHaveBeenCalledTimes(1);
 		expect(d.send).toHaveBeenCalledWith("/skill:word-report '/home/u/notes.md'");
+	});
+
+	it("quotes a chosen file whose name has an apostrophe", async () => {
+		const d = deps(["/home/u/Bob's notes.docx"]);
+		await runStarter(starter("word-report"), d);
+		expect(d.send).toHaveBeenCalledWith(`/skill:word-report "/home/u/Bob's notes.docx"`);
+	});
+
+	it("refuses a chosen file whose name holds a line break", async () => {
+		const d = deps(["/home/u/notes.md\n../../x.md"]);
+		await runStarter(starter("word-report"), d);
+		expect(d.send).not.toHaveBeenCalled();
+		expect(d.warn).toHaveBeenCalledWith(en["input.attach.unusualName"]);
 	});
 
 	it("starts the helpdesk without a file dialog, in the session language", async () => {

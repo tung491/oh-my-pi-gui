@@ -5,7 +5,7 @@
  * prompt). The helpdesk job opens no dialog and runs in the main session.
  */
 
-import { quotePromptPath } from "../layout/attach-document";
+import { isPromptSafePath, quotePromptPath } from "../layout/attach-document";
 
 export interface DialogFilter {
 	name: string;
@@ -63,6 +63,8 @@ export interface StarterDeps {
 	showOpenDialog(filters: DialogFilter[]): Promise<string[] | null>;
 	/** The composer's Send path. */
 	send(text: string): void;
+	/** Tells the person why nothing was sent. */
+	warn(message: string): void;
 	t(key: string): string;
 }
 
@@ -73,5 +75,9 @@ export async function runStarter(starter: Starter, deps: StarterDeps): Promise<v
 	}
 	const paths = await deps.showOpenDialog(starter.filters);
 	if (!paths || paths.length === 0) return;
+	if (!paths.every(isPromptSafePath)) {
+		deps.warn(deps.t("input.attach.unusualName"));
+		return;
+	}
 	deps.send(`/skill:${starter.skill} ${paths.map(quotePromptPath).join(" ")}`);
 }

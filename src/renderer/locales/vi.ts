@@ -78,6 +78,7 @@ export const vi: Record<string, string> = {
 	"tabs.kind.chat": "Phiên trò chuyện (không dùng công cụ)",
 	"input.attach": "Đính kèm tệp",
 	"input.attach.failed": "Không thể đính kèm tệp",
+	"input.attach.unusualName": "Tên tệp có dấu xuống dòng hoặc ký tự ẩn khác. Hãy đổi tên tệp rồi thử lại.",
 	"input.model": "Đổi mô hình",
 	"input.thinking": "Suy nghĩ: {level} — nhấn để thay đổi",
 	"input.thinking.failed": "Mức suy nghĩ",
