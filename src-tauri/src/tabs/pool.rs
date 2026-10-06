@@ -965,12 +965,14 @@ impl SidecarPool {
         let mut first_restored: Option<String> = None;
         let mut active_restored: Option<String> = None;
         for (index, tab) in layout.tabs.iter().enumerate() {
+            // Every tab comes back as an agent, whatever kind it was saved with: a
+            // chat-stamped session file is refused when the tab starts.
             let options = AcquireOptions {
                 cwd: tab.cwd.clone(),
                 win_id,
                 tab_id: Some(next_snowflake()),
                 session_path: tab.session_path.clone(),
-                kind: tab.kind,
+                kind: SessionKind::Agent,
                 worktree: tab.worktree.clone(),
                 fresh: tab.session_path.is_none(),
                 placeholder: tab.placeholder == Some(true),
@@ -1540,7 +1542,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn restores_tab_order_sessions_kinds_and_the_persisted_active_tab() {
+    async fn restores_tab_order_sessions_and_the_persisted_active_tab_every_tab_as_an_agent() {
         let h = harness();
         let win = h.window(1);
         let saved = json!({
@@ -1551,8 +1553,10 @@ mod tests {
         let restored = h.tabs().restore_layout(win, layout(saved.clone()));
 
         assert_eq!(restored, 2);
+        // A tab saved as a chat comes back as an agent: no pool entry may claim a
+        // kind its process does not run, and a chat-stamped file is refused at start.
         let calls: Vec<(String, SessionKind, bool)> = h.sidecars().iter().map(|s| (s.options.cwd.clone(), s.options.kind, s.options.fresh)).collect();
-        assert_eq!(calls, [("/agent".to_string(), SessionKind::Agent, false), ("/chat".to_string(), SessionKind::Chat, true)]);
+        assert_eq!(calls, [("/agent".to_string(), SessionKind::Agent, false), ("/chat".to_string(), SessionKind::Agent, true)]);
         assert_eq!(restarts(&h.sidecar(0)), [r#"restart(None, Some("/sessions/a.jsonl"))"#]);
         assert!(started(&h.sidecar(1)));
         let tabs = h.tabs_json(win);
@@ -1560,7 +1564,33 @@ mod tests {
         assert_eq!(active, [false, true]);
         let splits: Vec<Value> = tabs.as_array().unwrap().iter().map(|tab| tab["split"].clone()).collect();
         assert_eq!(splits, [json!({ "axis": "rows", "index": 0, "ratio": 0.6 }), json!({ "axis": "rows", "index": 1, "ratio": 0.6 })]);
-        assert_eq!(serde_json::to_value(h.tabs().tab_layout_for_window(win)).unwrap(), saved);
+        let mut expected = saved;
+        expected["tabs"][1]["kind"] = json!("agent");
+        assert_eq!(serde_json::to_value(h.tabs().tab_layout_for_window(win)).unwrap(), expected);
+        let kinds: Vec<Value> = tabs.as_array().unwrap().iter().map(|tab| tab["kind"].clone()).collect();
+        assert_eq!(kinds, [json!("agent"), json!("agent")]);
+    }
+
+    #[tokio::test]
+    async fn forwards_the_status_a_deferred_tab_reports_as_it_is_shown() {
+        let h = harness();
+        let win = h.window(1);
+        let saved = json!({
+            "version": 1, "activeIndex": 1,
+            "tabs": [{ "cwd": "/a", "kind": "agent", "sessionPath": "/sessions/a.jsonl" }, { "cwd": "/b", "kind": "agent" }],
+        });
+        h.tabs().restore_layout(win, layout(saved));
+        let sleeping = h.tabs_json(win)[0]["tabId"].as_str().unwrap().to_string();
+        settle().await;
+        h.clear(win);
+
+        // Showing the tab starts it; the status its start reports (a refusal among
+        // them) must reach the window's full status channel, not only TAB_STATUS.
+        h.tabs().set_active_tab(win, &sleeping);
+        assert_eq!(restarts(&h.sidecar(0)), [r#"restart(None, Some("/sessions/a.jsonl"))"#]);
+        report_starting(&h.sidecar(0));
+        settle().await;
+        assert_eq!(h.sent(win, CHANNEL_SIDECAR_STATUS), [json!({ "tabId": sleeping, "payload": { "status": "starting", "cwd": "/a" } })]);
     }
 
     #[tokio::test]

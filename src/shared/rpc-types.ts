@@ -2001,10 +2001,14 @@ export interface SidecarRestartProgress {
 
 /** Payload of `SidecarManager`'s `status` event, forwarded to the renderer as
  * the `SIDECAR_STATUS` IPC. `message` is the raw technical reason (exit code +
- * stderr tail), never user-facing copy. */
+ * stderr tail), never user-facing copy. `refusal` names a start the app
+ * refused on purpose, so the renderer shows its own copy for it:
+ * `kind-mismatch` = the session file is stamped `chat`, which an assistant
+ * session cannot resume. */
 export interface SidecarStatusPayload {
 	status: SidecarStatus;
 	message?: string;
 	cwd: string;
 	restart?: SidecarRestartProgress;
+	refusal?: "kind-mismatch";
 }

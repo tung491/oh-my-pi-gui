@@ -319,7 +319,6 @@ export class SidecarPool {
 	 */
 	#wireFull(entry: PoolEntry): void {
 		if (entry.detachFull) return;
-		this.#ensureStarted(entry);
 		const { sidecar, win } = entry;
 		const removers: (() => void)[] = [];
 		const forwardActive = <T>(channel: string, payload: T): void => {
@@ -384,6 +383,9 @@ export class SidecarPool {
 			entry.detachFull = null;
 			for (const remove of removers) remove();
 		};
+		// Start only once the listeners are attached: a start can report its
+		// status synchronously (a refusal does), and it must reach the window.
+		this.#ensureStarted(entry);
 	}
 
 	#syncFullWiring(winId: number): void {
@@ -706,12 +708,14 @@ export class SidecarPool {
 		try {
 			for (const [index, tab] of layout.tabs.entries()) {
 				const tabId = nextSnowflake();
+				// Every tab comes back as an agent, whatever kind it was saved with: a
+				// chat-stamped session file is refused when the tab starts.
 				const sidecar = this.acquire(
 					tab.cwd,
 					win,
 					tabId,
 					tab.sessionPath,
-					tab.kind,
+					"agent",
 					tab.worktree,
 					!tab.sessionPath,
 					tab.placeholder === true,

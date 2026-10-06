@@ -1,0 +1,375 @@
+From cb25899a403d2d81f016e49c8514a11d77d45b0b Mon Sep 17 00:00:00 2001
+From: Tung Son Do <dosontung007@gmail.com>
+Date: Tue, 6 Oct 2026 17:27:00 +0900
+Subject: [PATCH] feat(cli): add --no-context-files to skip instruction files
+
+A session started with --no-context-files loads no context files: no
+AGENTS.md, CLAUDE.md or other instruction file from the working folder,
+its parents or additional workspace roots, at startup or on any prompt
+rebuild. Subagents inherit the switch. --no-rules covers rules folders;
+this covers the context-file capability, which no flag could turn off.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ docs/cli-reference.md                         |   1 +
+ packages/coding-agent/src/cli.ts              |   1 +
+ packages/coding-agent/src/cli/args.ts         |   3 +
+ packages/coding-agent/src/cli/flag-tables.ts  |   1 +
+ .../coding-agent/src/commands/launch-help.ts  |   3 +
+ packages/coding-agent/src/main.ts             |   5 +
+ packages/coding-agent/src/sdk.ts              |  17 ++-
+ packages/coding-agent/src/system-prompt.ts    |   4 +
+ packages/coding-agent/src/task/executor.ts    |   3 +
+ .../src/task/structured-subagent.ts           |   1 +
+ packages/coding-agent/src/tools/index.ts      |   2 +
+ packages/coding-agent/src/vibe/runtime.ts     |   1 +
+ .../test/sdk-no-context-files.test.ts         | 107 ++++++++++++++++++
+ 13 files changed, 145 insertions(+), 4 deletions(-)
+ create mode 100644 packages/coding-agent/test/sdk-no-context-files.test.ts
+
+diff --git a/docs/cli-reference.md b/docs/cli-reference.md
+index eeccd96779..79faf38e1c 100644
+--- a/docs/cli-reference.md
++++ b/docs/cli-reference.md
+@@ -157,6 +157,7 @@ See [providers](./providers.md) and [models](./models.md) for model resolution.
+ | `--skills <globs>` | Comma-separated glob patterns to filter [skills](./skills.md) (e.g. `git-*,docker`). |
+ | `--no-skills` | Disable skills discovery and loading. |
+ | `--no-rules` | Disable rules discovery and loading. See [context files](./context-files.md). |
++| `--no-context-files` | Load no context files (`AGENTS.md`, `CLAUDE.md`, and the rest) from the working folder, its parents, or additional workspace roots, at startup or on any prompt rebuild. Subagents inherit it. See [context files](./context-files.md). |
+ 
+ #### System prompt
+ 
+diff --git a/packages/coding-agent/src/cli.ts b/packages/coding-agent/src/cli.ts
+index 6b6b34417b..81d62d1b12 100755
+--- a/packages/coding-agent/src/cli.ts
++++ b/packages/coding-agent/src/cli.ts
+@@ -82,6 +82,7 @@ const PREPAINT_SAFE_FLAGS: Record<string, true> = {
+ 	"--no-extensions": true,
+ 	"--no-skills": true,
+ 	"--no-rules": true,
++	"--no-context-files": true,
+ 	"--no-tools": true,
+ 	"--no-lsp": true,
+ 	"--no-title": true,
+diff --git a/packages/coding-agent/src/cli/args.ts b/packages/coding-agent/src/cli/args.ts
+index 09efd75179..4d52320c9f 100644
+--- a/packages/coding-agent/src/cli/args.ts
++++ b/packages/coding-agent/src/cli/args.ts
+@@ -84,6 +84,7 @@ export interface Args {
+ 	noSkills?: boolean;
+ 	skills?: string[];
+ 	noRules?: boolean;
++	noContextFiles?: boolean;
+ 	noTitle?: boolean;
+ 	/** RPC modes only: run extensions without a UI; `rpc-ui` tool UI remains enabled. */
+ 	noUi?: boolean;
+@@ -295,6 +296,8 @@ export function parseArgs(inputArgs: string[], extensionFlags?: Map<string, { ty
+ 			result.noSkills = true;
+ 		} else if (arg === "--no-rules") {
+ 			result.noRules = true;
++		} else if (arg === "--no-context-files") {
++			result.noContextFiles = true;
+ 		} else if (arg === "--no-title") {
+ 			result.noTitle = true;
+ 		} else if (arg === "--no-ui") {
+diff --git a/packages/coding-agent/src/cli/flag-tables.ts b/packages/coding-agent/src/cli/flag-tables.ts
+index fcaf0e34cb..df34939132 100644
+--- a/packages/coding-agent/src/cli/flag-tables.ts
++++ b/packages/coding-agent/src/cli/flag-tables.ts
+@@ -317,6 +317,7 @@ export const VALUELESS_FLAGS: ReadonlySet<string> = new Set([
+ 	"--no-extensions",
+ 	"--no-skills",
+ 	"--no-rules",
++	"--no-context-files",
+ 	"--no-title",
+ 	"--no-ui",
+ 	"--auto-approve",
+diff --git a/packages/coding-agent/src/commands/launch-help.ts b/packages/coding-agent/src/commands/launch-help.ts
+index 0eb54c05b4..3184ac9c02 100644
+--- a/packages/coding-agent/src/commands/launch-help.ts
++++ b/packages/coding-agent/src/commands/launch-help.ts
+@@ -97,6 +97,9 @@ export const launchHelp = {
+ 		"no-skills": Flags.boolean({ description: "Disable skills discovery and loading" }),
+ 		skills: Flags.string({ description: "Comma-separated glob patterns to filter skills (e.g., git-*,docker)" }),
+ 		"no-rules": Flags.boolean({ description: "Disable rules discovery and loading" }),
++		"no-context-files": Flags.boolean({
++			description: "Disable context file discovery and loading (AGENTS.md, CLAUDE.md, and the like)",
++		}),
+ 		export: Flags.string({ description: "Export session file to HTML and exit" }),
+ 		"no-title": Flags.boolean({ description: "Disable title auto-generation" }),
+ 		"no-ui": Flags.boolean({
+diff --git a/packages/coding-agent/src/main.ts b/packages/coding-agent/src/main.ts
+index 5e5ed474b3..33232d4ac5 100644
+--- a/packages/coding-agent/src/main.ts
++++ b/packages/coding-agent/src/main.ts
+@@ -1620,6 +1620,11 @@ export async function buildSessionOptions(
+ 		options.rules = [];
+ 	}
+ 
++	// Context files (AGENTS.md, CLAUDE.md, …)
++	if (parsed.noContextFiles) {
++		options.noContextFiles = true;
++	}
++
+ 	// Trusted extension paths are an exact allowlist for extension modules.
+ 	if (parsed.trustedExtensions && parsed.trustedExtensions.length > 0) {
+ 		const trustedPaths = parsed.trustedExtensions.map(trustedPath => {
+diff --git a/packages/coding-agent/src/sdk.ts b/packages/coding-agent/src/sdk.ts
+index 1b063d2204..e5710b8bbb 100644
+--- a/packages/coding-agent/src/sdk.ts
++++ b/packages/coding-agent/src/sdk.ts
+@@ -693,6 +693,11 @@ export interface CreateAgentSessionOptions {
+ 	rules?: Rule[];
+ 	/** Context files (AGENTS.md content). Default: discovered walking up from cwd */
+ 	contextFiles?: Array<{ path: string; content: string }>;
++	/**
++	 * Load no context files: none from cwd and its parents, none for additional workspace
++	 * roots, at startup or on any prompt rebuild. Subagents inherit it. Overrides `contextFiles`.
++	 */
++	noContextFiles?: boolean;
+ 	/** Pre-built workspace tree (skips re-scanning; passed by parents to subagents). */
+ 	workspaceTree?: WorkspaceTree;
+ 	/** Prompt templates. Default: discovered from cwd/.omp/prompts/ + agentDir/prompts/ */
+@@ -1735,9 +1740,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 	// Independent discoveries that depend only on cwd/agentDir — kicked off in parallel and awaited
+ 	// at their respective consumer sites. Their work can overlap with model resolution, secret loading,
+ 	// session-context build, tool creation, MCP discovery, and extension discovery.
+-	const contextFilesPromise = options.contextFiles
+-		? Promise.resolve(options.contextFiles)
+-		: logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir);
++	const contextFilesPromise = options.noContextFiles
++		? Promise.resolve([])
++		: options.contextFiles
++			? Promise.resolve(options.contextFiles)
++			: logger.time("discoverContextFiles", discoverContextFiles, cwd, agentDir);
+ 	contextFilesPromise.catch(() => {});
+ 	const resolveRepoContext = async (repoCwd: string) => {
+ 		try {
+@@ -2187,6 +2194,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 			},
+ 			skipPythonPreflight: options.skipPythonPreflight,
+ 			contextFiles,
++			noContextFiles: options.noContextFiles,
+ 			get workspaceTree() {
+ 				return lateWorkspaceTree ?? resolvedWorkspaceTree;
+ 			},
+@@ -3656,7 +3664,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 			const activeRepoContext = hasSession
+ 				? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
+ 				: initialActiveRepoContext;
+-			if (hasSession && options.contextFiles === undefined) {
++			if (hasSession && options.contextFiles === undefined && !options.noContextFiles) {
+ 				contextFiles = await logger.time("discoverContextFiles", discoverContextFiles, promptCwd, agentDir, [
+ 					...cfgDisabledExtensions.get(settings),
+ 				]);
+@@ -3815,6 +3823,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 			const defaultPrompt = await buildSystemPromptInternal({
+ 				cwd: promptCwd,
+ 				additionalWorkspaceRoots: sessionManager.getAdditionalDirectories(),
++				noContextFiles: options.noContextFiles,
+ 				xdevTools: toolSession.xdev ? xdevEntries(toolSession.xdev) : [],
+ 				xdevDocs: xdevPromptDocs ? renderXdevPromptDocs(xdevPromptDocs, routedCatalogNames) : "",
+ 				resolvedCustomPrompt: options.customSystemPrompt,
+diff --git a/packages/coding-agent/src/system-prompt.ts b/packages/coding-agent/src/system-prompt.ts
+index 61e9e7c0d4..2ce665814d 100644
+--- a/packages/coding-agent/src/system-prompt.ts
++++ b/packages/coding-agent/src/system-prompt.ts
+@@ -524,6 +524,8 @@ export interface BuildSystemPromptOptions {
+ 	additionalWorkspaceRoots?: string[];
+ 	/** Pre-loaded context files (skips discovery if provided). */
+ 	contextFiles?: Array<{ path: string; content: string; depth?: number }>;
++	/** Load no context files, not even for additional workspace roots. */
++	noContextFiles?: boolean;
+ 	/** Skills provided directly to system prompt construction. */
+ 	skills?: readonly Skill[];
+ 	/** Session-scoped description snapshot; background cache writes apply only to the next session. */
+@@ -642,6 +644,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+ 		cwd,
+ 		additionalWorkspaceRoots = [],
+ 		contextFiles: providedContextFiles,
++		noContextFiles = false,
+ 		skills: providedSkills,
+ 		rules,
+ 		alwaysApplyRules,
+@@ -753,6 +756,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+ 		? Promise.resolve(null)
+ 		: logger.time("loadSystemPromptFiles", loadSystemPromptFiles, { cwd: resolvedCwd });
+ 	const contextFilesPromise = (async () => {
++		if (noContextFiles) return [];
+ 		const primary = providedContextFiles
+ 			? providedContextFiles
+ 			: await logger.time("loadProjectContextFiles", loadProjectContextFiles, { cwd: resolvedCwd });
+diff --git a/packages/coding-agent/src/task/executor.ts b/packages/coding-agent/src/task/executor.ts
+index 3cf05bfdab..30ca9e1aa9 100644
+--- a/packages/coding-agent/src/task/executor.ts
++++ b/packages/coding-agent/src/task/executor.ts
+@@ -523,6 +523,8 @@ export interface ExecutorOptions {
+ 	eventBus?: EventBus;
+ 	subagentEventBus?: EventBus;
+ 	contextFiles?: ContextFileEntry[];
++	/** The parent loads no context files; the subagent loads none either. */
++	noContextFiles?: boolean;
+ 	skills?: Skill[];
+ 	promptTemplates?: PromptTemplate[];
+ 	workspaceTree?: WorkspaceTree;
+@@ -4028,6 +4030,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
+ 				restrictToolNames: options.restrictToolNames,
+ 				requireYieldTool: true,
+ 				contextFiles: options.contextFiles,
++				noContextFiles: options.noContextFiles,
+ 				skills: options.skills,
+ 				promptTemplates: options.promptTemplates,
+ 				workspaceTree: options.workspaceTree,
+diff --git a/packages/coding-agent/src/task/structured-subagent.ts b/packages/coding-agent/src/task/structured-subagent.ts
+index 6f12a1e551..3e15114ebc 100644
+--- a/packages/coding-agent/src/task/structured-subagent.ts
++++ b/packages/coding-agent/src/task/structured-subagent.ts
+@@ -543,6 +543,7 @@ function buildExecutorOptions(
+ 		customTools: request.customTools,
+ 		workPoolYieldItems: request.workPoolYieldItems,
+ 		contextFiles: session.contextFiles?.filter(file => path.basename(file.path).toLowerCase() !== "agents.md"),
++		noContextFiles: session.noContextFiles,
+ 		skills,
+ 		autoloadSkills,
+ 		workspaceTree: session.workspaceTree,
+diff --git a/packages/coding-agent/src/tools/index.ts b/packages/coding-agent/src/tools/index.ts
+index c7870c8281..15b8bcdeb6 100644
+--- a/packages/coding-agent/src/tools/index.ts
++++ b/packages/coding-agent/src/tools/index.ts
+@@ -235,6 +235,8 @@ export interface ToolSession {
+ 	skipPythonPreflight?: boolean;
+ 	/** Pre-loaded context files (AGENTS.md, etc) */
+ 	contextFiles?: ContextFileEntry[];
++	/** The session loads no context files; forwarded so subagents load none either. */
++	noContextFiles?: boolean;
+ 	/** Pre-loaded workspace tree (forwarded to subagents to skip re-scanning) */
+ 	workspaceTree?: WorkspaceTree;
+ 	/** Pre-loaded skills */
+diff --git a/packages/coding-agent/src/vibe/runtime.ts b/packages/coding-agent/src/vibe/runtime.ts
+index cd49a343dd..0eae7c70b7 100644
+--- a/packages/coding-agent/src/vibe/runtime.ts
++++ b/packages/coding-agent/src/vibe/runtime.ts
+@@ -1308,6 +1308,7 @@ export class VibeSessionRegistry {
+ 			inheritedSessionAgents: session.getSessionAgents?.(),
+ 			mcpManager: session.mcpManager ?? MCPManager.instance(),
+ 			contextFiles: session.contextFiles?.filter(file => path.basename(file.path).toLowerCase() !== "agents.md"),
++			noContextFiles: session.noContextFiles,
+ 			skills: [...(session.skills ?? [])],
+ 			workspaceTree: session.workspaceTree,
+ 			promptTemplates: session.promptTemplates,
+diff --git a/packages/coding-agent/test/sdk-no-context-files.test.ts b/packages/coding-agent/test/sdk-no-context-files.test.ts
+new file mode 100644
+index 0000000000..14afe5c3f7
+--- /dev/null
++++ b/packages/coding-agent/test/sdk-no-context-files.test.ts
+@@ -0,0 +1,107 @@
++import { describe, expect, it } from "bun:test";
++import * as fs from "node:fs";
++import * as path from "node:path";
++import { AuthStorage } from "@oh-my-pi/pi-ai";
++import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
++import { parseArgs } from "@oh-my-pi/pi-coding-agent/cli/args";
++import { VALUELESS_FLAGS } from "@oh-my-pi/pi-coding-agent/cli/flag-tables";
++import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
++import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
++import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
++import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
++import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
++import { TempDir } from "@oh-my-pi/pi-utils";
++
++const MARKERS = {
++	cwdAgents: "no-context-files-cwd-agents-marker",
++	cwdClaude: "no-context-files-cwd-claude-marker",
++	parentAgents: "no-context-files-parent-agents-marker",
++	parentClaude: "no-context-files-parent-claude-marker",
++	extraClaude: "no-context-files-extra-root-claude-marker",
++} as const;
++
++/**
++ * Plants AGENTS.md and CLAUDE.md in a working folder and in its parent, and a lone CLAUDE.md in an
++ * extra workspace root. At one depth AGENTS.md shadows CLAUDE.md, so the lone file proves CLAUDE.md loads.
++ */
++function plantInstructionFiles(tempDir: TempDir): { cwd: string; extraRoot: string } {
++	const cwd = tempDir.join("project");
++	const extraRoot = tempDir.join("extra-root");
++	fs.mkdirSync(cwd, { recursive: true });
++	fs.mkdirSync(extraRoot, { recursive: true });
++	fs.writeFileSync(path.join(cwd, "AGENTS.md"), MARKERS.cwdAgents);
++	fs.writeFileSync(path.join(cwd, "CLAUDE.md"), MARKERS.cwdClaude);
++	fs.writeFileSync(tempDir.join("AGENTS.md"), MARKERS.parentAgents);
++	fs.writeFileSync(tempDir.join("CLAUDE.md"), MARKERS.parentClaude);
++	fs.writeFileSync(path.join(extraRoot, "CLAUDE.md"), MARKERS.extraClaude);
++	return { cwd, extraRoot };
++}
++
++async function createSession(
++	cwd: string,
++	extraRoot: string,
++	noContextFiles: boolean,
++): Promise<{ session: AgentSession; authStorage: AuthStorage }> {
++	const authStorage = await AuthStorage.create(`${cwd}/auth.db`);
++	const modelRegistry = new ModelRegistry(authStorage, `${cwd}/models.json`);
++	const sessionManager = SessionManager.inMemory(cwd);
++	await sessionManager.setAdditionalDirectories([extraRoot]);
++	const { session } = await createAgentSession({
++		cwd,
++		agentDir: cwd,
++		modelRegistry,
++		sessionManager,
++		settings: Settings.isolated({}),
++		model: getBundledModel("openai", "gpt-4o-mini"),
++		disableExtensionDiscovery: true,
++		promptTemplates: [],
++		slashCommands: [],
++		enableMCP: false,
++		enableLsp: false,
++		toolNames: [],
++		restrictToolNames: true,
++		skipPythonPreflight: true,
++		noContextFiles,
++	});
++	return { session, authStorage };
++}
++
++function markersIn(session: AgentSession): string[] {
++	const prompt = session.systemPrompt.join("\n");
++	return Object.values(MARKERS).filter(marker => prompt.includes(marker));
++}
++
++describe("--no-context-files", () => {
++	it("parses as a value-less flag", () => {
++		const result = parseArgs(["--no-context-files", "explain"]);
++		expect(result.noContextFiles).toBe(true);
++		expect(result.messages).toEqual(["explain"]);
++		expect(VALUELESS_FLAGS.has("--no-context-files")).toBe(true);
++	});
++
++	it("loads the planted instruction files when the flag is absent", async () => {
++		using tempDir = TempDir.createSync("@omp-no-context-files-control-");
++		const { cwd, extraRoot } = plantInstructionFiles(tempDir);
++		const { session, authStorage } = await createSession(cwd, extraRoot, false);
++		try {
++			expect(markersIn(session)).toEqual([MARKERS.cwdAgents, MARKERS.parentAgents, MARKERS.extraClaude]);
++		} finally {
++			await session.dispose();
++			authStorage.close();
++		}
++	});
++
++	it("loads no context file at startup or on a prompt rebuild", async () => {
++		using tempDir = TempDir.createSync("@omp-no-context-files-");
++		const { cwd, extraRoot } = plantInstructionFiles(tempDir);
++		const { session, authStorage } = await createSession(cwd, extraRoot, true);
++		try {
++			expect(markersIn(session)).toEqual([]);
++			await session.refreshSkills();
++			expect(markersIn(session)).toEqual([]);
++		} finally {
++			await session.dispose();
++			authStorage.close();
++		}
++	});
++});
+-- 
+2.53.0
+

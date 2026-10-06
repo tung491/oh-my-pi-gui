@@ -1,12 +1,13 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	ASSISTANT_PACK_FILES,
 	assistantPackEnv,
 	assistantPackFlags,
+	isChatStampedSession,
 	missingAssistantPackFile,
 	missingAssistantPackMessage,
 	resolveAssistantPackDir,
@@ -16,6 +17,7 @@ const PACK_FILES = [
 	"package.json",
 	"tools.js",
 	"system-prompt.md",
+	"append-system-prompt.md",
 	"config.yml",
 	"skills/word-report/SKILL.md",
 	"skills/spreadsheet-cleanup/SKILL.md",
@@ -52,12 +54,16 @@ describe("assistant pack", () => {
 	it("builds the linux pack flags in order", () => {
 		expect(assistantPackFlags("/opt/pack", "linux")).toEqual([
 			"--no-extensions",
+			"--no-rules",
+			"--no-context-files",
 			"--extension",
 			"/opt/pack",
 			"--tools",
 			"read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean",
 			"--system-prompt",
 			join("/opt/pack", "system-prompt.md"),
+			"--append-system-prompt",
+			join("/opt/pack", "append-system-prompt.md"),
 			"--config",
 			join("/opt/pack", "config.yml"),
 			"--approval-mode",
@@ -68,12 +74,16 @@ describe("assistant pack", () => {
 	it("builds the macos pack flags without the os tools", () => {
 		const expected = [
 			"--no-extensions",
+			"--no-rules",
+			"--no-context-files",
 			"--extension",
 			"/opt/pack",
 			"--tools",
 			"read,glob,write,ask,office_report,office_slides,office_clean",
 			"--system-prompt",
 			join("/opt/pack", "system-prompt.md"),
+			"--append-system-prompt",
+			join("/opt/pack", "append-system-prompt.md"),
 			"--config",
 			join("/opt/pack", "config.yml"),
 			"--approval-mode",
@@ -119,6 +129,29 @@ describe("assistant pack", () => {
 		expect(resolveAssistantPackDir(fixture, [empty])).toBe(join(root, "e2e", "assistant-pack"));
 	});
 
+	it("resolves the pack from the search roots when the sidecar runs from source", () => {
+		const root = tempRoot();
+		writePack(join(root, "resources", "assistant-pack"), PACK_FILES);
+		const appPath = join(root, "out", "main");
+		mkdirSync(appPath, { recursive: true });
+		// The main process's cwd holds a pack-shaped folder, as the repo root holds the pack source.
+		const cwd = tempRoot();
+		writePack(join(cwd, "assistant-pack"), PACK_FILES);
+		const previous = process.cwd();
+		process.chdir(cwd);
+		try {
+			// A source sidecar has no binary path: nothing sits beside it, so the search roots decide.
+			expect(resolveAssistantPackDir("", [appPath])).toBe(join(root, "resources", "assistant-pack"));
+			// The result is always absolute: omp would resolve a relative flag path against the session cwd.
+			const unfound = resolveAssistantPackDir("", ["nowhere"]);
+			expect(isAbsolute(unfound)).toBe(true);
+			expect(unfound).toBe(resolve(cwd, "nowhere", "resources", "assistant-pack"));
+			expect(resolveAssistantPackDir(join("bin", "omp"))).toBe(resolve(cwd, "bin", "assistant-pack"));
+		} finally {
+			process.chdir(previous);
+		}
+	});
+
 	it("builds the pack env with the session language", () => {
 		expect(assistantPackEnv({ language: "vi" })).toEqual({ SAI_ATLAS_LANG: "vi" });
 		expect(assistantPackEnv({ language: "en" })).toEqual({ SAI_ATLAS_LANG: "en" });
@@ -145,6 +178,30 @@ describe("assistant pack", () => {
 			expect(dev).toContain(left);
 			expect(dev).toContain("bun run build:pack");
 		}
+	});
+
+	it("reads the chat stamp from the session header", () => {
+		const dir = tempRoot();
+		const session = (name: string, text: string): string => {
+			const path = join(dir, name);
+			writeFileSync(path, text);
+			return path;
+		};
+		// Line 1 is the title slot, line 2 the header.
+		const titleSlot = `${JSON.stringify({ title: "Notes" }).padEnd(255)}\n`;
+		const chat = session(
+			"chat.jsonl",
+			`${titleSlot}${JSON.stringify({ type: "session", id: "c", kind: "chat" })}\n{}\n`,
+		);
+		const agent = session("agent.jsonl", `${titleSlot}${JSON.stringify({ type: "session", id: "a" })}\n{}\n`);
+		expect(isChatStampedSession(chat)).toBe(true);
+		expect(isChatStampedSession(agent)).toBe(false);
+		// A file that cannot be read or parsed is not refused, as the session index degrades.
+		expect(isChatStampedSession(join(dir, "missing.jsonl"))).toBe(false);
+		expect(isChatStampedSession(session("empty.jsonl", ""))).toBe(false);
+		expect(isChatStampedSession(session("one-line.jsonl", '{"kind":"chat"}'))).toBe(false);
+		expect(isChatStampedSession(session("broken.jsonl", `${titleSlot}{"kind":"chat"\n`))).toBe(false);
+		expect(isChatStampedSession(dir)).toBe(false);
 	});
 
 	it("ships the tool list the pack check expects", () => {

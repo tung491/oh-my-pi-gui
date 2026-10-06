@@ -11,6 +11,7 @@ pub(crate) const ASSISTANT_PACK_FILES: &[&str] = &[
     "package.json",
     "tools.js",
     "system-prompt.md",
+    "append-system-prompt.md",
     "config.yml",
     "skills/word-report/SKILL.md",
     "skills/spreadsheet-cleanup/SKILL.md",
@@ -32,15 +33,19 @@ const OFFICE_TOOLS: &[&str] = &["office_report", "office_slides", "office_clean"
 /// that exists (the binary is never resolved through a symlink, so a worktree
 /// whose sidecar links into another checkout keeps its own pack). Otherwise
 /// the first `resources/assistant-pack` found walking up from each search
-/// root, which covers the e2e fixture sidecar in dev and e2e builds. When
-/// nothing is found, the beside-binary path, so the missing-file message
-/// names where the pack belongs.
+/// root, which covers the e2e fixture sidecar in dev and e2e builds. An empty
+/// binary path (the TS shell's source sidecar) has nothing beside it. When
+/// nothing is found, the beside-binary path (or, for an empty binary path, the
+/// first search root's `resources/assistant-pack`), so the missing-file
+/// message names where the pack belongs. The result is always absolute: omp
+/// resolves a relative flag path against the session cwd.
 pub(crate) fn resolve_pack_dir(binary: &Path, search_from: &[PathBuf]) -> PathBuf {
-    let beside = binary.parent().unwrap_or(Path::new("")).join(PACK_DIR_NAME);
-    if beside.is_dir() {
-        return beside;
+    let beside = (!binary.as_os_str().is_empty()).then(|| absolute(binary.parent().unwrap_or(Path::new("")).join(PACK_DIR_NAME)));
+    if let Some(beside) = beside.as_ref().filter(|beside| beside.is_dir()) {
+        return beside.clone();
     }
-    for start in search_from {
+    for root in search_from {
+        let start = absolute(root.clone());
         for dir in start.ancestors().take(SEARCH_DEPTH) {
             let candidate = dir.join("resources").join(PACK_DIR_NAME);
             if candidate.is_dir() {
@@ -48,7 +53,13 @@ pub(crate) fn resolve_pack_dir(binary: &Path, search_from: &[PathBuf]) -> PathBu
             }
         }
     }
-    beside
+    beside.unwrap_or_else(|| absolute(search_from.first().cloned().unwrap_or_default().join("resources").join(PACK_DIR_NAME)))
+}
+
+/// `path` made absolute against the process cwd, without following symlinks
+/// (a worktree's sidecar links into another checkout but keeps its own pack).
+fn absolute(path: PathBuf) -> PathBuf {
+    std::path::absolute(&path).unwrap_or(path)
 }
 
 /// The spawn flags that load the pack. `os` is `std::env::consts::OS`: Linux
@@ -61,12 +72,20 @@ pub(crate) fn pack_flags(pack_dir: &Path, os: &str) -> Vec<String> {
     tools.extend_from_slice(OFFICE_TOOLS);
     vec![
         "--no-extensions".to_string(),
+        // The folder's instruction files (rules folders, AGENTS.md, CLAUDE.md
+        // and the like) are written for coding agents, not for the assistant.
+        "--no-rules".to_string(),
+        "--no-context-files".to_string(),
         "--extension".to_string(),
         pack_dir.to_string_lossy().into_owned(),
         "--tools".to_string(),
         tools.join(","),
         "--system-prompt".to_string(),
         pack_dir.join("system-prompt.md").to_string_lossy().into_owned(),
+        // An explicit append prompt (empty) stops omp from appending a
+        // workspace's or the user's APPEND_SYSTEM.md to the pack's system prompt.
+        "--append-system-prompt".to_string(),
+        pack_dir.join("append-system-prompt.md").to_string_lossy().into_owned(),
         "--config".to_string(),
         pack_dir.join("config.yml").to_string_lossy().into_owned(),
         "--approval-mode".to_string(),
@@ -74,9 +93,41 @@ pub(crate) fn pack_flags(pack_dir: &Path, os: &str) -> Vec<String> {
     ]
 }
 
+/// Env keys removed from every pack session: shell startup files a shell would
+/// source inside the pack tools' system programs, and the omp profile
+/// selectors, which redirect omp's agent dir (user config, APPEND_SYSTEM.md, models).
+pub(crate) const REMOVED_ENV: &[&str] = &["BASH_ENV", "ENV", "OMP_PROFILE", "PI_PROFILE"];
+
 /// The env keys the pack's tools read, set last at spawn.
 pub(crate) fn pack_env(language: &str) -> Vec<(&'static str, String)> {
     vec![("SAI_ATLAS_LANG", language.to_string())]
+}
+
+/// Bytes read from the head of a session file to find the header line, as the session index does.
+const SESSION_HEAD_BYTES: u64 = 32 * 1024;
+/// Bytes read for the header line itself, as the session index does.
+const SESSION_HEADER_BYTES: u64 = 4096;
+
+/// Whether a session file is stamped `chat` (header `kind`, the second line;
+/// the first is the title slot). omp resumes such a file restricted to its
+/// stamped tools, without the pack's, so no pack session may start on it. A
+/// file that cannot be read or parsed counts as not chat, as the session index
+/// degrades.
+pub(crate) fn is_chat_stamped_session(session_path: &Path) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    let read_stamp = || -> Option<bool> {
+        let mut file = std::fs::File::open(session_path).ok()?;
+        let mut head = Vec::new();
+        (&mut file).take(SESSION_HEAD_BYTES).read_to_end(&mut head).ok()?;
+        let newline = head.iter().position(|byte| *byte == b'\n')?;
+        file.seek(SeekFrom::Start(newline as u64 + 1)).ok()?;
+        let mut header = Vec::new();
+        file.take(SESSION_HEADER_BYTES).read_to_end(&mut header).ok()?;
+        let line = header.split(|byte| *byte == b'\n').next().unwrap_or(&[]);
+        let parsed: serde_json::Value = serde_json::from_slice(line).ok()?;
+        Some(parsed.get("kind").and_then(serde_json::Value::as_str) == Some("chat"))
+    };
+    read_stamp().unwrap_or(false)
 }
 
 /// The first listed pack file that is missing, or `None` when the pack is complete.
@@ -101,6 +152,7 @@ mod tests {
         "package.json",
         "tools.js",
         "system-prompt.md",
+        "append-system-prompt.md",
         "config.yml",
         "skills/word-report/SKILL.md",
         "skills/spreadsheet-cleanup/SKILL.md",
@@ -129,12 +181,16 @@ mod tests {
         let pack = Path::new("/opt/pack");
         let expected = strings(&[
             "--no-extensions",
+            "--no-rules",
+            "--no-context-files",
             "--extension",
             "/opt/pack",
             "--tools",
             "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean",
             "--system-prompt",
             "/opt/pack/system-prompt.md",
+            "--append-system-prompt",
+            "/opt/pack/append-system-prompt.md",
             "--config",
             "/opt/pack/config.yml",
             "--approval-mode",
@@ -148,12 +204,16 @@ mod tests {
         let pack = Path::new("/opt/pack");
         let expected = strings(&[
             "--no-extensions",
+            "--no-rules",
+            "--no-context-files",
             "--extension",
             "/opt/pack",
             "--tools",
             "read,glob,write,ask,office_report,office_slides,office_clean",
             "--system-prompt",
             "/opt/pack/system-prompt.md",
+            "--append-system-prompt",
+            "/opt/pack/append-system-prompt.md",
             "--config",
             "/opt/pack/config.yml",
             "--approval-mode",
@@ -205,6 +265,25 @@ mod tests {
     }
 
     #[test]
+    fn resolves_the_pack_from_the_search_roots_when_the_sidecar_runs_from_source() {
+        let root = tempfile::tempdir().unwrap();
+        write_pack(&root.path().join("resources").join("assistant-pack"), PACK_FILES);
+        let app_path = root.path().join("out").join("main");
+        std::fs::create_dir_all(&app_path).unwrap();
+
+        // A source sidecar has no binary path: nothing sits beside it, so the search roots decide.
+        assert_eq!(resolve_pack_dir(Path::new(""), &[app_path]), root.path().join("resources").join("assistant-pack"));
+        // The result is always absolute: omp would resolve a relative flag path against the session cwd.
+        let cwd = std::env::current_dir().unwrap();
+        let unfound = resolve_pack_dir(Path::new(""), &[PathBuf::from("nowhere")]);
+        // (cargo runs tests from src-tauri, so the walk up may find the checkout's own pack.)
+        assert!(unfound.is_absolute(), "{}", unfound.display());
+        assert!(cwd.join("nowhere").starts_with(unfound.parent().unwrap().parent().unwrap()), "{}", unfound.display());
+        assert!(unfound.ends_with(Path::new("resources").join("assistant-pack")), "{}", unfound.display());
+        assert_eq!(resolve_pack_dir(&Path::new("bin").join("omp"), &[]), cwd.join("bin").join("assistant-pack"));
+    }
+
+    #[test]
     fn builds_the_pack_env_with_the_session_language() {
         assert_eq!(pack_env("vi"), vec![("SAI_ATLAS_LANG", "vi".to_string())]);
         assert_eq!(pack_env("en"), vec![("SAI_ATLAS_LANG", "en".to_string())]);
@@ -233,10 +312,35 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_chat_stamp_from_the_session_header() {
+        let dir = tempfile::tempdir().unwrap();
+        let session = |name: &str, text: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        // Line 1 is the title slot, line 2 the header.
+        let title_slot = format!("{:<255}\n", r#"{"title":"Notes"}"#);
+        let chat = session("chat.jsonl", &format!("{title_slot}{}\n{{}}\n", r#"{"type":"session","id":"c","kind":"chat"}"#));
+        let agent = session("agent.jsonl", &format!("{title_slot}{}\n{{}}\n", r#"{"type":"session","id":"a"}"#));
+        assert!(is_chat_stamped_session(&chat));
+        assert!(!is_chat_stamped_session(&agent));
+        // A file that cannot be read or parsed is not refused, as the session index degrades.
+        assert!(!is_chat_stamped_session(&dir.path().join("missing.jsonl")));
+        assert!(!is_chat_stamped_session(&session("empty.jsonl", "")));
+        assert!(!is_chat_stamped_session(&session("one-line.jsonl", r#"{"kind":"chat"}"#)));
+        assert!(!is_chat_stamped_session(&session("broken.jsonl", &format!("{title_slot}{}\n", r#"{"kind":"chat""#))));
+        assert!(!is_chat_stamped_session(dir.path()));
+    }
+
+    #[test]
     fn ships_the_tool_list_the_pack_check_expects() {
         let script = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("scripts").join("check-assistant-pack.ts")).unwrap();
-        let import = script.lines().find(|line| line.starts_with("import") && line.contains("\"../src/main/assistant-pack\"")).expect("the pack check imports the shared pack module");
-        assert!(import.contains("assistantPackFlags"), "{import}");
+        // The import statement may span lines: take it from its `import` to its module path.
+        let from = script.find("from \"../src/main/assistant-pack\"").expect("the pack check imports the shared pack module");
+        let start = script[..from].rfind("import").expect("the module path belongs to an import");
+        let import = &script[start..from];
+        assert!(import.split(|c: char| !c.is_alphanumeric()).any(|name| name == "assistantPackFlags"), "{import}");
         assert!(!script.contains("office_report"));
     }
 }

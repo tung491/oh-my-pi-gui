@@ -9,13 +9,14 @@ import { parseHTML } from "linkedom";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
-import type { SessionInfo } from "../../../shared/ipc-types";
+import type { IpcSessionOpenNewWindowResult, SessionInfo } from "../../../shared/ipc-types";
 import { useSidebarRecency } from "../../hooks/use-sidebar-recency";
 import { I18nProvider } from "../../lib/i18n";
 import { en } from "../../locales/en";
 import { useSessionStore } from "../../stores/session";
 import { useSidebarPrefs } from "../../stores/sidebar-prefs";
 import { useTabsStore } from "../../stores/tabs";
+import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { Sidebar } from "./Sidebar";
 
@@ -50,7 +51,7 @@ interface MockOmp {
 		delete: Mock<(path: string) => Promise<void>>;
 		rename: Mock<(path: string, name: string) => Promise<void>>;
 		search: Mock<(query: string, scope: string) => Promise<string[]>>;
-		openInNewWindow: Mock<(payload: { sessionPath?: string }) => Promise<boolean>>;
+		openInNewWindow: Mock<(payload: { sessionPath?: string }) => Promise<IpcSessionOpenNewWindowResult>>;
 	};
 	events: {
 		onSessionsChanged: Mock<() => () => void>;
@@ -86,7 +87,7 @@ function installMockOmp(sessionList: SessionInfo[]): MockOmp {
 			delete: vi.fn(async () => {}),
 			rename: vi.fn(async () => {}),
 			search: vi.fn(async () => []),
-			openInNewWindow: vi.fn(async () => true),
+			openInNewWindow: vi.fn(async (): Promise<IpcSessionOpenNewWindowResult> => true),
 		},
 		events: {
 			onSessionsChanged: vi.fn(() => () => {}),
@@ -227,6 +228,7 @@ afterEach(async () => {
 	useSessionStore.getState().reset();
 	useTabsStore.getState().reset();
 	useSidebarPrefs.getState().reset();
+	useToastStore.setState({ toasts: [] });
 	useUiStore.setState({
 		panelVisible: false,
 		sessionPickerOpen: false,
@@ -431,6 +433,32 @@ describe("Sidebar menus and pinned ordering", () => {
 		);
 		await fire(pinItem as Element, "onClick");
 		expect(omp.rpc.setSessionPinned).toHaveBeenCalledWith("/work/alpha/one.jsonl", true);
+	});
+
+	it("tells the user to start a new task when a chat session cannot open in a new window", async () => {
+		const chat = session("/work/alpha/chat.jsonl", "/work/alpha", { kind: "chat" });
+		const omp = installMockOmp([chat]);
+		omp.sessions.openInNewWindow.mockResolvedValue({ refusal: "kind-mismatch" });
+		seedStores();
+		await mount(<Sidebar />);
+
+		const row = [...document.querySelectorAll('div[role="button"]')].find(el =>
+			(el.textContent ?? "").includes("Session /work/alpha/chat"),
+		);
+		await fire(row as Element, "onContextMenu");
+		const openWindow = [...document.body.querySelectorAll('[role="menu"] button')].find(button =>
+			(button.textContent ?? "").includes("Open in new window"),
+		);
+		await fire(openWindow as Element, "onClick");
+		await flush();
+
+		expect(omp.sessions.openInNewWindow).toHaveBeenCalledWith({
+			sessionPath: "/work/alpha/chat.jsonl",
+			cwd: "/work/alpha",
+		});
+		const messages = useToastStore.getState().toasts.map(item => item.message);
+		expect(messages).toContain(en["sidebar.kindMismatch"]);
+		expect(messages).not.toContain(en["sidebar.parallelCap"]);
 	});
 
 	it("rename and delete stay enabled for idle tasks while another task runs", async () => {

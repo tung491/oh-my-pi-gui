@@ -628,12 +628,13 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 					// The command queue died with the process, so a probe would fail and
 					// overwrite the crash reason with a generic "not responding".
 					stopHeartbeat();
-					useUiStore
-						.getState()
-						.setSidecarError(
-							payload.message ?? translate("events.sidecarProcessFailed"),
-							payload.restart ?? null,
-						);
+					useUiStore.getState().setSidecarError(
+						// A refused old chat session gets the app's own copy, not the technical reason.
+						payload.refusal === "kind-mismatch"
+							? translate("sidebar.kindMismatch")
+							: (payload.message ?? translate("events.sidecarProcessFailed")),
+						payload.restart ?? null,
+					);
 				}
 			}
 		};

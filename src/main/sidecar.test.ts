@@ -18,18 +18,25 @@ const PACK_TOOLS =
 function packFlags(pack: string): string[] {
 	return [
 		"--no-extensions",
+		"--no-rules",
+		"--no-context-files",
 		"--extension",
 		pack,
 		"--tools",
 		PACK_TOOLS,
 		"--system-prompt",
 		path.join(pack, "system-prompt.md"),
+		"--append-system-prompt",
+		path.join(pack, "append-system-prompt.md"),
 		"--config",
 		path.join(pack, "config.yml"),
 		"--approval-mode",
 		"always-ask",
 	];
 }
+
+/** Flags the pack passes itself, so a profile's copy shows up as a second occurrence. */
+const PACK_OWNED_FLAGS = ["--tools", "--config", "--append-system-prompt", "--no-rules", "--no-context-files"];
 
 /** An `assistant-pack/` beside a fake binary in `dir`, holding every listed file except `leaveOut`. */
 async function makePackFixture(dir: string, leaveOut?: string): Promise<string> {
@@ -95,21 +102,30 @@ describe("SidecarManager", () => {
 		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
 		await fs.writeFile(
 			binaryPath,
-			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null, ompProfile: process.env.OMP_PROFILE ?? null, piProfile: process.env.PI_PROFILE ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
 		const pack = await makePackFixture(tempDir);
 
 		// A tab created as a chat still gets the pack: the chat branch is gone.
-		// Shell startup files reaching the spawn env are removed; the app language is set last.
+		// Shell startup files and omp profile selectors reaching the spawn env are
+		// removed, whether from the login shell or the app's own env; the app
+		// language is set last.
 		const sidecar = new SidecarManager({
 			binaryPath,
 			cwd: tempDir,
 			kind: "chat",
 			fresh: true,
-			shellEnv: () => Promise.resolve({ BASH_ENV: "/rc/bash_env", ENV: "/rc/env", SAI_ATLAS_LANG: "xx" }),
+			shellEnv: () =>
+				Promise.resolve({
+					BASH_ENV: "/rc/bash_env",
+					ENV: "/rc/env",
+					OMP_PROFILE: "work",
+					SAI_ATLAS_LANG: "xx",
+				}),
 			language: () => "vi",
 		});
+		vi.stubEnv("PI_PROFILE", "work");
 		try {
 			const ready = waitForReady(sidecar);
 			sidecar.start();
@@ -121,20 +137,31 @@ describe("SidecarManager", () => {
 				"rpc-ui",
 				"--no-auto-resume",
 				"--no-extensions",
+				"--no-rules",
+				"--no-context-files",
 				"--extension",
 				pack,
 				"--tools",
 				PACK_TOOLS,
 				"--system-prompt",
 				path.join(pack, "system-prompt.md"),
+				"--append-system-prompt",
+				path.join(pack, "append-system-prompt.md"),
 				"--config",
 				path.join(pack, "config.yml"),
 				"--approval-mode",
 				"always-ask",
 			]);
 			expect(launch).not.toContain("--chat");
-			expect(JSON.parse(await fs.readFile(envPath, "utf8"))).toEqual({ lang: "vi", bashEnv: null, env: null });
+			expect(JSON.parse(await fs.readFile(envPath, "utf8"))).toEqual({
+				lang: "vi",
+				bashEnv: null,
+				env: null,
+				ompProfile: null,
+				piProfile: null,
+			});
 		} finally {
+			vi.unstubAllEnvs();
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
@@ -171,6 +198,43 @@ describe("SidecarManager", () => {
 			expect(unhandled).toEqual([]);
 		} finally {
 			process.off("unhandledRejection", onUnhandled);
+			sidecar.dispose();
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	it("refuses to resume a chat-stamped session without spawning", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-chat-"));
+		const spawnedPath = path.join(tempDir, "spawned");
+		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
+		await fs.writeFile(
+			binaryPath,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs";\nfs.writeFileSync(${JSON.stringify(spawnedPath)}, "1");\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+		);
+		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir);
+		const sessionPath = path.join(tempDir, "old-chat.jsonl");
+		await fs.writeFile(
+			sessionPath,
+			`{"title":"Old chat"}\n${JSON.stringify({ type: "session", id: "c", kind: "chat" })}\n`,
+		);
+
+		const statuses: SidecarStatusPayload[] = [];
+		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+		sidecar.on("status", payload => statuses.push(payload));
+		try {
+			// A restored tab resumes its file this way the first time it is shown.
+			sidecar.restart(undefined, sessionPath);
+			expect(statuses).toHaveLength(1);
+			expect(statuses[0]).toMatchObject({ status: "error", refusal: "kind-mismatch" });
+			expect(sidecar.status).toBe("error");
+			// Asking again for the same file stays refused.
+			sidecar.restart(undefined, sessionPath);
+			expect(statuses.map(payload => payload.refusal)).toEqual(["kind-mismatch", "kind-mismatch"]);
+			await delay(500);
+			await expect(fs.stat(spawnedPath)).rejects.toThrow();
+			expect(statuses).toHaveLength(2);
+		} finally {
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
@@ -256,7 +320,18 @@ describe("SidecarManager", () => {
 		const originalHome = process.env.HOME;
 		process.env.HOME = fakeHome;
 		// The extraFlags seam carries what a stored profile cannot express.
-		const smuggled = ["--tools", "edit", "--yolo", "--config", "/x", "-e", "/y", "--hook", "/z"];
+		const smuggled = [
+			"--tools",
+			"edit",
+			"--yolo",
+			"--config",
+			"/x",
+			"-e",
+			"/y",
+			"--hook",
+			"/z",
+			"--no-context-files",
+		];
 		const sidecar = new SidecarManager({ binaryPath, cwd: workspaceCwd, extraFlags: smuggled });
 		try {
 			// Same options as the loader; a variable sidesteps the excess-property
@@ -307,11 +382,13 @@ describe("SidecarManager", () => {
 				"--add-dir",
 				"/data/extra",
 			]) {
-				if (token === "--tools" || token === "--config") continue;
+				if (PACK_OWNED_FLAGS.includes(token)) continue;
 				expect(launch).not.toContain(token);
 			}
-			expect((launch as string[]).filter(token => token === "--tools")).toHaveLength(1);
-			expect((launch as string[]).filter(token => token === "--config")).toHaveLength(1);
+			// The pack's own flags appear once each; the profile's copies are gone.
+			for (const flag of PACK_OWNED_FLAGS) {
+				expect((launch as string[]).filter(token => token === flag)).toHaveLength(1);
+			}
 		} finally {
 			process.env.HOME = originalHome;
 			sidecar.dispose();

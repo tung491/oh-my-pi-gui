@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import Store from "electron-store";
-import { parseLaunchProfile, profileToFlags, stripDenylistedFlags } from "../shared/launch-profile";
+import { allowedLaunchFlags, parseLaunchProfile, profileToFlags } from "../shared/launch-profile";
 import { PRODUCT_NAME } from "../shared/product";
 import type {
 	AgentSessionEvent,
@@ -31,9 +31,11 @@ import type {
 	SubagentFrame,
 } from "../shared/rpc-types";
 import {
+	ASSISTANT_PACK_REMOVED_ENV,
 	type AssistantPackLanguage,
 	assistantPackEnv,
 	assistantPackFlags,
+	isChatStampedSession,
 	missingAssistantPackFile,
 	missingAssistantPackMessage,
 	resolveAssistantPackDir,
@@ -288,6 +290,17 @@ export class SidecarManager extends EventEmitter {
 			return;
 		}
 		this.#packDir = packDir;
+		// A chat-stamped file resumes without the pack's tools and fails startup:
+		// refuse it, so the tab tells the user to start a new task instead.
+		if (this.#resumeSessionPath && isChatStampedSession(this.#resumeSessionPath)) {
+			this.#setStatus(
+				"error",
+				`The session file is stamped chat: ${this.#resumeSessionPath}`,
+				undefined,
+				"kind-mismatch",
+			);
+			return;
+		}
 		this.#setStatus("starting");
 		const resolveProxyEnv = this.#options.proxyEnv;
 		const resolveShellEnv = this.#options.shellEnv;
@@ -330,11 +343,11 @@ export class SidecarManager extends EventEmitter {
 		else if (this.#freshLaunchPending) args.push("--no-auto-resume");
 		args.push(...assistantPackFlags(this.#packDir, process.platform));
 		// User-controllable flags ride the extraFlags seam + the launch profile.
-		// Strip the code-controlled-flag denylist (pair-aware) over BOTH, then
-		// append: neither can override the code-controlled argv above, while a
-		// profile value that merely looks like a protected flag survives intact.
+		// Only the allowlisted flags of BOTH are appended: neither can override
+		// the code-controlled argv above, while a --session-dir value that merely
+		// looks like a protected flag survives intact.
 		const userFlags = [...(extraFlags ?? []), ...loadLaunchProfileFlags(cwd)];
-		args.push(...stripDenylistedFlags(userFlags));
+		args.push(...allowedLaunchFlags(userFlags));
 
 		// Source sidecar (monorepo dev): run the workspace coding-agent from
 		// source via bun so in-repo RPC fixes are live in the running GUI.
@@ -356,10 +369,9 @@ export class SidecarManager extends EventEmitter {
 			// server keeps its default context (4096 on most GPUs), below the agent's first request.
 			PI_OLLAMA_API: "ollama-chat",
 		};
-		// The pack's tools start system programs, some of them shell scripts:
-		// no startup file may ride along into them.
-		delete env.BASH_ENV;
-		delete env.ENV;
+		// No startup file may ride along into the pack tools' system programs, and
+		// no profile may redirect omp away from the pack's settings.
+		for (const key of ASSISTANT_PACK_REMOVED_ENV) delete env[key];
 		Object.assign(env, assistantPackEnv({ language: this.#options.language?.() ?? "en" }));
 
 		let child: ChildProcess;
@@ -593,9 +605,16 @@ export class SidecarManager extends EventEmitter {
 		}, delay);
 	}
 
-	#setStatus(status: SidecarStatus, message?: string, restart?: SidecarRestartProgress): void {
+	#setStatus(
+		status: SidecarStatus,
+		message?: string,
+		restart?: SidecarRestartProgress,
+		refusal?: SidecarStatusPayload["refusal"],
+	): void {
 		this.#status = status;
-		this.emit("status", { status, message, cwd: this.#options.cwd, restart });
+		const payload: SidecarStatusPayload = { status, message, cwd: this.#options.cwd, restart };
+		if (refusal) payload.refusal = refusal;
+		this.emit("status", payload);
 	}
 
 	#cleanup(): void {

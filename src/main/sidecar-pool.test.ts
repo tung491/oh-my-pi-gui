@@ -501,7 +501,7 @@ describe("SidecarPool tabs", () => {
 		});
 	});
 
-	it("restores tab order, sessions, kinds, and the persisted active tab", () => {
+	it("restores tab order, sessions, and the persisted active tab, every tab as an agent", () => {
 		const factoryCalls: Array<{ cwd: string; kind: "agent" | "chat"; fresh: boolean }> = [];
 		const sidecars: FakeSidecar[] = [];
 		const pool = new SidecarPool((cwd, kind, fresh) => {
@@ -523,9 +523,11 @@ describe("SidecarPool tabs", () => {
 		});
 
 		expect(restored).toBe(2);
+		// A tab saved as a chat comes back as an agent: no pool entry may claim a
+		// kind its process does not run, and a chat-stamped file is refused at start.
 		expect(factoryCalls).toEqual([
 			{ cwd: "/agent", kind: "agent", fresh: false },
-			{ cwd: "/chat", kind: "chat", fresh: true },
+			{ cwd: "/chat", kind: "agent", fresh: true },
 		]);
 		expect(sidecars[0]?.restartArgs).toEqual([{ cwd: undefined, sessionPath: "/sessions/a.jsonl" }]);
 		expect(sidecars[1]?.started).toBe(true);
@@ -539,10 +541,34 @@ describe("SidecarPool tabs", () => {
 			activeIndex: 1,
 			tabs: [
 				{ cwd: "/agent", kind: "agent", sessionPath: "/sessions/a.jsonl" },
-				{ cwd: "/chat", kind: "chat" },
+				{ cwd: "/chat", kind: "agent" },
 			],
 			split: { axis: "rows", firstIndex: 0, secondIndex: 1, ratio: 0.6 },
 		});
+		expect(pool.tabsForWindow(fw.win).map(tab => tab.kind)).toEqual(["agent", "agent"]);
+	});
+
+	it("forwards the status a deferred tab reports as it is shown", () => {
+		const { pool, sidecars } = fakePool();
+		const fw = fakeWindow(1);
+		pool.restoreLayout(fw.win, {
+			version: 1,
+			activeIndex: 1,
+			tabs: [
+				{ cwd: "/a", kind: "agent", sessionPath: "/sessions/a.jsonl" },
+				{ cwd: "/b", kind: "agent" },
+			],
+		});
+		const sleeping = pool.tabsForWindow(fw.win)[0]!;
+		fw.sent.length = 0;
+
+		// Showing the tab starts it; the status its start reports (a refusal among
+		// them) must reach the window's full status channel, not only TAB_STATUS.
+		pool.setActiveTab(fw.win, sleeping.tabId);
+		expect(sidecars[0]?.restartArgs).toEqual([{ cwd: undefined, sessionPath: "/sessions/a.jsonl" }]);
+		expect(fw.sentTo(IPC_EVENTS.SIDECAR_STATUS).map(entry => entry.data)).toEqual([
+			{ tabId: sleeping.tabId, payload: { status: "starting", cwd: "/a" } },
+		]);
 	});
 
 	it("publishes durable layout changes after tab, session, cwd, and active mutations", () => {
@@ -649,6 +675,7 @@ describe("SidecarPool tabs", () => {
 		expect(pool.sidecarForWindow(fw2.win)).toBe(sidecars[2]);
 
 		// Late events from the surviving window still forward normally.
+		fw2.sent.length = 0;
 		sidecars[2]?.emitStatus("ready");
 		expect(fw2.sentTo(IPC_EVENTS.SIDECAR_STATUS)).toHaveLength(1);
 	});

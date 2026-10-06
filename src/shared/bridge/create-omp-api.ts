@@ -16,6 +16,7 @@ import type {
 	IpcFsReadResult,
 	IpcOpenPathResult,
 	IpcSessionOpenNewWindowPayload,
+	IpcSessionOpenNewWindowResult,
 	IpcSessionOwner,
 	IpcSetTabViewPayload,
 	IpcSidecarRestartPayload,
@@ -250,7 +251,7 @@ export function createOmpApi(port: IpcPort, platform: OmpApi["platform"]): OmpAp
 			search: (query: string, scope: "local" | "global") =>
 				port.invoke(IPC_COMMANDS.SESSIONS_SEARCH, { query, scope }) as Promise<string[]>,
 			openInNewWindow: (payload: IpcSessionOpenNewWindowPayload) =>
-				port.invoke(IPC_COMMANDS.SESSION_OPEN_NEW_WINDOW, payload) as Promise<boolean>,
+				port.invoke(IPC_COMMANDS.SESSION_OPEN_NEW_WINDOW, payload) as Promise<IpcSessionOpenNewWindowResult>,
 			consumePendingOpen: () => port.invoke(IPC_COMMANDS.SESSION_CONSUME_PENDING) as Promise<string | null>,
 		},
 
