@@ -130,107 +130,30 @@ fn stderr_excerpt(lines: &[String]) -> String {
 // Launch profiles (`src/shared/launch-profile.ts`)
 // ---------------------------------------------------------------------------
 
-/// Flags the GUI owns, plus every flag that changes what an assistant session
-/// loads or approves; a launch profile must never override them.
-const DENYLISTED_FLAGS: &[&str] = &[
-    "--session",
-    "--mode",
-    "--print",
-    "--print-thoughts",
-    "--export",
-    "--cwd",
-    "--resume",
-    "--fork",
-    "--help",
-    "--version",
-    "--no-pty",
-    "--no-title",
-    "--no-auto-resume",
-    "--api-key",
-    "--chat",
-    "--no-tools",
-    "--no-extensions",
-    "--no-skills",
-    "--auto-approve",
-    "--yolo",
-    "--plan-yolo",
-    "--no-rules",
-    "--extension",
-    "--hook",
-    "--tools",
-    "--system-prompt",
-    "--system-prompt-template",
-    "--append-system-prompt",
-    "--config",
-    "--approval-mode",
-    "--skills",
-    "--plugin-dir",
-    "--trusted-extension",
-    "--profile",
-    "--plan-yolo-into",
-    "--add-dir",
-];
-/// Denylisted flags that consume a separate value token.
-const DENYLISTED_WITH_VALUE: &[&str] = &[
-    "--session",
-    "--mode",
-    "--export",
-    "--cwd",
-    "--resume",
-    "--fork",
-    "--api-key",
-    "--extension",
-    "--hook",
-    "--tools",
-    "--system-prompt",
-    "--system-prompt-template",
-    "--append-system-prompt",
-    "--config",
-    "--approval-mode",
-    "--skills",
-    "--plugin-dir",
-    "--trusted-extension",
-    "--profile",
-    "--plan-yolo-into",
-    "--add-dir",
-];
-/// Non-denylisted flags whose next token is data, never inspected as a flag.
-const VALUED_FLAGS: &[&str] = &["--session-dir"];
+/// Profile flags that pass to omp as a bare switch.
+const ALLOWED_BARE_FLAGS: &[&str] = &["--no-lsp"];
+/// Profile flags that pass with the next token as their value.
+const ALLOWED_VALUED_FLAGS: &[&str] = &["--session-dir"];
 
-/// Drop denylisted flags (and their value tokens) from a flag list, pair-aware.
-/// Every other token that is not a `--` flag is dropped: no short option is
-/// allowed (`-e <path>` loads an extension), and a value left behind by a
-/// dropped flag must not reach omp as a positional argument. A bare `--` goes
-/// too, since it would turn the flags after it into positional arguments.
-pub(crate) fn strip_denylisted_flags(flags: &[String]) -> Vec<String> {
+/// Keep only the launch flags a profile may pass: `--no-lsp`, and
+/// `--session-dir` with its value as the next token. Neither changes what an
+/// assistant session loads, resumes or approves; every other token is dropped,
+/// whatever its spelling (`--flag=value`, short options, a bare `--` or `--=x`,
+/// which omp reads as end-of-options, and stray positionals). The value of
+/// `--session-dir` is data and passes verbatim, even when it looks like a
+/// flag; a `--session-dir` with no value after it is dropped.
+pub(crate) fn allowed_launch_flags(flags: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     let mut index = 0;
     while index < flags.len() {
         let token = &flags[index];
         index += 1;
-        if !token.starts_with("--") || token == "--" {
-            continue;
-        }
-        let (name, has_eq) = match token.find('=') {
-            Some(eq) => (&token[..eq], true),
-            None => (token.as_str(), false),
-        };
-        if DENYLISTED_FLAGS.contains(&name) {
-            // `--flag value`: the value rides with the flag unless the next token
-            // is itself flag-looking; `--flag=value` already carries its value.
-            if !has_eq && DENYLISTED_WITH_VALUE.contains(&name) {
-                if let Some(next) = flags.get(index) {
-                    if !next.starts_with('-') {
-                        index += 1;
-                    }
-                }
-            }
-            continue;
-        }
-        out.push(token.clone());
-        if !has_eq && VALUED_FLAGS.contains(&name) {
-            if let Some(next) = flags.get(index) {
-                out.push(next.clone());
+        if ALLOWED_BARE_FLAGS.contains(&token.as_str()) {
+            out.push(token.clone());
+        } else if ALLOWED_VALUED_FLAGS.contains(&token.as_str()) {
+            if let Some(value) = flags.get(index) {
+                out.push(token.clone());
+                out.push(value.clone());
                 index += 1;
             }
         }
@@ -609,12 +532,12 @@ impl Inner {
         // `en` covers a context already gone at shutdown.
         let language = self.ctx.upgrade().map_or("en", |ctx| ctx.i18n.language().code());
         // User-controllable flags ride the extra_flags seam plus the launch
-        // profile. The denylist is applied over both, so neither can override the
-        // code-controlled argv above, while a profile value that merely looks
-        // like a protected flag survives intact.
+        // profile. Only the allowlisted flags of both are appended, so neither can
+        // override the code-controlled argv above, while a --session-dir value that
+        // merely looks like a protected flag survives intact.
         let mut user_flags = options.extra_flags.clone();
         user_flags.extend(launch_profile_flags(&self.ctx, &options.cwd));
-        args.extend(strip_denylisted_flags(&user_flags));
+        args.extend(allowed_launch_flags(&user_flags));
 
         let cwd = options.cwd.clone();
         let spawned = spawn_supervised(&options.binary_path, &args, |command| {
@@ -1192,11 +1115,11 @@ pub(crate) mod tests {
     }
 
     fn strip(flags: &[&str]) -> Vec<String> {
-        strip_denylisted_flags(&flags.iter().map(|flag| flag.to_string()).collect::<Vec<_>>())
+        allowed_launch_flags(&flags.iter().map(|flag| flag.to_string()).collect::<Vec<_>>())
     }
 
     #[test]
-    fn strips_denylisted_flags_pair_aware() {
+    fn keeps_only_the_allowed_launch_flags_pair_aware() {
         // The value of an allowed valued flag is data, even when it looks like a flag.
         assert_eq!(strip(&["--session", "x", "--session-dir", "--session", "--mode=print", "--no-lsp", "positional"]), vec!["--session-dir", "--session", "--no-lsp"]);
         assert_eq!(strip(&["--session", "--session-dir", "/s"]), vec!["--session-dir", "/s"]);
@@ -1231,6 +1154,24 @@ pub(crate) mod tests {
         assert_eq!(strip(&["-e/y", "--session-dir", "/s"]), vec!["--session-dir", "/s"]);
         assert_eq!(strip(&["-x", "value", "--no-lsp"]), vec!["--no-lsp"]);
         assert_eq!(strip(&["stray", "--no-lsp", "-", "--"]), vec!["--no-lsp"]);
+        // Only --no-lsp and --session-dir with its value are allowed: every other
+        // flag goes, `--=x` (omp's end-of-options marker plus a value) included.
+        for tokens in [
+            &["--=x"][..],
+            &["--continue"],
+            &["--from-claude", "/claude/session"],
+            &["--from-codex", "/codex/session"],
+            &["--advisor"],
+            &["--alias", "name"],
+            &["--allow-home"],
+            &["--model", "gpt"],
+        ] {
+            let mut flags = tokens.to_vec();
+            flags.extend(["--no-lsp", "--session-dir", "/s"]);
+            assert_eq!(strip(&flags), vec!["--no-lsp", "--session-dir", "/s"], "{tokens:?}");
+        }
+        assert_eq!(strip(&["--no-lsp", "--session-dir", "/s"]), vec!["--no-lsp", "--session-dir", "/s"]);
+        assert_eq!(strip(&["--no-lsp=1", "--session-dir=/s", "--session-dir"]), Vec::<String>::new());
         // A stored profile maps only the fields that cannot change what a session loads.
         let profile = json!({
             "systemPrompt": "s",

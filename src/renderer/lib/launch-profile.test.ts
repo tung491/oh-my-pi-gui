@@ -1,16 +1,15 @@
 /**
- * Contract tests for launch profiles (plan B3): the flag mapping, the
- * code-controlled-flag denylist (which guarantees a profile can never
- * override sidecar-owned argv like --session/--mode), prefs-JSON parsing,
+ * Contract tests for launch profiles: the flag mapping, the launch-flag
+ * allowlist (which guarantees a profile can never override sidecar-owned
+ * argv like --session/--mode), prefs-JSON parsing,
  * and the effective-command-line preview shown in Settings.
  */
 import { describe, expect, it } from "vitest";
 import {
-	DENYLISTED_FLAGS,
+	allowedLaunchFlags,
 	flagsToCommandLine,
 	parseLaunchProfile,
 	profileToFlags,
-	stripDenylistedFlags,
 } from "../../shared/launch-profile";
 
 /** Bare flags that change what a session loads or approves. */
@@ -42,6 +41,27 @@ const VALUED_PACK_FLAGS = [
 	"--plan-yolo-into",
 	"--add-dir",
 ];
+
+/** Flags the GUI owns: session continuity, the rpc-ui transport, process chrome, credentials. */
+const GUI_OWNED_FLAGS = [
+	"--session",
+	"--mode",
+	"--print",
+	"--print-thoughts",
+	"--export",
+	"--cwd",
+	"--resume",
+	"--fork",
+	"--help",
+	"--version",
+	"--no-pty",
+	"--no-title",
+	"--no-auto-resume",
+	"--api-key",
+];
+
+/** Every flag a launch profile must never pass. */
+const PROTECTED_FLAGS = [...GUI_OWNED_FLAGS, ...BARE_PACK_FLAGS, ...VALUED_PACK_FLAGS];
 
 describe("profileToFlags mapping", () => {
 	it("maps every field to its CLI flag in a fixed order", () => {
@@ -96,25 +116,24 @@ describe("profileToFlags mapping", () => {
 	});
 });
 
-describe("denylist", () => {
+describe("allowlist", () => {
 	it("drops every code-controlled flag, value token included", () => {
-		for (const flag of [...BARE_PACK_FLAGS, ...VALUED_PACK_FLAGS]) expect(DENYLISTED_FLAGS).toContain(flag);
-		for (const flag of DENYLISTED_FLAGS) {
-			expect(stripDenylistedFlags([flag, "value", "--no-lsp"])).toEqual(["--no-lsp"]);
+		for (const flag of PROTECTED_FLAGS) {
+			expect(allowedLaunchFlags([flag, "value", "--no-lsp"])).toEqual(["--no-lsp"]);
 		}
 	});
 
 	it("drops the --flag=value form in one token", () => {
-		expect(stripDenylistedFlags(["--mode=text", "--session=/tmp/x.jsonl", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags(["--mode=text", "--session=/tmp/x.jsonl", "--no-lsp"])).toEqual(["--no-lsp"]);
 	});
 
 	it("does not swallow the next flag-looking token as a value", () => {
-		expect(stripDenylistedFlags(["--session", "--session-dir", "/s"])).toEqual(["--session-dir", "/s"]);
+		expect(allowedLaunchFlags(["--session", "--session-dir", "/s"])).toEqual(["--session-dir", "/s"]);
 	});
 
 	it("keeps non-denylisted flags untouched and in order", () => {
 		expect(
-			stripDenylistedFlags([
+			allowedLaunchFlags([
 				"--no-lsp",
 				"--no-rules",
 				"--add-dir",
@@ -131,14 +150,14 @@ describe("denylist", () => {
 		// A value equal to a protected flag is DATA, not an override — it must
 		// survive pair-aware stripping so the agent receives it as the value.
 		expect(profileToFlags({ sessionDir: "--session" })).toEqual(["--session-dir", "--session"]);
-		expect(stripDenylistedFlags(["--session-dir", "--session", "--no-lsp"])).toEqual([
+		expect(allowedLaunchFlags(["--session-dir", "--session", "--no-lsp"])).toEqual([
 			"--session-dir",
 			"--session",
 			"--no-lsp",
 		]);
-		expect(stripDenylistedFlags(["--session-dir", "--mode=text"])).toEqual(["--session-dir", "--mode=text"]);
+		expect(allowedLaunchFlags(["--session-dir", "--mode=text"])).toEqual(["--session-dir", "--mode=text"]);
 		// A denylisted valued flag takes its value with it, even one that looks like a flag.
-		expect(stripDenylistedFlags(["--config", "--mode=text"])).toEqual([]);
+		expect(allowedLaunchFlags(["--config", "--mode=text"])).toEqual([]);
 	});
 
 	it("profileToFlags can never emit a denylisted flag, even from a crafted profile object", () => {
@@ -160,28 +179,51 @@ describe("denylist", () => {
 		const flags = profileToFlags(parseLaunchProfile(crafted));
 		expect(flags).toEqual(["--no-lsp", "--session-dir", "/s"]);
 		for (const token of flags) {
-			expect(DENYLISTED_FLAGS).not.toContain(token);
+			expect(PROTECTED_FLAGS).not.toContain(token);
 		}
 	});
 
 	it.each(BARE_PACK_FLAGS)("drops the bare %s flag", flag => {
-		expect(stripDenylistedFlags([flag, "--no-lsp"])).toEqual(["--no-lsp"]);
-		expect(stripDenylistedFlags([`${flag}=1`, "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags([flag, "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags([`${flag}=1`, "--no-lsp"])).toEqual(["--no-lsp"]);
 	});
 
 	it.each(VALUED_PACK_FLAGS)("drops %s and its value", flag => {
-		expect(stripDenylistedFlags([flag, "/value", "--no-lsp"])).toEqual(["--no-lsp"]);
-		expect(stripDenylistedFlags([`${flag}=/value`, "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags([flag, "/value", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags([`${flag}=/value`, "--no-lsp"])).toEqual(["--no-lsp"]);
 	});
 
 	it("drops -e and its value", () => {
-		expect(stripDenylistedFlags(["-e", "/y", "--no-lsp"])).toEqual(["--no-lsp"]);
-		expect(stripDenylistedFlags(["-e/y", "--session-dir", "/s"])).toEqual(["--session-dir", "/s"]);
+		expect(allowedLaunchFlags(["-e", "/y", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags(["-e/y", "--session-dir", "/s"])).toEqual(["--session-dir", "/s"]);
 	});
 
 	it("drops an unknown short option and its value", () => {
-		expect(stripDenylistedFlags(["-x", "value", "--no-lsp"])).toEqual(["--no-lsp"]);
-		expect(stripDenylistedFlags(["stray", "--no-lsp", "-", "--"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags(["-x", "value", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(allowedLaunchFlags(["stray", "--no-lsp", "-", "--"])).toEqual(["--no-lsp"]);
+	});
+
+	it.each([
+		["--=x"],
+		["--continue"],
+		["--from-claude", "/claude/session"],
+		["--from-codex", "/codex/session"],
+		["--advisor"],
+		["--alias", "name"],
+		["--allow-home"],
+		["--model", "gpt"],
+	])("drops %s, which is not on the allowlist", (...tokens: string[]) => {
+		expect(allowedLaunchFlags([...tokens, "--no-lsp", "--session-dir", "/s"])).toEqual([
+			"--no-lsp",
+			"--session-dir",
+			"/s",
+		]);
+	});
+
+	it("keeps only --no-lsp and --session-dir with its value", () => {
+		expect(allowedLaunchFlags(["--no-lsp", "--session-dir", "/s"])).toEqual(["--no-lsp", "--session-dir", "/s"]);
+		// Only the exact spellings pass: no inline values, no dangling --session-dir.
+		expect(allowedLaunchFlags(["--no-lsp=1", "--session-dir=/s", "--session-dir"])).toEqual([]);
 	});
 });
 

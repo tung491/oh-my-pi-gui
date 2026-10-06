@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import Store from "electron-store";
-import { parseLaunchProfile, profileToFlags, stripDenylistedFlags } from "../shared/launch-profile";
+import { allowedLaunchFlags, parseLaunchProfile, profileToFlags } from "../shared/launch-profile";
 import { PRODUCT_NAME } from "../shared/product";
 import type {
 	AgentSessionEvent,
@@ -331,11 +331,11 @@ export class SidecarManager extends EventEmitter {
 		else if (this.#freshLaunchPending) args.push("--no-auto-resume");
 		args.push(...assistantPackFlags(this.#packDir, process.platform));
 		// User-controllable flags ride the extraFlags seam + the launch profile.
-		// Strip the code-controlled-flag denylist (pair-aware) over BOTH, then
-		// append: neither can override the code-controlled argv above, while a
-		// profile value that merely looks like a protected flag survives intact.
+		// Only the allowlisted flags of BOTH are appended: neither can override
+		// the code-controlled argv above, while a --session-dir value that merely
+		// looks like a protected flag survives intact.
 		const userFlags = [...(extraFlags ?? []), ...loadLaunchProfileFlags(cwd)];
-		args.push(...stripDenylistedFlags(userFlags));
+		args.push(...allowedLaunchFlags(userFlags));
 
 		// Source sidecar (monorepo dev): run the workspace coding-agent from
 		// source via bun so in-repo RPC fixes are live in the running GUI.

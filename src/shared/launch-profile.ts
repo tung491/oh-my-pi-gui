@@ -32,125 +32,29 @@ export interface LaunchProfile {
 	config?: string;
 }
 
+/** Profile flags that pass to omp as a bare switch. */
+const ALLOWED_BARE_FLAGS: ReadonlySet<string> = new Set(["--no-lsp"]);
+/** Profile flags that pass with the next token as their value. */
+const ALLOWED_VALUED_FLAGS: ReadonlySet<string> = new Set(["--session-dir"]);
+
 /**
- * Flags the GUI/sidecar owns — session continuity (--session/--resume), the
- * rpc-ui transport (--mode), print/export plumbing, cwd, and process chrome —
- * plus credential-bearing flags that must stay in the protected provider
- * configuration flow, and every flag that changes what an assistant session
- * loads or approves (tools, extensions, skills, prompts, config, approvals).
- * A launch profile must never override them: any of these found in
- * profile-sourced flags is dropped (value token included).
+ * Keep only the launch flags a profile may pass: `--no-lsp`, and
+ * `--session-dir` with its value as the next token. Neither changes what an
+ * assistant session loads, resumes or approves; every other token is dropped,
+ * whatever its spelling (`--flag=value`, short options, a bare `--` or `--=x`,
+ * which omp reads as end-of-options, and stray positionals). The value of
+ * `--session-dir` is data and passes verbatim, even when it looks like a flag;
+ * a `--session-dir` with no value after it is dropped.
  */
-export const DENYLISTED_FLAGS: readonly string[] = [
-	"--session",
-	"--mode",
-	"--print",
-	"--print-thoughts",
-	"--export",
-	"--cwd",
-	"--resume",
-	"--fork",
-	"--help",
-	"--version",
-	"--no-pty",
-	"--no-title",
-	"--no-auto-resume",
-	"--api-key",
-	"--chat",
-	"--no-tools",
-	"--no-extensions",
-	"--no-skills",
-	"--auto-approve",
-	"--yolo",
-	"--plan-yolo",
-	"--no-rules",
-	"--extension",
-	"--hook",
-	"--tools",
-	"--system-prompt",
-	"--system-prompt-template",
-	"--append-system-prompt",
-	"--config",
-	"--approval-mode",
-	"--skills",
-	"--plugin-dir",
-	"--trusted-extension",
-	"--profile",
-	"--plan-yolo-into",
-	"--add-dir",
-];
-
-const DENYLISTED: Record<string, true> = Object.fromEntries(DENYLISTED_FLAGS.map(flag => [flag, true] as const));
-
-/** Denylisted flags that consume a separate value token (--flag value). The
- * rest are boolean switches; --resume/--session take an optional value and
- * are treated as value-taking so a smuggled value never survives as a stray
- * positional argument. */
-const DENYLISTED_WITH_VALUE: Record<string, true> = {
-	"--session": true,
-	"--mode": true,
-	"--export": true,
-	"--cwd": true,
-	"--resume": true,
-	"--fork": true,
-	"--api-key": true,
-	"--extension": true,
-	"--hook": true,
-	"--tools": true,
-	"--system-prompt": true,
-	"--system-prompt-template": true,
-	"--append-system-prompt": true,
-	"--config": true,
-	"--approval-mode": true,
-	"--skills": true,
-	"--plugin-dir": true,
-	"--trusted-extension": true,
-	"--profile": true,
-	"--plan-yolo-into": true,
-	"--add-dir": true,
-};
-
-/** Non-denylisted flags that consume a separate value token. The value of one
- * of these is DATA (a path) and must never be inspected as a potential
- * smuggled flag — a value that happens to be "--session" is a legitimate
- * value, not an override. */
-const VALUED_FLAGS: Record<string, true> = {
-	"--session-dir": true,
-};
-
-/** Drop denylisted flags (and their separate value tokens) from a flag list.
- * Handles both `--flag value` and `--flag=value` forms. Pair-aware: the value
- * of a non-denylisted valued flag is pushed verbatim and never inspected, so
- * a legitimate value that merely looks like a protected flag survives.
- * Every other token that is not a `--` flag is dropped: no short option is
- * allowed (`-e <path>` loads an extension), and a value left behind by a
- * dropped flag must not reach omp as a positional argument. A bare `--` goes
- * too, since it would turn the flags after it into positional arguments. */
-export function stripDenylistedFlags(flags: readonly string[]): string[] {
+export function allowedLaunchFlags(flags: readonly string[]): string[] {
 	const out: string[] = [];
 	for (let i = 0; i < flags.length; i++) {
 		const token = flags[i];
-		if (!token.startsWith("--") || token === "--") continue;
-		const eq = token.indexOf("=");
-		const name = eq === -1 ? token : token.slice(0, eq);
-		if (DENYLISTED[name] === true) {
-			// `--flag value`: the value rides with the flag unless the next token is
-			// itself flag-looking (then the flag is treated as valueless). The
-			// `--flag=value` form carries its value in the dropped token already.
-			if (eq === -1 && DENYLISTED_WITH_VALUE[name] === true) {
-				const next = flags[i + 1];
-				if (next !== undefined && !next.startsWith("-")) i++;
-			}
-			continue;
-		}
-		out.push(token);
-		// Value position of a valued non-denylisted flag is opaque data.
-		if (eq === -1 && VALUED_FLAGS[name] === true) {
-			const next = flags[i + 1];
-			if (next !== undefined) {
-				out.push(next);
-				i++;
-			}
+		if (ALLOWED_BARE_FLAGS.has(token)) {
+			out.push(token);
+		} else if (ALLOWED_VALUED_FLAGS.has(token) && i + 1 < flags.length) {
+			out.push(token, flags[i + 1]);
+			i++;
 		}
 	}
 	return out;
@@ -160,7 +64,7 @@ export function stripDenylistedFlags(flags: readonly string[]): string[] {
  * effective command line preview is stable. Only the fields that cannot change
  * what an assistant session loads or approves still map (`--no-lsp`,
  * `--session-dir`); the others stay in the type so stored prefs still parse.
- * The denylist is also enforced at the sidecar spawn site over the combined
+ * The allowlist is also enforced at the sidecar spawn site over the combined
  * user flags (sidecar.ts #spawn). Profile values are data, so a value that
  * looks like a protected flag survives intact. */
 export function profileToFlags(profile: LaunchProfile): string[] {
