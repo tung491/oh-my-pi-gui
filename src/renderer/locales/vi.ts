@@ -1419,6 +1419,7 @@ export const vi: Record<string, string> = {
 	"quickEntry.toast.refusedBody":
 		"Không thể đăng ký tổ hợp phím {chord}. Hãy chọn một tổ hợp phím khác trong Cài đặt → Phím tắt.",
 	"modelPicker.emptyLocal": "Chưa có mô hình cục bộ nào",
+	"modelPicker.localOnly": "Sai ATLAS chỉ dùng Ollama chạy trên máy tính này.",
 	"modelPicker.openOllama": "Mở cài đặt Ollama",
 	"welcome.title": "Thiết lập trợ lý cục bộ của bạn",
 	"welcome.subtitle": "Máy này có thể chạy trợ lý AI ngay trên máy, không có dữ liệu nào rời khỏi máy tính.",

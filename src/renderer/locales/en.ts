@@ -760,6 +760,7 @@ export const en: Record<string, string> = {
 	"modelPicker.searchLabel": "Search models",
 	"modelPicker.placeholder": "Search models…",
 	"modelPicker.emptyLocal": "No local models yet",
+	"modelPicker.localOnly": "Sai ATLAS only uses Ollama running on this computer.",
 	"modelPicker.openOllama": "Open Ollama settings",
 	"modelPicker.notResponding": "Agent not responding",
 	"modelPicker.notConnected": "Sidecar not connected",

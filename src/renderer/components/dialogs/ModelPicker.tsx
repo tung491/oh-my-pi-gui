@@ -296,6 +296,7 @@ export function ModelPicker() {
 					) : availableModels.length === 0 ? (
 						<div className="flex flex-col items-center gap-3 py-10" data-model-picker-empty>
 							<span className="text-xs text-(--omp-dim)">{t("modelPicker.emptyLocal")}</span>
+							<span className="text-omp-xs text-(--omp-dim)">{t("modelPicker.localOnly")}</span>
 							<Button onClick={openOllama} size="sm" variant="secondary">
 								{t("modelPicker.openOllama")}
 							</Button>

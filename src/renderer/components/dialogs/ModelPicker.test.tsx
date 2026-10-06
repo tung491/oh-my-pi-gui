@@ -236,6 +236,14 @@ describe("Ollama only", () => {
 		expect(useUiStore.getState().modelPickerOpen).toBe(false);
 	});
 
+	it("says the empty list holds only Ollama running on this computer", async () => {
+		catalog = [];
+		await mount();
+
+		const empty = body().querySelector("[data-model-picker-empty]");
+		expect(empty?.textContent).toContain("Sai ATLAS only uses Ollama running on this computer.");
+	});
+
 	it("selects an Ollama model through set_model", async () => {
 		rpc.setModel = vi.fn(async () => ok(QWEN));
 		await mount();
