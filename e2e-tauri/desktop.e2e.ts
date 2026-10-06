@@ -561,6 +561,31 @@ describe("desktop", () => {
 		await browser.setWindowSize(1400, 900);
 	}).timeout(90_000);
 
+	it("removed commands stay inert: a notice, no dialog and no agent call", async () => {
+		// The composer refuses a removed command before it reaches the agent, so
+		// nothing opens and nothing is sent: not as a prompt, not as a collaboration join.
+		const prompts = (await rpc("prompt")).length;
+		for (const name of ["collab", "tools", "debug", "import", "login"]) {
+			await command(`/${name}`);
+			expect(
+				await until(
+					() =>
+						browser.execute(() =>
+							Array.from(document.querySelectorAll('[role="status"]')).some(node =>
+								(node.textContent ?? "").includes("TUI-only — not yet available via RPC"),
+							),
+						),
+					shown => shown,
+				),
+			).toBe(true);
+			await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
+		}
+		expect(await rpc("prompt")).toHaveLength(prompts);
+		expect(await rpc("collab_join")).toHaveLength(0);
+		expect(await errors()).toEqual([]);
+		await fill($("textarea"), "");
+	});
+
 	it("settings search opens advanced controls and old refreshes cannot undo a saved edit", async () => {
 		await (await byRole("button", { name: "Settings", exact: true })).click();
 		const search = $(`${DIALOG} ${SETTINGS_SEARCH}`);
