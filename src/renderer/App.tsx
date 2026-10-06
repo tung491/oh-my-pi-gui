@@ -8,9 +8,7 @@ import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
 import { CollabDialog } from "./components/dialogs/CollabDialog";
 import { CommandPalette } from "./components/dialogs/CommandPalette";
-import { ContextReportDialog } from "./components/dialogs/ContextReportDialog";
 import { CopySelectorDialog } from "./components/dialogs/CopySelectorDialog";
-import { DebugConsoleDialog } from "./components/dialogs/DebugConsoleDialog";
 import { ExtensionDialog } from "./components/dialogs/ExtensionDialog";
 import { FirstRunOnboardingDialog } from "./components/dialogs/FirstRunOnboardingDialog";
 import { ForceToolDialog } from "./components/dialogs/ForceToolDialog";
@@ -643,10 +641,6 @@ export function App() {
 				ui.openCommandPalette();
 				return;
 			}
-			if (action === "open-context-report") {
-				ui.openContextReport();
-				return;
-			}
 			if (action === "open-jobs") {
 				ui.openJobs();
 				return;
@@ -697,10 +691,6 @@ export function App() {
 			}
 			if (action === "open-pr-center") {
 				ui.openPrCenter();
-				return;
-			}
-			if (action === "open-debug") {
-				ui.openDebug();
 				return;
 			}
 			// Menu commands below read or mutate the selected sidecar. Ignore the
@@ -780,10 +770,8 @@ export function App() {
 			<BranchPickerDialog />
 			<BtwDialog />
 			<CollabDialog />
-			<DebugConsoleDialog />
 			<LiveVoiceDialog />
 			<CopySelectorDialog />
-			<ContextReportDialog />
 			<ActiveToolsDialog />
 			<ShareSessionDialog />
 			<JobsDialog />

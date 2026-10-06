@@ -450,7 +450,7 @@ describe("tabs store switch", () => {
 	it("closes outgoing session overlays while keeping global windows open", async () => {
 		seedTabs();
 		useUiStore.getState().openSettings();
-		useUiStore.getState().openContextReport();
+		useUiStore.getState().openSessionInfo();
 		useUiStore.getState().openModes("goal");
 		useUiStore.getState().openStatsDashboard();
 		useForkHandoffStore.getState().openHandoffDialog();
@@ -458,7 +458,7 @@ describe("tabs store switch", () => {
 		await useTabsStore.getState().switchTab("t1");
 
 		expect(useUiStore.getState().settingsOpen).toBe(false);
-		expect(useUiStore.getState().contextReportOpen).toBe(false);
+		expect(useUiStore.getState().sessionInfoOpen).toBe(false);
 		expect(useUiStore.getState().modesOpen).toBe(false);
 		expect(useForkHandoffStore.getState().handoffDialogOpen).toBe(false);
 		expect(useUiStore.getState().statsDashboardOpen).toBe(true);

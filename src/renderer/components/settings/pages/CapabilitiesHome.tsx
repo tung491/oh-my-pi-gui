@@ -46,7 +46,6 @@ export type CapabilityTarget =
 	| "vibe"
 	| "collab"
 	| "live"
-	| "debug"
 	| "clear"
 	| "import"
 	| "sessionInfo"
@@ -65,7 +64,6 @@ export type CapabilityTarget =
 	| "queue"
 	| "workspaceDirs"
 	| "prCenter"
-	| "context"
 	| "tools"
 	| "stats"
 	| "jobs"
@@ -382,11 +380,9 @@ export function CapabilitiesHome({
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.context.desc")} icon={<BarChart3 size={16} />} title={t("cmd.stats")}>
-					<TargetButton label={t("cmd.context")} onOpen={onOpenTarget} target="context" variant="secondary" />
 					<TargetButton label={t("cmd.tools")} onOpen={onOpenTarget} target="tools" />
 					<TargetButton label={t("cmd.stats")} onOpen={onOpenTarget} target="stats" />
 					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" />
-					<TargetButton label={t("cmd.debug")} onOpen={onOpenTarget} target="debug" />
 				</CapabilityCard>
 
 				<CapabilityCard

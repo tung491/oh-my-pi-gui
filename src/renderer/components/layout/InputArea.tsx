@@ -42,7 +42,6 @@ import { useUiStore } from "../../stores/ui";
 import { IconButton } from "../common";
 import { ApprovalControl } from "./ApprovalControl";
 import { ComposerModes } from "./ComposerModes";
-import { ContextUsagePopover } from "./ContextUsagePopover";
 import { HistorySearchOverlay } from "./HistorySearchOverlay";
 import { fileToImage, listMentionFiles, mentionFileCache } from "./input-area-utils";
 import { ThinkingControl } from "./ThinkingControl";
@@ -1146,8 +1145,6 @@ export function InputArea() {
 								</span>
 							)}
 							<div className="omp-composer-send-cluster ml-1 flex shrink-0 items-center gap-2.5">
-								<ContextUsagePopover />
-
 								{isStreaming ? (
 									<div className="flex shrink-0 items-center gap-1.5">
 										<button

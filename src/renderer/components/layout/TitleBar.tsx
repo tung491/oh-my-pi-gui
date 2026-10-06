@@ -67,7 +67,6 @@ export function TitleBar() {
 	const openUsage = useUiStore(s => s.openUsage);
 	const openStatsDashboard = useUiStore(s => s.openStatsDashboard);
 	const openImportDialog = useUiStore(s => s.openImportDialog);
-	const openContextReport = useUiStore(s => s.openContextReport);
 	const openActiveTools = useUiStore(s => s.openActiveTools);
 	const openShareSession = useUiStore(s => s.openShareSession);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
@@ -247,16 +246,6 @@ export function TitleBar() {
 			onSelect: () => {
 				setActionsMenu(null);
 				openShareSession();
-			},
-		},
-		{
-			id: "context",
-			label: t("cmd.context"),
-			description: t("cmd.context.desc"),
-			icon: Gauge,
-			onSelect: () => {
-				setActionsMenu(null);
-				openContextReport();
 			},
 		},
 		{

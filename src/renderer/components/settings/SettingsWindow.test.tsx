@@ -88,11 +88,11 @@ describe("CapabilitiesHome", () => {
 		expect(html).toContain("Switch Model");
 		expect(html).toContain("MCP Servers");
 		expect(html).toContain("Collab Session");
-		expect(html).toContain("Debug Tools");
 		expect(html).toContain("Side Question");
 		expect(html).toContain("Export HTML");
 		expect(html).toContain("Plugin Marketplace");
 		expect(html).toContain("Updates");
+		for (const removed of ["Debug Tools"]) expect(html).not.toContain(removed);
 	});
 
 	// (The pending-toggle lock test was removed with the toggle buttons —

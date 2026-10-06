@@ -794,9 +794,6 @@ export function SettingsWindow() {
 				case "live":
 					external(() => useUiStore.getState().openLive());
 					return;
-				case "debug":
-					external(() => useUiStore.getState().openDebug());
-					return;
 				case "clear":
 					runAsync(() => clearSessionContext());
 					return;
@@ -858,9 +855,6 @@ export function SettingsWindow() {
 					return;
 				case "prCenter":
 					external(() => useUiStore.getState().openPrCenter());
-					return;
-				case "context":
-					external(() => useUiStore.getState().openContextReport());
 					return;
 				case "tools":
 					external(() => useUiStore.getState().openActiveTools());

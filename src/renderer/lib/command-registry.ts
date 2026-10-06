@@ -787,13 +787,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		},
 	});
 	add({
-		name: "context",
-		label: t("cmd.context"),
-		description: t("cmd.context.desc"),
-		category: "context",
-		affordance: { kind: "window", open: () => useUiStore.getState().openContextReport() },
-	});
-	add({
 		name: "auto-compact",
 		label: t("cmd.autoCompact"),
 		description: t("cmd.autoCompact.desc"),
@@ -1387,13 +1380,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		description: t("cmd.omfg.desc"),
 		category: "other",
 		affordance: { kind: "action", argUsage: "<complaint>", run: complaint => forgeTtsrRule(complaint) },
-	});
-	add({
-		name: "debug",
-		label: t("cmd.debug"),
-		description: t("cmd.debug.desc"),
-		category: "other",
-		affordance: { kind: "window", open: () => useUiStore.getState().openDebug() },
 	});
 	add({
 		name: "live",

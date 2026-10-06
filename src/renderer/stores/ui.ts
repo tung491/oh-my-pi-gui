@@ -64,7 +64,6 @@ interface UiStore {
 	importDialogOpen: boolean;
 	copySelectorOpen: boolean;
 	changelogOpen: boolean;
-	contextReportOpen: boolean;
 	activeToolsOpen: boolean;
 	shareSessionOpen: boolean;
 	jobsOpen: boolean;
@@ -73,7 +72,6 @@ interface UiStore {
 	btwRequest: string | null;
 	collabOpen: boolean;
 	collabJoinLink: string | null;
-	debugOpen: boolean;
 	liveOpen: boolean;
 	composerEditorOpen: boolean;
 	composerEditorInitial: string | null;
@@ -169,8 +167,6 @@ interface UiStore {
 	closeCopySelector: () => void;
 	openChangelog: () => void;
 	closeChangelog: () => void;
-	openContextReport: () => void;
-	closeContextReport: () => void;
 	openActiveTools: () => void;
 	closeActiveTools: () => void;
 	openShareSession: () => void;
@@ -185,8 +181,6 @@ interface UiStore {
 	closeBtw: () => void;
 	openCollab: (joinLink?: string) => void;
 	closeCollab: () => void;
-	openDebug: () => void;
-	closeDebug: () => void;
 	openLive: () => void;
 	closeLive: () => void;
 	openComposerEditor: (initial: string) => void;
@@ -348,9 +342,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	changelogOpen: false,
 	openChangelog: () => set({ changelogOpen: true }),
 	closeChangelog: () => set({ changelogOpen: false }),
-	contextReportOpen: false,
-	openContextReport: () => set({ contextReportOpen: true }),
-	closeContextReport: () => set({ contextReportOpen: false }),
 	activeToolsOpen: false,
 	openActiveTools: () => set({ activeToolsOpen: true }),
 	closeActiveTools: () => set({ activeToolsOpen: false }),
@@ -373,9 +364,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	collabJoinLink: null as string | null,
 	openCollab: joinLink => set({ collabOpen: true, collabJoinLink: joinLink ?? null }),
 	closeCollab: () => set({ collabOpen: false, collabJoinLink: null }),
-	debugOpen: false,
-	openDebug: () => set({ debugOpen: true }),
-	closeDebug: () => set({ debugOpen: false }),
 	liveOpen: false,
 	openLive: () => set({ liveOpen: true }),
 	closeLive: () => set({ liveOpen: false }),
@@ -424,7 +412,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			agentHubOpen: false,
 			importDialogOpen: false,
 			copySelectorOpen: false,
-			contextReportOpen: false,
 			activeToolsOpen: false,
 			shareSessionOpen: false,
 			jobsOpen: false,
@@ -433,7 +420,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			btwRequest: null,
 			collabOpen: false,
 			collabJoinLink: null,
-			debugOpen: false,
 			liveOpen: false,
 			composerEditorOpen: false,
 			composerEditorInitial: null,
