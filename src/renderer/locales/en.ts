@@ -604,6 +604,12 @@ export const en: Record<string, string> = {
 	"approval.deny": "Deny",
 	"approval.approve": "Approve",
 	"approval.unknownTool": "unknown tool",
+	"approval.details": "Details",
+	"approval.sentence.generic": "Sai ATLAS wants to {action}. Allow it?",
+	"approval.sentence.write": "Save a file to {path}?",
+	"approval.action.officeReport": "make a Word report",
+	"approval.action.officeSlides": "make a slide deck",
+	"approval.action.officeClean": "make a cleaned copy of a spreadsheet",
 
 	// Extension UI dialogs
 	"extDialog.autoDismiss": "auto-dismiss in {seconds}s",
