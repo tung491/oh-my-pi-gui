@@ -10,6 +10,9 @@
 // A second session runs in a folder whose `.env` points OLLAMA_BASE_URL and OLLAMA_HOST at a DNS
 // name that merely starts with a loopback address. Its traffic goes through a recording proxy that
 // answers as that host would: the session must list no model there and send it nothing.
+// The scratch HOME's ~/.omp/agent/mcp.json and the working folder's .mcp.json each name a stdio MCP
+// server that only records its start: neither may start in either session, at startup, on the GUI's
+// heartbeat (get_state) or on a plugin reload.
 //   bun scripts/check-assistant-pack.ts <omp binary> [<pack dir>] [--tools <comma list>] [--lang en|vi]
 // The pack dir defaults to the one the shells resolve for that binary. Prints one row per tool,
 // skill and setting; exits 1 naming every failed check, 2 on bad usage.
@@ -67,6 +70,10 @@ const FAKE_LOOPBACK_URL = `http://${FAKE_LOOPBACK_HOST}:11434`;
 const FAKE_LOOPBACK_PROMPT_WAIT_MS = 3_000;
 /** Settings that keep sessions local; the readback must find them pinned by the overlay. */
 const LOCAL_ONLY_SETTINGS = ["modelPolicy.providers", "modelPolicy.localOnly"];
+/** The setting that keeps every configured MCP server from starting; the pack pins it off. */
+const MCP_OFF_SETTING = "mcp.enabled";
+/** How long a session gets to start a configured MCP server after its last request. */
+const MCP_START_WAIT_MS = 3_000;
 const READY_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const KILL_GRACE_MS = 5_000;
@@ -481,6 +488,11 @@ async function check(
 			);
 		}
 	}
+	if (!expected.some(row => row.path === MCP_OFF_SETTING && row.expected === false)) {
+		failures.push(
+			`config.yml does not pin ${MCP_OFF_SETTING}: false (the sidecar needs patches/omp/0004-mcp-enabled-setting.patch)`,
+		);
+	}
 	const read = await sidecar.data<{
 		values: Record<string, unknown>;
 		provenance: Record<string, { layers?: unknown }>;
@@ -513,6 +525,39 @@ async function check(
 		else if (packNames.some(name => text.includes(name))) failures.push(`notice about the pack: ${text}`);
 	}
 	return failures;
+}
+
+/**
+ * Plants a stdio MCP server in the user's ~/.omp/agent/mcp.json and the folder's .mcp.json. The
+ * server never answers; it only appends a line naming its config to `marker` when it starts.
+ */
+function plantMcpTripwires(home: string, cwds: readonly string[], scratch: string): string {
+	const marker = join(scratch, "mcp-tripwire");
+	const server = join(scratch, "mcp-tripwire.sh");
+	writeFileSync(server, `#!/bin/sh\necho "$1" >>${JSON.stringify(marker)}\nexec cat >/dev/null\n`, { mode: 0o755 });
+	const config = (label: string) =>
+		`${JSON.stringify({ mcpServers: { [`tripwire-${label}`]: { type: "stdio", command: server, args: [label] } } })}\n`;
+	mkdirSync(join(home, ".omp", "agent"), { recursive: true });
+	writeFileSync(join(home, ".omp", "agent", "mcp.json"), config("user"));
+	for (const cwd of cwds) writeFileSync(join(cwd, ".mcp.json"), config("project"));
+	return marker;
+}
+
+/** The GUI's periodic heartbeat and a plugin reload, which rediscovers MCP servers when MCP is on. */
+async function exerciseMcpTriggers(sidecar: Sidecar): Promise<void> {
+	await sidecar.data({ type: "get_state" });
+	await sidecar.data({ type: "reload_plugins" });
+	await sidecar.data({ type: "get_state" });
+	await Bun.sleep(MCP_START_WAIT_MS);
+}
+
+/** Which planted MCP servers started, by config. */
+function mcpTripwireStarts(marker: string): string[] {
+	if (!existsSync(marker)) return [];
+	return readFileSync(marker, "utf8")
+		.split("\n")
+		.map(line => line.trim())
+		.filter(Boolean);
 }
 
 async function main(): Promise<number> {
@@ -576,6 +621,7 @@ async function main(): Promise<number> {
 	}
 	const dotenvCwd = join(scratch, "work-dotenv");
 	mkdirSync(dotenvCwd);
+	const mcpMarker = plantMcpTripwires(home, [cwd, dotenvCwd], scratch);
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
 	// The sidecar reads only the scratch HOME and the pack: a caller's own omp config location
@@ -597,6 +643,7 @@ async function main(): Promise<number> {
 	try {
 		await sidecar.ready(READY_TIMEOUT_MS);
 		failures = await check(sidecar, pack, tools, appendMarker, instructionMarkers, ollama.modelRequests);
+		await exerciseMcpTriggers(sidecar);
 	} catch (error) {
 		const tail = sidecar.stderr.slice(-20).join("\n");
 		failures = [`${error instanceof Error ? error.message : String(error)}${tail ? `\n${tail}` : ""}`];
@@ -606,6 +653,12 @@ async function main(): Promise<number> {
 	}
 	try {
 		failures.push(...(await checkFakeLoopback(argv, env, dotenvCwd)));
+		const starts = mcpTripwireStarts(mcpMarker);
+		const started = [...new Set(starts)].sort();
+		console.log(
+			`mcp     user and project MCP servers ${starts.length > 0 ? `STARTED ${starts.length} times: ${started.join(", ")}` : "never started"}`,
+		);
+		if (starts.length > 0) failures.push(`configured MCP servers started in a pack session: ${started.join(", ")}`);
 	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}

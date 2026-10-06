@@ -106,6 +106,7 @@ export const PACK_PINNED_SETTING_KEYS: readonly string[] = [
 	"commands.enableOpencodeProject",
 	"plan.enabled",
 	"plan.defaultOnStartup",
+	"mcp.enabled",
 	"mcp.enableProjectConfig",
 	"task.disabledAgents",
 	"tools.approval",

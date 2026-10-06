@@ -52,7 +52,7 @@ const EXPECTED_CONFIG = {
 		enableOpencodeProject: false,
 	},
 	plan: { enabled: false, defaultOnStartup: false },
-	mcp: { enableProjectConfig: false },
+	mcp: { enabled: false, enableProjectConfig: false },
 	task: { disabledAgents: ["task", "sonic", "scout", "reviewer", "security-reviewer"] },
 	tools: {
 		approval: {
@@ -144,6 +144,11 @@ describe("config overlay", () => {
 		const config = parse(read("config.yml")) as Record<string, unknown>;
 		expect(config.modelPolicy).toEqual({ providers: ["ollama"], localOnly: true });
 		expect(config.memory).toEqual({ backend: "off" });
+	});
+
+	it("starts no MCP server from the user's or the folder's config", () => {
+		const config = parse(read("config.yml")) as Record<string, unknown>;
+		expect(config.mcp).toEqual({ enabled: false, enableProjectConfig: false });
 	});
 });
 

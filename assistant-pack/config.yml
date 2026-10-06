@@ -45,7 +45,10 @@ commands:
 plan:
   enabled: false
   defaultOnStartup: false
+# No MCP server from the user's or the folder's config: a configured server is a program that
+# could connect anywhere (needs the sidecar's mcp.enabled patch, patches/omp/0004-mcp-enabled-setting.patch).
 mcp:
+  enabled: false
   enableProjectConfig: false
 # No task tool is loaded; disabledAgents stays as belt-and-braces.
 task:
