@@ -5,7 +5,44 @@ import { setTimeout as delay } from "node:timers/promises";
 import Store from "electron-store";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandOutputFrame, PromptResultFrame, SidecarStatus, SidecarStatusPayload } from "../shared/rpc-types";
+import { ASSISTANT_PACK_FILES } from "./assistant-pack";
 import { missingSidecarMessage, type SidecarFailureReport, SidecarManager } from "./sidecar";
+
+/** The `--tools` value of the spawn contract for the platform running the suite. */
+const PACK_TOOLS =
+	process.platform === "linux"
+		? "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean"
+		: "read,glob,write,ask,office_report,office_slides,office_clean";
+
+/** The pack part of the spawn argv, written out so the test does not restate the code it checks. */
+function packFlags(pack: string): string[] {
+	return [
+		"--no-extensions",
+		"--extension",
+		pack,
+		"--tools",
+		PACK_TOOLS,
+		"--system-prompt",
+		path.join(pack, "system-prompt.md"),
+		"--config",
+		path.join(pack, "config.yml"),
+		"--approval-mode",
+		"always-ask",
+	];
+}
+
+/** An `assistant-pack/` beside a fake binary in `dir`, holding every listed file except `leaveOut`. */
+async function makePackFixture(dir: string, leaveOut?: string): Promise<string> {
+	const pack = path.join(dir, "assistant-pack");
+	for (const file of ASSISTANT_PACK_FILES) {
+		if (file === leaveOut) continue;
+		const target = path.join(pack, file);
+		await fs.mkdir(path.dirname(target), { recursive: true });
+		await fs.writeFile(target, "x");
+	}
+	await fs.mkdir(pack, { recursive: true });
+	return pack;
+}
 
 async function waitForReady(sidecar: SidecarManager): Promise<void> {
 	const ready = Promise.withResolvers<void>();
@@ -31,6 +68,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		const pack = await makePackFixture(tempDir);
 
 		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
 		try {
@@ -43,32 +81,96 @@ describe("SidecarManager", () => {
 			await restarted;
 
 			const launch: unknown = JSON.parse(await fs.readFile(logPath, "utf8"));
-			expect(launch).toEqual(["--mode", "rpc-ui", "--session", sessionPath]);
+			expect(launch).toEqual(["--mode", "rpc-ui", "--session", sessionPath, ...packFlags(pack)]);
 		} finally {
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	});
 
-	it("spawns a chat sidecar with --chat in the code-controlled argv", async () => {
-		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-chat-"));
+	it("spawns every sidecar with the assistant pack flags and never --chat", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-pack-"));
 		const logPath = path.join(tempDir, "argv.json");
+		const envPath = path.join(tempDir, "env.json");
 		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
 		await fs.writeFile(
 			binaryPath,
-			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		const pack = await makePackFixture(tempDir);
 
-		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir, kind: "chat" });
+		// A tab created as a chat still gets the pack: the chat branch is gone.
+		// Shell startup files reaching the spawn env are removed; the app language is set last.
+		const sidecar = new SidecarManager({
+			binaryPath,
+			cwd: tempDir,
+			kind: "chat",
+			fresh: true,
+			shellEnv: () => Promise.resolve({ BASH_ENV: "/rc/bash_env", ENV: "/rc/env", SAI_ATLAS_LANG: "xx" }),
+			language: () => "vi",
+		});
 		try {
 			const ready = waitForReady(sidecar);
 			sidecar.start();
 			await ready;
 
 			const launch: unknown = JSON.parse(await fs.readFile(logPath, "utf8"));
-			expect(launch).toEqual(["--mode", "rpc-ui", "--chat"]);
+			expect(launch).toEqual([
+				"--mode",
+				"rpc-ui",
+				"--no-auto-resume",
+				"--no-extensions",
+				"--extension",
+				pack,
+				"--tools",
+				PACK_TOOLS,
+				"--system-prompt",
+				path.join(pack, "system-prompt.md"),
+				"--config",
+				path.join(pack, "config.yml"),
+				"--approval-mode",
+				"always-ask",
+			]);
+			expect(launch).not.toContain("--chat");
+			expect(JSON.parse(await fs.readFile(envPath, "utf8"))).toEqual({ lang: "vi", bashEnv: null, env: null });
 		} finally {
+			sidecar.dispose();
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	it("surfaces a reinstall instruction when a pack file is missing", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-nopack-"));
+		const spawnedPath = path.join(tempDir, "spawned");
+		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
+		await fs.writeFile(
+			binaryPath,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs";\nfs.writeFileSync(${JSON.stringify(spawnedPath)}, "1");\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+		);
+		await fs.chmod(binaryPath, 0o755);
+		// The directory exists with one listed file left out, so no fallback applies.
+		await makePackFixture(tempDir, "config.yml");
+
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown) => unhandled.push(reason);
+		process.on("unhandledRejection", onUnhandled);
+		const statuses: SidecarStatusPayload[] = [];
+		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir, packaged: true });
+		sidecar.on("status", payload => statuses.push(payload));
+		try {
+			sidecar.start();
+			expect(statuses).toHaveLength(1);
+			expect(statuses[0]).toMatchObject({ status: "error" });
+			expect(statuses[0].message).toContain("config.yml");
+			expect(statuses[0].message).toContain("Reinstall Sai ATLAS");
+			expect(sidecar.status).toBe("error");
+			await delay(500);
+			await expect(fs.stat(spawnedPath)).rejects.toThrow();
+			expect(statuses).toHaveLength(1);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
@@ -83,6 +185,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		const pack = await makePackFixture(tempDir);
 
 		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir, fresh: true });
 		try {
@@ -91,13 +194,13 @@ describe("SidecarManager", () => {
 			await ready;
 
 			const launch: unknown = JSON.parse(await fs.readFile(logPath, "utf8"));
-			expect(launch).toEqual(["--mode", "rpc-ui", "--no-auto-resume"]);
+			expect(launch).toEqual(["--mode", "rpc-ui", "--no-auto-resume", ...packFlags(pack)]);
 
 			const restarted = waitForReady(sidecar);
 			sidecar.restart();
 			await restarted;
 			const restartLaunch: unknown = JSON.parse(await fs.readFile(logPath, "utf8"));
-			expect(restartLaunch).toEqual(["--mode", "rpc-ui"]);
+			expect(restartLaunch).toEqual(["--mode", "rpc-ui", ...packFlags(pack)]);
 		} finally {
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
@@ -112,6 +215,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdout.write(JSON.stringify({ type: "prompt_result", id: "local-command", agentInvoked: false }) + "\\n");\nprocess.stdout.write(JSON.stringify({ type: "command_output", text: "Enabled models" }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir);
 
 		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
 		const received = Promise.withResolvers<CommandOutputFrame>();
@@ -143,6 +247,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		const pack = await makePackFixture(tempDir);
 
 		// electron-store/conf resolves its prefs path from os.homedir() per
 		// construction, so a redirected HOME lands the store inside tempDir.
@@ -150,7 +255,9 @@ describe("SidecarManager", () => {
 		// conf internals, then seed the workspace profile into it.
 		const originalHome = process.env.HOME;
 		process.env.HOME = fakeHome;
-		const sidecar = new SidecarManager({ binaryPath, cwd: workspaceCwd });
+		// The extraFlags seam carries what a stored profile cannot express.
+		const smuggled = ["--tools", "edit", "--yolo", "--config", "/x", "-e", "/y", "--hook", "/z"];
+		const sidecar = new SidecarManager({ binaryPath, cwd: workspaceCwd, extraFlags: smuggled });
 		try {
 			// Same options as the loader; a variable sidesteps the excess-property
 			// check on electron-store's Options type (projectName reaches conf).
@@ -165,7 +272,10 @@ describe("SidecarManager", () => {
 							appendSystemPrompt: "GUI injected",
 							noRules: true,
 							addDirs: ["/data/extra"],
-							tools: ["read", "bash"],
+							tools: ["edit"],
+							config: "/x",
+							noLsp: true,
+							sessionDir: "/data/sessions",
 							// Smuggled keys that could reach code-controlled flags —
 							// parseLaunchProfile drops them before the mapping.
 							"--session": "hijack",
@@ -180,17 +290,28 @@ describe("SidecarManager", () => {
 			await ready;
 
 			const launch: unknown = JSON.parse(await fs.readFile(logPath, "utf8"));
+			// Only the profile flags that cannot change what the session loads survive.
 			expect(launch).toEqual([
 				"--mode",
 				"rpc-ui",
-				"--append-system-prompt",
+				...packFlags(pack),
+				"--no-lsp",
+				"--session-dir",
+				"/data/sessions",
+			]);
+			for (const token of [
+				...smuggled,
 				"GUI injected",
+				"--append-system-prompt",
 				"--no-rules",
 				"--add-dir",
 				"/data/extra",
-				"--tools",
-				"read,bash",
-			]);
+			]) {
+				if (token === "--tools" || token === "--config") continue;
+				expect(launch).not.toContain(token);
+			}
+			expect((launch as string[]).filter(token => token === "--tools")).toHaveLength(1);
+			expect((launch as string[]).filter(token => token === "--config")).toHaveLength(1);
 		} finally {
 			process.env.HOME = originalHome;
 			sidecar.dispose();
@@ -209,6 +330,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		const pack = await makePackFixture(tempDir);
 
 		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
 		try {
@@ -223,8 +345,9 @@ describe("SidecarManager", () => {
 			sidecar.restart();
 			await ready;
 
-			const spawn = JSON.parse(await fs.readFile(logPath, "utf8")) as { cwd: string };
+			const spawn = JSON.parse(await fs.readFile(logPath, "utf8")) as { argv: string[]; cwd: string };
 			expect(spawn.cwd).toBe(adoptedCwd);
+			expect(spawn.argv).toEqual(["--mode", "rpc-ui", ...packFlags(pack)]);
 		} finally {
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
@@ -243,6 +366,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 2, supportedProtocolVersions: [2], maxFrameBytes: 1048576, maxReassembledFrameBytes: 67108864 }) + "\\n");\nsetTimeout(() => process.exit(3), 120);\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir);
 
 		const statuses: SidecarStatusPayload[] = [];
 		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
@@ -275,6 +399,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.appendFile(${JSON.stringify(pidPath)}, String(process.pid) + "\\n");\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir);
 
 		const sidecar = new SidecarManager({
 			binaryPath,
@@ -355,6 +480,7 @@ describe("SidecarManager", () => {
 			`#!/usr/bin/env bun\nprocess.stderr.write("dyld: Library not loaded: pi_natives\\n  Referenced by: omp\\n");\nsetTimeout(() => process.exit(4), 120);\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir);
 
 		const reportFailure = vi.fn();
 		const statuses: SidecarStatusPayload[] = [];

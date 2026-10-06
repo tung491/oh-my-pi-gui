@@ -3,6 +3,7 @@ import * as os from "node:os";
 import { homedir } from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { ASSISTANT_PACK_FILES } from "./assistant-pack";
 import {
 	resetLoginShellEnvCache,
 	resolveEditorCommand,
@@ -160,6 +161,34 @@ describe("shellSpawnEnv", () => {
 	});
 });
 
+describe("shellSpawnEnv config redirects", () => {
+	it("drops PI_CONFIG_FILES, PI_CONFIG_DIR, PI_CODING_AGENT_DIR, BASH_ENV and ENV from the login shell overlay", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-shell-env-"));
+		const redirects = ["PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR", "BASH_ENV", "ENV"];
+		try {
+			const fakeShell = await writeFakeShell(
+				tempDir,
+				envDumpBody(
+					{
+						PATH: "/probed/bin",
+						SHELL_ONLY_API_KEY: "from-rc",
+						...Object.fromEntries(redirects.map(key => [key, `/rc/${key}`])),
+					},
+					false,
+				),
+			);
+			setEnv("SHELL", fakeShell);
+			deleteEnv("SHELL_ONLY_API_KEY");
+			for (const key of redirects) deleteEnv(key);
+			const overlay = await shellSpawnEnv();
+			expect(overlay.SHELL_ONLY_API_KEY).toBe("from-rc");
+			for (const key of redirects) expect(overlay[key]).toBeUndefined();
+		} finally {
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("resolveEditorCommand", () => {
 	it("prefers process-env $VISUAL over the login-shell editor", async () => {
 		setEnv("VISUAL", "explicit-editor");
@@ -177,6 +206,11 @@ describe("SidecarManager spawn env", () => {
 			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ PATH: process.env.PATH, KEY: process.env.PROBED_SHELL_KEY ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
+		for (const file of ASSISTANT_PACK_FILES) {
+			const target = path.join(tempDir, "assistant-pack", file);
+			await fs.mkdir(path.dirname(target), { recursive: true });
+			await fs.writeFile(target, "x");
+		}
 
 		const sidecar = new SidecarManager({
 			binaryPath,

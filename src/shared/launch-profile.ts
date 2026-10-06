@@ -36,8 +36,10 @@ export interface LaunchProfile {
  * Flags the GUI/sidecar owns — session continuity (--session/--resume), the
  * rpc-ui transport (--mode), print/export plumbing, cwd, and process chrome —
  * plus credential-bearing flags that must stay in the protected provider
- * configuration flow. A launch profile must never override them: any of these
- * found in profile-sourced flags is dropped (value token included).
+ * configuration flow, and every flag that changes what an assistant session
+ * loads or approves (tools, extensions, skills, prompts, config, approvals).
+ * A launch profile must never override them: any of these found in
+ * profile-sourced flags is dropped (value token included).
  */
 export const DENYLISTED_FLAGS: readonly string[] = [
 	"--session",
@@ -55,25 +57,30 @@ export const DENYLISTED_FLAGS: readonly string[] = [
 	"--no-auto-resume",
 	"--api-key",
 	"--chat",
+	"--no-tools",
+	"--no-extensions",
+	"--no-skills",
+	"--auto-approve",
+	"--yolo",
+	"--plan-yolo",
+	"--no-rules",
+	"--extension",
+	"--hook",
+	"--tools",
+	"--system-prompt",
+	"--system-prompt-template",
+	"--append-system-prompt",
+	"--config",
+	"--approval-mode",
+	"--skills",
+	"--plugin-dir",
+	"--trusted-extension",
+	"--profile",
+	"--plan-yolo-into",
+	"--add-dir",
 ];
 
-const DENYLISTED: Record<string, true> = {
-	"--session": true,
-	"--mode": true,
-	"--print": true,
-	"--print-thoughts": true,
-	"--export": true,
-	"--cwd": true,
-	"--resume": true,
-	"--fork": true,
-	"--help": true,
-	"--version": true,
-	"--no-pty": true,
-	"--no-title": true,
-	"--no-auto-resume": true,
-	"--api-key": true,
-	"--chat": true,
-};
+const DENYLISTED: Record<string, true> = Object.fromEntries(DENYLISTED_FLAGS.map(flag => [flag, true] as const));
 
 /** Denylisted flags that consume a separate value token (--flag value). The
  * rest are boolean switches; --resume/--session take an optional value and
@@ -87,34 +94,43 @@ const DENYLISTED_WITH_VALUE: Record<string, true> = {
 	"--resume": true,
 	"--fork": true,
 	"--api-key": true,
+	"--extension": true,
+	"--hook": true,
+	"--tools": true,
+	"--system-prompt": true,
+	"--system-prompt-template": true,
+	"--append-system-prompt": true,
+	"--config": true,
+	"--approval-mode": true,
+	"--skills": true,
+	"--plugin-dir": true,
+	"--trusted-extension": true,
+	"--profile": true,
+	"--plan-yolo-into": true,
+	"--add-dir": true,
 };
 
 /** Non-denylisted flags that consume a separate value token. The value of one
- * of these is DATA (a prompt, a path, a tool list) and must never be inspected
- * as a potential smuggled flag — a prompt that happens to be "--session" is a
- * legitimate value, not an override. */
+ * of these is DATA (a path) and must never be inspected as a potential
+ * smuggled flag — a value that happens to be "--session" is a legitimate
+ * value, not an override. */
 const VALUED_FLAGS: Record<string, true> = {
-	"--system-prompt": true,
-	"--append-system-prompt": true,
-	"--add-dir": true,
-	"--tools": true,
-	"--profile": true,
 	"--session-dir": true,
-	"--config": true,
 };
 
 /** Drop denylisted flags (and their separate value tokens) from a flag list.
  * Handles both `--flag value` and `--flag=value` forms. Pair-aware: the value
  * of a non-denylisted valued flag is pushed verbatim and never inspected, so
- * a legitimate value that merely looks like a protected flag survives. */
+ * a legitimate value that merely looks like a protected flag survives.
+ * Every other token that is not a `--` flag is dropped: no short option is
+ * allowed (`-e <path>` loads an extension), and a value left behind by a
+ * dropped flag must not reach omp as a positional argument. A bare `--` goes
+ * too, since it would turn the flags after it into positional arguments. */
 export function stripDenylistedFlags(flags: readonly string[]): string[] {
 	const out: string[] = [];
 	for (let i = 0; i < flags.length; i++) {
 		const token = flags[i];
-		if (!token.startsWith("--")) {
-			out.push(token);
-			continue;
-		}
+		if (!token.startsWith("--") || token === "--") continue;
 		const eq = token.indexOf("=");
 		const name = eq === -1 ? token : token.slice(0, eq);
 		if (DENYLISTED[name] === true) {
@@ -141,39 +157,17 @@ export function stripDenylistedFlags(flags: readonly string[]): string[] {
 }
 
 /** Map a launch profile to agent CLI flags. Output order is fixed so the
- * effective command line preview is stable. The denylist is enforced at the
- * sidecar spawn site over the combined user flags (sidecar.ts #spawn), not
- * here: this mapping emits only constant flag names and profile values are
- * data, so a value that looks like a protected flag must survive intact. */
+ * effective command line preview is stable. Only the fields that cannot change
+ * what an assistant session loads or approves still map (`--no-lsp`,
+ * `--session-dir`); the others stay in the type so stored prefs still parse.
+ * The denylist is also enforced at the sidecar spawn site over the combined
+ * user flags (sidecar.ts #spawn). Profile values are data, so a value that
+ * looks like a protected flag survives intact. */
 export function profileToFlags(profile: LaunchProfile): string[] {
 	const flags: string[] = [];
-	if (typeof profile.systemPrompt === "string" && profile.systemPrompt.trim() !== "") {
-		flags.push("--system-prompt", profile.systemPrompt);
-	}
-	if (typeof profile.appendSystemPrompt === "string" && profile.appendSystemPrompt.trim() !== "") {
-		flags.push("--append-system-prompt", profile.appendSystemPrompt);
-	}
-	if (profile.noRules === true) flags.push("--no-rules");
-	if (Array.isArray(profile.addDirs)) {
-		for (const dir of profile.addDirs) {
-			const trimmed = dir.trim();
-			if (trimmed !== "") flags.push("--add-dir", trimmed);
-		}
-	}
-	if (Array.isArray(profile.tools)) {
-		const tools = profile.tools.map(tool => tool.trim()).filter(tool => tool !== "");
-		if (tools.length > 0) flags.push("--tools", tools.join(","));
-	}
 	if (profile.noLsp === true) flags.push("--no-lsp");
-	if (profile.planYolo === true) flags.push("--plan-yolo");
-	if (typeof profile.profile === "string" && profile.profile.trim() !== "") {
-		flags.push("--profile", profile.profile.trim());
-	}
 	if (typeof profile.sessionDir === "string" && profile.sessionDir.trim() !== "") {
 		flags.push("--session-dir", profile.sessionDir.trim());
-	}
-	if (typeof profile.config === "string" && profile.config.trim() !== "") {
-		flags.push("--config", profile.config.trim());
 	}
 	return flags;
 }

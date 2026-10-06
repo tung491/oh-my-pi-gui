@@ -16,6 +16,7 @@ import { installQuitGuard, requestQuit } from "./app-quit";
 import { bundledOmpFilename, resolveOmpCandidate } from "./bundled-omp-path";
 import { DEEP_LINK_PROTOCOL, setupDeepLinks } from "./deep-link";
 import { ensureDefaultWorkspace } from "./default-workspace";
+import { getMainLanguage } from "./i18n";
 import { firstUsableCwd } from "./initial-cwd";
 import { registerIpcHandlers } from "./ipc";
 import { launchArguments, parseLaunchArgv } from "./launch-argv";
@@ -353,6 +354,12 @@ app.whenReady().then(() => {
 	const explicitStartupCwd = resolveExplicitStartupCwd();
 	const bundledOmp = resolveBundledOmp();
 	const sourceCli = resolveSourceCli();
+	// Only a dev tree or the e2e fixture sidecar looks for the pack outside the
+	// binary's own directory; a packaged build loads the pack it ships.
+	const packSearchFrom =
+		!app.isPackaged || (bundledOmp !== null && process.env.OMP_BUNDLED_OMP === bundledOmp)
+			? [app.getAppPath(), process.cwd()]
+			: [];
 	sidecarPool = new SidecarPool((cwd, kind, fresh) => {
 		const sc = new SidecarManager({
 			binaryPath: bundledOmp ?? "",
@@ -361,6 +368,8 @@ app.whenReady().then(() => {
 			cwd,
 			kind,
 			fresh,
+			packSearchFrom,
+			language: getMainLanguage,
 			proxyEnv: resolveProxyEnvForSpawn,
 			shellEnv: shellSpawnEnv,
 			// Finder-launched omp has no terminal, and a sidecar that dies before

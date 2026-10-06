@@ -50,6 +50,13 @@ const OVERLAY_DENYLIST = new Set([
 	"http_proxy",
 	"https_proxy",
 	"no_proxy",
+	// They redirect omp's config away from what the assistant pack pins.
+	"PI_CONFIG_FILES",
+	"PI_CONFIG_DIR",
+	"PI_CODING_AGENT_DIR",
+	// Startup files a shell would source inside the pack tools' system programs.
+	"BASH_ENV",
+	"ENV",
 ]);
 
 export interface LoginShellEnv {

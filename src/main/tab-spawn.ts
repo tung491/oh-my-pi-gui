@@ -3,11 +3,12 @@
  * are directly testable without an Electron runtime. The handler stays a
  * thin shell: BrowserWindow lookup + this call.
  *
- * Two refusal codes, mirroring the F-OWN shape:
+ * Every tab spawns an assistant session (`agent`), whatever kind the payload
+ * asks for. Two refusal codes, mirroring the F-OWN shape:
  * - `owned` — the session file is already attached to a tab (double-attach).
- * - `kind-mismatch` — the payload's requested kind disagrees with the file's
- *   stamped kind (I3: reject, never degrade). When the payload omits `kind`,
- *   the file's kind wins instead of refusing.
+ * - `kind-mismatch` — the session file is stamped `chat`. omp would resume it
+ *   restricted to its stamped tools, without the assistant pack, so the user
+ *   is told to start a new task instead.
  */
 import type { BrowserWindow } from "electron";
 import type { IpcSpawnTabPayload, IpcSpawnTabResult, SessionKind } from "../shared/ipc-types";
@@ -31,18 +32,14 @@ export async function spawnTabForWindow(
 ): Promise<IpcSpawnTabResult | null> {
 	const sessionPath =
 		typeof payload?.sessionPath === "string" && payload.sessionPath ? payload.sessionPath : undefined;
-	let kind: SessionKind = payload?.kind === "chat" ? "chat" : "agent";
+	const kind: SessionKind = "agent";
 	if (sessionPath) {
 		// F-OWN first: a live owner wins over every other consideration.
 		const owner = deps.sidecarPool.sessionOwner(sessionPath);
 		if (owner) return { tabId: null, ownerTabId: owner.tabId, ownerWinId: owner.winId, refusal: "owned" };
-		// F-KIND: the file's stamped kind is authoritative. Refuse a mismatched
-		// explicit request; defer to the file when the payload omits kind.
+		// A chat-stamped file cannot carry the pack: refuse it whatever the payload says.
 		const fileKind = await deps.sessionIndex.kindFor(sessionPath);
-		if (payload?.kind !== undefined && fileKind !== kind) {
-			return { tabId: null, refusal: "kind-mismatch" };
-		}
-		kind = fileKind;
+		if (fileKind === "chat") return { tabId: null, refusal: "kind-mismatch" };
 	}
 	if (deps.sidecarPool.atCap) return null;
 	const cwd = payload.defaultWorkspace

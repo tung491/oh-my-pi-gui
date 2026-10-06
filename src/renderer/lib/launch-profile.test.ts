@@ -13,6 +13,36 @@ import {
 	stripDenylistedFlags,
 } from "../../shared/launch-profile";
 
+/** Bare flags that change what a session loads or approves. */
+const BARE_PACK_FLAGS = [
+	"--no-tools",
+	"--no-extensions",
+	"--no-skills",
+	"--auto-approve",
+	"--yolo",
+	"--plan-yolo",
+	"--no-rules",
+	"--chat",
+];
+
+/** Valued flags that change what a session loads or approves; the value goes with them. */
+const VALUED_PACK_FLAGS = [
+	"--extension",
+	"--hook",
+	"--tools",
+	"--system-prompt",
+	"--system-prompt-template",
+	"--append-system-prompt",
+	"--config",
+	"--approval-mode",
+	"--skills",
+	"--plugin-dir",
+	"--trusted-extension",
+	"--profile",
+	"--plan-yolo-into",
+	"--add-dir",
+];
+
 describe("profileToFlags mapping", () => {
 	it("maps every field to its CLI flag in a fixed order", () => {
 		const flags = profileToFlags({
@@ -24,30 +54,11 @@ describe("profileToFlags mapping", () => {
 			noLsp: true,
 			planYolo: true,
 			profile: "fast",
-			sessionDir: "/tmp/sessions",
+			sessionDir: " /tmp/sessions ",
 			config: "/tmp/config.yml",
 		});
-		expect(flags).toEqual([
-			"--system-prompt",
-			"You are terse.",
-			"--append-system-prompt",
-			"Always run tests.",
-			"--no-rules",
-			"--add-dir",
-			"/tmp/a",
-			"--add-dir",
-			"/tmp/b",
-			"--tools",
-			"read,bash",
-			"--no-lsp",
-			"--plan-yolo",
-			"--profile",
-			"fast",
-			"--session-dir",
-			"/tmp/sessions",
-			"--config",
-			"/tmp/config.yml",
-		]);
+		// Only the fields that cannot change what the session loads still map.
+		expect(flags).toEqual(["--no-lsp", "--session-dir", "/tmp/sessions"]);
 	});
 
 	it("emits nothing for an empty profile", () => {
@@ -71,37 +82,25 @@ describe("profileToFlags mapping", () => {
 		).toEqual([]);
 	});
 
-	it("preserves prompt whitespace verbatim (trimming would rewrite the prompt)", () => {
-		expect(profileToFlags({ appendSystemPrompt: "line one\nline two\n" })).toEqual([
-			"--append-system-prompt",
-			"line one\nline two\n",
-		]);
+	it("emits no prompt flag, whatever the prompt holds", () => {
+		expect(profileToFlags({ systemPrompt: "You are terse." })).toEqual([]);
+		expect(profileToFlags({ appendSystemPrompt: "line one\nline two\n" })).toEqual([]);
 	});
 
-	it("trims tool names and joins them csv; all-blank lists emit no flag", () => {
-		expect(profileToFlags({ tools: [" read ", "", "bash"] })).toEqual(["--tools", "read,bash"]);
-		expect(profileToFlags({ tools: [" ", ""] })).toEqual([]);
+	it("emits no --tools flag for a tool list", () => {
+		expect(profileToFlags({ tools: [" read ", "", "bash"] })).toEqual([]);
 	});
 
-	it("drops blank add-dir entries and trims the rest", () => {
-		expect(profileToFlags({ addDirs: [" /data ", ""] })).toEqual(["--add-dir", "/data"]);
+	it("emits no --add-dir flag for extra directories", () => {
+		expect(profileToFlags({ addDirs: [" /data ", ""] })).toEqual([]);
 	});
 });
 
 describe("denylist", () => {
 	it("drops every code-controlled flag, value token included", () => {
+		for (const flag of [...BARE_PACK_FLAGS, ...VALUED_PACK_FLAGS]) expect(DENYLISTED_FLAGS).toContain(flag);
 		for (const flag of DENYLISTED_FLAGS) {
-			expect(stripDenylistedFlags([flag, "value", "--tools", "read"])).toEqual(
-				flag === "--session" ||
-					flag === "--mode" ||
-					flag === "--export" ||
-					flag === "--cwd" ||
-					flag === "--resume" ||
-					flag === "--fork" ||
-					flag === "--api-key"
-					? ["--tools", "read"]
-					: ["value", "--tools", "read"],
-			);
+			expect(stripDenylistedFlags([flag, "value", "--no-lsp"])).toEqual(["--no-lsp"]);
 		}
 	});
 
@@ -110,30 +109,36 @@ describe("denylist", () => {
 	});
 
 	it("does not swallow the next flag-looking token as a value", () => {
-		expect(stripDenylistedFlags(["--session", "--tools", "read"])).toEqual(["--tools", "read"]);
+		expect(stripDenylistedFlags(["--session", "--session-dir", "/s"])).toEqual(["--session-dir", "/s"]);
 	});
 
 	it("keeps non-denylisted flags untouched and in order", () => {
-		expect(stripDenylistedFlags(["--no-rules", "--add-dir", "/a", "--tools", "read,bash"])).toEqual([
-			"--no-rules",
-			"--add-dir",
-			"/a",
-			"--tools",
-			"read,bash",
-		]);
+		expect(
+			stripDenylistedFlags([
+				"--no-lsp",
+				"--no-rules",
+				"--add-dir",
+				"/a",
+				"--session-dir",
+				"/s",
+				"--tools",
+				"read,bash",
+			]),
+		).toEqual(["--no-lsp", "--session-dir", "/s"]);
 	});
 
 	it("preserves a profile value that merely looks like a denylisted flag", () => {
 		// A value equal to a protected flag is DATA, not an override — it must
 		// survive pair-aware stripping so the agent receives it as the value.
-		expect(profileToFlags({ appendSystemPrompt: "--session" })).toEqual(["--append-system-prompt", "--session"]);
-		expect(stripDenylistedFlags(["--append-system-prompt", "--session", "--tools", "read"])).toEqual([
-			"--append-system-prompt",
+		expect(profileToFlags({ sessionDir: "--session" })).toEqual(["--session-dir", "--session"]);
+		expect(stripDenylistedFlags(["--session-dir", "--session", "--no-lsp"])).toEqual([
+			"--session-dir",
 			"--session",
-			"--tools",
-			"read",
+			"--no-lsp",
 		]);
-		expect(stripDenylistedFlags(["--config", "--mode=text"])).toEqual(["--config", "--mode=text"]);
+		expect(stripDenylistedFlags(["--session-dir", "--mode=text"])).toEqual(["--session-dir", "--mode=text"]);
+		// A denylisted valued flag takes its value with it, even one that looks like a flag.
+		expect(stripDenylistedFlags(["--config", "--mode=text"])).toEqual([]);
 	});
 
 	it("profileToFlags can never emit a denylisted flag, even from a crafted profile object", () => {
@@ -141,13 +146,42 @@ describe("denylist", () => {
 			"--session": "hijack",
 			session: "hijack",
 			mode: "text",
+			systemPrompt: "s",
 			appendSystemPrompt: "hi",
+			noRules: true,
+			addDirs: ["/a"],
+			tools: ["bash"],
+			noLsp: true,
+			planYolo: true,
+			profile: "p",
+			sessionDir: "/s",
+			config: "/c.yml",
 		};
 		const flags = profileToFlags(parseLaunchProfile(crafted));
-		expect(flags).toEqual(["--append-system-prompt", "hi"]);
+		expect(flags).toEqual(["--no-lsp", "--session-dir", "/s"]);
 		for (const token of flags) {
 			expect(DENYLISTED_FLAGS).not.toContain(token);
 		}
+	});
+
+	it.each(BARE_PACK_FLAGS)("drops the bare %s flag", flag => {
+		expect(stripDenylistedFlags([flag, "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(stripDenylistedFlags([`${flag}=1`, "--no-lsp"])).toEqual(["--no-lsp"]);
+	});
+
+	it.each(VALUED_PACK_FLAGS)("drops %s and its value", flag => {
+		expect(stripDenylistedFlags([flag, "/value", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(stripDenylistedFlags([`${flag}=/value`, "--no-lsp"])).toEqual(["--no-lsp"]);
+	});
+
+	it("drops -e and its value", () => {
+		expect(stripDenylistedFlags(["-e", "/y", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(stripDenylistedFlags(["-e/y", "--session-dir", "/s"])).toEqual(["--session-dir", "/s"]);
+	});
+
+	it("drops an unknown short option and its value", () => {
+		expect(stripDenylistedFlags(["-x", "value", "--no-lsp"])).toEqual(["--no-lsp"]);
+		expect(stripDenylistedFlags(["stray", "--no-lsp", "-", "--"])).toEqual(["--no-lsp"]);
 	});
 });
 
