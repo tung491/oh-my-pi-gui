@@ -85,7 +85,6 @@ test.beforeAll(async () => {
 		PI_PROFILE: "",
 		OMP_BUNDLED_OMP: fixture,
 		OMP_GUI_TEST_RECORD: record,
-		OMP_GUI_TEST_STATS_BINARY: path.resolve("resources/omp"),
 	};
 	Reflect.deleteProperty(env, "ELECTRON_RUN_AS_NODE");
 	app = await electron.launch({

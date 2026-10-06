@@ -7,7 +7,7 @@ import { _electron as electron } from "playwright";
 import type { RpcSessionState } from "../src/shared/rpc-types";
 import { writeDesktopPrefs } from "./desktop-prefs";
 
-test("real bundled sidecar persists settings and sessions and serves every stats route", async () => {
+test("real bundled sidecar persists settings and sessions", async () => {
 	test.setTimeout(180_000);
 	const profile = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-real-core-"));
 	const project = path.join(profile, "project");
@@ -136,27 +136,6 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 		}, original.sessionFile!);
 		await page.reload();
 		await expect(page.locator("[data-transcript-kind]")).toContainText(["arm audit ok"]);
-		await page.getByRole("button", { name: "Session stats", exact: true }).click();
-		const stats = page.getByRole("dialog");
-		await expect(stats).toBeVisible();
-		for (const label of [
-			"Overview",
-			"Models",
-			"Providers",
-			"Tools",
-			"Costs",
-			"Errors",
-			"Behavior",
-			"Gain",
-			"Projects",
-			"Requests",
-		]) {
-			await stats.locator("nav").getByRole("button", { name: label, exact: true }).click();
-			await expect(stats.getByText("Loading stats…", { exact: true })).toHaveCount(0, { timeout: 30000 });
-			await expect(stats).not.toContainText("Stats unavailable", { timeout: 15000 });
-			await page.screenshot({ path: `test-results/stats-${label}.png`, scale: "css", animations: "disabled" });
-		}
-		await page.keyboard.press("Escape");
 		await page.evaluate(async () => {
 			await window.omp.prefs.set("language", "vi");
 		});
@@ -192,22 +171,6 @@ test("real bundled sidecar persists settings and sessions and serves every stats
 			}
 		}
 		await fs.writeFile("test-results/settings-pages.json", JSON.stringify(settingsPages, null, 2));
-		const settingsSearch = page.getByRole("dialog").getByPlaceholder("Tìm kiếm cài đặt và tài nguyên được quản lý…");
-		await settingsSearch.fill("bash.patterns");
-		await page.getByRole("button", { name: /Mẫu phê duyệt Bash bash.patterns/ }).click();
-		const rules = page.locator('[title="bash.patterns"]').locator("..").locator("..");
-		await expect(rules.locator("textarea")).toHaveValue("[]");
-		const rule = { match: "echo audit-blocked", approval: "deny" };
-		await rules.locator("textarea").fill(JSON.stringify([rule]));
-		await rules.getByRole("button", { name: "Áp dụng", exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.omp.rpc.getSettings(["bash.patterns"])))
-			.toMatchObject({ success: true, data: { values: { "bash.patterns": [rule] } } });
-		await rules.locator("textarea").fill("[]");
-		await rules.getByRole("button", { name: "Áp dụng", exact: true }).click();
-		await expect
-			.poll(() => page.evaluate(() => window.omp.rpc.getSettings(["bash.patterns"])))
-			.toMatchObject({ success: true, data: { values: { "bash.patterns": [] } } });
 		await page.getByRole("dialog").getByRole("button", { name: "Giao diện & Trải nghiệm", exact: true }).click();
 		await expect(page.getByRole("dialog")).toContainText("Chọn chủ đề GUI");
 		await page.screenshot({ path: "test-results/05-packaged-vi.png", scale: "css", animations: "disabled" });

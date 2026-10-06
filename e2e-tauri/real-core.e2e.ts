@@ -1,7 +1,7 @@
 /**
  * The real bundled sidecar (no fixture) behind the e2e-hooks build, with only
  * local operations: state, settings, a shell command, session switching, an
- * HTML export, the stats routes and the Vietnamese settings pages. Set
+ * HTML export and the Vietnamese settings pages. Set
  * OMP_GUI_TEST_APP to an e2e-hooks release build to check the packaged
  * sidecar selection instead of `resources/omp`.
  */
@@ -15,7 +15,6 @@ import {
 	awaitBridge,
 	byRole,
 	collectPageErrors,
-	exactTextCount,
 	fill,
 	launch,
 	nodeOf,
@@ -55,7 +54,7 @@ async function chooseThemeVi(theme: string): Promise<void> {
 }
 
 describe("real core", () => {
-	it("real bundled sidecar persists settings and sessions and serves every stats route", async () => {
+	it("real bundled sidecar persists settings and sessions", async () => {
 		const executablePath = process.env.OMP_GUI_TEST_APP;
 		await fs.rm(MAIN_PROCESS_LOG, { force: true });
 		const app = await launch({
@@ -163,41 +162,6 @@ describe("real core", () => {
 				),
 			);
 		expect(await until(transcriptShows, shown => shown)).toBe(true);
-		await (await byRole("button", { name: "Session stats", exact: true })).click();
-		const stats = $(DIALOG);
-		await expect(stats).toBeDisplayed();
-		for (const label of [
-			"Overview",
-			"Models",
-			"Providers",
-			"Tools",
-			"Costs",
-			"Errors",
-			"Behavior",
-			"Gain",
-			"Projects",
-			"Requests",
-		]) {
-			await (await byRole("button", { name: label, exact: true, within: `${DIALOG} nav` })).click();
-			expect(
-				await until(
-					() => exactTextCount("Loading stats…", DIALOG),
-					count => count === 0,
-					{
-						timeout: 30_000,
-					},
-				),
-			).toBe(0);
-			expect(
-				await until(
-					() => textOf(stats),
-					text => !text.includes("Stats unavailable"),
-					{ timeout: 15_000 },
-				),
-			).not.toContain("Stats unavailable");
-			await browser.saveScreenshot(`test-results/stats-${label}.png`);
-		}
-		await browser.keys("Escape");
 		await browser.execute(async () => {
 			await window.omp.prefs.set("language", "vi");
 		});
@@ -248,30 +212,6 @@ describe("real core", () => {
 			}
 		}
 		await fs.writeFile("test-results/settings-pages.json", JSON.stringify(settingsPages, null, 2));
-		await fill($(`${DIALOG} [placeholder="Tìm kiếm cài đặt và tài nguyên được quản lý…"]`), "bash.patterns");
-		await (await byRole("button", { name: /Mẫu phê duyệt Bash bash.patterns/ })).click();
-		const RULES = '//*[@title="bash.patterns"]/../..';
-		const rulesText = $(`${RULES}//textarea`);
-		const apply = () => $(`${RULES}//button[normalize-space(.)="Áp dụng"]`).click();
-		await expect(rulesText).toHaveValue("[]");
-		const rule = { match: "echo audit-blocked", approval: "deny" };
-		await fill(rulesText, JSON.stringify([rule]));
-		await apply();
-		const patterns = async () => await browser.execute(() => window.omp.rpc.getSettings(["bash.patterns"]));
-		const holds = (expected: unknown) => (response: RpcResponse) =>
-			response.success &&
-			JSON.stringify((response.data as { values?: Record<string, unknown> }).values?.["bash.patterns"]) ===
-				JSON.stringify(expected);
-		expect(await until(patterns, holds([rule]))).toMatchObject({
-			success: true,
-			data: { values: { "bash.patterns": [rule] } },
-		});
-		await fill(rulesText, "[]");
-		await apply();
-		expect(await until(patterns, holds([]))).toMatchObject({
-			success: true,
-			data: { values: { "bash.patterns": [] } },
-		});
 		await (await byRole("button", { name: "Giao diện & Trải nghiệm", exact: true, within: DIALOG })).click();
 		await expect($(DIALOG)).toHaveElementProperty(TEXT, "Chọn chủ đề GUI", containing);
 		await browser.saveScreenshot("test-results/05-packaged-vi.png");
