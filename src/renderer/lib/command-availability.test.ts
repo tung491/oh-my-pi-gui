@@ -46,6 +46,11 @@ describe("removedCommandName", () => {
 		expect(removedCommandName("/logout:openai", [])).toBe("logout");
 	});
 
+	it("blocks the model preset command, which writes the user's global config", () => {
+		expect(removedCommandName("/modelpreset", [])).toBe("modelpreset");
+		expect(removedCommandName("/modelpreset list", [])).toBe("modelpreset");
+	});
+
 	it("resolves advertised aliases to their removed canonical command", () => {
 		const commands = [builtin("share", ["publish"]), builtin("compact", ["squash"])];
 		expect(removedCommandName("/publish now", commands)).toBe("share");

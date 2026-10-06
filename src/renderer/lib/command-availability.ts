@@ -85,6 +85,9 @@ export const REMOVED_COMMANDS: ReadonlySet<string> = new Set([
 	// off the computer; the assistant uses only local models.
 	"login",
 	"logout",
+	// Role models are not an assistant surface, and the command writes the
+	// user's global omp config even when the session refuses the model.
+	"modelpreset",
 ]);
 
 /**
