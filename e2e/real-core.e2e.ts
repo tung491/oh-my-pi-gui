@@ -142,10 +142,10 @@ test("real bundled sidecar persists settings and sessions", async () => {
 		await page.reload();
 		await expect(page.getByRole("button", { name: "Cài đặt", exact: true })).toBeVisible();
 		await page.getByRole("button", { name: "Cài đặt", exact: true }).click();
-		await expect(page.getByRole("dialog")).toContainText("Quyền hạn & Bảo mật");
-		await expect(page.getByRole("dialog").locator(".settings-nav-group-label")).toHaveCount(8);
+		await expect(page.getByRole("dialog")).toContainText("Hệ thống & Nâng cao");
+		await expect(page.getByRole("dialog").locator(".settings-nav-group-label")).toHaveCount(7);
 		const settingsPages: Array<{ group: string; page: string; text: string }> = [];
-		for (let groupIndex = 0; groupIndex < 8; groupIndex++) {
+		for (let groupIndex = 0; groupIndex < 7; groupIndex++) {
 			const settings = page.getByRole("dialog");
 			const group = settings.locator(".settings-nav-group-label").nth(groupIndex);
 			const groupName = await group.innerText();

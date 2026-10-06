@@ -13,7 +13,6 @@ import {
 	pageErrorLog,
 	recorded,
 	relaunch,
-	textOf,
 	until,
 } from "./session";
 import {
@@ -126,18 +125,6 @@ describe("desktop", () => {
 		await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
 	});
 
-	it("opening sharing performs local preview only, upload needs a button click", async () => {
-		await command("/share");
-		const modal = $(DIALOG);
-		const upload = await byRole("button", { name: "Upload and create link", within: DIALOG });
-		await expect(upload).toBeDisplayed();
-		expect(await rpc("share_session")).toHaveLength(0);
-		await upload.click();
-		await expect(modal).toHaveElementProperty(TEXT, "http://127.0.0.1/shared#local", containing);
-		expect(await rpc("share_session")).toHaveLength(1);
-		await browser.keys("Escape");
-	});
-
 	it("a running task keeps both send and stop reachable", async () => {
 		await command("fixture running");
 		await expect($(ABORT)).toBeDisplayed();
@@ -172,10 +159,10 @@ describe("desktop", () => {
 		expect(await errors()).toEqual([]);
 	});
 
-	it("settings expose eight groups, translated search and independent display preferences", async () => {
+	it("settings expose seven groups, translated search and independent display preferences", async () => {
 		await (await byRole("button", { name: "Settings", exact: true })).click();
 		const settings = $(DIALOG);
-		await expect($$(`${DIALOG} .settings-nav-group-label`)).toBeElementsArrayOfSize(8);
+		await expect($$(`${DIALOG} .settings-nav-group-label`)).toBeElementsArrayOfSize(7);
 		await (await byRole("button", { name: "Appearance & use", exact: true, within: DIALOG })).click();
 		await expect(settings).toHaveElementProperty(TEXT, "Choose GUI theme", containing);
 		await browser.saveScreenshot("test-results/01-settings.png");
@@ -188,13 +175,7 @@ describe("desktop", () => {
 		await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
 	});
 
-	it("voice and side question require an explicit start", async () => {
-		const voiceBefore = (await rpc("live_start")).length;
-		await command("/live");
-		await expect($(DIALOG)).toBeDisplayed();
-		expect(await rpc("live_start")).toHaveLength(voiceBefore);
-		await browser.saveScreenshot("test-results/02-voice.png");
-		await browser.keys("Escape");
+	it("a side question requires an explicit start", async () => {
 		const before = (await rpc("btw")).length;
 		await command("/btw explain the current approach");
 		await expect($(DIALOG)).toBeDisplayed();
@@ -413,30 +394,6 @@ describe("desktop", () => {
 		expect(await errors()).toEqual([]);
 	});
 
-	it("security distinguishes unavailable, disabled, unscanned, running, failed and completed scans", async () => {
-		const states = {
-			disabled: "Security disabled",
-			unscanned: "This project has not been scanned",
-			unavailable: "Scan status unavailable",
-			running: "Scan in progress",
-			failed: "The selected scan failed",
-			incomplete: "The selected scan did not complete",
-			clear: "No findings in this scan",
-			findings: "Untrusted path reaches file access",
-		};
-		for (const [state, expected] of Object.entries(states)) {
-			await browser.execute((value: string) => window.omp.rpc.bash(`fixture:security:${value}`), state);
-			await (await byRole("button", { name: "Settings", exact: true })).click();
-			const modal = $(DIALOG);
-			await (await byRole("button", { name: "Permissions & security", exact: true, within: DIALOG })).click();
-			await expect(modal).toHaveElementProperty(TEXT, expected, containing);
-			if (state !== "clear") expect(await textOf(modal)).not.toContain("No findings in this scan");
-			await browser.saveScreenshot(`test-results/security-${state}.png`);
-			await browser.keys("Escape");
-			await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
-		}
-	}).timeout(90_000);
-
 	it("repeated modal and task lifecycles release sidecars and document listeners", async () => {
 		// Chromium counted the document's listeners over its devtools protocol, and
 		// emulated reduced motion there; WebKit offers neither through WebDriver. So
@@ -599,10 +556,10 @@ describe("desktop", () => {
 		).toBe(true);
 		await fill(search, "launchProfiles");
 		await (await byRole("button", { name: /^Launch profile/, within: DIALOG })).click();
-		const promptField = `${DIALOG} [placeholder="Leave empty to use the default system prompt"]`;
+		const sessionDirField = `${DIALOG} [placeholder="Where session files are stored (--session-dir)"]`;
 		expect(
 			await until(
-				() => editable(promptField),
+				() => editable(sessionDirField),
 				can => can,
 			),
 		).toBe(true);
@@ -771,10 +728,10 @@ describe("desktop", () => {
 		await expect($('[role="alert"]')).toHaveElementProperty(TEXT, "audit disk write refused", containing);
 		await expect(proxy).toHaveValue(PROXY);
 		expect(await callsTo(browser, "sidecar:restart")).toBe(restartsBefore);
-		const PROMPT = `${DIALOG} [placeholder="Leave empty to use the default system prompt"]`;
-		const prompt = $(PROMPT);
-		await fill(prompt, "Preserve this unsaved instruction.");
-		await press(PROMPT, "Tab");
+		const SESSION_DIR = `${DIALOG} [placeholder="Where session files are stored (--session-dir)"]`;
+		const sessionDir = $(SESSION_DIR);
+		await fill(sessionDir, "/tmp/preserve-this-unsaved-session-dir");
+		await press(SESSION_DIR, "Tab");
 		expect(
 			await until(
 				() => barrierWaiters(browser, "launch-save"),
@@ -786,8 +743,8 @@ describe("desktop", () => {
 		await releaseBarrier(browser, "launch-save");
 		const alertWith = (text: string) => $(`//*[@role="alert"][contains(., "${text}")]`);
 		await expect(alertWith("audit launch write refused")).toBeDisplayed();
-		await expect(prompt).toHaveValue("Preserve this unsaved instruction.");
-		expect(await editable(PROMPT)).toBe(true);
+		await expect(sessionDir).toHaveValue("/tmp/preserve-this-unsaved-session-dir");
+		expect(await editable(SESSION_DIR)).toBe(true);
 		await expect(restart).toBeDisabled();
 		expect(await callsTo(browser, "sidecar:restart")).toBe(restartsBefore);
 		await fill($(`${DIALOG} ${SETTINGS_SEARCH}`), "codeLineNumbers");

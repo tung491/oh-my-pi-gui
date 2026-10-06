@@ -168,8 +168,8 @@ describe("real core", () => {
 		await pageLog.reload();
 		await expect(await byRole("button", { name: "Cài đặt", exact: true })).toBeDisplayed();
 		await (await byRole("button", { name: "Cài đặt", exact: true })).click();
-		await expect($(DIALOG)).toHaveElementProperty(TEXT, "Quyền hạn & Bảo mật", containing);
-		await expect($$(`${DIALOG} .settings-nav-group-label`)).toBeElementsArrayOfSize(8);
+		await expect($(DIALOG)).toHaveElementProperty(TEXT, "Hệ thống & Nâng cao", containing);
+		await expect($$(`${DIALOG} .settings-nav-group-label`)).toBeElementsArrayOfSize(7);
 		const innerText = async (selector: string, index: number) =>
 			browser.execute(
 				(all: string, at: number) => (document.querySelectorAll<HTMLElement>(all)[at]?.innerText ?? "").trim(),
@@ -177,7 +177,7 @@ describe("real core", () => {
 				index,
 			);
 		const settingsPages: Array<{ group: string; page: string; text: string }> = [];
-		for (let groupIndex = 0; groupIndex < 8; groupIndex++) {
+		for (let groupIndex = 0; groupIndex < 7; groupIndex++) {
 			const GROUPS = `${DIALOG} .settings-nav-group-label`;
 			const groupName = await innerText(GROUPS, groupIndex);
 			await $$(GROUPS)[groupIndex].click();

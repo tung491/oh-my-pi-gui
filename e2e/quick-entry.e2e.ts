@@ -103,7 +103,7 @@ test.afterAll(async () => {
 	if (profile) await fs.rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 });
 
-test("quick entry sends a new chat and focuses the main window", async () => {
+test("quick entry sends a new task and focuses the main window", async () => {
 	const before = await tabs();
 	const prompts = (await recorded("prompt")).length;
 	const bar = await openQuickEntry();
@@ -115,7 +115,7 @@ test("quick entry sends a new chat and focuses the main window", async () => {
 	expect((await recorded("prompt")).length).toBe(prompts + 1);
 	const after = await tabs();
 	expect(after).toHaveLength(before.length + 1);
-	expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("chat");
+	expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("agent");
 	await expect.poll(barVisible).toBe(false);
 });
 
@@ -136,14 +136,13 @@ test("quick entry sends from the Send button", async () => {
 	expect((await recorded("prompt")).length).toBe(prompts + 1);
 	const after = await tabs();
 	expect(after).toHaveLength(before.length + 1);
-	expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("chat");
+	expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("agent");
 	await expect.poll(barVisible).toBe(false);
 });
 
-test("quick entry agent target opens the Work workspace", async () => {
+test("quick entry opens the Work workspace by default", async () => {
 	const before = await tabs();
 	const bar = await openQuickEntry();
-	await bar.getByRole("button", { name: "Agent", exact: true }).click();
 	await expect(bar.getByRole("combobox", { name: "Agent workspace" })).toHaveValue("");
 	await send(bar, "work on this");
 
@@ -192,7 +191,7 @@ test("quick entry leaves a running task alone", async () => {
 	expect(await counts()).toEqual(before);
 });
 
-test("quick entry leaves shell commands unsent", async () => {
+test("quick entry sends a leading ! as text, never as a shell command", async () => {
 	const before = await tabs();
 	const counts = async () => ({
 		bash: (await recorded("bash")).length,
@@ -203,15 +202,9 @@ test("quick entry leaves shell commands unsent", async () => {
 	await send(bar, "!echo hi");
 
 	await expect.poll(async () => (await tabs()).length).toBe(before.length + 1);
-	const known = new Set(before.map(tab => tab.tabId));
-	// The composer hands off once its tab is ready, so a shell command that slipped
-	// through would reach the fixture within moments of that.
-	await expect
-		.poll(async () => (await tabs()).find(tab => !known.has(tab.tabId))?.status, { timeout: 30_000 })
-		.toBe("ready");
-	await mainPage().waitForTimeout(1_500);
-	await expect(mainPage().locator("textarea").first()).toHaveValue("!echo hi");
-	expect(await counts()).toEqual(sent);
+	// The composer has no shell mode: the text reaches the agent as a prompt.
+	await expect.poll(async () => (await recorded("prompt")).map(command => command.message)).toContain("!echo hi");
+	expect(await counts()).toEqual({ bash: sent.bash, prompt: sent.prompt + 1 });
 });
 
 test("the quick entry page has no app API", async () => {

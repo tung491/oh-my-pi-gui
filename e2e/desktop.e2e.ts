@@ -73,17 +73,6 @@ test("initially closed modal receives focus and Escape closes it", async () => {
 	await expect(modal).toHaveCount(0);
 });
 
-test("opening sharing performs local preview only, upload needs a button click", async () => {
-	await command("/share");
-	const modal = page.getByRole("dialog");
-	await expect(modal.getByRole("button", { name: "Upload and create link" })).toBeVisible();
-	expect(await recorded("share_session")).toHaveLength(0);
-	await modal.getByRole("button", { name: "Upload and create link" }).click();
-	await expect(modal).toContainText("http://127.0.0.1/shared#local");
-	expect(await recorded("share_session")).toHaveLength(1);
-	await page.keyboard.press("Escape");
-});
-
 test("a running task keeps both send and stop reachable", async () => {
 	await command("fixture running");
 	await expect(page.getByRole("button", { name: "Abort", exact: true })).toBeVisible();
@@ -105,10 +94,10 @@ test("long approval remains complete and Enter is neutral", async () => {
 	expect(errors).toEqual([]);
 });
 
-test("settings expose eight groups, translated search and independent display preferences", async () => {
+test("settings expose seven groups, translated search and independent display preferences", async () => {
 	await page.getByRole("button", { name: "Settings", exact: true }).click();
 	const settings = page.getByRole("dialog");
-	await expect(settings.locator(".settings-nav-group-label")).toHaveCount(8);
+	await expect(settings.locator(".settings-nav-group-label")).toHaveCount(7);
 	await settings.getByRole("button", { name: "Appearance & use", exact: true }).click();
 	await expect(settings).toContainText("Choose GUI theme");
 	await page.screenshot({ path: "test-results/01-settings.png", scale: "css", animations: "disabled" });
@@ -121,17 +110,10 @@ test("settings expose eight groups, translated search and independent display pr
 	await expect(settings).toHaveCount(0);
 });
 
-test("voice and side question require an explicit start", async () => {
-	const voiceBefore = (await recorded("live_start")).length;
-	await command("/live");
-	let modal = page.getByRole("dialog");
-	await expect(modal).toBeVisible();
-	expect(await recorded("live_start")).toHaveLength(voiceBefore);
-	await page.screenshot({ path: "test-results/02-voice.png", scale: "css", animations: "disabled" });
-	await page.keyboard.press("Escape");
+test("a side question requires an explicit start", async () => {
 	const before = (await recorded("btw")).length;
 	await command("/btw explain the current approach");
-	modal = page.getByRole("dialog");
+	const modal = page.getByRole("dialog");
 	await expect(modal).toBeVisible();
 	expect(await recorded("btw")).toHaveLength(before);
 	await page.keyboard.press("Escape");
@@ -322,31 +304,6 @@ test("collaboration permission events immediately gate the originating composer 
 	expect(errors).toEqual([]);
 });
 
-test("security distinguishes unavailable, disabled, unscanned, running, failed and completed scans", async () => {
-	test.setTimeout(90_000);
-	const states = {
-		disabled: "Security disabled",
-		unscanned: "This project has not been scanned",
-		unavailable: "Scan status unavailable",
-		running: "Scan in progress",
-		failed: "The selected scan failed",
-		incomplete: "The selected scan did not complete",
-		clear: "No findings in this scan",
-		findings: "Untrusted path reaches file access",
-	};
-	for (const [state, expected] of Object.entries(states)) {
-		await page.evaluate(value => window.omp.rpc.bash(`fixture:security:${value}`), state);
-		await page.getByRole("button", { name: "Settings", exact: true }).click();
-		const modal = page.getByRole("dialog");
-		await modal.getByRole("button", { name: "Permissions & security", exact: true }).click();
-		await expect(modal).toContainText(expected);
-		if (state !== "clear") await expect(modal).not.toContainText("No findings in this scan");
-		await page.screenshot({ path: `test-results/security-${state}.png`, scale: "css", animations: "disabled" });
-		await page.keyboard.press("Escape");
-		await expect(modal).toHaveCount(0);
-	}
-});
-
 test("repeated modal and task lifecycles release sidecars and document listeners", async () => {
 	test.setTimeout(360_000);
 	await page.emulateMedia({ reducedMotion: "reduce" });
@@ -457,7 +414,7 @@ test("settings search opens advanced controls and old refreshes cannot undo a sa
 	await expect(page.locator("#setting-gui-proxy input")).toBeEditable();
 	await search.fill("launchProfiles");
 	await settings.getByRole("button", { name: /^Launch profile/ }).click();
-	await expect(settings.getByPlaceholder("Leave empty to use the default system prompt")).toBeEditable();
+	await expect(settings.getByPlaceholder("Where session files are stored (--session-dir)")).toBeEditable();
 	await search.fill("compaction.reserveTokens");
 	await settings.getByRole("button", { name: "Reserve tokens compaction.reserveTokens", exact: true }).click();
 	const input = settings.locator('input[type="number"]').first();
@@ -616,16 +573,16 @@ test("failed preference writes retain edits and never allow a premature restart"
 	await expect(page.getByRole("alert")).toContainText("audit disk write refused");
 	await expect(proxy).toHaveValue("http://127.0.0.1:7899");
 	expect(await app.evaluate(() => Reflect.get(globalThis, "auditRestarts"))).toEqual([]);
-	const prompt = settings.getByPlaceholder("Leave empty to use the default system prompt");
-	await prompt.fill("Preserve this unsaved instruction.");
-	await prompt.press("Tab");
+	const sessionDir = settings.getByPlaceholder("Where session files are stored (--session-dir)");
+	await sessionDir.fill("/tmp/preserve-this-unsaved-session-dir");
+	await sessionDir.press("Tab");
 	await expect.poll(() => app.evaluate(() => Reflect.get(globalThis, "auditLaunchRequested"))).toBe(true);
 	const restart = settings.getByRole("button", { name: "Restart now", exact: true });
 	await expect(restart).toBeDisabled();
 	await app.evaluate(() => Reflect.get(globalThis, "auditLaunchSave").resolve());
 	await expect(page.getByRole("alert").filter({ hasText: "audit launch write refused" })).toBeVisible();
-	await expect(prompt).toHaveValue("Preserve this unsaved instruction.");
-	await expect(prompt).toBeEditable();
+	await expect(sessionDir).toHaveValue("/tmp/preserve-this-unsaved-session-dir");
+	await expect(sessionDir).toBeEditable();
 	await expect(restart).toBeDisabled();
 	expect(await app.evaluate(() => Reflect.get(globalThis, "auditRestarts"))).toEqual([]);
 	await settings.getByPlaceholder("Search settings and managed resources…").fill("codeLineNumbers");

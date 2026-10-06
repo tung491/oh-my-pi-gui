@@ -8,9 +8,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { $, $$, browser, expect } from "@wdio/globals";
 import { writeDesktopPrefs } from "../e2e/desktop-prefs";
+import { removedCommandName } from "../src/renderer/lib/command-availability";
 import { keyboardPlatformOf } from "../src/renderer/lib/keymap";
 import { effectiveShortcut } from "../src/renderer/lib/shortcut-hint";
-import type { SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
+import type { AvailableCommand, SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
 import {
 	awaitBridge,
 	byRole,
@@ -83,6 +84,9 @@ interface DeepAuditEvidence {
 		names: string[];
 		paletteTopLevelCount: number;
 		paletteSearchMissing: string[];
+		/** Commands the assistant removed; the palette must not list them. */
+		removedHidden: string[];
+		removedListed: string[];
 		tuiOnlyNames: string[];
 		nestedSurfaces: Array<{ name: string; controls: SurfaceControl[]; status: "opened" | "failed"; error?: string }>;
 		error?: string;
@@ -313,6 +317,23 @@ async function press(element: WebdriverIO.Element, key: string): Promise<void> {
 }
 
 /** The last element matching `selector` whose text contains `text`, or null. */
+/**
+ * The first gate the assistant pack holds closed: its key sits in the `--config`
+ * overlay with another value, and the overlay outranks every settings write.
+ */
+function packPinnedGate(
+	gates: Array<{ path: string; value: unknown }>,
+	schema: SettingsSchemaResult,
+): { path: string } | undefined {
+	return gates.find(gate => {
+		const entry = schema.entries.find(candidate => candidate.path === gate.path);
+		return entry?.provenance?.layers.includes("overlay") === true && !equalJson(entry.value, gate.value);
+	});
+}
+
+/** The refusal a model picker shows for a value that is not a local model. */
+const LOCAL_ONLY_REFUSAL = "Only models that run on this computer can be used.";
+
 async function lastWithText(selector: string, text: string): Promise<WebdriverIO.Element | null> {
 	const found = await browser.execute(
 		(all: string, wanted: string) => {
@@ -462,6 +483,19 @@ async function mutateEntry(
 					if (pickerInput) await expect(pickerInput).toBeDisplayed();
 					if (pickerInput) {
 						await fill(pickerInput, marker);
+						if (entry.path !== "shellPath") {
+							// Sessions accept only local Ollama models, and the isolated audit
+							// profile lists none, so the picker refuses the custom marker.
+							const refusal = await until(
+								() => lastWithText(`${row} div`, LOCAL_ONLY_REFUSAL),
+								found => found !== null,
+							);
+							if (!refusal) throw new Error(`no local-only refusal for ${entry.path}`);
+							await expect(refusal).toBeDisplayed();
+							await browser.keys("Escape");
+							notes.push("accepts only local Ollama models; none in the audit profile");
+							return { write: "skipped-no-control", readback: "not-run", restore: "not-run", notes };
+						}
 						const OPTIONS = `${row} [role="listbox"] button`;
 						const custom = await until(
 							() => lastWithText(OPTIONS, marker),
@@ -744,6 +778,8 @@ describe("deep audit", () => {
 				names: [],
 				paletteTopLevelCount: 0,
 				paletteSearchMissing: [],
+				removedHidden: [],
+				removedListed: [],
 				tuiOnlyNames: [],
 				nestedSurfaces: [],
 			},
@@ -875,6 +911,14 @@ describe("deep audit", () => {
 					continue;
 				}
 				const gates = conditionGate(entry.condition);
+				const pinnedGate = packPinnedGate(gates, schema);
+				if (pinnedGate) {
+					// Writing the gate would only land in the global layer the pack outranks.
+					base.write = "skipped-no-control";
+					base.notes.push(`condition gate \`${pinnedGate.path}\` is pack-pinned`);
+					evidence.settings.push(base);
+					continue;
+				}
 				const gateOriginals: Array<{ path: string; value: unknown }> = [];
 				try {
 					for (const gate of gates) {
@@ -953,14 +997,13 @@ describe("deep audit", () => {
 				.join(", ");
 			const available = await browser.execute(async () => window.omp.rpc.getAvailableCommands());
 			if (available.success) {
-				const commandEntries =
-					(available.data as { commands?: Array<{ name: string; textModeExecutable?: boolean }> } | undefined)
-						?.commands ?? [];
+				const commandEntries = (available.data as { commands?: AvailableCommand[] } | undefined)?.commands ?? [];
 				const commands = commandEntries.map(command => command.name);
 				evidence.commands.availableCount = commands.length;
 				evidence.commands.names = commands;
 				for (const { name, textModeExecutable } of commandEntries) {
 					await fill($(SEARCH), name);
+					const removed = removedCommandName(`/${name}`, commandEntries) !== null;
 					const exactMatch = () =>
 						browser.execute(
 							(command: string) =>
@@ -973,6 +1016,12 @@ describe("deep audit", () => {
 								),
 							name,
 						);
+					if (removed) {
+						// Removed commands are hidden from the palette, not merely disabled.
+						if (await exactMatch()) evidence.commands.removedListed.push(name);
+						else evidence.commands.removedHidden.push(name);
+						continue;
+					}
 					if (textModeExecutable === false && !(await exactMatch())) {
 						evidence.commands.tuiOnlyNames.push(name);
 						continue;
@@ -1047,6 +1096,7 @@ describe("deep audit", () => {
 			const failed = evidence.settings.filter(row => row.write === "failed");
 			labelled(JSON.stringify(failed, null, 2), () => expect(failed).toEqual([]));
 			labelled(JSON.stringify(evidence.commands), () => expect(evidence.commands.paletteSearchMissing).toEqual([]));
+			labelled(JSON.stringify(evidence.commands), () => expect(evidence.commands.removedListed).toEqual([]));
 			expect(evidence.commands.nestedSurfaces.filter(surface => surface.status === "failed")).toEqual([]);
 		} finally {
 			evidence.finishedAt ??= new Date().toISOString();

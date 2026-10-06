@@ -3,9 +3,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron } from "playwright";
+import { removedCommandName } from "../src/renderer/lib/command-availability";
 import { keyboardPlatformOf } from "../src/renderer/lib/keymap";
 import { effectiveShortcut } from "../src/renderer/lib/shortcut-hint";
-import type { SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
+import type { AvailableCommand, SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
 import { writeDesktopPrefs } from "./desktop-prefs";
 
 type JsonRecord = Record<string, unknown>;
@@ -65,6 +66,9 @@ interface DeepAuditEvidence {
 		names: string[];
 		paletteTopLevelCount: number;
 		paletteSearchMissing: string[];
+		/** Commands the assistant removed; the palette must not list them. */
+		removedHidden: string[];
+		removedListed: string[];
 		tuiOnlyNames: string[];
 		nestedSurfaces: Array<{ name: string; controls: SurfaceControl[]; status: "opened" | "failed"; error?: string }>;
 		error?: string;
@@ -215,6 +219,23 @@ function conditionGate(condition: string | undefined): Array<{ path: string; val
 	return condition === undefined ? [] : (gates[condition] ?? []);
 }
 
+/**
+ * The first gate the assistant pack holds closed: its key sits in the `--config`
+ * overlay with another value, and the overlay outranks every settings write.
+ */
+function packPinnedGate(
+	gates: Array<{ path: string; value: unknown }>,
+	schema: SettingsSchemaResult,
+): { path: string } | undefined {
+	return gates.find(gate => {
+		const entry = schema.entries.find(candidate => candidate.path === gate.path);
+		return entry?.provenance?.layers.includes("overlay") === true && !equalJson(entry.value, gate.value);
+	});
+}
+
+/** The refusal a model picker shows for a value that is not a local model. */
+const LOCAL_ONLY_REFUSAL = "Only models that run on this computer can be used.";
+
 async function clickSearchResult(page: Page, pathName: string): Promise<boolean> {
 	const search = page.getByPlaceholder(/Search settings|搜索设置/);
 	await search.fill(pathName);
@@ -352,6 +373,14 @@ async function mutateEntry(
 					await expect(pickerInput).toBeVisible();
 					if ((await pickerInput.count()) > 0) {
 						await pickerInput.fill(marker);
+						if (entry.path !== "shellPath") {
+							// Sessions accept only local Ollama models, and the isolated audit
+							// profile lists none, so the picker refuses the custom marker.
+							await expect(row.getByText(LOCAL_ONLY_REFUSAL, { exact: true })).toBeVisible();
+							await page.keyboard.press("Escape");
+							notes.push("accepts only local Ollama models; none in the audit profile");
+							return { write: "skipped-no-control", readback: "not-run", restore: "not-run", notes };
+						}
 						const custom = row.locator('[role="listbox"] button').filter({ hasText: marker });
 						await expect(custom.last()).toBeVisible();
 						if ((await custom.count()) > 0) {
@@ -648,6 +677,8 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 			names: [],
 			paletteTopLevelCount: 0,
 			paletteSearchMissing: [],
+			removedHidden: [],
+			removedListed: [],
 			tuiOnlyNames: [],
 			nestedSurfaces: [],
 		},
@@ -751,6 +782,14 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 				continue;
 			}
 			const gates = conditionGate(entry.condition);
+			const pinnedGate = packPinnedGate(gates, schema);
+			if (pinnedGate) {
+				// Writing the gate would only land in the global layer the pack outranks.
+				base.write = "skipped-no-control";
+				base.notes.push(`condition gate \`${pinnedGate.path}\` is pack-pinned`);
+				evidence.settings.push(base);
+				continue;
+			}
 			const gateOriginals: Array<{ path: string; value: unknown }> = [];
 			try {
 				for (const gate of gates) {
@@ -826,14 +865,13 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 		const search = palette.getByRole("textbox").first();
 		const available = await page.evaluate(async () => window.omp.rpc.getAvailableCommands());
 		if (available.success) {
-			const commandEntries =
-				(available.data as { commands?: Array<{ name: string; textModeExecutable?: boolean }> } | undefined)
-					?.commands ?? [];
+			const commandEntries = (available.data as { commands?: AvailableCommand[] } | undefined)?.commands ?? [];
 			const commands = commandEntries.map(command => command.name);
 			evidence.commands.availableCount = commands.length;
 			evidence.commands.names = commands;
 			for (const { name, textModeExecutable } of commandEntries) {
 				await search.fill(name);
+				const removed = removedCommandName(`/${name}`, commandEntries) !== null;
 				const exactMatch = () =>
 					palette
 						.locator("button[data-command-name]")
@@ -848,6 +886,12 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 								),
 							name,
 						);
+				if (removed) {
+					// Removed commands are hidden from the palette, not merely disabled.
+					if (await exactMatch()) evidence.commands.removedListed.push(name);
+					else evidence.commands.removedHidden.push(name);
+					continue;
+				}
 				if (textModeExecutable === false && !(await exactMatch())) {
 					evidence.commands.tuiOnlyNames.push(name);
 					continue;
@@ -916,6 +960,7 @@ test("deep GUI audit: settings rows, nested controls, and command discoverabilit
 		const failed = evidence.settings.filter(row => row.write === "failed");
 		expect(failed, JSON.stringify(failed, null, 2)).toEqual([]);
 		expect(evidence.commands.paletteSearchMissing, JSON.stringify(evidence.commands)).toEqual([]);
+		expect(evidence.commands.removedListed, JSON.stringify(evidence.commands)).toEqual([]);
 		expect(evidence.commands.nestedSurfaces.filter(surface => surface.status === "failed")).toEqual([]);
 	} finally {
 		evidence.finishedAt ??= new Date().toISOString();

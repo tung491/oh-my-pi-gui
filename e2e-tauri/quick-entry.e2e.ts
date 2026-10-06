@@ -89,7 +89,7 @@ describe("quick entry", () => {
 		if (app) await fs.copyFile(app.record, "test-results/quick-entry-rpc.jsonl").catch(() => {});
 	});
 
-	it("quick entry sends a new chat and focuses the main window", async () => {
+	it("quick entry sends a new task and focuses the main window", async () => {
 		const before = await tabs();
 		const count = (await prompts()).length;
 		await openQuickEntry();
@@ -104,7 +104,7 @@ describe("quick entry", () => {
 		expect((await prompts()).length).toBe(count + 1);
 		const after = await tabs();
 		expect(after).toHaveLength(before.length + 1);
-		expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("chat");
+		expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("agent");
 		expect(await until(barVisible, visible => !visible)).toBe(false);
 	});
 
@@ -128,14 +128,13 @@ describe("quick entry", () => {
 		expect((await prompts()).length).toBe(count + 1);
 		const after = await tabs();
 		expect(after).toHaveLength(before.length + 1);
-		expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("chat");
+		expect(after.find(tab => !before.some(old => old.tabId === tab.tabId))?.kind).toBe("agent");
 		expect(await until(barVisible, visible => !visible)).toBe(false);
 	});
 
-	it("quick entry agent target opens the Work workspace", async () => {
+	it("quick entry opens the Work workspace by default", async () => {
 		const before = await tabs();
 		await openQuickEntry();
-		await $("button=Agent").click();
 		await expect($('select[aria-label="Agent workspace"]')).toHaveValue("");
 		await send("work on this");
 
@@ -196,7 +195,7 @@ describe("quick entry", () => {
 		expect(await counts()).toEqual(before);
 	});
 
-	it("quick entry leaves shell commands unsent", async () => {
+	it("quick entry sends a leading ! as text, never as a shell command", async () => {
 		const before = await tabs();
 		const counts = async () => ({
 			bash: (await recorded(app.record, "bash")).length,
@@ -212,20 +211,14 @@ describe("quick entry", () => {
 				length => length === before.length + 1,
 			),
 		).toBe(before.length + 1);
-		const known = new Set(before.map(tab => tab.tabId));
-		// The composer hands off once its tab is ready, so a shell command that slipped
-		// through would reach the fixture within moments of that.
+		// The composer has no shell mode: the text reaches the agent as a prompt.
 		expect(
 			await until(
-				async () => (await tabs()).find(tab => !known.has(tab.tabId))?.status,
-				status => status === "ready",
-				{ timeout: 30_000 },
+				async () => (await prompts()).map(command => command.message),
+				messages => messages.includes("!echo hi"),
 			),
-		).toBe("ready");
-		await browser.switchToWindow(main);
-		await browser.pause(1_500);
-		await expect($("textarea")).toHaveValue("!echo hi");
-		expect(await counts()).toEqual(sent);
+		).toContain("!echo hi");
+		expect(await counts()).toEqual({ bash: sent.bash, prompt: sent.prompt + 1 });
 	});
 
 	it("the quick entry page has no app API", async () => {
