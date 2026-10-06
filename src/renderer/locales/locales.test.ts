@@ -24,33 +24,26 @@ const TRANSLATED_NAMESPACES = [
 	"sidebar.",
 	"input.",
 	"fork.",
-	"handoff.",
 	"sessionTree.",
 	"themePicker.",
-	"planApproval.",
 	"lang.",
 	"common.",
 	"modelCompare.",
-	"invPanel.",
-	"extPanel.",
 	"modesPanel.",
 	// Broader component wave: dialogs, stats, chat, tools, panels, layout.
 	"approval.",
 	"extDialog.",
 	"sessionPicker.",
-	"branchPicker.",
 	"rename.",
 	"sessionInfo.",
 	"modelPicker.",
 	"palette.",
 	"stats.",
-	"statsPop.",
 	"chat.",
 	"tools.",
 	"todoPanel.",
 	"logPanel.",
 	"filesPanel.",
-	"planPanel.",
 	"subagent.",
 	"subagentPanel.",
 	"agentHub.",
@@ -58,18 +51,13 @@ const TRANSLATED_NAMESPACES = [
 	"diffPanel.",
 	"sidecar.",
 	"panel.",
-	"usage.",
 	"providers.",
 	"modelValue.",
 	"tree.",
 	// Parity-closeout waves (B1/A1/B2) and C1/B3 slices.
 	"hotkeys.",
-	"import.",
 	"editor.",
 	"readGroup.",
-	"mcp.",
-	"marketplace.",
-	"pluginDetail.",
 	"settings.launch.",
 	"codeblock.",
 	"quickEntry.",
@@ -77,27 +65,11 @@ const TRANSLATED_NAMESPACES = [
 
 /** Proper nouns, acronyms, and symbols legitimately identical across locales. */
 const ALLOW_IDENTICAL: Record<string, true> = {
-	"providers.badge.oauth": true, // OAuth — brand name
-	"modelCompare.noRole": true, // "—" — punctuation, no letters
-	"extPanel.tabs.mcp": true, // MCP — protocol acronym
-	"modesPanel.tabs.vibe": true, // Vibe — feature name
-	"stats.col.ttft": true, // TTFT — latency acronym
-	"stats.col.tps": true, // Tok/s — unit symbol
-	"stats.overview.ttftSub": true, // TTFT {time} — acronym + placeholder
-	"stats.requests.detail.api": true, // API — protocol acronym
 	"chat.exec.python": true, // Python — language name
 	"chat.exec.shell": true, // Shell — universal term in dev UIs
 	"themePicker.theme.nord.label": true, // Nord — theme name
 	"themePicker.theme.solarized.label": true, // Solarized — theme name
 	"themePicker.theme.latte.label": true, // Latte — theme name
-	"quickEntry.target.agent": true, // Agent — dev term, as in tabs.new.agent
-};
-
-/** Copy about the bundled coding agent, which keeps the omp name. */
-const AGENT_SCOPE_OMP: Record<string, true> = {
-	"benchmark.description": true, // the bundled omp benchmark
-	"collab.joinDesc": true, // collab links are an agent feature
-	"collab.joinPlaceholder": true,
 };
 
 const LOCALES = [
@@ -156,7 +128,6 @@ describe("product name", () => {
 	it("names the GUI Sai ATLAS and keeps omp for agent features", () => {
 		for (const [locale, entries] of LOCALES) {
 			for (const [key, value] of Object.entries(entries)) {
-				if (AGENT_SCOPE_OMP[key]) continue;
 				const prose = value.replaceAll("~/.omp", "").replaceAll("omp://", "");
 				expect(/\bomp\b/.test(prose), `${locale}["${key}"] names the product omp: ${value}`).toBe(false);
 			}
