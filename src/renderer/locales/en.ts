@@ -58,8 +58,7 @@ export const en: Record<string, string> = {
 	"tabs.new.agentHint": "New agent tab ({chord})",
 	"tabs.new.agent": "New Agent Tab",
 	"tabs.kind.worktree": "Worktree tab",
-	"tabs.kindMismatch":
-		"That session has a different type. Agent and chat sessions can't be converted — open it from the session list instead.",
+	"tabs.kindMismatch": "This conversation is from an older version of Sai ATLAS. Start a new task.",
 	"tabs.close": "Close tab",
 	"tabs.menu.closeLeft": "Close tabs to the left",
 	"tabs.menu.closeRight": "Close tabs to the right",
@@ -186,8 +185,7 @@ export const en: Record<string, string> = {
 	"sidebar.pinFailed": "Could not save the pinned list.",
 	"sidebar.pinned": "Pinned",
 	"sidebar.pinSyncFailed": "Pinned in the GUI, but could not sync the CLI resume list.",
-	"sidebar.kindMismatch":
-		"Cannot switch between agent and chat sessions. Open the target session in a new tab instead.",
+	"sidebar.kindMismatch": "This conversation is from an older version of Sai ATLAS. Start a new task.",
 	"sidebar.openedInNewTab": "Opened in a new tab — agent and chat sessions stay separate.",
 	"sidebar.signal.running": "Running",
 	"sidebar.signal.waiting": "Waiting for confirmation or approval",
@@ -315,11 +313,11 @@ export const en: Record<string, string> = {
 	"cmd.hotkeys": "Keyboard Shortcuts",
 	"cmd.hotkeys.desc": "Show all shortcuts",
 	"cmd.agents": "Agents",
-	"cmd.agents.desc": "Subagent definitions and activity hub",
+	"cmd.agents.desc": "Helper definitions and activity hub",
 	"cmd.restart": "Restart OMP Core",
 	"cmd.restart.desc": "Restart the bundled agent and resume this session",
 	"cmd.hub": "Agent Hub",
-	"cmd.hub.desc": "Monitor active subagents and open their sessions",
+	"cmd.hub.desc": "Monitor active helpers and open their sessions",
 	"cmd.btw": "Side Question",
 	"cmd.btw.desc": "Ask an ephemeral side question",
 	"cmd.tan": "Tangential Agent",
@@ -444,7 +442,7 @@ export const en: Record<string, string> = {
 	"settings.capabilities.ttsrDesc":
 		"When output matches a rule, OMP interrupts generation, injects the relevant guidance, and continues from the same turn—without permanently bloating the prompt.",
 	"settings.capabilities.configureRules": "Configure rules",
-	"settings.capabilities.agents": "Parallel subagents",
+	"settings.capabilities.agents": "Parallel helpers",
 	"settings.capabilities.agentsDesc":
 		"Fan independent work out to isolated agents, collect structured results, and let sibling tasks coordinate through the hub.",
 	"settings.capabilities.openAgentHub": "Open Agent Hub",
@@ -671,7 +669,7 @@ export const en: Record<string, string> = {
 	"jobs.error": "Failed to load jobs",
 	"jobs.empty": "No background jobs running.",
 	"jobs.emptyHint":
-		"Background jobs run async tools — long bash commands, debuggers, task subagents. They appear here while alive and for ~5 minutes after.",
+		"Background jobs run async tools — long bash commands, debuggers, task helpers. They appear here while alive and for ~5 minutes after.",
 	"jobs.running": "Running",
 	"jobs.type.bash": "bash",
 	"jobs.type.task": "task",
@@ -1166,8 +1164,8 @@ export const en: Record<string, string> = {
 	"subagent.status.parked": "parked",
 	"subagent.status.stale": "no turn",
 	"subagent.status.unknown": "unknown",
-	"subagent.empty": "No subagents spawned yet.",
-	"subagent.loadFailed": "Could not load the subagent roster.",
+	"subagent.empty": "No helpers spawned yet.",
+	"subagent.loadFailed": "Could not load the helper roster.",
 	"subagent.emptyHint": "Agents created via the task tool appear here.",
 	"subagent.transcriptFailed": "Transcript failed",
 	"subagent.loadingTranscript": "Loading transcript…",
@@ -1175,7 +1173,7 @@ export const en: Record<string, string> = {
 	"subagent.loadMore": "Load more",
 
 	// Subagent panel
-	"subagentPanel.viewAria": "Subagent view",
+	"subagentPanel.viewAria": "Helper view",
 	"subagentPanel.list": "List",
 	"subagentPanel.graph": "Graph",
 	"subagentPanel.listView": "List view",
@@ -1229,7 +1227,7 @@ export const en: Record<string, string> = {
 	"agentHub.hub.pauseFailed": "Failed to change agent pause state",
 	"agentHub.hub.abortFailed": "Abort failed",
 	"agentHub.hub.gapNote":
-		"Per-agent abort and revive act on the live subagent (TUI hub parity); abort turn stops the whole active turn.",
+		"Per-agent abort and revive act on the live helper (TUI hub parity); abort turn stops the whole active turn.",
 	"agentHub.hub.abortAgent": "Abort this agent",
 	"agentHub.hub.reviveAgent": "Revive this agent",
 	"agentHub.hub.readOnly": "read-only",
@@ -1244,7 +1242,7 @@ export const en: Record<string, string> = {
 	"agentHub.hub.reason.abortFailed": "Action failed",
 	"agentHub.hub.viewMessages": "View messages",
 	"agentHub.hub.backToHub": "Back to instances",
-	"agentHub.hub.kind.sub": "sub",
+	"agentHub.hub.kind.sub": "helper",
 
 	// Subagent DAG
 	"dag.main": "main session",

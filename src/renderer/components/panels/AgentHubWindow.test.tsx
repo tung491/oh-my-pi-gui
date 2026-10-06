@@ -215,7 +215,7 @@ describe("AgentHubWindow hub tab", () => {
 		expect(bodyText()).toContain("openai/gpt-5.2-codex");
 		expect(bodyText()).toContain("editing files");
 		expect(bodyText()).toContain("read-only");
-		expect(bodyText()).toContain("sub");
+		expect(bodyText()).toContain("helper");
 		// Status badges for the seeded statuses.
 		expect(bodyText()).toContain("running");
 		expect(bodyText()).toContain("parked");
@@ -259,9 +259,9 @@ describe("AgentHubWindow hub tab", () => {
 		await mount(<AgentHubWindow initialTab="hub" onClose={() => {}} open />);
 
 		const text = document.body.textContent ?? "";
-		expect(text).toContain("Could not load the subagent roster.");
+		expect(text).toContain("Could not load the helper roster.");
 		expect(text).toContain("sidecar went away");
-		expect(text).not.toContain("No subagents spawned yet.");
+		expect(text).not.toContain("No helpers spawned yet.");
 	});
 
 	it("查看消息 opens a transcript slide-over and back closes it", async () => {

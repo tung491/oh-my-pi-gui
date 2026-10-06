@@ -74,7 +74,7 @@ describe("CapabilitiesHome", () => {
 		);
 
 		expect(html).toContain("Start with what makes OMP different");
-		expect(html.indexOf("Mid-stream correction · TTSR")).toBeLessThan(html.indexOf("Parallel subagents"));
+		expect(html.indexOf("Mid-stream correction · TTSR")).toBeLessThan(html.indexOf("Parallel helpers"));
 		expect(html).toContain("Configure rules");
 		expect(html).toContain("Open Agent Hub");
 		expect(html).toContain("Advisor settings");
