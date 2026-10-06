@@ -532,6 +532,67 @@ describe("useRpcEvents model switch sync", () => {
 		// flag belongs to agent_start/agent_end, not to this snapshot.
 		expect(session.getState().isStreaming).toBe(true);
 	});
+
+	it("switches a tab back to its local model when the agent reports an online one", async () => {
+		const { emitTabBatch, commandForTab } = installTabRoutedMockOmp();
+		useTabsStore.setState({
+			tabs: [{ kind: "agent", id: "t-local", cwd: "/alpha", status: "ready", unreadDone: false }],
+			activeTabId: "t-local",
+		});
+		ensureTabRuntime("t-local");
+		setFocusedSessionRuntime("t-local");
+		await mount(<RpcEventsProbe />);
+		await flush();
+
+		const model = sessionRuntimeStore<ModelStore>("t-local", "model")!;
+		model.getState().reset();
+		const original = commandForTab.getMockImplementation()!;
+		let reported: { provider: string; id: string } = { provider: "ollama", id: "gemma4:e4b" };
+		commandForTab.mockImplementation((tabId, command) => {
+			if (command.type === "set_model") {
+				reported = { provider: command.provider, id: command.modelId };
+				return Promise.resolve(success(reported));
+			}
+			if (command.type === "get_state") {
+				return Promise.resolve(
+					success({
+						sessionId: "s1",
+						sessionName: null,
+						sessionFile: null,
+						cwd: "/tmp",
+						model: reported,
+						isStreaming: false,
+						isCompacting: false,
+						contextUsage: null,
+						messageCount: 0,
+						queuedMessageCount: 0,
+						planModeEnabled: false,
+						todoPhases: [],
+					}),
+				);
+			}
+			return original(tabId, command);
+		});
+
+		// The tab learns its local model, then the agent reports a switch to an
+		// online one (by any route the composer could not see).
+		await act(async () => {
+			emitTabBatch([{ type: "model_changed" }], "t-local");
+		});
+		await flush();
+		expect(model.getState().model).toMatchObject({ provider: "ollama", id: "gemma4:e4b" });
+		reported = { provider: "anthropic", id: "claude-sonnet-4-5" };
+		await act(async () => {
+			emitTabBatch([{ type: "model_changed" }], "t-local");
+		});
+		await flush();
+
+		expect(commandForTab.mock.calls.filter(([, command]) => command.type === "set_model")).toEqual([
+			["t-local", { type: "set_model", provider: "ollama", modelId: "gemma4:e4b" }, undefined],
+		]);
+		expect(model.getState().model).toMatchObject({ provider: "ollama", id: "gemma4:e4b" });
+		expect(useToastStore.getState().toasts.map(toast => toast.message)).toContain(en["model.localOnly.refused"]);
+	});
 });
 
 function settledState(overrides: Record<string, unknown>): RpcResponse {

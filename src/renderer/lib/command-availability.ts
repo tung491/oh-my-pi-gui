@@ -81,6 +81,10 @@ export const REMOVED_COMMANDS: ReadonlySet<string> = new Set([
 	// worktree; every git surface is gone from the assistant.
 	"wt",
 	"worktree",
+	// Signing in to an online provider would let a session send conversations
+	// off the computer; the assistant uses only local models.
+	"login",
+	"logout",
 ]);
 
 /**
@@ -132,15 +136,25 @@ export function removedCommandName(message: string, commands: readonly Available
 	return REMOVED_COMMANDS.has(command.typed) ? command.typed : null;
 }
 
+/** The agent commands that switch the session model to the one named in their arguments. */
+const MODEL_SWITCH_COMMANDS: ReadonlySet<string> = new Set(["model", "switch"]);
+
 /**
  * Whether a typed slash message would switch the session to an Ollama cloud
- * model (`/model kimi-k2:cloud`, `/models:x-cloud`). Cloud models send the
- * conversation online, so the composer refuses them as the model picker does.
- * A bare `/model` only opens the picker and passes.
+ * model (`/model kimi-k2:cloud`, `/models:x-cloud`, `/switch kimi-k2:cloud:low`).
+ * Cloud models send the conversation online, so the composer refuses them as
+ * the model picker does. A bare `/model` or `/switch` only reports the current
+ * model and passes. Online providers are refused by the agent's pinned model
+ * policy, which knows every provider name.
  */
 export function cloudModelCommand(message: string, commands: readonly AvailableCommand[]): boolean {
 	const command = parseTypedCommand(message, commands);
-	return command?.canonical === "model" && command.args !== "" && isCloudTag(command.args);
+	return (
+		command !== null &&
+		MODEL_SWITCH_COMMANDS.has(command.canonical) &&
+		command.args !== "" &&
+		isCloudTag(command.args)
+	);
 }
 
 /** Whether `name` can run in a tab of this kind. */
