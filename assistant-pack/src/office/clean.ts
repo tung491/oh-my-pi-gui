@@ -4,11 +4,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
+import { setImmediate as nextTurn } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import ExcelJS from "exceljs";
 import { countOf } from "./markdown";
-import { PlainError } from "./output";
+import { PlainError, throwIfStopped } from "./output";
 
 export type Decimal = "comma" | "dot";
 
@@ -26,6 +27,8 @@ export interface CleanOptions {
 	lang: string;
 	/** Runs LibreOffice for .xls and .ods input. */
 	convert?: RunFile;
+	/** Cancels the clean-up; checked before each sheet and every few hundred rows. */
+	signal?: AbortSignal;
 }
 
 export interface CleanedWorkbook {
@@ -37,6 +40,17 @@ const FORMULA_WITHOUT_RESULT =
 	"This file has formulas without saved results. Open it in your spreadsheet app, save it, then try again.";
 const SAVE_AS_XLSX = "Save this file as .xlsx in your spreadsheet app, then try again.";
 const CONVERT_TIMEOUT_MS = 60_000;
+const TOO_LARGE = "This file is too large for me to clean. The limit is 20 MB.";
+const TOO_MANY_CELLS = "This spreadsheet has too many cells for me to clean.";
+/**
+ * The clean-up runs inside the agent process, so a workbook is refused before it is loaded
+ * when its file is over this size (a zip bomb or a huge export would starve the session).
+ */
+const MAX_INPUT_BYTES = 20 * 1024 * 1024;
+/** Rows × columns over every cleaned sheet; a stray cell at XFD1048576 would mean 17 billion. */
+const MAX_CELLS = 2_000_000;
+/** Rows read between two checks of the stop signal (each check lets the event loop run). */
+const ROWS_PER_TURN = 500;
 /** Excel keeps 15 significant digits; longer digit strings are identifiers, not amounts. */
 const MAX_NUMBER_DIGITS = 15;
 const ID_HEADERS = new Set(
@@ -140,6 +154,17 @@ export async function convertLegacy(path: string, options: { run: RunFile; tmpDi
 	throw new PlainError(SAVE_AS_XLSX);
 }
 
+/** Lets a pending cancel arrive, then stops when it did. */
+async function checkpoint(signal: AbortSignal | undefined): Promise<void> {
+	if (!signal) return;
+	await nextTurn();
+	throwIfStopped(signal);
+}
+
+function assertSmallEnough(path: string): void {
+	if (statSync(path).size > MAX_INPUT_BYTES) throw new PlainError(TOO_LARGE);
+}
+
 function sniffDelimiter(text: string): string {
 	const firstLine = text.split("\n", 1)[0];
 	const count = (char: string) => firstLine.split(char).length - 1;
@@ -163,6 +188,7 @@ async function readWorkbook(inPath: string, run: RunFile): Promise<ExcelJS.Workb
 	if (![".xlsx", ".xls", ".ods", ".csv"].includes(ext)) {
 		throw new PlainError("I can only clean .xlsx, .xls, .ods and .csv files.");
 	}
+	assertSmallEnough(inPath);
 	if (ext === ".xls" || ext === ".ods") {
 		const tmpDir = mkdtempSync(join(tmpdir(), "sai-atlas-convert-"));
 		try {
@@ -182,6 +208,8 @@ async function readWorkbook(inPath: string, run: RunFile): Promise<ExcelJS.Workb
 }
 
 async function readXlsx(path: string): Promise<ExcelJS.Workbook> {
+	// A converted .xls or .ods can be larger than its source.
+	assertSmallEnough(path);
 	const workbook = new ExcelJS.Workbook();
 	try {
 		await workbook.xlsx.readFile(path);
@@ -271,10 +299,15 @@ function columnName(header: Value, index: number): string {
 }
 
 /** Reads one sheet into trimmed rows without empty or duplicate rows. */
-function readRows(sheet: ExcelJS.Worksheet, report: SheetReport): Cell[][] {
+async function readRows(
+	sheet: ExcelJS.Worksheet,
+	report: SheetReport,
+	signal: AbortSignal | undefined,
+): Promise<Cell[][]> {
 	const rows: Cell[][] = [];
 	const seen = new Set<string>();
 	for (let r = 1; r <= sheet.rowCount; r++) {
+		if (r % ROWS_PER_TURN === 0) await checkpoint(signal);
 		const row: Cell[] = [];
 		for (let c = 1; c <= sheet.columnCount; c++) {
 			const source = sheet.getCell(r, c);
@@ -466,17 +499,22 @@ function summary(reports: readonly SheetReport[], rowsKept: number): string {
 export async function cleanWorkbook(inPath: string, options: CleanOptions): Promise<CleanedWorkbook> {
 	const labels = options.lang === "vi" ? LABELS.vi : LABELS.en;
 	const decimal = options.decimal ?? (options.lang === "vi" ? "comma" : "dot");
+	throwIfStopped(options.signal);
 	const source = await readWorkbook(inPath, options.convert ?? defaultRun);
 	const sheets = options.sheet ? source.worksheets.filter(ws => ws.name === options.sheet) : source.worksheets;
 	if (sheets.length === 0) {
 		throw new PlainError(options.sheet ? "This file has no sheet with that name." : "This file has no sheets.");
 	}
 
+	const cells = sheets.reduce((total, sheet) => total + sheet.rowCount * sheet.columnCount, 0);
+	if (cells > MAX_CELLS) throw new PlainError(TOO_MANY_CELLS);
+
 	const out = new ExcelJS.Workbook();
 	out.creator = "Sai ATLAS";
 	const reports: SheetReport[] = [];
 	let rowsKept = 0;
 	for (const sheet of sheets) {
+		await checkpoint(options.signal);
 		const report: SheetReport = {
 			name: sheet.name,
 			trimmed: 0,
@@ -489,7 +527,7 @@ export async function cleanWorkbook(inPath: string, options: CleanOptions): Prom
 			textColumns: [],
 			totals: false,
 		};
-		const rows = readRows(sheet, report);
+		const rows = await readRows(sheet, report, options.signal);
 		typeColumns(rows, decimal, report);
 		rowsKept += rows.length;
 		const totals = options.totals ? totalsRow(rows, labels) : undefined;
@@ -497,6 +535,7 @@ export async function cleanWorkbook(inPath: string, options: CleanOptions): Prom
 		writeSheet(out.addWorksheet(uniqueSheetName(out, sheet.name)), totals ? [...rows, totals] : rows);
 		reports.push(report);
 	}
+	await checkpoint(options.signal);
 	writeChanges(out, reports, labels);
 	if (options.totals) out.calcProperties.fullCalcOnLoad = true;
 	const bytes = new Uint8Array(await out.xlsx.writeBuffer());

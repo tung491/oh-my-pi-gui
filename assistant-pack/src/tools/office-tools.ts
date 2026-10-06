@@ -1,17 +1,17 @@
 // office_report, office_slides and office_clean: check the arguments, build the file in-process
 // and save it as a new file under Documents > Sai ATLAS. No shell is involved.
-import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, extname } from "node:path";
 import { cleanWorkbook, type Decimal, type RunFile } from "../office/clean";
 import {
 	defaultRunXdgUserDir,
-	documentsDir,
+	ensureOutputDir,
 	expandHome,
 	type OfficeKind,
 	PlainError,
 	resultLine,
 	safeBaseName,
+	throwIfStopped,
 	writeUnique,
 } from "../office/output";
 import { buildReport } from "../office/report";
@@ -88,6 +88,8 @@ const CLEAN_PARAMS: JsonSchema = {
 const PATH_PREFIX = /^(\/|~\/|\.\/|\.\.\/)/;
 const PATH_SUFFIX = /\.(md|txt|docx|pdf)$/i;
 const SAVE_FAILED = "I could not save the file in the Sai ATLAS folder.";
+/** The markdown builds in-process inside the agent, so one call stays small. */
+const MAX_MARKDOWN_BYTES = 1024 * 1024;
 const UNEXPECTED = "Something went wrong while making the file.";
 
 function optionalString(args: Record<string, unknown>, key: string, message: string): string | undefined {
@@ -111,12 +113,18 @@ function isOnlyAPath(markdown: string): boolean {
 	return !trimmed.includes("\n") && (PATH_PREFIX.test(trimmed) || PATH_SUFFIX.test(trimmed));
 }
 
-function save(env: OfficeEnv, base: string, kind: OfficeKind, bytes: Uint8Array, check: string): ToolResult {
-	const dir = documentsDir(env);
+function save(
+	env: OfficeEnv,
+	base: string,
+	kind: OfficeKind,
+	bytes: Uint8Array,
+	check: string,
+	signal: AbortSignal | undefined,
+): ToolResult {
+	throwIfStopped(signal);
 	let file: string;
 	try {
-		mkdirSync(dir, { recursive: true });
-		file = writeUnique(dir, base, kind, bytes);
+		file = writeUnique(ensureOutputDir(env), base, kind, bytes);
 	} catch (error) {
 		if (error instanceof PlainError) throw error;
 		throw new PlainError(SAVE_FAILED);
@@ -146,8 +154,9 @@ function documentTool(env: OfficeEnv, kind: "docx" | "pptx"): PackTool {
 		parameters: DOCUMENT_PARAMS,
 		approval: "write",
 		loadMode: "essential",
-		execute: (_toolCallId, params) =>
+		execute: (_toolCallId, params, signal) =>
 			run(async () => {
+				throwIfStopped(signal);
 				const args = asRecord(params);
 				const markdown = requiredString(
 					args,
@@ -158,11 +167,14 @@ function documentTool(env: OfficeEnv, kind: "docx" | "pptx"): PackTool {
 				const title = optionalString(args, "title", "The title must be text.");
 				const name = optionalString(args, "name", "The file name must be text.");
 				if (isOnlyAPath(markdown)) throw new ArgumentError("Read the file first, then pass its text as markdown.");
+				if (Buffer.byteLength(markdown) > MAX_MARKDOWN_BYTES) {
+					throw new ArgumentError("The text is too long for one file. Split it into smaller parts.");
+				}
 				const fallbackTitle = name?.trim() || (report ? "Report" : "Slides");
 				const built = report
 					? await buildReport({ markdown, title, fallbackTitle })
 					: await buildSlides({ markdown, title, fallbackTitle });
-				return save(env, safeBaseName(name ?? built.title), kind, built.bytes, built.check);
+				return save(env, safeBaseName(name ?? built.title), kind, built.bytes, built.check, signal);
 			}),
 	};
 }
@@ -179,8 +191,9 @@ function cleanTool(env: OfficeEnv): PackTool {
 		parameters: CLEAN_PARAMS,
 		approval: "write",
 		loadMode: "essential",
-		execute: (_toolCallId, params) =>
+		execute: (_toolCallId, params, signal) =>
 			run(async () => {
+				throwIfStopped(signal);
 				const args = asRecord(params);
 				const file = requiredString(
 					args,
@@ -204,9 +217,10 @@ function cleanTool(env: OfficeEnv): PackTool {
 					decimal: (decimal ?? undefined) as Decimal | undefined,
 					lang: env.lang,
 					convert: env.convert,
+					signal,
 				});
 				const base = `${safeBaseName(basename(inPath, extname(inPath)))} (cleaned)`;
-				return save(env, base, "xlsx", cleaned.bytes, cleaned.check);
+				return save(env, base, "xlsx", cleaned.bytes, cleaned.check, signal);
 			}),
 	};
 }
