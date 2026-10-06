@@ -3,6 +3,7 @@
 //! bridge, the login-shell and proxy environment, the stats dashboard server
 //! and the benchmark runner live here.
 
+mod assistant_pack;
 mod bench;
 mod event_batcher;
 pub mod ipc;

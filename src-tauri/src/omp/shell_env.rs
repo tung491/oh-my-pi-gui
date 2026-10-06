@@ -31,6 +31,10 @@ const OVERLAY_DENYLIST: &[&str] = &[
     // Proxy resolution has its own precedence chain (GUI pref → inherited
     // env → system proxy); rc-file proxy exports must not bypass it.
     "ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "PI_PROXY", "all_proxy", "http_proxy", "https_proxy", "no_proxy",
+    // They redirect omp's config away from what the assistant pack pins.
+    "PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR",
+    // Startup files a shell would source inside the pack tools' system programs.
+    "BASH_ENV", "ENV",
 ];
 
 /// The process environment as the module sees it.
@@ -322,6 +326,23 @@ mod tests {
         assert_eq!(overlay.get("HTTPS_PROXY"), None);
         assert_eq!(overlay.get("PWD"), None);
         assert!(overlay["PATH"].split(':').any(|entry| entry == "/probed/bin"));
+    }
+
+    #[tokio::test]
+    async fn drops_pi_config_files_pi_config_dir_pi_coding_agent_dir_bash_env_and_env_from_the_login_shell_overlay() {
+        let dir = tempfile::tempdir().unwrap();
+        let redirects = ["PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR", "BASH_ENV", "ENV"];
+        let values: Vec<String> = redirects.iter().map(|key| format!("/rc/{key}")).collect();
+        let mut entries: Vec<(&str, &str)> = vec![("PATH", "/probed/bin"), ("SHELL_ONLY_API_KEY", "from-rc")];
+        entries.extend(redirects.iter().copied().zip(values.iter().map(String::as_str)));
+        let shell = write_fake_shell(dir.path(), &entries, false);
+        let env = env(&[("SHELL", &shell), ("PATH", "/usr/bin")]);
+        let probed = ShellEnvCache::default().resolve(&env).await.clone();
+        let overlay = shell_spawn_env(&env, &probed);
+        assert_eq!(overlay.get("SHELL_ONLY_API_KEY").map(String::as_str), Some("from-rc"));
+        for key in redirects {
+            assert_eq!(overlay.get(key), None, "{key}");
+        }
     }
 
     #[tokio::test]
