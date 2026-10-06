@@ -11,7 +11,8 @@
 import type { AvailableCommand, ImageContent, RpcResponse } from "../../shared/rpc-types";
 import { hydrateSession } from "../hooks/use-rpc-events";
 import { toast } from "../stores/toast";
-import { buildCurrentCommandMenu, type CommandAffordance, REMOVED_COMMANDS } from "./command-registry";
+import { REMOVED_COMMANDS } from "./command-availability";
+import { buildCurrentCommandMenu, type CommandAffordance } from "./command-registry";
 import { translate } from "./i18n";
 import type { TabRpc } from "./tab-rpc";
 

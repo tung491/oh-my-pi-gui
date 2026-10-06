@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import type { SessionKind } from "../../../shared/ipc-types";
 import { filterAllowedModels, HIDDEN_ACCOUNT_COMMANDS } from "../../../shared/provider-policy";
 import type { AvailableCommand, AvailableModelsResult, ModelInfo } from "../../../shared/rpc-types";
-import { isCommandAvailable } from "../../lib/command-availability";
+import { isCommandAvailable, REMOVED_COMMANDS } from "../../lib/command-availability";
 import { getEmojiSuggestions } from "../../lib/emoji";
 import { useT } from "../../lib/i18n";
 import { useTabRpc } from "../../lib/tab-rpc";
@@ -52,10 +52,11 @@ export function slashCommandItems(
 		.filter(
 			command =>
 				// Every surface shares one availability rule: never offer a command
-				// that does nothing in this tab kind, or an account command the
-				// Ollama-only GUI does not offer.
+				// that does nothing in this tab kind, an account command the
+				// Ollama-only GUI does not offer, or a command the assistant removed.
 				isCommandAvailable(tabKind, command.name) &&
 				!HIDDEN_ACCOUNT_COMMANDS.has(command.name) &&
+				!REMOVED_COMMANDS.has(command.name) &&
 				(!query ||
 					command.name.toLowerCase().includes(query) ||
 					command.aliases?.some(alias => alias.toLowerCase().includes(query))),

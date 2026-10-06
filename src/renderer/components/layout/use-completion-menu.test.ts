@@ -42,4 +42,14 @@ describe("slashCommandItems", () => {
 		expect(slashCommandItems(commands, "agent", "").map(item => item.label)).toEqual(["/compact"]);
 		expect(slashCommandItems(commands, "agent", "log")).toEqual([]);
 	});
+
+	it("never suggests a command the assistant removed, even when the agent advertises it", () => {
+		const advertised: AvailableCommand[] = [
+			{ name: "share", description: "Share", source: "builtin" },
+			{ name: "mcp", description: "MCP", source: "builtin" },
+			{ name: "compact", description: "Compact", source: "builtin" },
+		];
+		expect(slashCommandItems(advertised, "agent", "").map(item => item.label)).toEqual(["/compact"]);
+		expect(slashCommandItems(advertised, "agent", "sha")).toEqual([]);
+	});
 });

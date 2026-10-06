@@ -34,75 +34,13 @@ import { activeTabKind, useTabsStore } from "../stores/tabs";
 import { toast } from "../stores/toast";
 import { useTodoStore } from "../stores/todo";
 import { type DockCardId, useUiStore } from "../stores/ui";
-import { isCommandAvailable } from "./command-availability";
+import { isCommandAvailable, REMOVED_COMMANDS } from "./command-availability";
 import { exportSessionHtml } from "./export-session";
 import { copyText } from "./format";
 import { translate } from "./i18n";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "./messages";
 import { copyTodosToClipboard, dumpTranscriptToClipboard, exportTodos, importTodosFromFile } from "./transcript-copy";
 import { addWorkspaceDirectory, moveSessionTo, pickWorkspaceDirectory } from "./workspace-dirs";
-
-/**
- * Commands the assistant does not offer. omp advertises its own version of
- * several of them (`/share` uploads the session, `/mcp` edits servers), so the
- * palette skips these names when it merges advertised commands and the
- * composer refuses them when typed, instead of handing them to the agent.
- */
-export const REMOVED_COMMANDS: ReadonlySet<string> = new Set([
-	"new-chat-tab",
-	"import",
-	"handoff",
-	"share",
-	"branch",
-	"tree",
-	"model-roles",
-	"model-compare",
-	"benchmark",
-	"context",
-	"tools",
-	"computer",
-	"browser",
-	"force",
-	"usage",
-	"skills",
-	"hooks",
-	"commands",
-	"mcp",
-	"mcp panel",
-	"mcp list",
-	"marketplace",
-	"marketplace panel",
-	"marketplace list",
-	"marketplace installed",
-	"plugins",
-	"plugins panel",
-	"reload-plugins",
-	"memory",
-	"memory panel",
-	"security",
-	"templates",
-	"ssh",
-	"plan",
-	"vibe",
-	"goal",
-	"loop",
-	"modes",
-	"move",
-	"add-dir",
-	"remove-dir",
-	"dirs",
-	"git",
-	"stats",
-	"extensions",
-	"prs",
-	"collab",
-	"join",
-	"leave",
-	"debug",
-	"live",
-	"plan-review",
-	"guided-goal",
-]);
 
 /**
  * `action` and `prompt` carry `argUsage` when the command needs user text
