@@ -11,6 +11,7 @@ pub(crate) const ASSISTANT_PACK_FILES: &[&str] = &[
     "package.json",
     "tools.js",
     "system-prompt.md",
+    "append-system-prompt.md",
     "config.yml",
     "skills/word-report/SKILL.md",
     "skills/spreadsheet-cleanup/SKILL.md",
@@ -67,6 +68,10 @@ pub(crate) fn pack_flags(pack_dir: &Path, os: &str) -> Vec<String> {
         tools.join(","),
         "--system-prompt".to_string(),
         pack_dir.join("system-prompt.md").to_string_lossy().into_owned(),
+        // An explicit append prompt (empty) stops omp from appending a
+        // workspace's or the user's APPEND_SYSTEM.md to the pack's system prompt.
+        "--append-system-prompt".to_string(),
+        pack_dir.join("append-system-prompt.md").to_string_lossy().into_owned(),
         "--config".to_string(),
         pack_dir.join("config.yml").to_string_lossy().into_owned(),
         "--approval-mode".to_string(),
@@ -101,6 +106,7 @@ mod tests {
         "package.json",
         "tools.js",
         "system-prompt.md",
+        "append-system-prompt.md",
         "config.yml",
         "skills/word-report/SKILL.md",
         "skills/spreadsheet-cleanup/SKILL.md",
@@ -135,6 +141,8 @@ mod tests {
             "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean",
             "--system-prompt",
             "/opt/pack/system-prompt.md",
+            "--append-system-prompt",
+            "/opt/pack/append-system-prompt.md",
             "--config",
             "/opt/pack/config.yml",
             "--approval-mode",
@@ -154,6 +162,8 @@ mod tests {
             "read,glob,write,ask,office_report,office_slides,office_clean",
             "--system-prompt",
             "/opt/pack/system-prompt.md",
+            "--append-system-prompt",
+            "/opt/pack/append-system-prompt.md",
             "--config",
             "/opt/pack/config.yml",
             "--approval-mode",
@@ -235,8 +245,11 @@ mod tests {
     #[test]
     fn ships_the_tool_list_the_pack_check_expects() {
         let script = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("scripts").join("check-assistant-pack.ts")).unwrap();
-        let import = script.lines().find(|line| line.starts_with("import") && line.contains("\"../src/main/assistant-pack\"")).expect("the pack check imports the shared pack module");
-        assert!(import.contains("assistantPackFlags"), "{import}");
+        // The import statement may span lines: take it from its `import` to its module path.
+        let from = script.find("from \"../src/main/assistant-pack\"").expect("the pack check imports the shared pack module");
+        let start = script[..from].rfind("import").expect("the module path belongs to an import");
+        let import = &script[start..from];
+        assert!(import.split(|c: char| !c.is_alphanumeric()).any(|name| name == "assistantPackFlags"), "{import}");
         assert!(!script.contains("office_report"));
     }
 }

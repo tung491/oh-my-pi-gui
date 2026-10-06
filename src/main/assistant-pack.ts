@@ -13,6 +13,7 @@ export const ASSISTANT_PACK_FILES: readonly string[] = [
 	"package.json",
 	"tools.js",
 	"system-prompt.md",
+	"append-system-prompt.md",
 	"config.yml",
 	"skills/word-report/SKILL.md",
 	"skills/spreadsheet-cleanup/SKILL.md",
@@ -77,6 +78,10 @@ export function assistantPackFlags(packDir: string, platform: string): string[] 
 		tools.join(","),
 		"--system-prompt",
 		join(packDir, "system-prompt.md"),
+		// An explicit append prompt (empty) stops omp from appending a workspace's
+		// or the user's APPEND_SYSTEM.md to the pack's system prompt.
+		"--append-system-prompt",
+		join(packDir, "append-system-prompt.md"),
 		"--config",
 		join(packDir, "config.yml"),
 		"--approval-mode",

@@ -104,6 +104,7 @@ describe.skipIf(process.env.SKIP_COMPILED === "1")("the pack in the compiled sid
 			for (const tool of TOOLS) expect(stdout).toMatch(new RegExp(`^tool\\s+${tool}$`, "m"));
 			for (const skill of SKILLS) expect(stdout).toMatch(new RegExp(`^skill\\s+${skill}$`, "m"));
 			expect(stdout).toMatch(/^setting\s+bash\.direnv = "off"\s+\[.*overlay.*\]$/m);
+			expect(stdout).toMatch(/^append\s+workspace APPEND_SYSTEM\.md ignored$/m);
 			for (const path of [
 				"plan.enabled",
 				"plan.defaultOnStartup",

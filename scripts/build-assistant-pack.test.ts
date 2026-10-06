@@ -14,6 +14,7 @@ const PACK_FILES = [
 	"package.json",
 	"tools.js",
 	"system-prompt.md",
+	"append-system-prompt.md",
 	"config.yml",
 	"skills/word-report/SKILL.md",
 	"skills/spreadsheet-cleanup/SKILL.md",

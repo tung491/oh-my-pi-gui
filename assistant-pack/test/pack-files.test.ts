@@ -122,6 +122,12 @@ describe("system prompt", () => {
 	it("stays under 2 KiB", () => {
 		expect(Buffer.byteLength(prompt)).toBeLessThan(2048);
 	});
+
+	it("ships an empty append prompt, so no workspace APPEND_SYSTEM.md is ever added", () => {
+		// The shells pass this file with --append-system-prompt; omp then skips its
+		// APPEND_SYSTEM.md lookup, and an empty append adds nothing.
+		expect(read("append-system-prompt.md")).toBe("");
+	});
 });
 
 describe("config overlay", () => {

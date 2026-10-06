@@ -13,7 +13,7 @@ const DEFAULT_OUT = join(ROOT, "resources", "assistant-pack");
 const DEFAULT_ENTRY = join(SOURCE, "src", "tools", "index.ts");
 const BUNDLE = "tools.js";
 const MANIFEST = { name: "sai-atlas-assistant-pack", private: true, omp: { extensions: [`./${BUNDLE}`] } };
-const TEXT_FILES = ["system-prompt.md", "config.yml"];
+const TEXT_FILES = ["system-prompt.md", "append-system-prompt.md", "config.yml"];
 
 /** Every .js file under `dir` other than the bundle, as paths relative to `dir`. */
 export function strayScripts(dir: string): string[] {

@@ -24,6 +24,8 @@ function packFlags(pack: string): string[] {
 		PACK_TOOLS,
 		"--system-prompt",
 		path.join(pack, "system-prompt.md"),
+		"--append-system-prompt",
+		path.join(pack, "append-system-prompt.md"),
 		"--config",
 		path.join(pack, "config.yml"),
 		"--approval-mode",
@@ -127,6 +129,8 @@ describe("SidecarManager", () => {
 				PACK_TOOLS,
 				"--system-prompt",
 				path.join(pack, "system-prompt.md"),
+				"--append-system-prompt",
+				path.join(pack, "append-system-prompt.md"),
 				"--config",
 				path.join(pack, "config.yml"),
 				"--approval-mode",
@@ -307,11 +311,13 @@ describe("SidecarManager", () => {
 				"--add-dir",
 				"/data/extra",
 			]) {
-				if (token === "--tools" || token === "--config") continue;
+				if (token === "--tools" || token === "--config" || token === "--append-system-prompt") continue;
 				expect(launch).not.toContain(token);
 			}
+			// The pack's own flags appear once each; the profile's copies are gone.
 			expect((launch as string[]).filter(token => token === "--tools")).toHaveLength(1);
 			expect((launch as string[]).filter(token => token === "--config")).toHaveLength(1);
+			expect((launch as string[]).filter(token => token === "--append-system-prompt")).toHaveLength(1);
 		} finally {
 			process.env.HOME = originalHome;
 			sidecar.dispose();

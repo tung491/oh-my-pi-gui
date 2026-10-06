@@ -1113,6 +1113,8 @@ pub(crate) mod tests {
             pack_tools().to_string(),
             "--system-prompt".to_string(),
             pack.join("system-prompt.md").to_string_lossy().into_owned(),
+            "--append-system-prompt".to_string(),
+            pack.join("append-system-prompt.md").to_string_lossy().into_owned(),
             "--config".to_string(),
             pack.join("config.yml").to_string_lossy().into_owned(),
             "--approval-mode".to_string(),
@@ -1292,6 +1294,8 @@ pub(crate) mod tests {
             pack_tools().to_string(),
             "--system-prompt".to_string(),
             pack.join("system-prompt.md").to_string_lossy().into_owned(),
+            "--append-system-prompt".to_string(),
+            pack.join("append-system-prompt.md").to_string_lossy().into_owned(),
             "--config".to_string(),
             pack.join("config.yml").to_string_lossy().into_owned(),
             "--approval-mode".to_string(),
@@ -1431,13 +1435,15 @@ process.stdin.resume();"#,
         // Only the profile flags that cannot change what the session loads survive.
         assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &["--no-lsp", "--session-dir", "/data/sessions"]));
         for token in smuggled.iter().chain(["GUI injected", "--append-system-prompt", "--no-rules", "--add-dir", "/data/extra"].iter()) {
-            if *token == "--tools" || *token == "--config" {
+            if *token == "--tools" || *token == "--config" || *token == "--append-system-prompt" {
                 continue;
             }
             assert!(!launch.iter().any(|arg| arg == token), "{token} survived");
         }
+        // The pack's own flags appear once each; the profile's copies are gone.
         assert_eq!(launch.iter().filter(|arg| *arg == "--tools").count(), 1);
         assert_eq!(launch.iter().filter(|arg| *arg == "--config").count(), 1);
+        assert_eq!(launch.iter().filter(|arg| *arg == "--append-system-prompt").count(), 1);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
