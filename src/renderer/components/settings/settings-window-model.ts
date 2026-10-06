@@ -11,16 +11,9 @@ import { isSettingSupportedInGui } from "./settings-schema-utils";
 export type LoadState = "loading" | "error" | "ready";
 
 /** Launch-profile text fields that commit on blur (checkboxes/chips apply immediately). */
-export type LaunchTextField = "systemPrompt" | "appendSystemPrompt" | "profile" | "sessionDir" | "config";
-export const LAUNCH_TEXT_FIELDS: readonly LaunchTextField[] = [
-	"systemPrompt",
-	"appendSystemPrompt",
-	"profile",
-	"sessionDir",
-	"config",
-];
-/** Prompt fields keep whitespace verbatim (the CLI takes the literal value); the rest trim. */
-export const LAUNCH_VERBATIM_FIELDS: Record<string, true> = { systemPrompt: true, appendSystemPrompt: true };
+/** Launch-profile text fields the Settings window edits; values are trimmed on commit. */
+export type LaunchTextField = "sessionDir";
+export const LAUNCH_TEXT_FIELDS: readonly LaunchTextField[] = ["sessionDir"];
 
 export interface SettingsResponseData {
 	values?: Record<string, unknown>;

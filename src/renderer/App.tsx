@@ -71,7 +71,6 @@ import { startVoiceAutoSpeak } from "./lib/voice";
 import { useModelStore } from "./stores/model";
 import { useSessionStore } from "./stores/session";
 import { SessionRuntimeProvider } from "./stores/session-runtime-context";
-import { useSettingsStore } from "./stores/settings";
 import { ensureTabRuntime } from "./stores/tab-runtime";
 import { useSessionTabs, useTabsStore } from "./stores/tabs";
 import { toast } from "./stores/toast";
@@ -506,7 +505,7 @@ export function App() {
 				return;
 			}
 			// New tab actions never touch the live run — they must stay OUT of the
-			// streaming busy-guard below (unlike new-session/open-project).
+			// streaming busy-guard below (unlike new-session/switch-project).
 			if (action === "new-tab") {
 				void useTabsStore.getState().openTab();
 				return;
@@ -568,22 +567,13 @@ export function App() {
 				void runSessionCommand(focusedTabRpc().cycleThinkingLevel(), t("palette.failed"));
 				return;
 			}
-			if (action === "set-approval") {
-				if (payload?.approvalMode) useSettingsStore.getState().setApprovalMode(payload.approvalMode);
-				return;
-			}
-			if (
-				useSessionStore.getState().isStreaming &&
-				(action === "new-session" || action === "open-project" || action === "switch-project")
-			) {
+			if (useSessionStore.getState().isStreaming && (action === "new-session" || action === "switch-project")) {
 				toast({ variant: "warning", message: t("sessionSwitch.busyBlocked") });
 				return;
 			}
 
 			try {
-				if (action === "open-project") {
-					await window.omp.sidecar.selectProject();
-				} else if (action === "switch-project") {
+				if (action === "switch-project") {
 					if (payload?.cwd) await window.omp.sidecar.setProject(payload.cwd);
 				} else if (action === "new-session") {
 					await newSessionNow();

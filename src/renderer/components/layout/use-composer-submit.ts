@@ -7,7 +7,7 @@
 import { useCallback } from "react";
 import type { AgentMessage, AvailableCommand } from "../../../shared/rpc-types";
 import { hydrateTabSession } from "../../hooks/use-rpc-events";
-import { removedCommandName } from "../../lib/command-availability";
+import { cloudModelCommand, removedCommandName } from "../../lib/command-availability";
 import { isGuiOnlyBuiltinCommand, planComposerSubmit, settleComposerResponse } from "../../lib/composer-submit";
 import { expandEmoticons } from "../../lib/emoji";
 import { useT } from "../../lib/i18n";
@@ -143,11 +143,18 @@ export function useComposerSubmit({
 				setMenu(null);
 				const dispatchItems = items.length > 0 ? items : [""];
 				// Queued items reach the agent's prompt RPC, which runs its builtin
-				// commands, so a removed command is refused here as in a plain send.
+				// commands, so a removed command or a cloud model is refused here as in a
+				// plain send.
 				if (dispatchItems.some(item => removedCommandName(item, commands) !== null)) {
 					setText(message);
 					setImages(previousImages);
 					toast({ variant: "warning", message: t("unavailable.tuiOnly") });
+					return;
+				}
+				if (dispatchItems.some(item => cloudModelCommand(item, commands))) {
+					setText(message);
+					setImages(previousImages);
+					toast({ variant: "warning", message: t("ollama.settings.cloudRefused") });
 					return;
 				}
 				if (dispatchItems.some(item => isGuiOnlyBuiltinCommand(item, commands))) {

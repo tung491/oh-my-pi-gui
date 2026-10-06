@@ -54,15 +54,14 @@ import { useSessionStore } from "../../stores/session";
 import { focusedSessionRuntime, sessionRuntime, withSessionRuntime } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
-import { CodeBlock } from "../chat/CodeBlock";
-import { Button, IconButton, Input, Kbd, SaiAtlasLogo, Spinner, type TabItem, TextArea } from "../common";
+import { Button, IconButton, Input, Kbd, SaiAtlasLogo, Spinner, type TabItem } from "../common";
 import { isTopmostDialog, registerDialogLayer } from "../common/dialog-layer";
-import { ArrayChipEditor } from "./editors/ArrayChipEditor";
 import { RadioGroup } from "./editors/RadioGroup";
 import { Section } from "./editors/Section";
 import { Toggle } from "./editors/Toggle";
 import { AdvancedTab } from "./pages/AdvancedTab";
 import { CapabilitiesHome, type CapabilityTarget } from "./pages/CapabilitiesHome";
+import { LaunchProfileSection } from "./pages/LaunchProfileSection";
 import { SchemaTabContent } from "./pages/SchemaTabContent";
 import { VI_SETTINGS } from "./schema-vi";
 import { isSettingVisibleInGui, matchesSettingSearch, resolveSettingsTarget } from "./settings-schema-utils";
@@ -74,7 +73,6 @@ import {
 	GUI_TAB_ID,
 	isAgentSchemaTab,
 	LAUNCH_TEXT_FIELDS,
-	LAUNCH_VERBATIM_FIELDS,
 	type LaunchTextField,
 	type LoadState,
 	MANAGEMENT_TAB_IDS,
@@ -499,7 +497,7 @@ export function SettingsWindow() {
 	const commitLaunchField = async (field: LaunchTextField) => {
 		const draft = launchDrafts[field];
 		if (draft === undefined) return;
-		const value = LAUNCH_VERBATIM_FIELDS[field] === true ? draft : draft.trim();
+		const value = draft.trim();
 		if (!(await updateLaunchProfile({ [field]: value === "" ? undefined : value }))) return;
 		setLaunchDrafts(prev => {
 			if (prev[field] !== draft) return prev;
@@ -507,15 +505,6 @@ export function SettingsWindow() {
 			delete next[field];
 			return next;
 		});
-	};
-	const pickLaunchAddDirs = async () => {
-		const version = launchVersion.current;
-		const picked = await window.omp.system.showOpenDialog([], { directory: true }).catch(() => null);
-		if (!picked || picked.length === 0 || version !== launchVersion.current) return;
-		const current = launchProfile.addDirs ?? [];
-		const merged = [...current];
-		for (const dir of picked) if (!merged.includes(dir)) merged.push(dir);
-		if (merged.length !== current.length) await updateLaunchProfile({ addDirs: merged });
 	};
 	const restartForLaunchProfile = () => {
 		if (sidecarBusy || launchRestarting || launchPending.current || Object.keys(launchDrafts).length) return;
@@ -546,7 +535,7 @@ export function SettingsWindow() {
 		for (const field of LAUNCH_TEXT_FIELDS) {
 			const draft = launchDrafts[field];
 			if (draft === undefined) continue;
-			const value = LAUNCH_VERBATIM_FIELDS[field] === true ? draft : draft.trim();
+			const value = draft.trim();
 			if (value === "") delete effective[field];
 			else effective[field] = value;
 		}
@@ -1092,189 +1081,24 @@ export function SettingsWindow() {
 											/>
 											<p className="mt-1.5 text-omp-sm text-(--omp-muted)">{t("settings.gui.proxyDesc")}</p>
 										</Section>
-										<Section id="setting-gui-launch" title={t("settings.launch.title")}>
-											<fieldset className="space-y-3" disabled={launchSaving || launchRestarting}>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.systemPrompt")}
-													</span>
-													<TextArea
-														mono
-														onBlur={() => commitLaunchField("systemPrompt")}
-														onChange={event =>
-															setLaunchDrafts(prev => ({ ...prev, systemPrompt: event.target.value }))
-														}
-														placeholder={t("settings.launch.systemPromptPlaceholder")}
-														rows={4}
-														spellCheck={false}
-														value={launchDrafts.systemPrompt ?? launchProfile.systemPrompt ?? ""}
-													/>
-												</div>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.appendSystemPrompt")}
-													</span>
-													<TextArea
-														mono
-														onBlur={() => commitLaunchField("appendSystemPrompt")}
-														onChange={event =>
-															setLaunchDrafts(prev => ({
-																...prev,
-																appendSystemPrompt: event.target.value,
-															}))
-														}
-														placeholder={t("settings.launch.appendSystemPromptPlaceholder")}
-														rows={4}
-														spellCheck={false}
-														value={
-															launchDrafts.appendSystemPrompt ?? launchProfile.appendSystemPrompt ?? ""
-														}
-													/>
-												</div>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.addDirs")}
-													</span>
-													<ArrayChipEditor
-														onCommit={dirs => updateLaunchProfile({ addDirs: dirs })}
-														placeholder={t("settings.launch.addDirsPlaceholder")}
-														values={launchProfile.addDirs ?? []}
-													/>
-													<div className="mt-1.5">
-														<Button
-															onClick={() => void pickLaunchAddDirs()}
-															size="sm"
-															type="button"
-															variant="secondary"
-														>
-															{t("settings.launch.addDirPick")}
-														</Button>
-													</div>
-													<p className="mt-1.5 text-omp-sm text-(--omp-muted)">
-														{t("settings.launch.addDirsDesc")}
-													</p>
-												</div>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.tools")}
-													</span>
-													<ArrayChipEditor
-														onCommit={tools => updateLaunchProfile({ tools })}
-														values={launchProfile.tools ?? []}
-													/>
-													<p className="mt-1.5 text-omp-sm text-(--omp-muted)">
-														{t("settings.launch.toolsDesc")}
-													</p>
-												</div>
-												<Toggle
-													checked={launchProfile.noRules === true}
-													description={t("settings.launch.noRulesDesc")}
-													label={t("settings.launch.noRules")}
-													onChange={value => updateLaunchProfile({ noRules: value })}
-												/>
-												<Toggle
-													checked={launchProfile.noLsp === true}
-													description={t("settings.launch.noLspDesc")}
-													label={t("settings.launch.noLsp")}
-													onChange={value => updateLaunchProfile({ noLsp: value })}
-												/>
-												<Toggle
-													checked={launchProfile.planYolo === true}
-													description={t("settings.launch.planYoloDesc")}
-													label={t("settings.launch.planYolo")}
-													onChange={value => updateLaunchProfile({ planYolo: value })}
-												/>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.profile")}
-													</span>
-													<Input
-														onBlur={() => commitLaunchField("profile")}
-														onChange={event =>
-															setLaunchDrafts(prev => ({ ...prev, profile: event.target.value }))
-														}
-														onKeyDown={event => {
-															if (isImeKeyEvent(event)) return;
-															if (event.key === "Enter") event.currentTarget.blur();
-														}}
-														placeholder={t("settings.launch.profilePlaceholder")}
-														spellCheck={false}
-														value={launchDrafts.profile ?? launchProfile.profile ?? ""}
-													/>
-												</div>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.sessionDir")}
-													</span>
-													<Input
-														onBlur={() => commitLaunchField("sessionDir")}
-														onChange={event =>
-															setLaunchDrafts(prev => ({ ...prev, sessionDir: event.target.value }))
-														}
-														onKeyDown={event => {
-															if (isImeKeyEvent(event)) return;
-															if (event.key === "Enter") event.currentTarget.blur();
-														}}
-														placeholder={t("settings.launch.sessionDirPlaceholder")}
-														spellCheck={false}
-														value={launchDrafts.sessionDir ?? launchProfile.sessionDir ?? ""}
-													/>
-												</div>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.config")}
-													</span>
-													<Input
-														onBlur={() => commitLaunchField("config")}
-														onChange={event =>
-															setLaunchDrafts(prev => ({ ...prev, config: event.target.value }))
-														}
-														onKeyDown={event => {
-															if (isImeKeyEvent(event)) return;
-															if (event.key === "Enter") event.currentTarget.blur();
-														}}
-														placeholder={t("settings.launch.configPlaceholder")}
-														spellCheck={false}
-														value={launchDrafts.config ?? launchProfile.config ?? ""}
-													/>
-												</div>
-												<div>
-													<span className="mb-1 block text-xs font-medium text-(--omp-text)">
-														{t("settings.launch.preview")}
-													</span>
-													<CodeBlock
-														code={launchPreview}
-														language="bash"
-														showCopy={false}
-														showLineNumbers={false}
-													/>
-												</div>
-												<div className="flex items-center gap-3 rounded-md border border-[var(--omp-warning)]/40 px-3 py-2">
-													<span className="min-w-0 flex-1 text-omp-sm text-[var(--omp-warning)]">
-														{t("settings.launch.restartNote")}
-													</span>
-													<Button
-														disabled={
-															sidecarBusy ||
-															launchRestarting ||
-															launchSaving ||
-															Object.keys(launchDrafts).length > 0
-														}
-														onClick={restartForLaunchProfile}
-														size="sm"
-														type="button"
-														variant="secondary"
-													>
-														{launchRestarting
-															? t("settings.launch.restarting")
-															: t("settings.launch.restartNow")}
-													</Button>
-												</div>
-												{sidecarBusy && (
-													<p className="text-omp-sm text-(--omp-muted)">{t("settings.launch.busyHint")}</p>
-												)}
-											</fieldset>
-										</Section>
+										<LaunchProfileSection
+											busy={sidecarBusy}
+											disabled={launchSaving || launchRestarting}
+											drafts={launchDrafts}
+											onCommitField={field => void commitLaunchField(field)}
+											onDraft={(field, value) => setLaunchDrafts(prev => ({ ...prev, [field]: value }))}
+											onRestart={restartForLaunchProfile}
+											onUpdate={patch => void updateLaunchProfile(patch)}
+											preview={launchPreview}
+											profile={launchProfile}
+											restartDisabled={
+												sidecarBusy ||
+												launchRestarting ||
+												launchSaving ||
+												Object.keys(launchDrafts).length > 0
+											}
+											restarting={launchRestarting}
+										/>
 									</>
 								)}
 

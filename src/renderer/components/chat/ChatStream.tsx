@@ -1,17 +1,14 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
 	ArrowDown,
-	BookOpen,
-	Bug,
 	ChevronRight,
-	Code2,
-	Languages,
-	Lightbulb,
+	FileText,
+	LifeBuoy,
 	ListTodo,
 	Loader2,
-	PenLine,
-	SearchCode,
-	Sparkles,
+	type LucideIcon,
+	Presentation,
+	Sheet,
 	X,
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -26,12 +23,12 @@ import { useMessagesStore } from "../../stores/messages";
 import { type QueueLane, useQueuedMessages, useQueueStore } from "../../stores/queue";
 import { useSessionStore } from "../../stores/session";
 import { useRuntimeTabId } from "../../stores/session-runtime-context";
-import { useActiveTabKind } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { type TodoSnapshot, useTodoStore } from "../../stores/todo";
 import { type ToolEntry, toolEntryKey, useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
 import { SaiAtlasLogo } from "../common";
+import { isOfficeTool } from "../tools/office-tools";
 import { ReadGroupCard } from "../tools/ReadGroupCard";
 import { ToolCard } from "../tools/ToolCard";
 import { ConversationNavigator } from "./ConversationNavigator";
@@ -55,7 +52,15 @@ import {
 import { ExecutionGroup } from "./ExecutionGroup";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingText } from "./StreamingText";
+import { runStarter, type Starter, startersFor } from "./starters";
 import { ThinkingBlock } from "./ThinkingBlock";
+
+const STARTER_ICONS: Record<Starter["id"], LucideIcon> = {
+	"word-report": FileText,
+	"spreadsheet-cleanup": Sheet,
+	"slides-from-report": Presentation,
+	helpdesk: LifeBuoy,
+};
 
 // TanStack's end check needs one CSS pixel for fractional scrollTop rounding.
 // User intent is enforced separately by switching away from end anchoring.
@@ -229,21 +234,16 @@ function SessionTranscript() {
 		setVisibleRowIndex(current => (current === next ? current : next));
 	}, []);
 
-	const STARTERS = [
-		{ icon: Code2, title: t("chat.starter.understand.title"), prompt: t("chat.starter.understand.prompt") },
-		{ icon: Bug, title: t("chat.starter.fix.title"), prompt: t("chat.starter.fix.prompt") },
-		{ icon: Sparkles, title: t("chat.starter.build.title"), prompt: t("chat.starter.build.prompt") },
-		{ icon: SearchCode, title: t("chat.starter.review.title"), prompt: t("chat.starter.review.prompt") },
-	] as const;
-	const CHAT_STARTERS = [
-		{ icon: BookOpen, title: t("chat.starter.explain.title"), prompt: t("chat.starter.explain.prompt") },
-		{ icon: PenLine, title: t("chat.starter.draft.title"), prompt: t("chat.starter.draft.prompt") },
-		{ icon: Lightbulb, title: t("chat.starter.brainstorm.title"), prompt: t("chat.starter.brainstorm.prompt") },
-		{ icon: Languages, title: t("chat.starter.translate.title"), prompt: t("chat.starter.translate.prompt") },
-	] as const;
-	/** Chat tabs get a conversation-oriented empty state (agent starters imply tools). */
-	const isChat = useActiveTabKind() === "chat";
-	const starters = isChat ? CHAT_STARTERS : STARTERS;
+	const starters = startersFor(window.omp?.platform);
+	const startJob = (starter: Starter) => {
+		void runStarter(starter, {
+			showOpenDialog: filters => window.omp.system.showOpenDialog(filters),
+			// The composer owns sending: the same pipeline as its Send button.
+			send: text =>
+				window.dispatchEvent(new CustomEvent("omp:fill-composer", { detail: { text, tabId, submit: true } })),
+			t,
+		}).catch((error: unknown) => toast({ variant: "error", message: String(error) }));
+	};
 
 	const virtualizer = useVirtualizer({
 		count: rows.length,
@@ -569,34 +569,27 @@ function SessionTranscript() {
 								<SaiAtlasLogo kind="icon" surface="page" height={48} className="[&>img]:rounded-[22%]" />
 							</div>
 							<h1 className="font-display text-[30px] font-semibold leading-tight tracking-[-0.025em] text-[var(--omp-text)]">
-								{isChat ? t("chat.empty.title.chat") : t("chat.empty.title")}
+								{t("chat.empty.everyday.title")}
 							</h1>
-							<p className="mt-2 max-w-2xl text-omp-xl leading-relaxed text-[var(--omp-muted)]">
-								{isChat ? t("chat.empty.subtitle.chat") : t("chat.empty.subtitle")}
-							</p>
 							<div className="omp-starter-grid mt-8 grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-								{starters.map(({ icon: Icon, title, prompt }) => (
-									<button
-										key={title}
-										type="button"
-										onClick={() =>
-											window.dispatchEvent(
-												new CustomEvent("omp:fill-composer", { detail: { text: prompt, tabId } }),
-											)
-										}
-										className="omp-starter-card omp-lift group flex min-h-20 items-start gap-3 rounded-2xl border border-[var(--omp-border)] p-4 text-left shadow-[var(--omp-shadow-sm)] hover:border-[var(--omp-border-accent)] hover:bg-[var(--omp-bg-secondary)]"
-									>
-										<span className="omp-starter-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--omp-selected-bg)] text-[var(--omp-accent)]">
-											<Icon size={17} />
-										</span>
-										<span>
-											<span className="block text-omp-lg font-semibold text-[var(--omp-text)]">{title}</span>
-											<span className="mt-1 block text-omp-lg leading-snug text-[var(--omp-muted)]">
-												{prompt}
+								{starters.map(starter => {
+									const Icon = STARTER_ICONS[starter.id];
+									return (
+										<button
+											key={starter.id}
+											type="button"
+											onClick={() => startJob(starter)}
+											className="omp-starter-card omp-lift group flex min-h-20 items-center gap-3 rounded-2xl border border-[var(--omp-border)] p-4 text-left shadow-[var(--omp-shadow-sm)] hover:border-[var(--omp-border-accent)] hover:bg-[var(--omp-bg-secondary)]"
+										>
+											<span className="omp-starter-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--omp-selected-bg)] text-[var(--omp-accent)]">
+												<Icon size={17} />
 											</span>
-										</span>
-									</button>
-								))}
+											<span className="text-omp-lg font-semibold text-[var(--omp-text)]">
+												{t(starter.titleKey)}
+											</span>
+										</button>
+									);
+								})}
 							</div>
 						</div>
 					)}
@@ -859,22 +852,35 @@ export function StreamingRows({
 		);
 	}
 
+	// Office jobs stay out of the compact steps group: their card is how the
+	// finished file opens, as in finalized history (buildHistoryRows).
+	const officeCards = allCards.filter(card => isOfficeTool(card.name));
+	const stepCards = allCards.filter(card => !isOfficeTool(card.name));
+	const hasSteps = hasThinking || stepCards.length > 0;
+	const cardsOf = (cards: typeof allCards) =>
+		cards.map(card => (
+			<ToolCard key={card.id} toolCallId={card.id} toolName={card.name} args={card.args} runningIndicator="dot" />
+		));
+
 	return (
 		<div className={cx("omp-streaming-turn group flex px-6", turnClass)}>
 			<div className="omp-transcript-content min-w-0">
-				{hasProcess ? (
+				{hasSteps ? (
 					<ExecutionGroup
 						expanded={expanded}
 						live
 						onExpandedChange={onExpandedChange}
-						stepCount={toolCalls.length + liveTools.length + (hasThinking ? 1 : 0)}
-						toolCallIds={allCards.map(card => card.id)}
+						stepCount={stepCards.length + (hasThinking ? 1 : 0)}
+						toolCallIds={stepCards.map(card => card.id)}
 					>
 						<div className="omp-process-group omp-process-group--live">
 							{hasThinking ? <ThinkingBlock live /> : null}
-							{toolCalls.length + liveTools.length > 0 ? <div>{toolCards}</div> : null}
+							{stepCards.length > 0 ? <div>{cardsOf(stepCards)}</div> : null}
 						</div>
 					</ExecutionGroup>
+				) : null}
+				{officeCards.length > 0 ? (
+					<div className={hasSteps ? "mt-1" : undefined}>{cardsOf(officeCards)}</div>
 				) : null}
 				<div className={hasProcess ? "mt-1" : undefined}>
 					<StreamingText />

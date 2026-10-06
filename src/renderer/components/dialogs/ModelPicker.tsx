@@ -21,6 +21,7 @@ import { formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
 import { availableFilters, filterModels, type ModelFilter } from "../../lib/model-filters";
+import { isCloudTag } from "../../lib/ollama-cloud";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useRuntimeTabId } from "../../stores/session-runtime-context";
@@ -145,7 +146,8 @@ export function ModelPicker() {
 	};
 
 	const select = async (provider: string, modelId: string) => {
-		if (!sidecarReady) return;
+		// A cloud model would send the conversation online: never select one.
+		if (!sidecarReady || isCloudTag(modelId)) return;
 		const key = `${provider}/${modelId}`;
 		setSwitching(key);
 		try {
@@ -310,15 +312,23 @@ export function ModelPicker() {
 							const key = `${model.provider}/${model.id}`;
 							const isActive = optionIndex === activeIndex;
 							const over = !isCurrent && isOverContext(model);
+							const cloud = isCloudTag(model.id);
 							return (
 								<button
 									aria-selected={isCurrent}
 									className={`flex min-h-[58px] w-full items-center gap-3 rounded-md px-3 py-2 text-left transition-colors ${
 										isActive ? "bg-(--omp-selected-bg)" : "hover:bg-(--omp-bg-tertiary)"
 									}`}
+									aria-disabled={cloud || undefined}
 									data-option-index={optionIndex}
-									disabled={switching !== null || !sidecarReady}
-									title={!sidecarReady ? t("modelPicker.notConnected") : undefined}
+									disabled={cloud || switching !== null || !sidecarReady}
+									title={
+										cloud
+											? t("ollama.settings.cloudRefused")
+											: !sidecarReady
+												? t("modelPicker.notConnected")
+												: undefined
+									}
 									id={`${listboxId}-option-${optionIndex}`}
 									key={key}
 									onClick={() => void select(model.provider, model.id)}
@@ -352,6 +362,11 @@ export function ModelPicker() {
 												</Badge>
 											)}
 										</div>
+										{cloud && (
+											<span className="text-omp-sm text-(--omp-warning)" data-cloud-refused>
+												{t("ollama.settings.cloudRefused")}
+											</span>
+										)}
 										{((model.name && model.name !== model.id) || model.description) && (
 											<span className="truncate text-omp-sm text-(--omp-muted)" title={model.description}>
 												{[model.name && model.name !== model.id ? model.id : null, model.description]

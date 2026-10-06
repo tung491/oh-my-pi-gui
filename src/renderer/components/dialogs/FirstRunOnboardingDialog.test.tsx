@@ -302,6 +302,12 @@ describe("defaultPick", () => {
 		expect(defaultPick([choices[0], { ...choices[1], installed: false }], null)).toBe("a");
 		expect(defaultPick([{ ...choices[1], installed: null }], null)).toBeNull();
 	});
+
+	it("never picks a cloud model, even the current or recommended one", () => {
+		const cloud = choice({ tag: "kimi-k2:cloud", tiers: ["recommended"], installed: true });
+		expect(defaultPick([choices[0], cloud], "kimi-k2:cloud")).toBe("a");
+		expect(defaultPick([cloud], null)).toBeNull();
+	});
 });
 
 describe("FirstRunOnboardingDialog", () => {

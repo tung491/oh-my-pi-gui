@@ -12,6 +12,7 @@ import { I18nProvider } from "../../lib/i18n";
 import { useUiStore } from "../../stores/ui";
 import { Toggle } from "./editors/Toggle";
 import { CapabilitiesHome } from "./pages/CapabilitiesHome";
+import { LaunchProfileSection } from "./pages/LaunchProfileSection";
 import {
 	groupSchemaEntries,
 	isSettingVisibleInGui,
@@ -20,7 +21,7 @@ import {
 	SettingsConnectionNotice,
 	SettingsWindow,
 } from "./SettingsWindow";
-import { isSettingVisible } from "./settings-schema-utils";
+import { isSettingVisible, PACK_PINNED_SETTING_KEYS } from "./settings-schema-utils";
 import { buildSettingsNavGroups, isAgentSchemaTab } from "./settings-window-model";
 
 function entry(partial: Partial<SettingEntry> & { path: string }): SettingEntry {
@@ -73,7 +74,7 @@ describe("CapabilitiesHome", () => {
 		);
 
 		expect(html).toContain("Start with what makes OMP different");
-		expect(html.indexOf("Mid-stream correction · TTSR")).toBeLessThan(html.indexOf("Parallel subagents"));
+		expect(html.indexOf("Mid-stream correction · TTSR")).toBeLessThan(html.indexOf("Parallel helpers"));
 		expect(html).toContain("Configure rules");
 		expect(html).toContain("Open Agent Hub");
 		expect(html).toContain("Advisor settings");
@@ -305,6 +306,78 @@ describe("GUI settings visibility", () => {
 		expect(html).toContain("<textarea");
 		expect(html).toContain("{}");
 		expect(html).not.toContain("<input");
+	});
+});
+
+describe("pack-pinned settings", () => {
+	it("renders no row for a key the assistant pack pins", () => {
+		const pinned = PACK_PINNED_SETTING_KEYS.flatMap(key => [
+			entry({ path: key, tab: "tools", group: "Pinned", label: `Pinned ${key}` }),
+			entry({ path: `${key}.child`, tab: "tools", group: "Pinned", label: `Pinned child ${key}` }),
+		]);
+		const free = entry({ path: "compaction.enabled", tab: "tools", group: "Pinned", label: "Auto Compaction" });
+		const html = renderToStaticMarkup(
+			<I18nProvider>
+				<SchemaTabContent
+					entries={[...pinned, free]}
+					groups={["Pinned"]}
+					onCommitted={() => {}}
+					tabId="tools"
+					values={{}}
+				/>
+			</I18nProvider>,
+		);
+		expect(html).toContain("Auto Compaction");
+		expect(html).not.toContain("Pinned ");
+		for (const item of pinned) expect(isSettingVisibleInGui(item, {})).toBe(false);
+	});
+
+	it("keeps a key that only shares a prefix with a pinned one", () => {
+		expect(isSettingVisibleInGui(entry({ path: "temperatureScale", tab: "model" }), {})).toBe(true);
+		expect(isSettingVisibleInGui(entry({ path: "tools.approvalTimeout", tab: "tools" }), {})).toBe(true);
+	});
+});
+
+describe("Launch Profile page", () => {
+	it("offers only the launch options a session still honours", () => {
+		const html = renderToStaticMarkup(
+			<I18nProvider>
+				<LaunchProfileSection
+					busy={false}
+					disabled={false}
+					drafts={{}}
+					onCommitField={() => {}}
+					onDraft={() => {}}
+					onRestart={() => {}}
+					onUpdate={() => {}}
+					preview="omp --mode rpc-ui --no-lsp"
+					profile={{ noLsp: true, sessionDir: "/tmp/s" }}
+					restartDisabled={false}
+					restarting={false}
+				/>
+			</I18nProvider>,
+		);
+		for (const removed of [
+			"System prompt override",
+			"Append to system prompt",
+			"Extra directories",
+			"Tool whitelist",
+			"Disable rules files",
+			"Plan yolo",
+			"Config file path",
+			"Profile name",
+			"--profile",
+			"--add-dir",
+			"--tools",
+			"--no-rules",
+			"--plan-yolo",
+			"--config",
+		]) {
+			expect(html).not.toContain(removed);
+		}
+		expect(html).toContain("Disable LSP");
+		expect(html).toContain("Session directory");
+		expect(html).toContain("omp --mode rpc-ui --no-lsp");
 	});
 });
 

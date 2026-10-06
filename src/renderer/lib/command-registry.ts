@@ -39,6 +39,7 @@ import { exportSessionHtml } from "./export-session";
 import { copyText } from "./format";
 import { translate } from "./i18n";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "./messages";
+import { isCloudTag } from "./ollama-cloud";
 import { copyTodosToClipboard, dumpTranscriptToClipboard, exportTodos, importTodosFromFile } from "./transcript-copy";
 
 /**
@@ -198,7 +199,9 @@ export async function cycleAllowedModel(
 	rpc: Pick<TabRpc, "setModel">,
 	direction: "forward" | "backward" = "forward",
 ): Promise<void> {
-	const { availableModels: models, model: current } = useModelStore.getState();
+	const { availableModels, model: current } = useModelStore.getState();
+	// A cloud model would send the conversation online: never step onto one.
+	const models = availableModels.filter(model => !isCloudTag(model.id));
 	if (models.length === 0) return;
 	const index = current
 		? models.findIndex(model => model.provider === current.provider && model.id === current.id)

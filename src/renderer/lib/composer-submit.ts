@@ -11,7 +11,7 @@
 import type { AvailableCommand, ImageContent, RpcResponse } from "../../shared/rpc-types";
 import { hydrateSession } from "../hooks/use-rpc-events";
 import { toast } from "../stores/toast";
-import { removedCommandName } from "./command-availability";
+import { cloudModelCommand, removedCommandName } from "./command-availability";
 import { buildCurrentCommandMenu, type CommandAffordance } from "./command-registry";
 import { translate } from "./i18n";
 import type { TabRpc } from "./tab-rpc";
@@ -26,7 +26,7 @@ const SESSION_REPLACING_COMMANDS: Record<string, true> = { new: true, clear: tru
 const GUI_CONFIRMATION_COMMANDS = new Set(["btw", "delete", "drop"]);
 
 export type ComposerSubmit =
-	/** Session-replacing command while busy, or a removed command — draft stays, warning toasted. */
+	/** Session-replacing command while busy, a removed command or a cloud model — draft stays, warning toasted. */
 	| { kind: "blocked" }
 	/** Exact `/clear` — native clear_context RPC path (lib/messages.clearSessionContext). */
 	| { kind: "clear" }
@@ -106,6 +106,10 @@ export function planComposerSubmit(input: {
 	const isSlashCommand = message.startsWith("/");
 	if (removedCommandName(message, commands) !== null) {
 		toast({ variant: "warning", message: translate("unavailable.tuiOnly") });
+		return { kind: "blocked" };
+	}
+	if (cloudModelCommand(message, commands)) {
+		toast({ variant: "warning", message: translate("ollama.settings.cloudRefused") });
 		return { kind: "blocked" };
 	}
 	if (isSlashCommand && isStreaming) {
