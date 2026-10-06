@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Sai ATLAS — One window. Every session in parallel.</title>
-<meta name="description" content="Sai ATLAS, the AI assistant for SAI OS: a responsive desktop GUI for the omp coding agent, with parallel sessions plus native Skills, MCP, security, SSH host, and update management. macOS arm64 / x64, Windows x64 and Linux x64." />
+<title>Sai ATLAS — Private, local AI for your everyday work</title>
+<meta name="description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. macOS arm64 / x64 and Linux x64." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -365,11 +365,11 @@
       <img src="assets/sai-atlas-lockup-on-dark.svg" alt="Sai ATLAS" height="28">
     </a>
     <div class="nav-links">
-      <a href="#tabs">Session Tabs</a>
-      <a href="#dock">Conversation Dock</a>
-      <a href="#management">Management</a>
-      <a href="#native">Native</a>
-      <a href="#updates">Updates</a>
+      <a href="#word">Word</a>
+      <a href="#excel">Excel</a>
+      <a href="#powerpoint">PowerPoint</a>
+      <a href="#computer-help">Computer help</a>
+      <a href="#privacy">Privacy</a>
       <a href="#install">Install</a>
       <a href="https://github.com/tung491/oh-my-pi-gui">GitHub</a>
     </div>
@@ -379,22 +379,21 @@
 
 <header class="hero" id="top">
   <div class="container">
-    <div class="hero-badge rise d1"><span class="dot"></span><span data-omp-version>v0.9.10</span> · <span data-omp-release-date>Sep 2026</span> — bundled agent, Apple Silicon, Intel, Windows &amp; Linux</div>
-    <h1 class="rise d2">One window.<br /><span class="grad">Every session in parallel.</span></h1>
-    <p class="sub rise d3">The desktop GUI for the omp coding agent. Every session tab runs its own agent process — your work keeps moving in the background while you switch. All of the TUI's power, none of its walls.</p>
+    <div class="hero-badge rise d1"><span class="dot"></span><span data-omp-version>v0.9.10</span> · <span data-omp-release-date>Sep 2026</span> — the private AI assistant for everyday work on SAI OS</div>
+    <h1 class="rise d2">Private, local AI<br /><span class="grad">for your everyday work.</span></h1>
+    <p class="sub rise d3">Write a Word report, clean up a spreadsheet, turn a report into slides, or get help when the computer misbehaves. Sai ATLAS runs on your own computer, answers in English or Vietnamese, and asks before it changes anything.</p>
     <div class="hero-cta rise d4">
       <a class="btn btn-primary" data-omp-dmg="arm64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download for macOS <span class="btn-sub">Apple Silicon</span>
       </a>
       <a class="btn btn-ghost" data-omp-dmg="x64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg">Intel build <span class="btn-sub">macOS x64</span></a>
-      <a class="btn btn-ghost" data-omp-win href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-setup.exe">Windows build <span class="btn-sub">x64 installer</span></a>
       <a class="btn btn-ghost" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux build <span class="btn-sub">x64 .deb</span></a>
     </div>
-    <p class="hero-fine rise d5">Bundled sidecar — no agent, bun, or Node to install · <a href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a> · <a href="#install">Build from source</a></p>
+    <p class="hero-fine rise d5">No account, no sign-in · models run through Ollama on this computer · <a href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a></p>
     <div class="hero-shot-wrap rise d5">
       <div class="hero-shot" id="tilt">
-        <img src="assets/11-felt-quality.webp" alt="Sai ATLAS — warm paper canvas with a unified teal accent family" loading="eager" />
+        <img src="assets/01-word-report.webp" alt="Sai ATLAS writing a Word report from a short request" loading="eager" />
       </div>
     </div>
   </div>
@@ -402,187 +401,115 @@
 
 <div class="marquee" aria-hidden="true">
   <div class="marquee-track" id="marquee">
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="18" height="18" rx="4"/></svg>Parallel session tabs</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/></svg>Independent agent processes</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Background execution</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Structured job coordination</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/></svg>Live voice mode</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Real-time collaboration</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Structured debug console</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>Command palette</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Three-step auto-update</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Crash recovery &amp; diagnostics</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Session stats</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Provider &amp; login management</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 12h18"/><path d="m15 6 6 6-6 6"/></svg>Live upstream model discovery</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Security Center</span>
-    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>Skills &amp; MCP management</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>Word reports</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>Tidy spreadsheets</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="2" y="4" width="20" height="13" rx="2"/></svg>Slides from a report</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Help with your computer</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Runs on this computer</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"/></svg>Asks before it acts</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/></svg>English and Vietnamese</span>
+    <span class="chip"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3 12h18"/><path d="m15 6 6 6-6 6"/></svg>Quick entry from any app</span>
   </div>
 </div>
 
-<section class="stats">
-  <div class="container">
-    <div class="stats-grid">
-      <div class="stat reveal"><div class="num"><em>0</em></div><div class="lbl">Runtimes to install — the sidecar ships inside the app</div></div>
-      <div class="stat reveal reveal-late"><div class="num"><span class="count" data-to="14">0</span><em>+</em></div><div class="lbl">Native RPC dialogs, from providers to process control</div></div>
-      <div class="stat reveal reveal-late"><div class="num"><span class="count" data-to="2">0</span><em>×</em></div><div class="lbl">Parallel agents observed live in one window</div></div>
-      <div class="stat reveal reveal-later"><div class="num"><span class="count" data-to="3">0</span></div><div class="lbl">Steps from update banner to restarted app</div></div>
-    </div>
-  </div>
-</section>
-
-<section id="tabs">
+<section id="word" style="padding-top: 40px;">
   <div class="container split">
     <div class="split-text reveal">
-      <span class="eyebrow">Session Tabs</span>
-      <h2>Sessions that never block each other</h2>
-      <p class="lead">Every tab owns a full agent process. Kick off a long task, switch to another tab, and let it finish on its own — the titlebar keeps a live heartbeat so you always know what's running.</p>
+      <span class="eyebrow">Word</span>
+      <h2>A finished report from a few lines</h2>
+      <p class="lead">Describe the report you need or paste your notes. Sai ATLAS writes it as a Word document with headings, lists and tables, ready to open and edit.</p>
       <div class="points">
         <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/></svg></span>
-          <div><strong>Independent processes</strong><p>A crash or hang in one tab never touches the others.</p></div>
+          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span>
+          <div><strong>Your words, organised</strong><p>Rough notes become a clear report with a title, sections and a summary.</p></div>
         </div>
         <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="3"/><line x1="12" y1="4" x2="12" y2="20"/></svg></span>
-          <div><strong>Two-session split view</strong><p>Drag a tab into the workspace to run two isolated sessions side by side or stacked.</p></div>
-        </div>
-        <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-          <div><strong>Persistent workspace</strong><p>Open tabs, the active session, and recent-first navigation survive restarts and app upgrades.</p></div>
-        </div>
-        <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-          <div><strong>Ownership guard</strong><p>Live sessions are locked against accidental takeover.</p></div>
+          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <div><strong>A real .docx file</strong><p>Saved in Documents &gt; Sai ATLAS and opened from the card in the conversation.</p></div>
         </div>
       </div>
     </div>
     <figure class="shot reveal reveal-late">
-      <img src="assets/01-session-tabs.webp" alt="Three session tabs running in parallel" loading="lazy" />
-      <figcaption>Three tabs, three agent processes — two running concurrently.</figcaption>
+      <img src="assets/01-word-report.webp" alt="Sai ATLAS writing a Word report" loading="lazy" />
+      <figcaption>A short request becomes a Word report.</figcaption>
     </figure>
   </div>
 </section>
 
-<section id="dock" style="padding-top: 40px;">
+<section id="excel" style="padding-top: 40px;">
   <div class="container split flip">
     <div class="split-text reveal">
-      <span class="eyebrow">Conversation Dock</span>
-      <h2>Execution state, exactly where the work happens</h2>
-      <p class="lead">Todos, plan review, sub-agents and queued work live between the transcript and composer. Large collections stay compact, keep urgent rows visible, and expand into a focused full-list view without nested scrollbars.</p>
+      <span class="eyebrow">Excel</span>
+      <h2>A messy spreadsheet, cleaned up</h2>
+      <p class="lead">Attach an Excel, LibreOffice or CSV spreadsheet. Sai ATLAS makes a tidy copy and tells you what it fixed. Your original file is never changed.</p>
       <div class="points">
         <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-          <div><strong>Live todo &amp; plan cards</strong><p>Edit tasks, review plans, approve steps, and preserve todo changes in the transcript.</p></div>
+          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg></span>
+          <div><strong>The usual mess, fixed</strong><p>Extra spaces, empty and repeated rows, and numbers stored as text.</p></div>
         </div>
         <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
-          <div><strong>Focused large-list views</strong><p>Summarize busy Todo and Agents cards, then expand one card to inspect every row while the composer stays visible.</p></div>
-        </div>
-      </div>
-    </div>
-    <div class="duo reveal reveal-late">
-      <figure class="shot">
-        <img src="assets/09-dock-summary.webp" alt="Bounded Todo and Agents summaries sharing one dock scroll owner" loading="lazy" />
-        <figcaption>Summary mode keeps urgent work visible without squeezing the composer.</figcaption>
-      </figure>
-      <figure class="shot">
-        <img src="assets/10-dock-agents-focus.webp" alt="Agents card expanded into the focused full-list view" loading="lazy" />
-        <figcaption>Focused mode reveals every agent and collapses sibling cards to headers.</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<section id="management" style="padding-top: 40px;">
-  <div class="container">
-    <div class="center reveal">
-      <span class="eyebrow">Native Management</span>
-      <h2>The command line is no longer the settings screen</h2>
-      <p class="lead" style="max-width: 680px;">Configure the agent from dedicated, responsive surfaces. Selection and status carry the color; the rest stays clean, readable, and sized to your window.</p>
-    </div>
-    <div class="steps">
-      <div class="step reveal"><div class="n">01</div><h3>Skills &amp; MCP</h3><p>Inspect complete skill instructions, control scopes, add servers, test connections, and reauthorize without editing config files by hand.</p></div>
-      <div class="step reveal reveal-late"><div class="n">02</div><h3>Security &amp; SSH</h3><p>Audit the current repository, review findings with evidence, and maintain reusable remote hosts from one operations area.</p></div>
-      <div class="step reveal reveal-later"><div class="n">03</div><h3>One update surface</h3><p>See GUI and omp versions together, resolve update errors clearly, and install a verified package with its published metadata.</p></div>
-    </div>
-  </div>
-</section>
-
-<section id="native" style="padding-top: 40px;">
-  <div class="container">
-    <div class="center reveal">
-      <span class="eyebrow">Native, Not a Wrapper</span>
-      <h2>Real interfaces for real workflows</h2>
-      <p class="lead" style="max-width: 600px;">Voice, collaboration, debugging and commands get first-class native surfaces — not a terminal crammed into a webview.</p>
-    </div>
-    <div class="cards">
-      <div class="card reveal">
-        <img src="assets/04-voice.webp" alt="Live voice mode dialog" loading="lazy" />
-        <div class="card-body">
-          <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>Live voice mode</h3>
-          <p>Real-time speech sessions with live transcripts — talk to the agent while your hands stay on the keyboard.</p>
-        </div>
-      </div>
-      <div class="card reveal reveal-late">
-        <img src="assets/05-collab.webp" alt="Collaboration dialog" loading="lazy" />
-        <div class="card-body">
-          <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Collaboration</h3>
-          <p>Bring teammates into a session and watch the agent work together, live.</p>
-        </div>
-      </div>
-      <div class="card reveal">
-        <img src="assets/06-debug.webp" alt="Structured debug console" loading="lazy" />
-        <div class="card-body">
-          <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Structured debug console</h3>
-          <p>The raw RPC event stream — search, filters and pause — for when you need to see exactly what the agent did.</p>
-        </div>
-      </div>
-      <div class="card reveal reveal-late">
-        <img src="assets/07-command-palette.webp" alt="Command palette in Chinese" loading="lazy" />
-        <div class="card-body">
-          <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>Command palette</h3>
-          <p>Every command, dialog and setting one keystroke away — fully localized, English and Chinese included.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="context" style="padding-top: 40px;">
-  <div class="container split">
-    <div class="split-text reveal">
-      <span class="eyebrow">Context &amp; Usage</span>
-      <h2>Context you can actually audit</h2>
-      <p class="lead">Per-file token breakdowns, tool-call frequency and live cost — the numbers behind every session, rendered natively.</p>
-      <div class="points">
-        <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-          <div><strong>Session statistics</strong><p>Requests, tokens, cost and cache-hit rate at a glance.</p></div>
-        </div>
-        <div class="point">
-          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
-          <div><strong>Context report</strong><p>Exactly which files and tools are eating your window.</p></div>
+          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <div><strong>Totals when you want them</strong><p>Ask for a totals row and it is added under each sheet.</p></div>
         </div>
       </div>
     </div>
     <figure class="shot reveal reveal-late">
-      <img src="assets/08-context-report.webp" alt="Context report with token bars" loading="lazy" />
-      <figcaption>Context report — sorted token bars per source, with a copyable breakdown.</figcaption>
+      <img src="assets/02-spreadsheet-cleanup.webp" alt="Sai ATLAS cleaning a spreadsheet" loading="lazy" />
+      <figcaption>The cleaned copy sits next to the original, which stays untouched.</figcaption>
     </figure>
   </div>
 </section>
 
-<section id="updates" style="padding-top: 40px;">
+<section id="powerpoint" style="padding-top: 40px;">
+  <div class="container split">
+    <div class="split-text reveal">
+      <span class="eyebrow">PowerPoint</span>
+      <h2>Slides from your report</h2>
+      <p class="lead">Give Sai ATLAS a report or an outline and it builds a PowerPoint deck: one idea per slide, with short points you can present.</p>
+      <div class="points">
+        <div class="point">
+          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="8" y1="21" x2="16" y2="21"/></svg></span>
+          <div><strong>From report to deck</strong><p>Turn the report it just wrote, or one of your own, into slides.</p></div>
+        </div>
+        <div class="point">
+          <span class="ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <div><strong>A real .pptx file</strong><p>Open it in PowerPoint or LibreOffice Impress and adjust it as you like.</p></div>
+        </div>
+      </div>
+    </div>
+    <figure class="shot reveal reveal-late">
+      <img src="assets/03-slides.webp" alt="Sai ATLAS making a slide deck" loading="lazy" />
+      <figcaption>A report turned into a slide deck.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="computer-help" style="padding-top: 40px;">
   <div class="container">
     <div class="center reveal">
-      <span class="eyebrow">Updates</span>
-      <h2>Know when a new build lands</h2>
-      <p class="lead" style="max-width: 560px;">The app checks GitHub and keeps release progress visible. macOS builds are ad-hoc signed and Windows builds are unsigned, so either platform may require a manual confirmation on first launch.</p>
+      <span class="eyebrow">Computer help on SAI OS</span>
+      <h2>Help when the computer misbehaves</h2>
+      <p class="lead" style="max-width: 680px;">Wi-Fi gone, no sound, the printer will not print, the screen looks wrong, Vietnamese typing stopped working? Tell Sai ATLAS what happened in your own words.</p>
     </div>
     <div class="steps">
-      <div class="step reveal"><div class="n">01</div><h3>Banner appears</h3><p>A new release on GitHub shows up as a quiet banner — no modal, no interruption.</p></div>
-      <div class="step reveal reveal-late"><div class="n">02</div><h3>Get the matching build</h3><p>Choose the Apple Silicon, Intel, Windows x64, or Linux x64 build from the latest GitHub Release.</p></div>
-      <div class="step reveal reveal-later"><div class="n">03</div><h3>Install and reopen</h3><p>Install the matching package for your platform, then reopen Sai ATLAS with your existing sessions and settings.</p></div>
+      <div class="step reveal"><div class="n">01</div><h3>It checks first</h3><p>Sai ATLAS looks at the network, sound, printers, the screen, Bluetooth, storage, typing or updates before it suggests anything.</p></div>
+      <div class="step reveal reveal-late"><div class="n">02</div><h3>It explains plainly</h3><p>You get what it found in one or two sentences, without jargon.</p></div>
+      <div class="step reveal reveal-later"><div class="n">03</div><h3>You approve each fix</h3><p>It offers one fix at a time and changes nothing until you say yes. When a fix needs more, it writes a short note for whoever helps you next.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy" style="padding-top: 40px;">
+  <div class="container">
+    <div class="center reveal">
+      <span class="eyebrow">Privacy</span>
+      <h2>Your work stays with you</h2>
+      <p class="lead" style="max-width: 680px;">Your files and conversations stay on this computer. Sai ATLAS goes online only to download models and updates.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="n">01</div><h3>A model on your computer</h3><p>The AI runs through Ollama on this computer. Sai ATLAS does not use cloud models or an Ollama on another machine.</p></div>
+      <div class="step reveal reveal-late"><div class="n">02</div><h3>No account</h3><p>There is nothing to sign up for and nothing to sign in to.</p></div>
+      <div class="step reveal reveal-later"><div class="n">03</div><h3>Your files stay yours</h3><p>New files go to Documents &gt; Sai ATLAS. It never edits or deletes your own files.</p></div>
     </div>
   </div>
 </section>
@@ -591,31 +518,21 @@
   <div class="container">
     <div class="install-panel reveal">
       <span class="eyebrow" style="justify-content: center; display: inline-flex;">Install</span>
-      <h2>Up and running in a minute</h2>
-      <p class="lead" style="margin-left: auto; margin-right: auto;">Grab the build for your platform. The agent, its runtime and everything else are already inside.</p>
+      <h2>Up and running in a few minutes</h2>
+      <p class="lead" style="margin-left: auto; margin-right: auto;">Install Ollama from ollama.com, then grab the build for your computer. On first launch Sai ATLAS suggests a model that fits your machine and downloads it for you.</p>
       <div class="cta-row">
         <a class="btn btn-primary" data-omp-dmg="arm64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Apple Silicon <span class="btn-sub">arm64</span>
         </a>
         <a class="btn btn-ghost" data-omp-dmg="x64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg">Intel <span class="btn-sub">x64</span></a>
-        <a class="btn btn-ghost" data-omp-win href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-setup.exe">Windows <span class="btn-sub">x64 installer</span></a>
         <a class="btn btn-ghost" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 .deb</span></a>
         <a class="btn btn-ghost" data-omp-linux="appimage" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 AppImage</span></a>
         <a class="btn btn-ghost" href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a>
       </div>
       <div class="install-note">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>macOS builds are ad-hoc signed but not notarized; Windows builds are unsigned. On first launch, macOS may require right-click → <b>Open</b> or System Settings → Privacy &amp; Security → Open Anyway, and Windows may require More info → <b>Run anyway</b>. On Linux, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage keeps Chromium's sandbox only with the AppArmor profile from the README.</span>
-      </div>
-      <div class="src">
-        <h3>Prefer building it yourself?</h3>
-        <pre><span class="c"># clone the fork, with the GUI nested inside</span>
-git clone https://github.com/nornzach/oh-my-pi.git
-cd oh-my-pi &amp;&amp; git clone https://github.com/tung491/oh-my-pi-gui.git packages/gui
-bun install
-bun --cwd packages/gui run build:omp   <span class="c"># build the sidecar from the monorepo</span>
-bun --cwd packages/gui run package:mac:arm64 -- --publish never <span class="c"># → packages/gui/dist/*.dmg</span></pre>
+        <span>macOS builds are ad-hoc signed but not notarized: on first launch, macOS may require right-click → <b>Open</b> or System Settings → Privacy &amp; Security → Open Anyway. On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>.</span>
       </div>
     </div>
   </div>
@@ -628,7 +545,7 @@ bun --cwd packages/gui run package:mac:arm64 -- --publish never <span class="c">
         <a class="brand" href="#top">
           <img src="assets/sai-atlas-lockup-on-dark.svg" alt="Sai ATLAS" height="28">
         </a>
-        <p style="margin-top: 14px; color: var(--faint); font-size: 13.5px; max-width: 280px;">Sai ATLAS, the AI assistant for SAI OS, built on the omp coding agent — the real agent, not a reimplementation.</p>
+        <p style="margin-top: 14px; color: var(--faint); font-size: 13.5px; max-width: 280px;">Sai ATLAS, the private AI assistant for everyday work on SAI OS. It runs on your computer, built on the open-source omp agent.</p>
       </div>
       <div class="foot-links">
         <div class="foot-col">

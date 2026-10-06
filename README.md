@@ -2,152 +2,42 @@
 
 # Sai ATLAS
 
-**A desktop home for parallel coding agents.**<br>
-**让对话、代码与并行 Agent 工作尽在眼前。**
+**The private AI assistant for everyday work on SAI OS.**
 
 <a href="https://github.com/tung491/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/v/release/tung491/oh-my-pi-gui?style=flat&colorA=222222&colorB=3FB950" alt="Release"></a>
 <a href="https://github.com/tung491/oh-my-pi-gui/releases"><img src="https://img.shields.io/github/downloads/tung491/oh-my-pi-gui/total?style=flat&colorA=222222&colorB=58A6FF" alt="Downloads"></a>
 <a href="./LICENSE"><img src="https://img.shields.io/github/license/tung491/oh-my-pi-gui?style=flat&colorA=222222&colorB=BE185D" alt="License"></a>
-<img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-222222?style=flat" alt="Platform: macOS | Windows | Linux">
-<img src="https://img.shields.io/badge/Electron-44-47848F?style=flat&logo=electron&logoColor=white" alt="Electron">
-<img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white" alt="React">
+<img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-222222?style=flat" alt="Platform: macOS | Linux">
 
-[English](#english) · [中文](#中文) · [Releases / 下载](https://github.com/tung491/oh-my-pi-gui/releases)
+English · [Tiếng Việt](./README.vi.md) · [Releases](https://github.com/tung491/oh-my-pi-gui/releases)
 
 </div>
 
 ---
 
-## English
+Your files and conversations stay on this computer. Sai ATLAS goes online only to download models and updates.
 
-Keep the conversation, code changes, and agent activity in one place. Review a diff while another session works in its own Git worktree, compare two sessions in a split view, or open a tool-free Chat to think through an idea.
+Sai ATLAS is an AI assistant for people who want help with ordinary office work, not a tool for programmers. Ask in English or Vietnamese and it answers in the same language.
 
-Sai ATLAS is the AI assistant for SAI OS, a desktop GUI built on the [omp](https://github.com/can1357/oh-my-pi) coding agent. Every package bundles its own agent: **users of the DMG, NSIS, portable, `.deb`, and AppImage packages do not need to install omp, Bun, or Node separately.** It complements the TUI and shares the usual `~/.omp` configuration and sessions.
+- **Private.** No account and no sign-in. What you write and the files you work on are not sent anywhere.
+- **Local.** The AI model runs on this computer through [Ollama](https://ollama.com). Sai ATLAS uses only an Ollama running on this computer, never one on another machine or a cloud service.
+- **Word reports.** Describe a report or paste your notes, and Sai ATLAS writes a Word document (`.docx`).
+- **Spreadsheet clean-up.** Give it an Excel, LibreOffice or CSV spreadsheet and it makes a tidy copy: extra spaces, empty and repeated rows and numbers stored as text are fixed, and it can add a totals row. Your original file is never changed.
+- **Slides.** Turn a report or an outline into a PowerPoint deck (`.pptx`).
+- **Help with your computer.** On SAI OS it checks Wi-Fi, sound, printers, the screen, Bluetooth, storage, Vietnamese typing and updates, explains what it found in plain words, and offers one fix at a time for you to approve.
+- **Your work stays yours.** New files go to **Documents > Sai ATLAS**. Sai ATLAS never edits or deletes your own files, and every change it makes to the computer waits for your approval.
+- **Ready to install.** Every package carries everything it needs; there is nothing else to set up apart from Ollama.
 
-[Features](#en-features) · [What's new in 0.9.10](#en-recent) · [Gallery](#en-gallery) · [Install](#en-install) · [Shortcuts](#en-shortcuts) · [Development](#en-development) · [Help](#en-help) · [Releasing](#en-release)
+[Install](#en-install) · [Ollama](#en-ollama) · [Shortcuts](#en-shortcuts) · [Help](#en-help) · [Development](#en-development) · [Releasing](#en-release)
 
-> **v0.9.10 showcase.** The improvements below are included in v0.9.10, with the bundled agent updated to omp 18.3.0. [GitHub Releases](https://github.com/tung491/oh-my-pi-gui/releases) is authoritative for available downloads and release contents.
-
-<img src="docs/screenshots/en/01-conversation.png" alt="English Sai ATLAS conversation in the synthetic aurora-web project" width="100%">
-
-**About the screenshots:** these are real Electron GUI renders of a synthetic `aurora-web` project. Conversations, model lists, agent states, and metrics are scripted demonstration data—not actual provider benchmarks or account data. Captures use a fresh temporary HOME, Electron profile, and project with a synthetic sidecar, without live credentials or personal workspace content.
-
-<a id="en-features"></a>
-### A workspace for the whole workflow
-
-The distinctive part is not just a chat window: it is being able to **separate parallel work, inspect what happened, and choose how the next step runs** without losing the thread.
-
-| Area | What you can do | Scope and useful limits |
+| A Word report | A cleaned spreadsheet | A slide deck |
 |---|---|---|
-| **Independent sessions** | Run up to **10 tabs**, each with its own sidecar, session, and message queue; keep background work running and create fresh Git worktree tabs. | Separate session runtimes are not an OS security boundary. Git must be available for worktrees. |
-| **Split views & windows** | Place two sessions side by side or stacked, resize the divider, and use multiple windows. Restore the open/active tab layout across restarts. | A split contains **two panes**, not an unlimited pane grid. |
-| **Chat vs. Agent** | Use global, tool-free **Chat** for conversation and workspace **Agent** sessions for coding tasks. | Chat history stays separate from project groups and workspace operations. |
-| **Readable execution** | Inspect diffs and Bash, read, grep, and task calls in dedicated renderers; follow streaming Markdown, highlighted code, collapsible thinking, math, Mermaid, and images. | Tool output remains inspectable alongside the conversation rather than being flattened into plain chat text. |
-| **Background coordination** | Follow `wait` jobs, inspect `proc://` task and service state, and review `agent://` messages and process controls in compact structured cards. | Coordination details stay bounded and expandable; legacy `hub` transcripts remain readable. |
-| **Plans, Todos & queues** | Review plans and approvals, queue follow-up messages, and monitor bounded Todos/Agents dock cards. Expand a card for a focused full list. | Compact summaries keep large task lists from taking over the conversation. |
-| **Agent Hub** | Manage agent definitions, enable/disable agents, set model and prewalk overrides, inspect progress/logs, abort work, and wake parked agents. | Available actions follow the agent's current state; role assignments and per-agent overrides serve different purposes. |
-| **Models & roles** | Pick models by provider, assign models to roles, and adjust reasoning/thinking levels. | Reasoning controls appear only for models that support them. |
-| **Local models (Ollama)** | Run every model locally through Ollama: check its status, download models with progress, and pick the default from the Ollama window. | Ollama must be installed and running; model size is limited by this machine's memory. Other providers are not offered. |
-| **Session library** | Search history, explore session trees, branches and forks, organize labels, copy-import Claude/Codex sessions, export HTML, and preview sharing. | Copy import is not live synchronization with another app. Review content before exporting or sharing. |
-| **Context & live accounting** | Inspect context usage and live cost/cache updates; retain measured context usage even when model capacity is unknown. | Measured usage and a model's maximum capacity are different facts. |
-| **Statistics & usage** | Open a private local statistics dashboard and session metrics for requests, tokens, cost, cache, and speed; inspect provider usage/quotas. | Provider quotas depend on API/account availability. Local statistics are not a provider billing statement. |
-| **MCP** | Manage servers, test connections, reconnect, and complete supported authentication flows. | External MCP executables/services still need installation and configuration. |
-| **Skills & plugins** | Enable skills, edit managed skills, and manage plugins and marketplaces. | Managed-skill editing does not imply every discovered resource is editable. |
-| **Hooks & resources** | Configure hooks and inspect templates, memory, and other discovered resources from settings. | Some hook changes take effect next session; templates and memory are mostly inspection surfaces. |
-| **SSH hosts** | Configure hosts through the native SSH settings page. | `/ssh list`, `/ssh add`, and `/ssh remove` management commands remain disabled; OpenSSH and host access must be configured separately. |
-| **Commands & voice** | Use a searchable palette for supported dialogs, menus, toggles, and argument prompts; access the voice command. | Some slash commands pass through to the agent or are unsupported. Voice depends on runtime, permissions, and service support—not a promise of offline or all-OS availability. |
-| **Relay collaboration** | Host or join a shared session with edit or read-only access. | Requires a configured relay service; it is not a purely local collaboration mode. |
-| **Settings & control** | Configure GUI/runtime/tool behavior, switch English/Vietnamese, choose themes, and access approvals and security scans/settings. | Approvals and scans are **not an OS sandbox**; command coverage is not total CLI parity. |
+| <img src="docs/screenshots/en/01-word-report.png" alt="Sai ATLAS writing a Word report" width="100%"> | <img src="docs/screenshots/en/02-spreadsheet-cleanup.png" alt="Sai ATLAS cleaning a spreadsheet" width="100%"> | <img src="docs/screenshots/en/03-slides.png" alt="Sai ATLAS making a slide deck" width="100%"> |
 
-Model requests go to the local Ollama daemon (`http://127.0.0.1:11434`, or the address in `OLLAMA_BASE_URL` / `OLLAMA_HOST`). The bundled agent removes the separate runtime install, not the need to configure credentials, project dependencies, external Git/OpenSSH/MCP tools, or optional services. Only connect tools and services you trust.
-
-<a id="en-recent"></a>
-### What's new in 0.9.10
-
-v0.9.10 includes these GUI improvements and a bundled agent update:
-
-| In daily use | What has improved |
-|---|---|
-| **Bundled agent** | Updated to **omp 18.3.0**, with expanded browser automation, buffered cloud transcription, improved long-session responsiveness, and a fix for LSP requests hanging during cancellation. |
-| **Background coordination** | New `wait` and internal `proc://`/`agent://` protocol renderers keep job progress, peer messages, process state, and cancellation actions readable without treating them as generic text or file writes. |
-| **Switching models and accounts** | Model/provider views refresh after switching, login, and provider create/update/delete operations. |
-| **Watching a run** | Context, cost, and cache values update live; measured context remains visible when capacity is unknown. |
-| **Reading long conversations** | Tail-follow keeps up with new output without pulling you out of scrollback; jump-to-latest returns you to the live end. |
-| **Streaming responses** | More stable Markdown rendering while tokens arrive. |
-| **Moving around the app** | Smoother common dialogs, popovers, hover feedback, and panel entrances—not a claim that every overlay has been reworked. |
-| **Typing and returning to work** | IME, focus, and context-sensitive Escape handling improvements, plus recovery of window bounds when a saved position is no longer usable. |
-
-<a id="en-gallery"></a>
-### Explore the interface
-
-Open a group for a closer look. All images in this section use the English interface and the synthetic showcase data described above.
-
-<details>
-<summary><b>Work across projects — workspace inspection and two-pane split</b></summary>
-
-Keep files, diffs, and logs within reach, then place a second session beside the first without merging their runtimes.
-
-| Workspace | Split view |
-|---|---|
-| ![English workspace panel](docs/screenshots/en/02-workspace.png) | ![English two-pane split view](docs/screenshots/en/11-split.png) |
-
-</details>
-
-<details>
-<summary><b>Choose your connection — models and providers</b></summary>
-
-Browse the model picker and provider controls. The displayed model roster and account states are fixtures, not a live catalog or connected account.
-
-| Models | Providers |
-|---|---|
-| ![English model picker](docs/screenshots/en/03-models.png) | ![English provider management](docs/screenshots/en/04-providers.png) |
-
-</details>
-
-<details>
-<summary><b>Delegate deliberately — model roles and Agent Hub</b></summary>
-
-Assign models by role, then inspect agent definitions and task activity without losing the main conversation.
-
-| Model roles | Agent Hub |
-|---|---|
-| ![English model role assignments](docs/screenshots/en/05-model-roles.png) | ![English Agent Hub with scripted agent states](docs/screenshots/en/06-agent-hub.png) |
-
-</details>
-
-<details>
-<summary><b>See the numbers — local statistics and provider usage</b></summary>
-
-Separate session analytics from provider-reported usage. The values below are scripted examples, not measured model performance, real spending, or account quotas.
-
-| Local statistics | Usage |
-|---|---|
-| ![English local statistics with synthetic metrics](docs/screenshots/en/07-statistics.png) | ![English usage view with synthetic values](docs/screenshots/en/12-usage.png) |
-
-</details>
-
-<details>
-<summary><b>Understand and tune — context and settings</b></summary>
-
-Inspect what a session is carrying, then configure the runtime and GUI from the settings window.
-
-| Context | Settings |
-|---|---|
-| ![English context inspection](docs/screenshots/en/08-context.png) | ![English settings window](docs/screenshots/en/10-settings.png) |
-
-</details>
-
-<details>
-<summary><b>Find the next action — command palette</b></summary>
-
-Search with `⌘K`. Supported commands lead to native controls; pass-through and unavailable commands should not be mistaken for complete GUI coverage of the CLI.
-
-![English command palette](docs/screenshots/en/09-commands.png)
-
-</details>
+The screenshots show the real app with a scripted demonstration conversation; no real documents or accounts were used.
 
 <a id="en-install"></a>
-### Install & start
+## Install & start
 
 **Documented install baseline: [v0.9.10](https://github.com/nornzach/oh-my-pi-gui/releases/tag/v0.9.10).** Check [Releases](https://github.com/tung491/oh-my-pi-gui/releases) for authoritative current downloads and release notes.
 
@@ -157,11 +47,6 @@ Search with `⌘K`. Supported commands lead to native controls; pass-through and
 | Intel | [omp-0.9.10.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg) |
 
 Sai ATLAS builds on Electron 44 need macOS 13 or later. The updater does not offer them to macOS 12.
-
-| Windows x64 | v0.9.10 download |
-|---|---|
-| Installer | [omp-0.9.10-setup.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-setup.exe) |
-| Portable | [omp-0.9.10-portable.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-portable.exe) |
 
 | Linux x64 (Ubuntu 24.04+) | Package |
 |---|---|
@@ -174,9 +59,9 @@ In-app `.deb` updates download the package to `~/.cache/@oh-my-pi/omp-gui/update
 
 For the AppImage, run `chmod +x` on it and start it. It needs `libwebkit2gtk-4.1-0` on the host (stock Ubuntu GNOME desktops have it; otherwise `sudo apt install libwebkit2gtk-4.1-0`), which also brings `bubblewrap` and `xdg-dbus-proxy`. The WebKit sandbox is always on here too and needs no AppArmor profile. Dictation and speech playback reach the microphone and speakers through the PulseAudio socket, which Ubuntu's stock `pipewire-pulse` provides. A started AppImage registers itself as the `omp://` handler when `desktop-file-utils` and `xdg-utils` are installed, and in-app updates replace the file in place. In the AppImage on Ubuntu 26.04, spell checking in text fields does not work; the `.deb` has it.
 
-Sai ATLAS runs natively on Wayland; start it with `GDK_BACKEND=x11 sai-atlas` to use XWayland. On Wayland the compositor places windows, so the quick-entry bar may not be centred or kept on top. Under XWayland, global shortcuts fire only while a Sai ATLAS window is focused. Startup needs the standard `XDG_RUNTIME_DIR` (`/run/user/<uid>`), which every desktop login session sets; the WebKit sandbox cannot start without it.
+Sai ATLAS runs natively on Wayland; start it with `GDK_BACKEND=x11 sai-atlas` to use XWayland. On Wayland the compositor decides where each window goes, so the quick-entry bar may not be centred or kept on top. Under XWayland, global shortcuts fire only while a Sai ATLAS window is focused. Startup needs the standard `XDG_RUNTIME_DIR` (`/run/user/<uid>`), which every desktop login session sets; the WebKit sandbox cannot start without it.
 
-Input methods: if Chinese or Vietnamese input through ibus or fcitx5 does not work in the composer or the quick-entry bar on native Wayland, start Sai ATLAS with `GDK_BACKEND=x11`.
+Input methods: if Vietnamese input through ibus or fcitx5 does not work in the composer or the quick-entry bar on native Wayland, start Sai ATLAS with `GDK_BACKEND=x11`.
 
 **Migrating from 0.9.16 on Linux.** Linux builds now run on Tauri and the system's WebKitGTK instead of Electron, and 0.9.16 moves to them through its own updater. Settings and sessions carry over.
 
@@ -191,51 +76,70 @@ Open the DMG and drag **Sai ATLAS** into **Applications**. The build is ad-hoc s
 
 **Coming from omp 0.9.x on a Mac?** Sai ATLAS installs beside `omp.app` instead of replacing it. Quit omp, install Sai ATLAS, then move `omp.app` to the Trash and pin Sai ATLAS in the Dock again. macOS asks for microphone and notification access again, because the app id is now `vn.io.vif.saiatlas`. Settings and sessions carry over.
 
-Windows packages are currently unsigned. Windows SmartScreen may require **More info → Run anyway** on first launch after confirming the download's source. The installer upgrades an existing omp install in place and keeps its settings; if you pinned omp to the taskbar, pin Sai ATLAS again.
+<a id="en-ollama"></a>
+## Ollama and your first task
 
 Sai ATLAS runs its models locally through [Ollama](https://ollama.com), so install Ollama first. On the first launch a welcome screen shows this machine's memory and graphics, whether Ollama is running, and up to three Gemma 4 models (E2B, E4B and 26B A4B, labelled minimal, recommended and maximum) picked to fit this machine.
 
-- **Ollama not running or not installed:** on Linux the screen shows the exact command and runs it after the system password prompt, either **Start Ollama** (`systemctl start ollama.service`) or **Install Ollama** (the official `ollama.com/install.sh` installer). On macOS and Windows it links to ollama.com/download; start Ollama, then choose **Check again**.
+- **Ollama not running or not installed:** on Linux the screen shows the exact command and runs it after the system password prompt, either **Start Ollama** (`systemctl start ollama.service`) or **Install Ollama** (the official `ollama.com/install.sh` installer). On macOS it links to ollama.com/download; start Ollama, then choose **Check again**.
 - **Download** a model on its card and watch the progress bar. **Cancel** stops the download, and a later **Download** resumes it.
-- **Continue to the assistant** makes the chosen model the default for this and new sessions. **Set up later** closes the screen until the next launch; **Run setup again** in the Ollama window reopens it.
+- **Get started** makes the chosen model the default for this and new sessions. **Set up later** closes the screen until the next launch; **Run setup again** in the Ollama window reopens it.
 
-Ollama follows `OLLAMA_BASE_URL` or `OLLAMA_HOST` when set, the same rule the agent uses.
+Ollama follows `OLLAMA_BASE_URL` or `OLLAMA_HOST` when set, the same rule the agent uses. The address must point at this computer (`127.0.0.1`, `localhost` or `::1`); with an Ollama on another machine, no model is listed and the model chooser says Sai ATLAS only uses Ollama running on this computer.
 
 1. **Get a local model:** finish the welcome screen, or open **Ollama** from the sidebar to download a model and choose **Use as default**.
-2. **Choose your work:** open a project Agent tab with `⌘T`, or a tool-free Chat with `⇧⌘T`; select an available model.
-3. **Start a conversation:** enter a request. Use `⌘N` when you want a new session, and inspect tool calls and approvals as work proceeds.
-4. **Go parallel:** `⌥T` creates a fresh worktree tab. Use the tab context menu or drag a tab into the workspace for a two-pane split.
-5. **Find and revisit:** `⌘K` opens commands; `⌘P` searches session history.
+2. **Start a task:** choose **New task** in the sidebar, or pick one of the suggestions on the empty screen: a Word report, a spreadsheet clean-up, slides from a report, or help with your computer.
+3. **Attach a file** when the job needs one, such as the spreadsheet to clean or the report to turn into slides, and say what you want in your own words.
+4. **Approve the steps:** Sai ATLAS asks before it creates a file or changes a setting. When it is done, open the result from the card in the conversation.
 
 <a id="en-shortcuts"></a>
-### Keyboard shortcuts
+## Keyboard shortcuts
 
 | Shortcut | Action |
 |---|---|
-| `⌘T` | New Agent tab |
-| `⇧⌘T` | New tool-free Chat tab |
-| `⌥T` | Fresh Git worktree tab |
+| `⌘T` | New tab |
 | `⌘N` | New session |
 | `⌘K` | Command palette |
-| `⌘P` | Session history search |
 | `⌘,` | Settings |
+| `⌘/` | List every shortcut |
 | `⌘B` / `⌘J` | Toggle sidebars |
+| `⇧⌘O` | Show or hide the window |
 | `⌃⇧Space` (macOS) / `Ctrl+Shift+Space` | Quick entry: ask from any app (rebindable, can be turned off) |
-| `Esc` | Context-dependent close or abort; not an unconditional abort shortcut |
+| `Esc` | Close the open dialog, or stop the running answer |
 
-On Linux and Windows, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+Shift+T`, `Ctrl+K`). The thinking toggle has no default chord there, because Ctrl+T opens a tab; assign one in Keyboard Shortcuts.
+On Linux, ⌘ shortcuts use Ctrl and show as text (`Ctrl+T`, `Ctrl+K`). Change any of them in Settings → Keyboard Shortcuts.
 
-**Quick entry** opens a small bar over whatever app you are in. Choose **Chat**, or **Agent** with the Work folder or a recent workspace, type, and press Enter: the message is sent from a new tab in the main window, which comes to the front. Shift+Enter adds a line. Esc or clicking away closes the bar and keeps the draft. A shell command (`!ls`) or Python code (`$ print(1)`) opens in the new tab unsent, and a message that cannot be delivered, for example at the tab limit, stays in the bar with the reason. Change the chord or turn it off in Settings → Keyboard Shortcuts. `⇧⌘O` (`Ctrl+Shift+O`) still shows or hides the window.
+**Quick entry** opens a small bar over whatever app you are in. Type and press Enter: the message starts a new task in the main window, which comes to the front. Shift+Enter adds a line. Esc or clicking away closes the bar and keeps the draft. A message that cannot be delivered, for example when too many tabs are open, stays in the bar with the reason.
 
 On GNOME Wayland with the `.deb`, the first launch asks you to allow both global shortcuts. GNOME then owns the keys: change or remove them in Settings → Apps → Sai ATLAS → Global Shortcuts. A chord changed in Sai ATLAS applies after a restart, when GNOME asks again; turning quick entry off takes effect at once. Without the portal (an AppImage without desktop integration, wlroots compositors such as Sway, or a declined dialog), bind `sai-atlas --quick-entry` as a custom keyboard shortcut, or the AppImage's path followed by `--quick-entry` for the AppImage; on Sway, `bindsym ctrl+shift+space exec sai-atlas --quick-entry`.
 
+<a id="en-help"></a>
+## Troubleshooting
+
+| Symptom | What to check |
+|---|---|
+| No model is listed | Check that Ollama runs on this computer and has a model (`ollama list`). Sai ATLAS ignores an Ollama on another machine, even when `OLLAMA_HOST` points at it. |
+| macOS blocks the first launch | Confirm the download came from the release page, then right-click → Open or use Privacy & Security → Open Anyway. The baseline build is ad-hoc signed, not notarized. |
+| `Built-in omp not found` | In a source checkout, build the sidecar or supply a compatible prebuilt one. In an installed app, reinstall the correct official DMG; a separate system `omp` will not fix a missing bundle resource. |
+| `build:omp` cannot find the monorepo | Put the GUI checkout at the monorepo's `packages/gui/`, alongside `packages/coding-agent/` and `packages/natives/`. |
+| `replacing stale addon … version sentinel ≠ …` | Informational: the builder detected and replaced a mismatched native addon. |
+| Native addon download fails | Check registry access and whether that version is published. If necessary, from the monorepo root run `bun --cwd=packages/natives run build` with the required Rust toolchain, then rebuild the sidecar. |
+| Intel sidecar exits immediately | Check the sidecar architecture and package with `bun run package:mac:x64`, not the default config. |
+| The AppImage exits at once, naming a missing library such as `libEGL.so.1` | Install `libwebkit2gtk-4.1-0`. The AppImage relies on the graphics libraries and sandbox tools that package brings. |
+| Startup fails with `Failed to fully launch dbus-proxy` | Start Sai ATLAS from a desktop login session, which sets `XDG_RUNTIME_DIR=/run/user/<uid>`; shells opened with `su`, remote logins and cron jobs often lack it. |
+| `bun run dev` exits with `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ restricts unprivileged user namespaces. Install the `omp-dev-electron` profile from [Daily development](#daily-development). Do not make `chrome-sandbox` setuid root. |
+| No tray icon on Ubuntu | Enable the Ubuntu AppIndicators extension. |
+| A `.deb` update says Sai ATLAS can't ask for administrator access | The running copy was started in a way that blocks the password prompt, for example by the previous version's updater. Quit and reopen Sai ATLAS, then install again; the update downloads again. |
+| A `.deb` update shows a `sudo apt install …` command instead of installing | apt could not resolve the packages the update needs, so nothing changed. Run the command in a terminal to see why and install it. |
+| Quick entry or `Ctrl+Shift+O` does nothing while another app is focused | On GNOME Wayland, use the `.deb` and allow the shortcuts when asked; if you declined, allow or reset them in Settings → Apps → Sai ATLAS. Without the portal, bind `sai-atlas --quick-entry` as a custom shortcut. Settings → Keyboard Shortcuts shows the quick-entry status, and a refused registration is logged to `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`. |
+
 <a id="en-development"></a>
-### Development
+## Development
 
 <details>
-<summary><b>Build, test, and reproduce the showcase</b> — DMG users do not need these steps</summary>
+<summary><b>Build, test, and reproduce the screenshots</b> — people who install a package do not need these steps</summary>
 
-#### Repository boundaries
+### Repository boundaries
 
 This is a **separate repository nested inside a monorepo**, not an ordinary monorepo package:
 
@@ -258,9 +162,9 @@ omp-monorepo/                    # nornzach/oh-my-pi: fork and sidecar build sou
 
 Never stage `packages/gui/` into the monorepo: its untracked status there is intentional. Git commands inside `packages/gui/` act on the GUI repository; run monorepo Git commands at the monorepo root. Read [AGENTS.md](./AGENTS.md) before making changes.
 
-#### Build from source
+### Build from source
 
-**Prerequisites:** Git and [Bun](https://bun.sh) **≥ 1.4**. macOS is required for the macOS sidecar and DMG commands; Windows x64 can be cross-built from macOS or Linux when the neighboring monorepo is available. Linux x64 packages build on a Linux x64 host with Docker.
+**Prerequisites:** Git and [Bun](https://bun.sh) **≥ 1.4**. macOS is required for the macOS sidecar and DMG commands. Linux x64 packages build on a Linux x64 host with Docker.
 
 ```bash
 # Clone the monorepo fork, then nest the GUI repository inside it.
@@ -281,8 +185,6 @@ bun run build:omp                              # arm64 host -> resources/omp
 bun run build:omp:x64                          # Intel -> resources/omp.x64
 bun run package:mac:arm64 -- --publish never    # dist/Sai-ATLAS-<version>-arm64.dmg, .zip, latest-mac.yml
 bun run package:mac:x64 -- --publish never      # dist/Sai-ATLAS-<version>.dmg, .zip, latest-mac.yml
-bun run build:omp:win                           # Windows x64 -> resources/omp.exe
-bun run package:win -- --publish never           # Windows NSIS + portable installers
 bun run build:omp:linux                        # Linux x64 -> resources/omp.linux-x64
 bun run package:linux                           # AppImage + .deb -> src-tauri/target-linux-2404/x86_64-unknown-linux-gnu/release/bundle/
 ```
@@ -306,11 +208,9 @@ Inside the monorepo, `bun install` resolves `packages/gui` as a workspace member
 
 Packaging rebuilds the Electron app, **not the agent sidecar**. Re-run the matching `build:omp*` after agent/RPC changes or upstream updates. The arm64 config uses `resources/omp`; the Intel config uses `resources/omp.x64`. Always use `package:mac:x64` for Intel—using the default config can package the wrong architecture.
 
-The Windows configuration targets x64 and bundles `resources/omp.exe`. It produces an NSIS installer and a portable executable. Windows packages are currently unsigned; production distribution should add a Windows code-signing certificate before treating SmartScreen warnings as resolved.
-
 **A standalone GUI clone cannot compile the sidecar.** It must occupy `packages/gui/` in the layout above. For artifact assembly without monorepo sources, supply trusted, compatible prebuilt sidecars at `resources/omp` and/or `resources/omp.x64`, then run `build` and the matching packaging command. A packaged app uses its bundled agent; installing a system `omp` is not a fallback for a missing sidecar.
 
-#### Daily development
+### Daily development
 
 ```bash
 bun run dev                         # HMR, using resources/omp
@@ -336,45 +236,23 @@ profile omp-dev-electron "/path/printed/by/node" flags=(unconfined) {
 }
 ```
 
-#### Reproduce the screenshots
+### Reproduce the screenshots
 
 From the GUI repository, after installing its dependencies:
 
 ```bash
 bun run build
-bun scripts/capture-showcase.ts
+scripts/virtual-display.sh run -- bun scripts/capture-showcase.ts
 ```
 
-The capture script renders the actual Electron GUI using a fresh temporary HOME, Electron profile, synthetic `aurora-web` project, and synthetic sidecar—**no live credentials or personal workspace are used**. It writes localized showcase images to `docs/screenshots/en/` and `docs/screenshots/zh/`. Scripted conversations, model lists, agent states, and metrics make the scenes reproducible; they are not provider tests or real usage records. This fixture setup is not an OS sandbox.
+The capture script renders the real Electron GUI with a fresh temporary HOME and profile and a scripted stand-in for the agent, so **no live model, credentials or personal files are used**. It plays three office tasks (a Word report, a spreadsheet clean-up and a slide deck) and writes the shots to `docs/screenshots/en/` and `docs/screenshots/vi/`. The conversations are demonstration data, not real model output.
 
-Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light theme instead of the default dark theme, `SHOWCASE_OUT=<dir>` writes to `<dir>/en` and `<dir>/zh` instead of `docs/screenshots`, and `SHOWCASE_ONBOARDING=1` also captures the first-run welcome screen as `00-onboarding.png`. On Linux the script passes the display variables (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) through to Electron.
+Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light theme instead of the default dark theme, `SHOWCASE_OUT=<dir>` writes to `<dir>/en` and `<dir>/vi` instead of `docs/screenshots`, and `SHOWCASE_ONBOARDING=1` also captures the first-run welcome screen as `00-onboarding.png`. On Linux the script passes the display variables (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) through to Electron.
 
 </details>
 
-<a id="en-help"></a>
-### Troubleshooting
-
-| Symptom | What to check |
-|---|---|
-| macOS blocks the first launch | Confirm the download came from the release page, then right-click → Open or use Privacy & Security → Open Anyway. The baseline build is ad-hoc signed, not notarized. |
-| Windows SmartScreen blocks the first launch | Confirm the download came from the release page, then choose More info → Run anyway. The Windows package is currently unsigned. |
-| A screenshot shows something absent from the installed app | The showcase covers v0.9.10. Check the installed version and its release notes; earlier releases may not include these improvements. |
-| `Built-in omp not found` | In a source checkout, build the sidecar or supply a compatible prebuilt one. In an installed app, reinstall the correct official DMG; a separate system `omp` will not fix a missing bundle resource. |
-| `build:omp` cannot find the monorepo | Put the GUI checkout at the monorepo's `packages/gui/`, alongside `packages/coding-agent/` and `packages/natives/`. |
-| `replacing stale addon … version sentinel ≠ …` | Informational: the builder detected and replaced a mismatched native addon. |
-| Native addon download fails | Check registry access and whether that version is published. If necessary, from the monorepo root run `bun --cwd=packages/natives run build` with the required Rust toolchain, then rebuild the sidecar. |
-| Intel sidecar exits immediately | Check the sidecar architecture and package with `bun run package:mac:x64`, not the default config. |
-| A command or integration is unavailable | Some slash commands pass through or are unsupported. Configure external services/tools separately; use SSH settings rather than the disabled `/ssh` management commands. |
-| The AppImage exits at once, naming a missing library such as `libEGL.so.1` | Install `libwebkit2gtk-4.1-0`. The AppImage relies on the graphics libraries and sandbox tools that package brings. |
-| Startup fails with `Failed to fully launch dbus-proxy` | Start Sai ATLAS from a desktop login session, which sets `XDG_RUNTIME_DIR=/run/user/<uid>`; shells opened with `su` or `ssh`, and cron jobs, often lack it. |
-| `bun run dev` exits with `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ restricts unprivileged user namespaces. Install the `omp-dev-electron` profile from [Daily development](#daily-development). Do not make `chrome-sandbox` setuid root. |
-| No tray icon on Ubuntu | Enable the Ubuntu AppIndicators extension. |
-| A `.deb` update says Sai ATLAS can't ask for administrator access | The running copy was started in a way that blocks the password prompt, for example by the previous version's updater. Quit and reopen Sai ATLAS, then install again; the update downloads again. |
-| A `.deb` update shows a `sudo apt install …` command instead of installing | apt could not resolve the packages the update needs, so nothing changed. Run the command in a terminal to see why and install it. |
-| Quick entry or `Ctrl+Shift+O` does nothing while another app is focused | On GNOME Wayland, use the `.deb` and allow the shortcuts when asked; if you declined, allow or reset them in Settings → Apps → Sai ATLAS. Without the portal, bind `sai-atlas --quick-entry` as a custom shortcut. Settings → Keyboard Shortcuts shows the quick-entry status, and a refused registration is logged to `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`. |
-
 <a id="en-release"></a>
-### Release process (maintainers)
+## Release process (maintainers)
 
 <details>
 <summary><b>Sync, build all targets, smoke-test the installers, then publish</b></summary>
@@ -382,393 +260,11 @@ Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light th
 Releases belong only to [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui/releases). Preserve the two-repository boundary throughout:
 
 1. **Start with clean checkouts and sync upstream.** From the **monorepo root**, run `bash packages/gui/scripts/sync-upstream.sh`. It fetches/merges `upstream/main`, installs dependencies, re-provisions natives, generates the statistics assets, rebuilds/smoke-tests the sidecar, and builds/checks/tests the GUI. If there are conflicts, resolve and commit the monorepo merge, then run `SKIP_MERGE=1 bash packages/gui/scripts/sync-upstream.sh`. Do not substitute a hand-rolled merge. Review and commit any remaining monorepo changes there; push them only to the fork's `origin`.
-2. **Prepare the GUI release.** In `packages/gui/`, bump `package.json` and `src-tauri/Cargo.toml` to the same version (a packaging test fails when they differ), write the release's `CHANGELOG.md` entry, and update both language sections' install links and source/release notes.
+2. **Prepare the GUI release.** In `packages/gui/`, bump `package.json` and `src-tauri/Cargo.toml` to the same version (a packaging test fails when they differ), write the release's `CHANGELOG.md` entry, and update the install links and release notes in both `README.md` and `README.vi.md`.
 3. **Verify the GUI:** `bunx vitest run && bun run check:types && bun run build`; check touched supported files with Biome.
 4. **Record the release source.** Commit GUI release changes in the GUI repository, tag `vX.Y.Z`, and push `main` plus the tag to its `origin`. Keep both checkouts clean before producing release artifacts.
-5. **Build all sidecars:** `bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`. Run the two macOS sidecars and the Windows sidecar's `--smoke-test` on compatible hosts. On a Linux x64 host, run `bun run build:omp:linux` and `resources/omp.linux-x64 --smoke-test`. Cross-compilation alone is not runtime verification.
-6. **Build and inspect installers:** build both DMGs with the macOS commands and Windows installers with `bun run package:win -- --publish never`. Mount each DMG; verify its app seal with `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"`, its bundled sidecar architecture with `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"`, and the Windows package's `win-unpacked/resources/omp.exe` with `file`. On compatible hosts, launch each package, confirm sidecar `ready`, a successful `get_settings` RPC, and a settings toggle that persists. On macOS, also check that the Dock, About and menu names read Sai ATLAS, that `codesign -dv` shows `Identifier=vn.io.vif.saiatlas`, and that Finder shows the app icon (electron-builder converts it from the PNG). On Windows, install 0.9.10 and then the new setup: Apps & features must show one entry, "Sai ATLAS", the old omp shortcuts must be gone, and settings must be kept (the pinned `nsis.guid` upgrades in place). On Linux x64, run `bun run package:linux` with `SAI_ATLAS_UPDATE_BASE` unset, so the binaries read this repository's release feed. Then run `bash scripts/tauri-deb-smoke.sh <deb>`, which installs the `.deb` in a clean Ubuntu 24.04 container and runs `e2e-tauri/packaged-smoke.e2e.ts` against it there, `OMP_E2E_FAKE_MIC=1 bash scripts/tauri-deb-smoke.sh <deb>` for the microphone and playback probe, and `bash scripts/tauri-wm-geometry-check.sh <deb>` (Docker required for all three). Then install the `.deb` and the AppImage on the host. On each package, press the quick-entry chord and send one prompt.
-7. **Publish only verified artifacts.** Run `bun scripts/release-feeds.ts --version <version> --linux <bundle-dir> --electron-mac-feed <dir>/latest-mac.yml --electron-windows-feed <dir>/latest.yml`: it copies the Linux bundles into `dist-release/` under their published names, writes `latest-linux.yml` for both packages, and copies the Electron feeds with the files they list. Create the GitHub Release as a draft, upload every asset, then publish; a release missing an asset breaks update checks. Publish it with both DMGs, the Windows NSIS and portable installers, the Linux AppImage and `.deb` with `latest-linux.yml` (without it, Linux update checks fail), generated update metadata, and the changelog. **Until 1.0.0, every release also carries bridge copies:** byte-identical copies of the two DMGs named `omp-<version>-arm64.dmg` and `omp-<version>.dmg`, listed next to the Sai-ATLAS names in the combined `latest-mac.yml`. Macs on 0.9.x look only for the `omp-` names and otherwise report the installer missing. The combined `latest-mac.yml` must also carry `minimumSystemVersion: 22.0.0` (Darwin 22 is macOS 13; electron-builder does not write it), and `bun run check:mac-update-floor <path-to-latest-mac.yml>` must pass before you publish; the release body says the previous release is the last one for macOS 12. Those Macs keep `omp.app` after installing, and their update screen never shows release notes, so put the Mac migration steps from [Install & start](#en-install) (quit omp, install Sai ATLAS, trash `omp.app`, re-pin, grant access again) at the top of every release body until 1.0.0. Record the monorepo commit used for the sidecars, especially when it differs from upstream `main`. Never commit sidecar binaries or push to `upstream`.
+5. **Build all sidecars:** `bun run build:omp && bun run build:omp:x64`. Run each macOS sidecar's `--smoke-test` on a compatible Mac. On a Linux x64 host, run `bun run build:omp:linux` and `resources/omp.linux-x64 --smoke-test`. Cross-compilation alone is not runtime verification.
+6. **Build and inspect installers:** build both DMGs with the macOS commands. Mount each DMG; verify its app seal with `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"` and its bundled sidecar architecture with `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"`. On compatible hosts, launch each package, confirm sidecar `ready`, a successful `get_settings` RPC, and a settings toggle that persists. On macOS, also check that the Dock, About and menu names read Sai ATLAS, that `codesign -dv` shows `Identifier=vn.io.vif.saiatlas`, and that Finder shows the app icon (electron-builder converts it from the PNG). On Linux x64, run `bun run package:linux` with `SAI_ATLAS_UPDATE_BASE` unset, so the binaries read this repository's release feed. Then run `bash scripts/tauri-deb-smoke.sh <deb>`, which installs the `.deb` in a clean Ubuntu 24.04 container and runs `e2e-tauri/packaged-smoke.e2e.ts` against it there, `OMP_E2E_FAKE_MIC=1 bash scripts/tauri-deb-smoke.sh <deb>` for the microphone and playback probe, and `bash scripts/tauri-wm-geometry-check.sh <deb>` (Docker required for all three). Then install the `.deb` and the AppImage on the host. On each package, press the quick-entry chord and send one prompt.
+7. **Publish only verified artifacts.** Run `bun scripts/release-feeds.ts --version <version> --linux <bundle-dir> --electron-mac-feed <dir>/latest-mac.yml`: it copies the Linux bundles into `dist-release/` under their published names, writes `latest-linux.yml` for both packages, and copies the Electron feed with the files it lists. Create the GitHub Release as a draft, upload every asset, then publish; a release missing an asset breaks update checks. Publish it with both DMGs, the Linux AppImage and `.deb` with `latest-linux.yml` (without it, Linux update checks fail), generated update metadata, and the changelog. **Until 1.0.0, every release also carries bridge copies:** byte-identical copies of the two DMGs named `omp-<version>-arm64.dmg` and `omp-<version>.dmg`, listed next to the Sai-ATLAS names in the combined `latest-mac.yml`. Macs on 0.9.x look only for the `omp-` names and otherwise report the installer missing. The combined `latest-mac.yml` must also carry `minimumSystemVersion: 22.0.0` (Darwin 22 is macOS 13; electron-builder does not write it), and `bun run check:mac-update-floor <path-to-latest-mac.yml>` must pass before you publish; the release body says the previous release is the last one for macOS 12. Those Macs keep `omp.app` after installing, and their update screen never shows release notes, so put the Mac migration steps from [Install & start](#en-install) (quit omp, install Sai ATLAS, trash `omp.app`, re-pin, grant access again) at the top of every release body until 1.0.0. Record the monorepo commit used for the sidecars, especially when it differs from upstream `main`. Never commit sidecar binaries or push to `upstream`.
 
 </details>
-
----
-
-## 中文
-
-把对话、代码变更与 Agent 执行状态放在同一视野中。一边审查 diff，一边让另一段会话在独立 Git worktree 中推进任务；需要对照时打开双会话分屏，只想讨论思路时则切换到无工具 Chat。
-
-Sai ATLAS 是 SAI OS 的 AI 助手，一款基于 [omp](https://github.com/can1357/oh-my-pi) 编码 Agent 的桌面 GUI。每个安装包都内置 Agent 二进制：**通过 DMG、NSIS、便携版、`.deb` 或 AppImage 安装的用户无需另装 omp、Bun 或 Node。** GUI 与 TUI 互补，共享常规的 `~/.omp` 配置与会话。
-
-[功能全览](#zh-features) · [0.9.10 更新内容](#zh-recent) · [界面导览](#zh-gallery) · [安装](#zh-install) · [快捷键](#zh-shortcuts) · [开发](#zh-development) · [常见问题](#zh-help) · [发布](#zh-release)
-
-> **v0.9.10 功能展示。** 下文改进均纳入 v0.9.10，内置 Agent 更新至 omp 18.3.0。可用下载及实际发布内容以 [GitHub Releases](https://github.com/tung491/oh-my-pi-gui/releases) 为准。
-
-<img src="docs/screenshots/zh/01-conversation.png" alt="中文 Sai ATLAS 中的合成 aurora-web 项目对话" width="100%">
-
-**截图说明：**所有截图均为真实 Electron GUI 渲染，展示合成的 `aurora-web` 项目。对话、模型列表、Agent 状态与统计数值均由脚本构造，**不是实际 Provider 基准测试或账号数据**。截图使用全新的临时 HOME、Electron 配置目录、项目及合成 sidecar，不使用真实凭据或个人工作区内容。
-
-<a id="zh-features"></a>
-### 覆盖完整工作流，而不只是聊天
-
-这里的重点是：**让并行任务各有空间，让执行过程可以检查，让下一步如何运行由你掌握**，同时不打断当前思路。
-
-| 领域 | 可以怎样使用 | 范围与边界 |
-|---|---|---|
-| **独立会话** | 最多运行 **10 个标签页**，各自拥有 sidecar、会话和消息队列；后台任务可继续运行，也可新建 Git worktree 标签页。 | 独立会话运行时不是操作系统安全边界；worktree 需要可用的 Git。 |
-| **分屏与多窗口** | 两段会话可左右或上下排列，分隔条可调整，也可使用多个窗口；重启后恢复已打开及选中的标签布局。 | 每个分屏为**双面板**，不是无限面板网格。 |
-| **Chat 与 Agent** | 全局、无工具的 **Chat** 用于交流；项目工作区中的 **Agent** 会话用于编码任务。 | Chat 历史与项目分组、工作区操作保持分离。 |
-| **可读的执行过程** | 专用视图呈现 diff、Bash、read、grep、task；支持流式 Markdown、代码高亮、可折叠思考块、公式、Mermaid 与图片。 | 工具输出可在对话旁直接检查，而不是全部压成普通聊天文本。 |
-| **后台协作状态** | `wait` 任务、`proc://` 进程与服务状态、`agent://` 消息及进程控制操作均以紧凑结构化卡片呈现。 | 详情保持有边界并可展开；历史 `hub` 记录仍可正常阅读。 |
-| **计划、待办与队列** | 审查计划与审批、排队发送后续消息，通过有高度约束的 Todos/Agents Dock 卡片查看状态；展开单张卡片查看完整列表。 | 大量任务以紧凑摘要呈现，不占满对话区域。 |
-| **Agent Hub** | 管理 Agent 定义、启用/停用、覆盖模型与 prewalk 设置，查看进度和日志、中止任务、唤醒已停驻的 Agent。 | 可用操作取决于 Agent 当前状态；角色模型分配与单个 Agent 覆盖是不同层次的控制。 |
-| **模型与角色** | 按 Provider 选择模型，为不同角色分配模型，调整推理/思考等级。 | 只有支持的模型才提供推理等级控制。 |
-| **本地模型（Ollama）** | 所有模型都通过 Ollama 在本机运行：查看运行状态、带进度下载模型，并在 Ollama 窗口中选择默认模型。 | 需要安装并运行 Ollama；可用模型大小受本机内存限制。不再提供其他 Provider。 |
-| **会话资料库** | 搜索历史、查看会话树、分支与分叉、管理标签，复制导入 Claude/Codex 会话、导出 HTML、预览分享内容。 | 复制导入不是与其他应用实时同步；导出或分享前请检查内容。 |
-| **上下文与实时计量** | 检查上下文用量和实时花费/缓存变化；即使模型容量未知，仍可查看已测得的上下文用量。 | 已测用量与模型最大容量是两件事，不应混为一谈。 |
-| **统计与用量** | 内置私有、本地运行的统计仪表盘，查看请求、token、花费、缓存、速度及会话指标，也可查看 Provider 用量/配额。 | 配额信息取决于 API 与账号可用性；本地统计不等于 Provider 账单。 |
-| **MCP** | 管理服务、测试连接、重连，并完成受支持的认证流程。 | 外部 MCP 可执行程序或服务仍需自行安装和配置。 |
-| **Skills 与插件** | 启用技能、编辑受管理的技能，管理插件与市场。 | 支持编辑受管理技能，不代表所有发现的资源都能编辑。 |
-| **Hooks 与资源** | 在设置中配置 hooks，查看模板、记忆及其他已发现资源。 | 部分 hook 改动到下一段会话才生效；模板与记忆主要提供检查视图。 |
-| **SSH 主机** | 通过原生 SSH 设置页面配置主机。 | `/ssh list`、`/ssh add`、`/ssh remove` 管理命令仍停用；OpenSSH 与主机访问需另行配置。 |
-| **命令与语音** | 可搜索命令面板提供受支持的对话框、菜单、开关与参数输入，也提供语音命令入口。 | 部分 slash 命令转交 Agent 或尚不支持；语音取决于运行环境、权限和服务，不承诺离线或所有系统可用。 |
-| **Relay 协作** | 主持或加入共享会话，使用可编辑或只读权限。 | 需要已配置的 relay 服务，并非纯本地协作模式。 |
-| **设置与控制** | 配置 GUI、运行时和工具行为，切换中英文与主题，使用审批及安全扫描/设置入口。 | 审批与扫描**不是操作系统沙箱**；GUI 命令覆盖不等于完整 CLI 功能对齐。 |
-
-模型请求发送到本机的 Ollama 服务（`http://127.0.0.1:11434`，或 `OLLAMA_BASE_URL` / `OLLAMA_HOST` 指定的地址）。内置 Agent 省去了单独安装运行时的步骤，但不替你配置凭据、项目依赖、外部 Git/OpenSSH/MCP 工具或可选服务。请只连接你信任的工具与服务。
-
-<a id="zh-recent"></a>
-### 0.9.10 更新内容
-
-v0.9.10 包含以下 GUI 改进与内置 Agent 更新：
-
-| 日常场景 | 改进内容 |
-|---|---|
-| **内置 Agent** | 更新至 **omp 18.3.0**，扩展浏览器自动化、支持缓冲式云端转录，并改进长会话响应速度、修复 LSP 请求取消时可能挂起的问题。 |
-| **后台协作状态** | 新增 `wait` 与 `proc://`/`agent://` 协议渲染，让后台任务、代理消息、进程状态和取消操作不再以普通文本或文件写入显示。 |
-| **切换模型与账号** | 切换、登录及 Provider 新增/修改/删除后，模型与 Provider 视图会刷新。 |
-| **关注运行状态** | 上下文、花费与缓存数值实时更新；容量未知时仍展示已测上下文用量。 |
-| **阅读长对话** | 尾部跟随持续接收新输出，同时保留向上阅读的位置；可通过“跳到最新”回到实时末尾。 |
-| **接收流式回复** | token 持续到达时，Markdown 渲染更稳定。 |
-| **在界面间移动** | 常用对话框、弹出层、悬停反馈与面板入场更流畅；并非所有浮层都已重做。 |
-| **输入与恢复工作** | 改进输入法组合输入、焦点与按上下文处理的 Escape 行为，并在保存的窗口位置不可用时恢复合理的窗口边界。 |
-
-<a id="zh-gallery"></a>
-### 界面导览
-
-展开感兴趣的分组即可查看。本节图片全部使用中文界面，以及上文说明的合成展示数据。
-
-<details>
-<summary><b>跨项目推进 — 工作区检查与双面板分屏</b></summary>
-
-文件、diff 与日志随手可查；把另一段会话放在旁边，也不会合并两者的运行时。
-
-| 工作区 | 分屏 |
-|---|---|
-| ![中文工作区面板](docs/screenshots/zh/02-workspace.png) | ![中文双面板分屏](docs/screenshots/zh/11-split.png) |
-
-</details>
-
-<details>
-<summary><b>选择连接方式 — 模型与 Provider</b></summary>
-
-浏览模型选择器与 Provider 控制。画面中的模型列表和账号状态均为预设数据，不是实时目录或已连接的真实账号。
-
-| 模型 | Provider |
-|---|---|
-| ![中文模型选择器](docs/screenshots/zh/03-models.png) | ![中文 Provider 管理](docs/screenshots/zh/04-providers.png) |
-
-</details>
-
-<details>
-<summary><b>明确分工 — 模型角色与 Agent Hub</b></summary>
-
-按角色分配模型，再查看 Agent 定义与任务状态，无需离开主对话的工作脉络。
-
-| 模型角色 | Agent Hub |
-|---|---|
-| ![中文模型角色分配](docs/screenshots/zh/05-model-roles.png) | ![中文 Agent Hub 与脚本构造的 Agent 状态](docs/screenshots/zh/06-agent-hub.png) |
-
-</details>
-
-<details>
-<summary><b>看清数值 — 本地统计与 Provider 用量</b></summary>
-
-区分会话分析和 Provider 报告的用量。以下数值为脚本示例，不是实测模型性能、真实消费或账号配额。
-
-| 本地统计 | 用量 |
-|---|---|
-| ![中文本地统计与合成指标](docs/screenshots/zh/07-statistics.png) | ![中文用量视图与合成数值](docs/screenshots/zh/12-usage.png) |
-
-</details>
-
-<details>
-<summary><b>理解并调整 — 上下文与设置</b></summary>
-
-检查当前会话携带的上下文，再通过设置窗口调整运行时与 GUI。
-
-| 上下文 | 设置 |
-|---|---|
-| ![中文上下文检查](docs/screenshots/zh/08-context.png) | ![中文设置窗口](docs/screenshots/zh/10-settings.png) |
-
-</details>
-
-<details>
-<summary><b>找到下一步 — 命令面板</b></summary>
-
-通过 `⌘K` 搜索操作。受支持命令会打开原生控件；转交 Agent 或不可用的命令不应被理解为 CLI 已被完整图形化。
-
-![中文命令面板](docs/screenshots/zh/09-commands.png)
-
-</details>
-
-<a id="zh-install"></a>
-### 安装与开始使用
-
-**本文安装基线：[v0.9.10](https://github.com/nornzach/oh-my-pi-gui/releases/tag/v0.9.10)。** 最新可下载版本与发布说明以 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 为准。
-
-| Mac | v0.9.10 下载 |
-|---|---|
-| Apple Silicon | [omp-0.9.10-arm64.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg) |
-| Intel | [omp-0.9.10.dmg](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg) |
-
-基于 Electron 44 的 Sai ATLAS 版本需要 macOS 13 或更高版本，macOS 12 上不会收到这些版本的更新。
-
-| Windows x64 | v0.9.10 下载 |
-|---|---|
-| 安装程序 | [omp-0.9.10-setup.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-setup.exe) |
-| 便携版 | [omp-0.9.10-portable.exe](https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-portable.exe) |
-
-| Linux x64（Ubuntu 24.04+） | 安装包 |
-|---|---|
-| Debian 包（推荐） | 从 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 下载 `sai-atlas_<version>_amd64.deb` |
-| AppImage | 从 [Releases](https://github.com/tung491/oh-my-pi-gui/releases) 下载 `Sai-ATLAS-<version>-x86_64.AppImage` |
-
-在 Linux 上，Sai ATLAS 需要 Ubuntu 24.04 或更高版本（glibc 2.39）。`sudo apt install ./sai-atlas_<version>_amd64.deb` 会安装位于 `/usr/bin/sai-atlas` 的 `sai-atlas` 启动命令（Agent CLI 仍叫 `omp`）、位于 `/usr/lib/Sai ATLAS/omp` 的内置 Agent（不在 `PATH` 中）、`omp://` 链接处理程序，以及兼容链接 `/opt/Sai ATLAS/sai-atlas`（旧版本的启动路径）。该包依赖 `bubblewrap` 与 `xdg-dbus-proxy`，用于运行 WebKit 沙箱；沙箱始终开启，不附带也不需要 AppArmor 配置。注册 `omp://` 需要 `desktop-file-utils` 与 `xdg-utils`：`apt install` 会把它们作为推荐包一并安装，`dpkg -i` 则会跳过。可从应用列表启动，或运行 `sai-atlas /abs/project/dir`。旧名称的 Linux 包从未正式发布；如果你曾从源码构建并安装 `omp` 包，请先执行 `sudo apt remove omp` 卸载。
-
-应用内 `.deb` 更新会把安装包下载到 `~/.cache/@oh-my-pi/omp-gui/updates/`，按发布源校验其 SHA-512，只请求一次密码，然后用 `apt-get install --no-remove` 安装。apt 在改动任何内容之前先解析依赖，且绝不为腾出位置而移除其他软件包。无法解析依赖时，已安装的版本保持不变，更新横幅会显示可手动运行的命令（`sudo apt install <安装包路径>`）。SHA-512 校验以你的用户身份进行，随后 apt 以 root 身份从这个你可写的缓存目录读取同一文件，以你的身份运行的其他程序可能在两者之间替换该文件。如果在意这一点，请手动安装更新：`sudo apt install ./sai-atlas_<version>_amd64.deb`。
-
-AppImage 只需执行 `chmod +x` 后启动。宿主机需要 `libwebkit2gtk-4.1-0`（Ubuntu 默认 GNOME 桌面已自带；否则运行 `sudo apt install libwebkit2gtk-4.1-0`），它也会带来 `bubblewrap` 与 `xdg-dbus-proxy`。WebKit 沙箱在这里同样始终开启，不需要 AppArmor 配置。听写与语音播放通过 PulseAudio 套接字访问麦克风和扬声器，Ubuntu 默认的 `pipewire-pulse` 即提供该套接字。已安装 `desktop-file-utils` 与 `xdg-utils` 时，AppImage 启动后会把自己注册为 `omp://` 处理程序；应用内更新会原地替换该文件。在 Ubuntu 26.04 上，AppImage 中文本框的拼写检查无法使用；`.deb` 版本可以使用。
-
-Sai ATLAS 在 Wayland 上原生运行；如需使用 XWayland，请以 `GDK_BACKEND=x11 sai-atlas` 启动。在 Wayland 上窗口位置由合成器决定，因此快速输入栏可能不会居中，也可能不会保持在最前。在 XWayland 下，全局快捷键只在 Sai ATLAS 窗口获得焦点时有效。启动需要标准的 `XDG_RUNTIME_DIR`（`/run/user/<uid>`），所有桌面登录会话都会设置它；缺少它时 WebKit 沙箱无法启动。
-
-输入法：如果在原生 Wayland 上通过 ibus 或 fcitx5 输入中文或越南语时，输入框或快速输入栏无法正常输入，请以 `GDK_BACKEND=x11` 启动 Sai ATLAS。
-
-**在 Linux 上从 0.9.16 迁移（Migrating from 0.9.16 on Linux）。** Linux 版本现在基于 Tauri 与系统的 WebKitGTK 运行，不再使用 Electron；0.9.16 会通过自身的更新程序升级过来。设置与会话都会保留。
-
-- 在非 GNOME 桌面上，或在任何 `dpkg -s libwebkit2gtk-4.1-0` 失败的机器上从 0.9.16 更新：请先运行 `sudo apt install libwebkit2gtk-4.1-0`。
-- 如果更新后 Sai ATLAS 不见了：运行 `sudo apt --fix-broken install`，或下载安装包并运行 `sudo apt install ./sai-atlas_0.9.17_amd64.deb`。
-- 如果更新后 Sai ATLAS 没有自动重新打开，请手动启动一次新的 `.AppImage`；它的文件名现在带有版本号。
-- 更新后的第一次启动会再显示一次本地模型欢迎页面；你在那里的选择此后会被记住。
-- 把启动器和脚本中的 `--ozone-platform=x11` 换成环境变量 `GDK_BACKEND=x11`。更新后自动重新打开的应用可能沿用 systemd 用户会话的环境，而不是终端的环境。
-- AppImage 不再需要 `sai-atlas-appimage` AppArmor 配置。先卸载再删除：`sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`（仅重新加载 AppArmor 不会卸载已删除的配置）。旧的 `omp-appimage` 配置也按同样方式移除。
-
-打开 DMG，把 **Sai ATLAS** 拖入**应用程序**。构建采用 ad-hoc 签名，未经 Apple 公证。如果 macOS 拦截首次启动，请先确认下载来源，再使用**右键 → 打开**，或**系统设置 → 隐私与安全性 → 仍要打开**。
-
-**Mac 上从 omp 0.9.x 升级？** Sai ATLAS 会装在 `omp.app` 旁边，而不是替换它。请先退出 omp，安装 Sai ATLAS，再把 `omp.app` 移到废纸篓，并在程序坞中重新固定 Sai ATLAS。由于应用 ID 变为 `vn.io.vif.saiatlas`，macOS 会再次请求麦克风与通知权限。设置与会话都会保留。
-
-Windows 包当前未签名。首次启动前请确认下载来源；Windows SmartScreen 可能需要点击**更多信息 → 仍要运行**。安装程序会就地升级已安装的 omp 并保留设置；如果你把 omp 固定在任务栏，请重新固定 Sai ATLAS。
-
-Sai ATLAS 通过 [Ollama](https://ollama.com) 在本机运行模型，请先安装 Ollama。首次启动时会出现欢迎页面，显示本机内存与显卡、Ollama 是否在运行，以及按本机配置挑选的三档模型（最低配置、推荐、最高配置）。
-
-- **Ollama 未运行或未安装：**在 Linux 上，页面会显示完整命令，并在系统密码确认后执行：**启动 Ollama**（`systemctl start ollama.service`）或**安装 Ollama**（官方 `ollama.com/install.sh` 安装脚本）。在 macOS 和 Windows 上会链接到 ollama.com/download；启动 Ollama 后选择**重新检查**。
-- 在模型卡片上**下载**模型并查看进度条。**取消**会停止下载，之后再次**下载**会继续。
-- **继续前往助手**会把所选模型设为当前及新会话的默认模型。**稍后设置**会关闭页面直到下次启动；Ollama 窗口中的**重新运行设置**可再次打开它。
-
-设置了 `OLLAMA_BASE_URL` 或 `OLLAMA_HOST` 时，Ollama 地址按与 Agent 相同的规则取用。
-
-1. **准备本地模型：**完成欢迎页面，或从侧栏打开 **Ollama 设置**下载模型并选择**设为默认**。
-2. **选择工作方式：**`⌘T` 新建项目 Agent 标签页，或 `⇧⌘T` 打开无工具 Chat；选择可用模型。
-3. **开始对话：**输入请求。需要新会话时使用 `⌘N`，执行过程中检查工具调用并处理审批。
-4. **并行推进：**`⌥T` 新建 worktree 标签页；使用标签右键菜单，或把标签拖入工作区，打开双面板分屏。
-5. **查找与回顾：**`⌘K` 浏览命令，`⌘P` 搜索会话历史。
-
-<a id="zh-shortcuts"></a>
-### 快捷键
-
-| 快捷键 | 操作 |
-|---|---|
-| `⌘T` | 新建 Agent 标签页 |
-| `⇧⌘T` | 新建无工具 Chat 标签页 |
-| `⌥T` | 新建 Git worktree 标签页 |
-| `⌘N` | 新建会话 |
-| `⌘K` | 命令面板 |
-| `⌘P` | 会话历史搜索 |
-| `⌘,` | 设置 |
-| `⌘B` / `⌘J` | 切换侧栏 |
-| `⌃⇧Space`（macOS）/ `Ctrl+Shift+Space` | 快速输入：在任意应用中提问（可重绑，也可关闭） |
-| `Esc` | 按当前上下文关闭界面或中止执行，不是无条件中止快捷键 |
-
-在 Linux 和 Windows 上，⌘ 快捷键改用 Ctrl，并以文字显示（`Ctrl+T`、`Ctrl+Shift+T`、`Ctrl+K`）。思考开关在这些平台上没有默认快捷键，因为 Ctrl+T 用于新建标签页；可在键盘快捷键中自行指定。
-
-**快速输入**会在当前应用之上打开一个小输入栏。选择**聊天**，或选择 **Agent** 并指定**工作**（默认工作区）或最近的工作区，输入后按 Enter：消息会从主窗口的新标签页发出，主窗口随之切到最前。Shift+Enter 换行。按 Esc 或点击别处会关闭输入栏并保留草稿。Shell 命令（`!ls`）或 Python 代码（`$ print(1)`）会在新标签页中打开但不发送；无法送达的消息（例如已达标签页上限）会留在输入栏中并说明原因。可在 设置 → 键盘快捷键 中更改组合键或关闭快速输入。`⇧⌘O`（`Ctrl+Shift+O`）仍用于显示或隐藏窗口。
-
-在通过 `.deb` 安装的 GNOME Wayland 上，首次启动会请求允许两个全局快捷键。之后这些按键由 GNOME 管理：可在 设置 → 应用 → Sai ATLAS → 全局快捷键 中更改或移除。在 Sai ATLAS 中更改的组合键会在重启后生效，届时 GNOME 会再次询问；关闭快速输入则立即生效。没有门户时（未做桌面集成的 AppImage、Sway 等 wlroots 合成器，或拒绝了对话框），请把 `sai-atlas --quick-entry` 绑定为自定义键盘快捷键，AppImage 则绑定其文件路径加 `--quick-entry`；在 Sway 上可用 `bindsym ctrl+shift+space exec sai-atlas --quick-entry`。
-
-<a id="zh-development"></a>
-### 开发
-
-<details>
-<summary><b>构建、测试与复现展示截图</b> — DMG 用户无需执行这些步骤</summary>
-
-#### 仓库边界
-
-这是**嵌套在 monorepo 内的独立仓库**，不是普通的 monorepo 包：
-
-```text
-omp-monorepo/                    # nornzach/oh-my-pi：fork 与 sidecar 构建源
-├── .git/
-├── packages/coding-agent/
-├── packages/natives/
-└── packages/gui/                # tung491/oh-my-pi-gui：本产品仓库
-    ├── .git/
-    ├── src/
-    └── resources/omp*           # 本地构建、不入库的 sidecar
-```
-
-| 仓库 | 职责 |
-|---|---|
-| [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui) | GUI 代码、提交、标签与发布；GUI 工作推送到本仓库的 `origin/main`。 |
-| [`nornzach/oh-my-pi`](https://github.com/nornzach/oh-my-pi) | 外层 monorepo fork：提供 Agent 源码、同步上游与构建 sidecar；Agent 改动在这里提交并推送到它的 `origin`。 |
-| [`can1357/oh-my-pi`](https://github.com/can1357/oh-my-pi) | 上游功能来源，通过 monorepo 的 `upstream` 拉取；**绝不向其推送。** |
-
-不要把 `packages/gui/` 暂存到 monorepo；它在外层显示为未跟踪是刻意的安排。在 `packages/gui/` 中运行 Git 命令操作的是 GUI 仓库；monorepo Git 命令应在 monorepo 根目录运行。修改前请阅读 [AGENTS.md](./AGENTS.md)。
-
-#### 从源码构建
-
-**前置条件：**Git、[Bun](https://bun.sh) **≥ 1.4**。macOS sidecar 与 DMG 命令需要 macOS；Windows x64 sidecar 可以在 macOS 或 Linux 上交叉构建，但仍需相邻的 monorepo。Linux x64 安装包需在装有 Docker 的 Linux x64 宿主上构建。
-
-```bash
-# 克隆 monorepo fork，再将 GUI 仓库嵌套其中。
-git clone https://github.com/nornzach/oh-my-pi.git omp-monorepo
-cd omp-monorepo
-git remote add upstream https://github.com/can1357/oh-my-pi.git
-bun install
-git clone https://github.com/tung491/oh-my-pi-gui.git packages/gui
-cd packages/gui
-bun install
-```
-
-在 `packages/gui/` 下执行：
-
-```bash
-bun run build                                  # 主进程 + preload + 渲染层 -> out/
-bun run build:omp                              # arm64 宿主 -> resources/omp
-bun run build:omp:x64                          # Intel -> resources/omp.x64
-bun run package:mac:arm64 -- --publish never    # dist/Sai-ATLAS-<版本>-arm64.dmg、.zip、latest-mac.yml
-bun run package:mac:x64 -- --publish never      # dist/Sai-ATLAS-<版本>.dmg、.zip、latest-mac.yml
-bun run build:omp:win                           # Windows x64 -> resources/omp.exe
-bun run package:win -- --publish never           # Windows NSIS + portable 安装包
-bun run build:omp:linux                        # Linux x64 -> resources/omp.linux-x64
-bun run package:linux                           # AppImage + .deb -> src-tauri/target-linux-2404/x86_64-unknown-linux-gnu/release/bundle/
-```
-
-Linux 安装包由 `src-tauri/` 中的 Tauri 外壳构建。`package:linux` 运行 `scripts/tauri-linux-build.sh`，在 `ubuntu:24.04` 容器中构建 AppImage 与 `.deb`，使 AppImage 内置的库所需的 glibc 不高于 Ubuntu 24.04；`src-tauri/linux/` 中的收尾脚本会拒绝更高版本。它会把 `resources/omp.linux-x64` 准备为内置 Agent（`scripts/stage-tauri-sidecar.ts`）。更新源 `latest-linux.yml` 在发布时由 `scripts/release-feeds.ts` 生成。在 Linux 宿主上，`bun run build:omp` 会为 `bun run dev` 与 `bun run dev:tauri` 生成 `resources/omp`。
-
-要在宿主上构建或运行 Tauri 外壳（`bun run dev:tauri`、Rust 测试），请安装 rustup 但不让它修改 `PATH`（脚本从 `~/.cargo/bin` 读取 cargo，见 `scripts/rust-pins.env`，因为发行版自带的 `cargo` 可能遮蔽它），安装 `src-tauri/rust-toolchain.toml` 中的工具链通道、`tauri-cli` 2，以及 CI 的 `tauri-linux` 作业同样安装的 WebKitGTK 构建与沙箱软件包：
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
-~/.cargo/bin/rustup default stable
-~/.cargo/bin/cargo install tauri-cli --version "^2" --locked
-sudo apt-get install -y libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev librsvg2-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev build-essential gstreamer1.0-pipewire gstreamer1.0-plugins-good bubblewrap xdg-dbus-proxy
-```
-
-要在 `bun run dev:tauri` 或 `bun run dev` 中测试 Wayland 全局快捷键，门户需要该应用 id 的桌面条目：创建 `~/.local/share/applications/vn.io.vif.saiatlas.desktop`，写入 `Name=Sai ATLAS` 以及运行开发启动器的 `Exec=` 行。它会遮蔽 `.deb` 中同 id 的条目，因此测试已安装的 `.deb` 前请先删除它。
-
-在 monorepo 内，`bun install` 会把 `packages/gui` 当作 workspace 成员解析，不会更新本仓库的 `bun.lock`，而 CI 使用 `--frozen-lockfile` 安装。修改 `package.json` 依赖后，请在 monorepo 之外的检出中重新生成锁文件，例如 `git worktree add --detach /tmp/omp-gui-lock HEAD`，在其中运行 `bun install --ignore-scripts`，再把生成的 `bun.lock` 复制回来。
-
-`build:omp` 编译相邻的 monorepo Agent 源码并嵌入原生插件。它会准备匹配版本的 `pi_natives`，需要时下载已发布的包，替换旧插件，并在结束后还原临时准备的文件。`resources/omp*` 是被忽略的构建产物，**绝不能提交入库**。
-
-打包会重新构建 Electron 应用，**不会重新构建 Agent sidecar**。Agent/RPC 源码或上游更新后，先运行匹配的 `build:omp*`。arm64 配置使用 `resources/omp`，Intel 配置使用 `resources/omp.x64`。Intel 必须使用 `package:mac:x64`，默认配置可能装入错误架构。
-
-Windows 配置目标为 x64，并将 `resources/omp.exe` 放入应用包；它会生成 NSIS 安装程序与便携版可执行文件。Windows 包当前未签名，正式分发前应配置 Windows 代码签名证书。
-
-**单独克隆 GUI 仓库无法编译 sidecar。**它必须位于上述结构的 `packages/gui/`。如仅组装产物、没有 monorepo 源码，可在 `resources/omp` 和/或 `resources/omp.x64` 放入可信且兼容的预编译 sidecar，再执行 `build` 与对应的打包命令。已打包应用使用内置 Agent；另装系统 `omp` 不能替代缺失的 sidecar。
-
-#### 日常开发
-
-```bash
-bun run dev                         # HMR，使用 resources/omp
-OMP_SIDECAR=source bun run dev       # 显式开发覆盖：使用 monorepo Agent 源码
-bun run dev:tauri -- --user-data-dir=$(mktemp -d)   # Tauri 外壳（Linux），临时配置目录
-bunx vitest run                     # GUI 测试
-bun run check:types                 # GUI 类型检查
-bun run build                      # GUI 生产构建与主进程 bundle 检查
-```
-
-同时用 Biome 检查修改过且受其支持的文件。Agent/RPC 改动归属 monorepo；验证打包 GUI 前，需要重新构建内置 sidecar。
-
-在 Ubuntu 24.04+ 上，Electron 的 `bun run dev` 需要为开发用 Electron 二进制安装一个 `userns` AppArmor 配置，因为 Ubuntu 限制了非特权用户命名空间；`bun run dev:tauri` 不需要。把下面的内容保存为 `omp-dev-electron`，路径改为 `node -p "require('electron')"` 输出的路径，再用 `sudo install -m 0644 omp-dev-electron /etc/apparmor.d/omp-dev-electron && sudo apparmor_parser -r /etc/apparmor.d/omp-dev-electron` 加载。不要把 `chrome-sandbox` 设为 setuid root。
-
-```
-abi <abi/4.0>,
-include <tunables/global>
-
-profile omp-dev-electron "/path/printed/by/node" flags=(unconfined) {
-  userns,
-
-  include if exists <local/omp-dev-electron>
-}
-```
-
-#### 复现截图
-
-在 GUI 仓库安装依赖后运行：
-
-```bash
-bun run build
-bun scripts/capture-showcase.ts
-```
-
-截图脚本使用全新的临时 HOME、Electron 配置目录、合成 `aurora-web` 项目与合成 sidecar，渲染真实 Electron GUI，**不使用真实凭据或个人工作区**。本地化图片输出到 `docs/screenshots/en/` 与 `docs/screenshots/zh/`。对话、模型列表、Agent 状态和指标由脚本构造，便于复现；它们不是 Provider 测试或真实使用记录。这套展示数据环境不是操作系统沙箱。
-
-可选环境变量：`SHOWCASE_THEME=light` 截取 VIF 浅色主题（默认深色）；`SHOWCASE_OUT=<目录>` 输出到 `<目录>/en` 与 `<目录>/zh`，不写入 `docs/screenshots`；`SHOWCASE_ONBOARDING=1` 额外截取首次运行欢迎页面 `00-onboarding.png`。在 Linux 上，脚本会把显示相关变量（`DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`）传给 Electron。
-
-</details>
-
-<a id="zh-help"></a>
-### 常见问题
-
-| 现象 | 检查方式 |
-|---|---|
-| macOS 拦截首次启动 | 确认来自发布页后，右键 → 打开，或通过隐私与安全性 → 仍要打开。基线版本为 ad-hoc 签名，未经公证。 |
-| Windows SmartScreen 拦截首次启动 | 确认来自发布页后，点击更多信息 → 仍要运行。Windows 包当前未签名。 |
-| 截图中的功能在已安装应用中不存在 | 本展示对应 v0.9.10；请检查已安装版本及其发布说明，较早版本可能不包含这些改进。 |
-| `Built-in omp not found` | 源码检出中需构建或放入兼容 sidecar；已安装应用请重新安装正确的官方 DMG。另装系统 `omp` 无法补齐包内资源。 |
-| `build:omp` 找不到 monorepo | 将 GUI 放在 monorepo 的 `packages/gui/`，与 `packages/coding-agent/`、`packages/natives/` 同级。 |
-| `replacing stale addon … version sentinel ≠ …` | 提示信息：构建器发现并替换了版本不匹配的原生插件。 |
-| 原生插件下载失败 | 检查 registry 访问及该版本是否已发布。必要时安装所需 Rust 工具链，在 monorepo 根目录运行 `bun --cwd=packages/natives run build`，然后重建 sidecar。 |
-| Intel sidecar 立即退出 | 检查 sidecar 架构，并使用 `bun run package:mac:x64` 打包，不要使用默认配置。 |
-| 命令或集成不可用 | 部分 slash 命令转交 Agent 或尚未支持。外部工具和服务需另行配置；SSH 管理使用设置页面，而非已停用的 `/ssh` 管理命令。 |
-| AppImage 立即退出，并提示缺少 `libEGL.so.1` 等库 | 安装 `libwebkit2gtk-4.1-0`。AppImage 依赖该包带来的图形库与沙箱工具。 |
-| 启动失败并提示 `Failed to fully launch dbus-proxy` | 请从桌面登录会话启动 Sai ATLAS，该会话会设置 `XDG_RUNTIME_DIR=/run/user/<uid>`；通过 `su`、`ssh` 打开的 shell 以及 cron 任务往往没有它。 |
-| `bun run dev` 报错 `The SUID sandbox helper binary was found, but is not configured correctly` | Ubuntu 24.04+ 限制了非特权用户命名空间。请安装[日常开发](#日常开发)中的 `omp-dev-electron` 配置。不要把 `chrome-sandbox` 设为 setuid root。 |
-| Ubuntu 上没有托盘图标 | 启用 Ubuntu AppIndicators 扩展。 |
-| `.deb` 更新提示 Sai ATLAS 无法请求管理员权限 | 当前运行的应用以阻止密码提示的方式启动，例如由上一版本的更新程序启动。退出并重新打开 Sai ATLAS 后再安装；更新会重新下载。 |
-| `.deb` 更新没有安装，而是显示一条 `sudo apt install …` 命令 | apt 无法解析更新所需的软件包，因此没有做任何改动。请在终端运行该命令查看原因并完成安装。 |
-| 其他应用获得焦点时快速输入或 `Ctrl+Shift+O` 无效 | 在 GNOME Wayland 上请使用 `.deb`，并在询问时允许这些快捷键；如果当时拒绝了，可在 设置 → 应用 → Sai ATLAS 中允许或重置。没有门户时，请把 `sai-atlas --quick-entry` 绑定为自定义快捷键。设置 → 键盘快捷键 会显示快速输入的状态，注册被拒绝时会记录到 `~/.config/@oh-my-pi/omp-gui/logs/gui-runtime.jsonl`。 |
-
-<a id="zh-release"></a>
-### 发布流程（维护者）
-
-<details>
-<summary><b>同步、构建全部目标、烟测安装包，再发布</b></summary>
-
-发布只属于 [`tung491/oh-my-pi-gui`](https://github.com/tung491/oh-my-pi-gui/releases)，全程保持两个仓库的边界：
-
-1. **从干净检出开始并同步上游。**在 **monorepo 根目录**执行 `bash packages/gui/scripts/sync-upstream.sh`。脚本拉取/合并 `upstream/main`、安装依赖、准备原生插件、生成统计资源、重建并烟测 sidecar，再构建、检查和测试 GUI。冲突需在 monorepo 中解决并提交合并，然后运行 `SKIP_MERGE=1 bash packages/gui/scripts/sync-upstream.sh`。不要用手动拼装的 merge 流程替代。检查并在 monorepo 中提交其余改动，只推送到 fork 的 `origin`。
-2. **准备 GUI 发布。**在 `packages/gui/` 把 `package.json` 与 `src-tauri/Cargo.toml` 提升到同一版本（两者不一致时打包测试会失败），撰写本次发布的 `CHANGELOG.md`，更新两种语言的安装链接与源码/发布说明。
-3. **验证 GUI：**`bunx vitest run && bun run check:types && bun run build`，并用 Biome 检查修改过且受其支持的文件。
-4. **记录发布源码。**GUI 发布改动在 GUI 仓库提交，打 `vX.Y.Z` 标签，向它的 `origin` 推送 `main` 与标签。生成发布产物前保持两个检出干净。
-5. **构建全部 sidecar：**`bun run build:omp && bun run build:omp:x64 && bun run build:omp:win`。在兼容宿主上运行两个 macOS sidecar 与 Windows sidecar 的 `--smoke-test`；在 Linux x64 宿主上运行 `bun run build:omp:linux` 与 `resources/omp.linux-x64 --smoke-test`。交叉编译成功不等于运行验证通过。
-6. **构建并检查安装包：**按 macOS 命令构建两个 DMG，按 `bun run package:win -- --publish never` 构建 Windows 安装包。逐个挂载 DMG，用 `codesign --verify --deep --strict --verbose=2 "<path-to-Sai ATLAS.app>"` 验证应用签名封装，用 `file "<path-to-Sai ATLAS.app>/Contents/Resources/omp"` 检查内置 sidecar 架构，并用 `file` 检查 Windows 包的 `win-unpacked/resources/omp.exe`。在兼容宿主上启动各平台应用，确认 sidecar `ready`、`get_settings` RPC 成功，以及设置开关可以持久化。在 macOS 上还需确认程序坞、“关于”与菜单中的名称均为 Sai ATLAS，`codesign -dv` 显示 `Identifier=vn.io.vif.saiatlas`，且访达能显示应用图标（由 electron-builder 从 PNG 转换）。在 Windows 上先安装 0.9.10 再运行新安装程序：“应用和功能”中只能有一个名为 “Sai ATLAS” 的条目，旧的 omp 快捷方式应已移除，设置应保留（固定的 `nsis.guid` 使其就地升级）。在 Linux x64 上，在未设置 `SAI_ATLAS_UPDATE_BASE` 的情况下运行 `bun run package:linux`，使二进制读取本仓库的发布源。然后运行 `bash scripts/tauri-deb-smoke.sh <deb>`（在干净的 Ubuntu 24.04 容器中安装 `.deb`，并在容器内对其运行 `e2e-tauri/packaged-smoke.e2e.ts`）、用于麦克风与播放探测的 `OMP_E2E_FAKE_MIC=1 bash scripts/tauri-deb-smoke.sh <deb>`，以及 `bash scripts/tauri-wm-geometry-check.sh <deb>`（三者都需要 Docker）。然后在宿主上安装 `.deb` 与 AppImage。在每个安装包上按一次快速输入组合键并发送一条提示。
-7. **只发布验证过的产物。**运行 `bun scripts/release-feeds.ts --version <版本> --linux <bundle 目录> --electron-mac-feed <目录>/latest-mac.yml --electron-windows-feed <目录>/latest.yml`：它把 Linux 安装包以发布名称复制到 `dist-release/`，为两个安装包写入 `latest-linux.yml`，并连同所列文件一起复制 Electron 更新源。先把 GitHub Release 创建为草稿，上传全部资源后再发布；缺少任一资源都会让更新检查失败。GitHub Release 附带两个 DMG、Windows NSIS 与便携版安装包、Linux AppImage 与 `.deb` 及 `latest-linux.yml`（缺少它，Linux 更新检查会失败）、更新元数据和 changelog。**1.0.0 之前的每次发布还要附带桥接副本：**两个 DMG 的逐字节相同副本，命名为 `omp-<version>-arm64.dmg` 与 `omp-<version>.dmg`，并与 Sai-ATLAS 名称一起列入合并后的 `latest-mac.yml`。0.9.x 的 Mac 只查找 `omp-` 名称，否则会报告缺少安装包。合并后的 `latest-mac.yml` 还必须带有 `minimumSystemVersion: 22.0.0`（Darwin 22 即 macOS 13；electron-builder 不会写入该字段），发布前 `bun run check:mac-update-floor <latest-mac.yml 路径>` 必须通过；发布说明需写明上一个版本是 macOS 12 可用的最后一个版本。这些 Mac 安装后仍会保留 `omp.app`，且其更新界面从不显示发布说明，因此 1.0.0 之前每次发布说明的开头都要写上[安装与开始使用](#zh-install)中的 Mac 迁移步骤（退出 omp、安装 Sai ATLAS、把 `omp.app` 移到废纸篓、重新固定、再次授权）。记录构建 sidecar 使用的 monorepo commit，尤其在其不同于上游 `main` 时。绝不提交 sidecar 二进制，也不向 `upstream` 推送。
-
-</details>
-
----
-
-<div align="center">
-Built on <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> · GUI releases at <a href="https://github.com/tung491/oh-my-pi-gui/releases">tung491/oh-my-pi-gui</a><br>
-基于 oh-my-pi · TUI 与 GUI 共存，共享 <code>~/.omp</code>
-</div>
