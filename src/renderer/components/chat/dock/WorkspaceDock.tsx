@@ -1,11 +1,11 @@
 /**
  * Workspace dock: the live execution-state region mounted between the
  * transcript and the composer, replacing the workspace drawer's
- * todo/plan/agents/queue tabs with always-current center cards. Large
+ * todo/agents/queue tabs with always-current center cards. Large
  * todo/agent collections render a compact summary and temporarily focus one
  * card for full-list inspection. Each card self-gates its visibility (no
- * todos, no subagents, plan mode off, empty
- * queue → nothing rendered), so the region collapses to zero height on an
+ * todos, no subagents, empty queue → nothing
+ * rendered), so the region collapses to zero height on an
  * idle session. The surrounding conversation owns vertical scrolling; a
  * focused card expands naturally instead of adding a nested scrollbar. Chat
  * tabs are tool-free — none of these surfaces can exist there. Every card
@@ -19,14 +19,11 @@ import { cx } from "../../../lib/format";
 import { useT } from "../../../lib/i18n";
 import { writePersisted } from "../../../lib/persisted-storage";
 import { useQueuedMessages } from "../../../stores/queue";
-import { useSessionStore } from "../../../stores/session";
 import { useSubagentsStore } from "../../../stores/subagents";
 import { useActiveTabKind } from "../../../stores/tabs";
 import { useTodoStore } from "../../../stores/todo";
 import { PanelErrorBoundary } from "../../common";
 import { AgentsDockCard } from "./AgentsDockCard";
-import { GoalDockBar } from "./GoalDockBar";
-import { PlanDockCard } from "./PlanDockCard";
 import { QueueDockChip } from "./QueueDockChip";
 import { TodoDockCard } from "./TodoDockCard";
 import { useWorkspaceDockFocus, WorkspaceDockFocusProvider } from "./WorkspaceDockFocus";
@@ -38,13 +35,10 @@ function clampFocusHeight(height: number): number {
 function WorkspaceDockContent() {
 	const { focusedCard } = useWorkspaceDockFocus();
 	const t = useT();
-	const planModeEnabled = useSessionStore(state => state.planModeEnabled);
-	const goalVisible = useSessionStore(state => state.goal !== null);
 	const todoVisible = useTodoStore(state => state.phases.length > 0 || state.reminderVisible);
 	const agentsVisible = useSubagentsStore(state => state.subagents.size > 0);
 	const queued = useQueuedMessages();
-	const cardsVisible =
-		planModeEnabled || todoVisible || agentsVisible || queued.steering.length > 0 || queued.followUp.length > 0;
+	const cardsVisible = todoVisible || agentsVisible || queued.steering.length > 0 || queued.followUp.length > 0;
 
 	// Focused-card height: user-resizable via the drag handle above the stack,
 	// persisted across launches. null = fall back to the viewport-derived cap.
@@ -100,59 +94,49 @@ function WorkspaceDockContent() {
 		persistHeight(next);
 	};
 
-	if (!cardsVisible && !goalVisible) return null;
+	if (!cardsVisible) return null;
 
 	return (
 		<div className="flex flex-col gap-1.5 pb-1.5" data-focused-card={focusedCard ?? undefined}>
-			{cardsVisible && (
-				<>
-					{focusedCard && (
-						<div
-							aria-label={t("dock.resizeHeight")}
-							aria-orientation="horizontal"
-							className="mx-auto h-1.5 w-16 cursor-row-resize touch-none rounded-full bg-[var(--omp-border)] hover:bg-[var(--omp-border-strong)]"
-							data-testid="workspace-dock-resize"
-							onKeyDown={onHandleKeyDown}
-							onPointerDown={onHandleDown}
-							onPointerMove={onHandleMove}
-							onPointerUp={onHandleUp}
-							role="separator"
-							tabIndex={0}
-							title={t("dock.resizeHeight")}
-						/>
-					)}
-					<div
-						className={cx(
-							"flex flex-col gap-1.5 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
-							// Summary state stays compact. A FOCUSED card renders the full
-							// list; its cap is an INLINE style — arbitrary-value classes
-							// cannot express `calc(100dvh - 240px)` (the bare dash makes
-							// the declaration invalid, silently removing every bound and
-							// killing scrollability).
-							focusedCard ? undefined : "max-h-[min(40vh,320px)]",
-						)}
-						data-testid="workspace-dock"
-						ref={scrollerRef}
-						style={focusedCard ? { maxHeight: focusHeight ?? "min(50dvh, calc(100dvh - 300px))" } : undefined}
-					>
-						<PanelErrorBoundary>
-							<PlanDockCard />
-						</PanelErrorBoundary>
-						<PanelErrorBoundary>
-							<TodoDockCard />
-						</PanelErrorBoundary>
-						<PanelErrorBoundary>
-							<AgentsDockCard />
-						</PanelErrorBoundary>
-						<PanelErrorBoundary>
-							<QueueDockChip />
-						</PanelErrorBoundary>
-					</div>
-				</>
+			{focusedCard && (
+				<div
+					aria-label={t("dock.resizeHeight")}
+					aria-orientation="horizontal"
+					className="mx-auto h-1.5 w-16 cursor-row-resize touch-none rounded-full bg-[var(--omp-border)] hover:bg-[var(--omp-border-strong)]"
+					data-testid="workspace-dock-resize"
+					onKeyDown={onHandleKeyDown}
+					onPointerDown={onHandleDown}
+					onPointerMove={onHandleMove}
+					onPointerUp={onHandleUp}
+					role="separator"
+					tabIndex={0}
+					title={t("dock.resizeHeight")}
+				/>
 			)}
-			<PanelErrorBoundary>
-				<GoalDockBar />
-			</PanelErrorBoundary>
+			<div
+				className={cx(
+					"flex flex-col gap-1.5 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]",
+					// Summary state stays compact. A FOCUSED card renders the full
+					// list; its cap is an INLINE style — arbitrary-value classes
+					// cannot express `calc(100dvh - 240px)` (the bare dash makes
+					// the declaration invalid, silently removing every bound and
+					// killing scrollability).
+					focusedCard ? undefined : "max-h-[min(40vh,320px)]",
+				)}
+				data-testid="workspace-dock"
+				ref={scrollerRef}
+				style={focusedCard ? { maxHeight: focusHeight ?? "min(50dvh, calc(100dvh - 300px))" } : undefined}
+			>
+				<PanelErrorBoundary>
+					<TodoDockCard />
+				</PanelErrorBoundary>
+				<PanelErrorBoundary>
+					<AgentsDockCard />
+				</PanelErrorBoundary>
+				<PanelErrorBoundary>
+					<QueueDockChip />
+				</PanelErrorBoundary>
+			</div>
 		</div>
 	);
 }

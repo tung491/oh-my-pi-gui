@@ -77,8 +77,7 @@ export interface AgentSettingsRpc {
 
 /**
  * Lazy settings loader: fires on the tab's first activation, then silently
- * revalidates on re-activation. Mirrors ModesPanel's useModeRpc, except
- * mutations keep the optimistic snapshot — set_setting echoes `{path, value}`,
+ * revalidates on re-activation. Mutations keep the optimistic snapshot — set_setting echoes `{path, value}`,
  * not the composite state, so re-picking the response would clobber it.
  */
 export function useAgentSettings(open: boolean, active: boolean): AgentSettingsRpc {

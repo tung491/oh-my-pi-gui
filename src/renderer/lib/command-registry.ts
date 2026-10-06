@@ -174,7 +174,6 @@ export interface CommandRegistryContext {
 	openSessionInfo: () => void;
 	openHandoffDialog: () => void;
 	openThemePicker: () => void;
-	openModes: (tab?: "vibe" | "goal" | "loop") => void;
 	openAgentHub: (tab?: "definitions" | "hub") => void;
 	openPrCenter: () => void;
 	openHotkeys: () => void;
@@ -765,56 +764,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 	});
 
 	// ═══════════════════════════════════════════════════════════════════
-	// MODES
-	// ═══════════════════════════════════════════════════════════════════
-	add({
-		name: "plan",
-		label: t("cmd.plan"),
-		description: t("cmd.plan.desc"),
-		category: "modes",
-		shortcut: "⌥⇧P",
-		affordance: {
-			kind: "toggle",
-			get: () => ctx.planModeEnabled,
-			set: e =>
-				runSessionCommand(ctx.rpc.setPlanMode(e), "Plan mode", data => {
-					const d = data as { enabled?: boolean } | undefined;
-					useSessionStore.setState({ planModeEnabled: d?.enabled ?? e });
-				}),
-		},
-	});
-	add({
-		name: "vibe",
-		label: t("cmd.vibe"),
-		description: t("cmd.vibe.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes("vibe") },
-	});
-	add({
-		name: "goal",
-		label: t("cmd.goal"),
-		description: t("cmd.goal.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes("goal") },
-	});
-	add({
-		name: "loop",
-		label: t("cmd.loop"),
-		description: t("cmd.loop.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes("loop") },
-	});
-	// The Modes window is the native form of TUI /modes; without this row the
-	// sidecar-advertised command merges in as a dead "TUI-only" entry.
-	add({
-		name: "modes",
-		label: t("cmd.modes"),
-		description: t("cmd.modes.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes() },
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
 	// WORKSPACE
 	// ═══════════════════════════════════════════════════════════════════
 	// /dirs and /remove-dir open the workspace-directories dialog (it lists the
@@ -991,36 +940,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 					const state = data as { paused: boolean; pausedAt?: number };
 					useSessionStore.setState({ agentsPaused: state.paused, agentsPausedAt: state.pausedAt ?? null });
 				});
-			},
-		},
-	});
-	add({
-		name: "plan-review",
-		label: t("cmd.planReview"),
-		description: t("cmd.planReview.desc"),
-		category: "other",
-		affordance: {
-			kind: "action",
-			run: () => {
-				// The dock card only renders while plan mode is on — point at the toggle otherwise.
-				if (!useSessionStore.getState().planModeEnabled) {
-					toast({ variant: "info", message: translate("planPanel.statusOff") });
-					return;
-				}
-				ctx.focusDockCard("plan");
-			},
-		},
-	});
-	add({
-		name: "guided-goal",
-		label: t("cmd.guidedGoal"),
-		description: t("cmd.guidedGoal.desc"),
-		category: "other",
-		affordance: {
-			kind: "action",
-			run: async initial => {
-				const response = await boundRpc.guidedGoal(initial);
-				if (!response.success) throw new Error(response.error);
 			},
 		},
 	});
@@ -1262,7 +1181,6 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 		openSessionInfo: ui.openSessionInfo,
 		openHandoffDialog,
 		openThemePicker: ui.openThemePicker,
-		openModes: ui.openModes,
 		openAgentHub: ui.openAgentHub,
 		openPrCenter: ui.openPrCenter,
 		openHotkeys: ui.openHotkeys,

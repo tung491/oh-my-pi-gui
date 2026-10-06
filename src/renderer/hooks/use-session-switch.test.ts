@@ -305,7 +305,6 @@ describe("switchSessionNow F-OWN owner guard", () => {
 		useForkHandoffStore.getState().openHandoffDialog();
 		useSessionStore.setState({
 			goal: { objective: "old goal" },
-			loopMode: { enabled: true, state: "running" },
 			vibeModeEnabled: true,
 		});
 		const transcript = Promise.withResolvers<RpcResponse>();

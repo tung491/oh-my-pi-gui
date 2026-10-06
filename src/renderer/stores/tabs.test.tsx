@@ -451,7 +451,7 @@ describe("tabs store switch", () => {
 		seedTabs();
 		useUiStore.getState().openSettings();
 		useUiStore.getState().openSessionInfo();
-		useUiStore.getState().openModes("goal");
+		useUiStore.getState().openRenameDialog();
 		useUiStore.getState().openProviders();
 		useForkHandoffStore.getState().openHandoffDialog();
 
@@ -459,7 +459,7 @@ describe("tabs store switch", () => {
 
 		expect(useUiStore.getState().settingsOpen).toBe(false);
 		expect(useUiStore.getState().sessionInfoOpen).toBe(false);
-		expect(useUiStore.getState().modesOpen).toBe(false);
+		expect(useUiStore.getState().renameDialogOpen).toBe(false);
 		expect(useForkHandoffStore.getState().handoffDialogOpen).toBe(false);
 		expect(useUiStore.getState().providersOpen).toBe(true);
 	});

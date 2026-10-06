@@ -144,17 +144,16 @@ describe("InputArea quick-entry auto-submit", () => {
 		expect(useComposerStore.getState().autoSubmit).toBeNull();
 	});
 
-	it("leaves shell-mode text in the composer without running it", async () => {
+	it("sends shell-looking text to the assistant as typed, never to a shell", async () => {
 		await mount("ready");
 		await queue("!rm -rf ~", "bang");
-		await queue("$ print(1)", "dollar");
+		await flush();
 		await flush();
 
 		expect(bash).not.toHaveBeenCalled();
 		expect(evalCode).not.toHaveBeenCalled();
-		expect(prompt).not.toHaveBeenCalled();
-		expect(useComposerStore.getState().draft).toBe("$ print(1)");
-		expect(ackPrompt.mock.calls).toEqual([["bang"], ["dollar"]]);
+		expect(prompt).toHaveBeenCalledWith("!rm -rf ~", []);
+		expect(ackPrompt.mock.calls).toEqual([["bang"]]);
 		expect(useComposerStore.getState().autoSubmit).toBeNull();
 	});
 

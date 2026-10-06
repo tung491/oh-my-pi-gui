@@ -61,8 +61,6 @@ describe("CapabilitiesHome", () => {
 					onConfigureAdvisor={noop}
 					onConfigureTtsr={noop}
 					onOpenAgents={noop}
-					onOpenGoal={noop}
-					onOpenLoop={noop}
 					onOpenMemory={noop}
 					onOpenTools={noop}
 					onOpenCommandCenter={noop}
@@ -78,8 +76,6 @@ describe("CapabilitiesHome", () => {
 		expect(html).toContain("Configure rules");
 		expect(html).toContain("Open Agent Hub");
 		expect(html).toContain("Advisor settings");
-		expect(html).toContain("Goal mode");
-		expect(html).toContain("Loop mode");
 		expect(html).toContain("Configure memory");
 		expect(html).toContain("Configure tool access");
 		expect(html).toContain("Backend: local");
@@ -87,7 +83,14 @@ describe("CapabilitiesHome", () => {
 		expect(html).toContain("Side Question");
 		expect(html).toContain("Export HTML");
 		expect(html).toContain("Updates");
-		for (const removed of ["Debug Tools", "Collab Session", "MCP Servers", "Plugin Marketplace"])
+		for (const removed of [
+			"Debug Tools",
+			"Collab Session",
+			"MCP Servers",
+			"Plugin Marketplace",
+			"Goal mode",
+			"Loop mode",
+		])
 			expect(html).not.toContain(removed);
 	});
 

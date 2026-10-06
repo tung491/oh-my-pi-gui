@@ -38,7 +38,6 @@ const ctx: CommandRegistryContext = {
 	openSessionInfo: () => {},
 	openHandoffDialog: () => {},
 	openThemePicker: () => {},
-	openModes: () => {},
 	openAgentHub: () => {},
 	openPrCenter: () => {},
 	openHotkeys: () => {},

@@ -259,13 +259,6 @@ export const KEYMAP_ACTIONS = [
 	{ id: "pr.center", labelKey: "hotkeys.row.prCenter", defaults: ["⌥P"], overlaySafe: false, hotkeyGroup: "session" },
 	{ id: "dequeue", labelKey: "hotkeys.row.dequeue", defaults: ["⌥↑"], overlaySafe: false, hotkeyGroup: "generation" },
 	{
-		id: "plan.toggle",
-		labelKey: "hotkeys.row.planToggle",
-		defaults: ["⌥⇧P"],
-		overlaySafe: false,
-		hotkeyGroup: "generation",
-	},
-	{
 		id: "tools.expand",
 		labelKey: "hotkeys.row.expandTools",
 		defaults: ["⌃O"],

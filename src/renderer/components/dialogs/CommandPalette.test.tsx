@@ -157,7 +157,7 @@ describe("chat-tab rows", () => {
 		seedTab("chat");
 		await mount();
 
-		const plan = rowByLabel(translate("cmd.plan"));
+		const plan = rowByLabel(translate("cmd.tan"));
 		expect(plan.getAttribute("disabled")).not.toBeNull();
 		expect(plan.getAttribute("aria-disabled")).toBe("true");
 		expect(plan.textContent).toContain(translate("unavailable.chatSession"));
@@ -173,7 +173,7 @@ describe("chat-tab rows", () => {
 		sidecarCommands = [DEPLOY];
 		seedTab("agent");
 		await mount();
-		const plan = rowByLabel(translate("cmd.plan"));
+		const plan = rowByLabel(translate("cmd.tan"));
 		expect(plan.getAttribute("disabled")).toBeNull();
 		expect(plan.getAttribute("aria-disabled")).toBe("false");
 	});

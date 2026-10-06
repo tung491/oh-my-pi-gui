@@ -715,12 +715,6 @@ export function SettingsWindow() {
 				case "updates":
 					settingsPage(UPDATES_TAB_ID);
 					return;
-				case "modes":
-					external(() => useUiStore.getState().openModes());
-					return;
-				case "vibe":
-					external(() => useUiStore.getState().openModes("vibe"));
-					return;
 				case "clear":
 					runAsync(() => clearSessionContext());
 					return;
@@ -764,9 +758,6 @@ export function SettingsWindow() {
 					return;
 				case "omfg":
 					prefill("/omfg ");
-					return;
-				case "guidedGoal":
-					prefill("/guided-goal ");
 					return;
 				case "queue":
 					prefill("-> ");
@@ -937,14 +928,6 @@ export function SettingsWindow() {
 										onOpenAgents={() => {
 											close();
 											useUiStore.getState().openAgentHub("definitions");
-										}}
-										onOpenGoal={() => {
-											close();
-											useUiStore.getState().openModes("goal");
-										}}
-										onOpenLoop={() => {
-											close();
-											useUiStore.getState().openModes("loop");
 										}}
 										onOpenMemory={() => {
 											setTab("memory");

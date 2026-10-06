@@ -13,7 +13,6 @@ import { HandoffDialog } from "./components/dialogs/HandoffDialog";
 import { HotkeysDialog } from "./components/dialogs/HotkeysDialog";
 import { JobsDialog } from "./components/dialogs/JobsDialog";
 import { ModelPicker } from "./components/dialogs/ModelPicker";
-import { PlanApprovalDialog } from "./components/dialogs/PlanApprovalDialog";
 import { RenameSessionDialog } from "./components/dialogs/RenameSessionDialog";
 import { SessionInfoDialog } from "./components/dialogs/SessionInfoDialog";
 import { SessionPickerDialog } from "./components/dialogs/SessionPickerDialog";
@@ -94,7 +93,6 @@ const ComposerEditorDialog = lazy(() =>
 const SettingsWindow = lazy(() =>
 	import("./components/settings/SettingsWindow").then(m => ({ default: m.SettingsWindow })),
 );
-const ModesPanel = lazy(() => import("./components/panels/ModesPanel").then(m => ({ default: m.ModesPanel })));
 const AgentHubWindow = lazy(() =>
 	import("./components/panels/AgentHubWindow").then(m => ({ default: m.AgentHubWindow })),
 );
@@ -165,9 +163,6 @@ export function App() {
 	const theme = useUiStore(s => s.theme);
 	const fontSize = useUiStore(s => s.fontSize);
 	const followAgentTheme = useUiStore(s => s.followAgentTheme);
-	const modesOpen = useUiStore(s => s.modesOpen);
-	const modesTab = useUiStore(s => s.modesTab);
-	const closeModes = useUiStore(s => s.closeModes);
 	const agentHubOpen = useUiStore(s => s.agentHubOpen);
 	const agentHubTab = useUiStore(s => s.agentHubTab);
 	const closeAgentHub = useUiStore(s => s.closeAgentHub);
@@ -395,16 +390,6 @@ export function App() {
 						error => toast({ variant: "error", title: t("palette.failed"), message: String(error) }),
 					);
 					return;
-				case "plan.toggle": {
-					// ⌥⇧P — toggle plan mode (TUI app.plan.toggle).
-					const enabled = !useSessionStore.getState().planModeEnabled;
-					void runSessionCommand(focusedTabRpc().setPlanMode(enabled), t("settings.runtime.planMode"), data => {
-						const result = data as { enabled?: boolean } | undefined;
-						if (typeof result?.enabled === "boolean")
-							useSessionStore.setState({ planModeEnabled: result.enabled });
-					});
-					return;
-				}
 				case "tools.expand":
 					// ⌃O — expand/collapse all tool cards (TUI app.tools.expand).
 					ui.toggleToolsExpandAll();
@@ -615,10 +600,6 @@ export function App() {
 				ui.openAgentHub();
 				return;
 			}
-			if (action === "open-modes") {
-				ui.openModes();
-				return;
-			}
 			if (action === "open-providers") {
 				ui.openProviders();
 				return;
@@ -713,12 +694,10 @@ export function App() {
 			<Suspense fallback={null}>
 				<SettingsWindow />
 				<ProvidersWindow />
-				<ModesPanel open={modesOpen} onClose={closeModes} initialTab={modesTab} />
 				<AgentHubWindow open={agentHubOpen} onClose={closeAgentHub} initialTab={agentHubTab} />
 				<PrCenterWindow />
 			</Suspense>
 			<ThemePickerDialog />
-			<PlanApprovalDialog />
 			<HotkeysDialog open={hotkeysOpen} />
 			{composerEditorOpen && (
 				<Suspense fallback={null}>

@@ -8,7 +8,6 @@ import {
 	refreshModelState,
 	refreshSessionState,
 	syncGoal,
-	syncLoopMode,
 	syncVibeMode,
 } from "./session-hydration";
 
@@ -32,7 +31,6 @@ import {
 } from "../../shared/rpc-types";
 import { formatClock } from "../lib/format";
 import { translate } from "../lib/i18n";
-import { normalizeLoopUpdate } from "../lib/loop-mode";
 import { acceptsActiveTabEvents } from "../lib/tab-routing";
 import { useExtensionUiStore } from "../stores/extension-ui";
 import { useMessagesStore } from "../stores/messages";
@@ -484,14 +482,6 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 							useSessionStore.setState(goalPatchFromEvent(event.goal, event.state));
 							break;
 						}
-						case "loop_mode_update": {
-							// Loop state is passive display too — the composer chip and
-							// footer badge read it from the session store. Reuse the Modes
-							// window's normalizer: frames may arrive flat or nested.
-							const next = normalizeLoopUpdate(event);
-							if (next) useSessionStore.setState({ loopMode: next });
-							break;
-						}
 						case "queue_update": {
 							// Authoritative queue snapshot — fires on every queue mutation
 							// (enqueue, drain/consume, remove, move, clear), so the strip,
@@ -621,7 +611,6 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 								if (!wire.isStreaming) useMessagesStore.getState().clearStreaming();
 								await Promise.allSettled([
 									syncGoal("", activeTabCommand, () => true),
-									syncLoopMode("", activeTabCommand, () => true),
 									syncVibeMode("", activeTabCommand, () => true),
 									useQueueStore.getState().refresh(),
 									useSettingsStore.getState().syncDisplaySettings(),

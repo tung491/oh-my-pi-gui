@@ -151,7 +151,6 @@ export function CommandPalette() {
 	const openSessionTree = useUiStore(state => state.openSessionTree);
 	const openSessionInfo = useUiStore(state => state.openSessionInfo);
 	const openThemePicker = useUiStore(state => state.openThemePicker);
-	const openModes = useUiStore(state => state.openModes);
 	const openAgentHub = useUiStore(state => state.openAgentHub);
 	const openPrCenter = useUiStore(state => state.openPrCenter);
 	const openHotkeys = useUiStore(state => state.openHotkeys);
@@ -322,7 +321,6 @@ export function CommandPalette() {
 				forkSession: forkSessionFromGui,
 				hydrateSession: () => (tabId ? hydrateTabSession(tabId) : hydrateSession()),
 				openThemePicker,
-				openModes,
 				openAgentHub,
 				openPrCenter,
 				openHotkeys,
@@ -372,7 +370,6 @@ export function CommandPalette() {
 			openSessionInfo,
 			retryLastTurn,
 			retryTurn,
-			openModes,
 			focusDockCard,
 			openAgentHub,
 			openPrCenter,

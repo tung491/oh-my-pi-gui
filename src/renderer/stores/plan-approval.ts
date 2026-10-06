@@ -1,6 +1,6 @@
 /**
  * Plan-approval store: holds the pending structured plan proposal emitted by
- * the agent (`plan_proposal` event) for the PlanApprovalDialog. The sidecar
+ * the agent (`plan_proposal` event). The sidecar
  * can only have one plan awaiting approval at a time, so a new proposal
  * replaces the previous one (latest wins). The refine feedback lives here too
  * so it resets with the proposal lifecycle and survives dialog remounts.

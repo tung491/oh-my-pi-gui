@@ -1,7 +1,7 @@
 /**
  * useComposerSubmit: the composer submit controller extracted from InputArea.
- * Owns the entire send pipeline: bash/python mode dispatch, yield-queue
- * shorthand, slash-command routing, and the prompt/steer/followUp dispatch.
+ * Owns the entire send pipeline: yield-queue shorthand, slash-command
+ * routing, and the prompt/steer/followUp dispatch. Text is sent as typed.
  */
 
 import { useCallback } from "react";
@@ -10,7 +10,6 @@ import { hydrateTabSession } from "../../hooks/use-rpc-events";
 import { isGuiOnlyBuiltinCommand, planComposerSubmit, settleComposerResponse } from "../../lib/composer-submit";
 import { expandEmoticons } from "../../lib/emoji";
 import { useT } from "../../lib/i18n";
-import { parseComposerMode } from "../../lib/input-modes";
 import { clearSessionContext } from "../../lib/messages";
 import { dropReferencedPastes, expandPasteMarkers } from "../../lib/paste-blobs";
 import { parseQueueShorthand, splitQueuedMessages } from "../../lib/queue-input";
@@ -109,8 +108,8 @@ export function useComposerSubmit({
 				if (originSession) void hydrateTabSession(originTabId);
 			};
 
-			// Paste markers expand to full blob content BEFORE mode/queue parsing and
-			// every dispatch path (bash, python, prompt, queue items) — the wire only
+			// Paste markers expand to full blob content BEFORE queue parsing and
+			// every dispatch path (prompt, queue items) — the wire only
 			// ever sees expanded text (TUI getExpandedText parity, regression #3737).
 			// History records the raw typed text (markers included), matching the TUI.
 			// Emoticon expansion also runs at submit time over the whole message
@@ -123,104 +122,6 @@ export function useComposerSubmit({
 			// once delivery is confirmed. Recording up front left every failed or
 			// blocked send in the list, and a recalled entry replays a prompt that
 			// never ran.
-			const parsed = parseComposerMode(expandedMessage);
-			if (parsed?.mode === "bash" && parsed.body) {
-				const previousImages = images;
-				setText("");
-				setImages([]);
-				setMenu(null);
-				setSending(true);
-				let accepted = false;
-				const pending: AgentMessage = {
-					role: "bashExecution",
-					command: parsed.body,
-					excludeFromContext: parsed.excluded,
-					timestamp: Date.now(),
-					running: true,
-				};
-				originMessages?.getState().appendMessage(pending);
-				void rpc
-					.bash(parsed.body, parsed.excluded)
-					.then(async response => {
-						if (originStillActive()) originMessages?.getState().removeMessage(pending);
-						if (!response.success) {
-							if (response.code === "rpc_delivery_unknown") markUncertain();
-							restoreDraft(message, previousImages);
-							showSendError(t("input.bashFailed"), response.error);
-							return;
-						}
-						accepted = true;
-						useInputHistoryStore.getState().record(message, originCwd);
-						if (!originStillActive()) return;
-						dropReferencedPastes(message);
-						await hydrateTabSession(originTabId);
-					})
-					.catch(error => {
-						if (accepted) {
-							toast({ variant: "error", message: String(error) });
-							return;
-						}
-						markUncertain();
-						if (originStillActive()) originMessages?.getState().removeMessage(pending);
-						restoreDraft(message, previousImages);
-						showSendError(t("input.bashFailed"), String(error));
-					})
-					.finally(() => {
-						if (originStillActive()) setSending(false);
-					});
-				return;
-			}
-
-			// `$ code` → python mode (TUI parity): run through the eval RPC, showing a
-			// running ExecutionBubble (cancel → abortEval) until the transcript record
-			// lands. Language is left to the sidecar — interactive eval is python-only
-			// today and the GUI tracks no kernel state to source it from.
-			if (parsed?.mode === "python" && parsed.body) {
-				const previousImages = images;
-				setText("");
-				setImages([]);
-				setMenu(null);
-				setSending(true);
-				let accepted = false;
-				const pending: AgentMessage = {
-					role: "pythonExecution",
-					code: parsed.body,
-					timestamp: Date.now(),
-					running: true,
-				};
-				originMessages?.getState().appendMessage(pending);
-				void rpc
-					.eval(parsed.body, undefined, parsed.excluded)
-					.then(async response => {
-						if (originStillActive()) originMessages?.getState().removeMessage(pending);
-						if (!response.success) {
-							if (response.code === "rpc_delivery_unknown") markUncertain();
-							restoreDraft(message, previousImages);
-							showSendError(t("input.evalFailed"), response.error);
-							return;
-						}
-						accepted = true;
-						useInputHistoryStore.getState().record(message, originCwd);
-						if (!originStillActive()) return;
-						dropReferencedPastes(message);
-						await hydrateTabSession(originTabId);
-					})
-					.catch(error => {
-						if (accepted) {
-							toast({ variant: "error", message: String(error) });
-							return;
-						}
-						markUncertain();
-						if (originStillActive()) originMessages?.getState().removeMessage(pending);
-						restoreDraft(message, previousImages);
-						showSendError(t("input.evalFailed"), String(error));
-					})
-					.finally(() => {
-						if (originStillActive()) setSending(false);
-					});
-				return;
-			}
-
 			// `->` / `=>` yield-queue shorthand (TUI #queueForYield parity): split an
 			// enumerated list into one queue entry per item; first item prompts with
 			// streamingBehavior:"followUp" when idle, everything else followUps;

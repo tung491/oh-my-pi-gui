@@ -17,9 +17,8 @@ const SIDECAR_COMMANDS: AvailableCommand[] = [
 	{ name: "task", description: "Run a task", input: { hint: "<work>" }, textModeExecutable: true },
 	// A user command with an argument: the palette must not run it blind.
 	{ name: "deploy", description: "Deploy", input: { hint: "<env>" }, textModeExecutable: true },
-	// Both names are claimed by a native row (model picker, run-modes window).
+	// Claimed by a native row (the model picker's alias).
 	{ name: "models", description: "List models", textModeExecutable: true },
-	{ name: "modes", description: "Run modes", textModeExecutable: true },
 	// A terminal-only command stays visible so the palette explains its client limit.
 	{ name: "terminal-only", description: "Terminal helper", textModeExecutable: false },
 ];
@@ -49,10 +48,10 @@ afterEach(() => {
 describe("chat-tab availability", () => {
 	it("downgrades a GUI-registered tool command to a disabled row that explains itself", () => {
 		seedTab("agent");
-		expect(menuItem("plan").affordance.kind).toBe("toggle");
+		expect(menuItem("tan").affordance.kind).toBe("action");
 
 		seedTab("chat");
-		for (const name of ["plan", "goal", "vibe", "tree"]) {
+		for (const name of ["tan"]) {
 			const affordance = menuItem(name).affordance;
 			if (affordance.kind !== "unavailable") throw new Error(`${name} is still executable in a chat tab`);
 			expect(affordance.reason, name).toBe(CHAT_REASON);
@@ -99,11 +98,6 @@ describe("native rows vs sidecar-advertised duplicates", () => {
 		const items = buildCurrentCommandMenu(SIDECAR_COMMANDS);
 		expect(items.filter(item => item.name === "models")).toHaveLength(0);
 		expect(items.find(item => item.name === "model")?.affordance.kind).toBe("picker");
-	});
-
-	it("offers /modes as the run-modes window rather than an unhandled prompt", () => {
-		seedTab("agent");
-		expect(menuItem("modes").affordance.kind).toBe("window");
 	});
 });
 

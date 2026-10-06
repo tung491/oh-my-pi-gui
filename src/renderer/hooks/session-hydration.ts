@@ -2,7 +2,6 @@ import type {
 	AgentMessage,
 	ModelInfo,
 	RpcGoalState,
-	RpcLoopModeState,
 	RpcResponse,
 	RpcSessionState,
 	RpcVibeModeState,
@@ -179,22 +178,6 @@ export async function syncGoal(tabId: string, command: TabCommand, isCurrent: Hy
 	}
 }
 
-/** Fetch the live loop-mode state (get_loop_mode) into the session store; null on failure. */
-export async function syncLoopMode(tabId: string, command: TabCommand, isCurrent: HydrationGuard): Promise<void> {
-	const before = withSessionRuntime(tabId, () => useSessionStore.getState().loopMode);
-	try {
-		const res = await command({ type: "get_loop_mode" });
-		if (!isCurrent() || !res.success) return;
-		if (withSessionRuntime(tabId, () => useSessionStore.getState().loopMode) !== before) return;
-		// get_loop_mode wire payload is RpcLoopModeState; `data` crosses the bridge as unknown.
-		withSessionRuntime(tabId, () => {
-			useSessionStore.setState({ loopMode: (res.data as RpcLoopModeState | undefined) ?? null });
-		});
-	} catch {
-		// Transient — the next loop_mode_update event or hydration retries.
-	}
-}
-
 /** Fetch the live vibe-mode state (get_vibe_mode) into the session store; no event exists. */
 export async function syncVibeMode(tabId: string, command: TabCommand, isCurrent: HydrationGuard): Promise<void> {
 	try {
@@ -229,7 +212,6 @@ export async function hydrateLegacySession(fallbackName?: string, initialState?:
 	const subagents = useSubagentsStore.getState().refresh({ expect: isCurrent });
 	const secondary = Promise.allSettled([
 		syncGoal("", activeTabCommand, isCurrent),
-		syncLoopMode("", activeTabCommand, isCurrent),
 		syncVibeMode("", activeTabCommand, isCurrent),
 		useQueueStore.getState().refresh(),
 		useSettingsStore.getState().syncDisplaySettings(),
@@ -317,9 +299,7 @@ export async function hydrateTabSession(tabId: string, fallbackName?: string): P
 		// composer chip reflects an active goal after boot/session switches,
 		// not only on goal_updated events.
 		syncGoal(tabId, runtime.command, isCurrent),
-		// Loop and vibe mode likewise: loop_mode_update frames keep loop fresh
-		// afterwards; vibe emits nothing, so the Modes window mirrors toggles.
-		syncLoopMode(tabId, runtime.command, isCurrent),
+		// Vibe mode likewise; it emits no event of its own.
 		syncVibeMode(tabId, runtime.command, isCurrent),
 		// Queue snapshot: queue_update frames keep it fresh afterwards;
 		// get_queue is only the hydrate fallback (boot/reconnect/session

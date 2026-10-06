@@ -47,8 +47,6 @@ interface UiStore {
 	/** The local-model welcome screen (first run, or reopened from Settings › Ollama). */
 	welcomeOpen: boolean;
 	themePickerOpen: boolean;
-	modesOpen: boolean;
-	modesTab: "vibe" | "goal" | "loop";
 	agentHubOpen: boolean;
 	agentHubTab: "definitions" | "hub";
 	hotkeysOpen: boolean;
@@ -125,8 +123,6 @@ interface UiStore {
 	closeWelcome: () => void;
 	openThemePicker: () => void;
 	closeThemePicker: () => void;
-	openModes: (tab?: "vibe" | "goal" | "loop") => void;
-	closeModes: () => void;
 	openAgentHub: (tab?: "definitions" | "hub") => void;
 	closeAgentHub: () => void;
 	openHotkeys: () => void;
@@ -257,10 +253,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	themePickerOpen: false,
 	openThemePicker: () => set({ themePickerOpen: true }),
 	closeThemePicker: () => set({ themePickerOpen: false }),
-	modesOpen: false,
-	modesTab: "vibe" as const,
-	openModes: tab => set({ modesOpen: true, modesTab: tab ?? "vibe" }),
-	closeModes: () => set({ modesOpen: false }),
 	agentHubOpen: false,
 	agentHubTab: "definitions" as const,
 	openAgentHub: tab => set({ agentHubOpen: true, agentHubTab: tab ?? "definitions" }),
@@ -322,7 +314,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			commandPaletteOpen: false,
 			modelPickerOpen: false,
 			settingsOpen: false,
-			modesOpen: false,
 			agentHubOpen: false,
 			copySelectorOpen: false,
 			jobsOpen: false,

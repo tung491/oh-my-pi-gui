@@ -616,8 +616,8 @@ describe("InputArea run settings", () => {
 		expect(document.querySelector("[data-run-settings-overflow-trigger]")).toBeNull();
 		expect(buttonWithText(translate("input.thinking.name.high"))).toBeDefined();
 		expect(buttonWithText("Fast")).toBeDefined();
-		expect(buttonWithText("Full access")).toBeDefined();
-		expect(buttonWithText("Modes")).toBeDefined();
+		expect(buttonWithText("Full access")).toBeUndefined();
+		expect(buttonWithText("Modes")).toBeUndefined();
 	});
 
 	it("marks fast mode selected when enabled but unavailable to the active model", async () => {
@@ -650,38 +650,5 @@ describe("InputArea run settings", () => {
 
 		expect(setThinkingLevel).toHaveBeenCalledWith("max");
 		expect(useModelStore.getState().thinkingConfigured).toBe("max");
-	});
-
-	it("lets the nested approval portal persist its selected mode", async () => {
-		await mountCompact();
-		await openRunSettings();
-		const approval = buttonWithText("Full access");
-		if (!approval) throw new Error("approval trigger missing");
-		await click(approval);
-
-		const ask = buttonWithText("Ask every time");
-		if (!ask) throw new Error("approval option missing");
-		await pointerDown(ask);
-		await click(ask);
-
-		expect(setSetting).toHaveBeenCalledWith("tools.approvalMode", "always-ask");
-		expect(useSettingsStore.getState().approvalMode).toBe("always-ask");
-	});
-
-	it("lets the nested modes portal dispatch its selected action", async () => {
-		await mountCompact();
-		await openRunSettings();
-		const modes = buttonWithText("Modes");
-		if (!modes) throw new Error("modes trigger missing");
-		await click(modes);
-
-		const plan = buttonWithText("Plan");
-		if (!plan) throw new Error("plan option missing");
-		await pointerDown(plan);
-		await click(plan);
-		await flush();
-
-		expect(setPlanMode).toHaveBeenCalledWith(true);
-		expect(useSessionStore.getState().planModeEnabled).toBe(true);
 	});
 });

@@ -14,7 +14,6 @@ import {
 	Keyboard,
 	Network,
 	Plug,
-	Route,
 	ShieldCheck,
 	Sparkles,
 	Wrench,
@@ -28,8 +27,6 @@ export type CapabilityTarget =
 	| "providers"
 	| "agents"
 	| "updates"
-	| "modes"
-	| "vibe"
 	| "clear"
 	| "sessionInfo"
 	| "sessionTree"
@@ -42,7 +39,6 @@ export type CapabilityTarget =
 	| "btw"
 	| "tan"
 	| "omfg"
-	| "guidedGoal"
 	| "queue"
 	| "workspaceDirs"
 	| "prCenter"
@@ -62,8 +58,6 @@ interface CapabilitiesHomeProps {
 	onConfigureTtsr: () => void;
 	onOpenAgents: () => void;
 	onConfigureAdvisor: () => void;
-	onOpenGoal: () => void;
-	onOpenLoop: () => void;
 	onOpenMemory: () => void;
 	onOpenTools: () => void;
 	onOpenCommandCenter: () => void;
@@ -150,8 +144,6 @@ export function CapabilitiesHome({
 	onConfigureTtsr,
 	onOpenAgents,
 	onConfigureAdvisor,
-	onOpenGoal,
-	onOpenLoop,
 	onOpenMemory,
 	onOpenTools,
 	onOpenCommandCenter,
@@ -203,7 +195,6 @@ export function CapabilitiesHome({
 					<TargetButton label={t("cmd.btw")} onOpen={onOpenTarget} target="btw" variant="secondary" />
 					<TargetButton label={t("cmd.tan")} onOpen={onOpenTarget} target="tan" />
 					<TargetButton label={t("cmd.omfg")} onOpen={onOpenTarget} target="omfg" />
-					<TargetButton label={t("cmd.guidedGoal")} onOpen={onOpenTarget} target="guidedGoal" />
 					<TargetButton label={t("cmd.queue")} onOpen={onOpenTarget} target="queue" />
 				</CapabilityCard>
 
@@ -250,19 +241,6 @@ export function CapabilitiesHome({
 				</CapabilityCard>
 
 				<CapabilityCard
-					description={t("settings.capabilities.modesDesc")}
-					icon={<Route size={16} />}
-					title={t("settings.capabilities.modes")}
-				>
-					<Button onClick={onOpenGoal} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.goalMode")}
-					</Button>
-					<Button onClick={onOpenLoop} size="sm" type="button" variant="ghost">
-						{t("settings.capabilities.loopMode")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
 					description={t("settings.capabilities.memoryDesc")}
 					icon={<Database size={16} />}
 					status={
@@ -295,11 +273,6 @@ export function CapabilitiesHome({
 
 				<CapabilityCard description={t("cmd.providers.desc")} icon={<Plug size={16} />} title={t("cmd.providers")}>
 					<TargetButton label={t("cmd.providers")} onOpen={onOpenTarget} target="providers" variant="secondary" />
-				</CapabilityCard>
-
-				<CapabilityCard description={t("cmd.modes.desc")} icon={<Route size={16} />} title={t("cmd.modes")}>
-					<TargetButton label={t("cmd.modes")} onOpen={onOpenTarget} target="modes" variant="secondary" />
-					<TargetButton label={t("cmd.vibe")} onOpen={onOpenTarget} target="vibe" />
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.import.desc")} icon={<FolderOpen size={16} />} title={t("cmd.session")}>

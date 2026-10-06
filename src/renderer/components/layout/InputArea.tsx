@@ -9,7 +9,6 @@ import { tryEmojiInlineReplace } from "../../lib/emoji";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
-import { parseComposerMode } from "../../lib/input-modes";
 import { onEscape } from "../../lib/keymap";
 import { abortActiveTurn } from "../../lib/messages";
 import {
@@ -40,8 +39,6 @@ import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { IconButton } from "../common";
-import { ApprovalControl } from "./ApprovalControl";
-import { ComposerModes } from "./ComposerModes";
 import { HistorySearchOverlay } from "./HistorySearchOverlay";
 import { fileToImage, listMentionFiles, mentionFileCache } from "./input-area-utils";
 import { ThinkingControl } from "./ThinkingControl";
@@ -213,17 +210,6 @@ export function InputArea() {
 	useEffect(() => {
 		void useInputHistoryStore.getState().hydrate();
 	}, []);
-
-	// `!` → bash / `$` → python composer mode (TUI parity): drives the border badge
-	// and reroutes sending. Detected from the prefix alone so the badge appears
-	// while the user is still typing.
-	const composerMode = useMemo(() => parseComposerMode(text), [text]);
-	const modeColor =
-		composerMode?.mode === "bash"
-			? "var(--omp-info)"
-			: composerMode?.mode === "python"
-				? "var(--omp-warning)"
-				: undefined;
 
 	// `->` / `=>` yield-queue shorthand (TUI queue-input.ts parity). The badge
 	// preview and the send-path dispatch share this one parser so the "splits
@@ -525,14 +511,13 @@ export function InputArea() {
 	});
 
 	// A quick-entry prompt arrives in a fresh tab's draft and goes out once the
-	// tab is ready, through the same pipeline as Enter. Shell-mode text is only
-	// shown, never run: a pasted `!cmd` must not execute unseen.
+	// tab is ready, through the same pipeline as Enter.
 	useEffect(() => {
 		if (!autoSubmit || status !== "ready" || !routeReady || sending || submissionUncertain) return;
 		if (handledAutoSubmit.current === autoSubmit.id) return;
 		handledAutoSubmit.current = autoSubmit.id;
 		clearAutoSubmit();
-		if (!parseComposerMode(text)) send(text);
+		send(text);
 		void window.omp.quickEntry.ack(autoSubmit.id);
 	}, [autoSubmit, status, routeReady, sending, submissionUncertain, text, send, clearAutoSubmit]);
 
@@ -799,17 +784,6 @@ export function InputArea() {
 					</div>
 				)}
 
-				{composerMode && modeColor && (
-					<div
-						className="absolute -top-2 left-5 z-10 flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-omp-xs font-semibold"
-						style={{ borderColor: modeColor, color: modeColor, backgroundColor: "var(--omp-bg-primary)" }}
-						title={composerMode.mode === "bash" ? t("input.mode.bash.title") : t("input.mode.python.title")}
-					>
-						<span className="font-mono text-omp-sm leading-none">{composerMode.mode === "bash" ? "!" : "$"}</span>
-						{composerMode.mode}
-					</div>
-				)}
-
 				{/* Anchoring context for completion/history overlays: they sit directly
 				    above the input box instead of the surrounding composer region. */}
 				<div className="relative">
@@ -863,10 +837,7 @@ export function InputArea() {
 							}}
 						/>
 					)}
-					<div
-						className="overflow-hidden rounded-xl border border-(--omp-border) bg-(--omp-input-bg) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus-within:border-[var(--omp-input-focus-border)] focus-within:shadow-[var(--omp-shadow-glow)]"
-						style={modeColor ? { borderColor: modeColor } : undefined}
-					>
+					<div className="overflow-hidden rounded-xl border border-(--omp-border) bg-(--omp-input-bg) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus-within:border-[var(--omp-input-focus-border)] focus-within:shadow-[var(--omp-shadow-glow)]">
 						<div className="px-3.5 pb-1.5 pt-2.5">
 							{submissionUncertain && (
 								<div
@@ -1112,8 +1083,6 @@ export function InputArea() {
 											>
 												<ThinkingControl menuItem />
 												<FastModeControl menuItem />
-												{!isChat && <ApprovalControl menuItem />}
-												{!isChat && <ComposerModes menuItem />}
 											</div>,
 											document.body,
 										)}
@@ -1126,8 +1095,6 @@ export function InputArea() {
 								>
 									<ThinkingControl />
 									<FastModeControl />
-									{!isChat && <ApprovalControl />}
-									{!isChat && <ComposerModes />}
 								</div>
 							)}
 
