@@ -7,10 +7,12 @@ import {
 	buildOsSettingArgv,
 	createOsTools,
 	DIAGNOSE_AREAS,
+	type DiagnoseArea,
 	diagnoseChecks,
 	type ExecFile,
 	type Launch,
 	type OsEnv,
+	SETTINGS_PANELS,
 	STATUS_CHECKS,
 } from "../src/tools/os-commands";
 import type { PackTool, ToolResult } from "../src/tools/types";
@@ -94,43 +96,27 @@ function reason(definition: PackTool, args: unknown): string | undefined {
 }
 
 describe("buildOsSettingArgv", () => {
-	it("maps each setting to one fixed argv", () => {
-		expect(buildOsSettingArgv("dark_mode", true)).toEqual([
-			"gsettings",
-			"set",
-			"org.x.apps.portal",
-			"color-scheme",
-			"prefer-dark",
-		]);
-		expect(buildOsSettingArgv("dark_mode", false)).toEqual([
-			"gsettings",
-			"set",
-			"org.x.apps.portal",
-			"color-scheme",
-			"default",
-		]);
-		expect(buildOsSettingArgv("night_light", true)).toEqual([
-			"gsettings",
-			"set",
-			"org.cinnamon.settings-daemon.plugins.color",
-			"night-light-enabled",
-			"true",
-		]);
-		expect(buildOsSettingArgv("do_not_disturb", true)).toEqual([
-			"gsettings",
-			"set",
-			"org.cinnamon.desktop.notifications",
-			"display-notifications",
-			"false",
-		]);
-		expect(buildOsSettingArgv("volume", 40)).toEqual(["pactl", "set-sink-volume", "@DEFAULT_SINK@", "40%"]);
-		expect(buildOsSettingArgv("text_size", 1.25)).toEqual([
-			"gsettings",
-			"set",
-			"org.cinnamon.desktop.interface",
-			"text-scaling-factor",
-			"1.25",
-		]);
+	it.each([
+		["dark_mode", true, ["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"]],
+		["dark_mode", false, ["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "default"]],
+		[
+			"night_light",
+			true,
+			["gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "true"],
+		],
+		[
+			"night_light",
+			false,
+			["gsettings", "set", "org.gnome.settings-daemon.plugins.color", "night-light-enabled", "false"],
+		],
+		["do_not_disturb", true, ["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", "false"]],
+		["do_not_disturb", false, ["gsettings", "set", "org.gnome.desktop.notifications", "show-banners", "true"]],
+		["volume", 40, ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "40%"]],
+		["volume", 0, ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "0%"]],
+		["volume", 99.6, ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "100%"]],
+		["text_size", 1.25, ["gsettings", "set", "org.gnome.desktop.interface", "text-scaling-factor", "1.25"]],
+	])("maps %s = %j to one fixed GNOME argv", (setting, value, argv) => {
+		expect(buildOsSettingArgv(setting, value)).toEqual(argv);
 	});
 
 	it.each([
@@ -209,14 +195,126 @@ describe("buildOpenItemArgv", () => {
 		expect(() => open("app", "org.gnome.Calculator")).toThrow("This is not available on this computer.");
 	});
 
-	it("opens only the listed settings panels", () => {
-		expect(open("settings", "sound")).toEqual(["cinnamon-settings", "sound"]);
+	it("opens only the listed GNOME Settings panels", () => {
+		expect([...SETTINGS_PANELS]).toEqual([
+			"network",
+			"wifi",
+			"bluetooth",
+			"display",
+			"sound",
+			"printers",
+			"power",
+			"keyboard",
+			"notifications",
+			"background",
+		]);
+		for (const panel of SETTINGS_PANELS) expect(open("settings", panel)).toEqual(["gnome-control-center", panel]);
+		expect(() => open("settings", "themes")).toThrow();
 		expect(() => open("settings", "rm")).toThrow();
 		expect(() => open("printer", "x")).toThrow();
+	});
+
+	it("says plainly that an app is missing", () => {
+		expect(() => open("app", "not-installed")).toThrow("I could not find that app.");
 	});
 });
 
 describe("diagnose", () => {
+	it.each<[DiagnoseArea, readonly (readonly string[])[]]>([
+		[
+			"network",
+			[
+				["nmcli", "-t", "-f", "STATE,CONNECTIVITY", "general"],
+				["nmcli", "-t", "-f", "WIFI", "radio"],
+				["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"],
+			],
+		],
+		[
+			"sound",
+			[
+				["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"],
+				["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"],
+			],
+		],
+		[
+			"printer",
+			[
+				["lpstat", "-p", "-d"],
+				["lpstat", "-o"],
+			],
+		],
+		[
+			"storage",
+			[
+				["df", "-h", "--output=target,size,avail,pcent", "/home"],
+				["df", "-h", "--output=target,size,avail,pcent", "/"],
+			],
+		],
+		["performance", [["uptime"], ["free", "-h"], ["ps", "-eo", "comm,%cpu,%mem", "--sort=-%cpu"]]],
+		[
+			"bluetooth",
+			[
+				["rfkill", "list", "bluetooth"],
+				["bluetoothctl", "show"],
+			],
+		],
+		[
+			"display",
+			[
+				["xrandr", "--listmonitors"],
+				["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+				["gsettings", "get", "org.gnome.settings-daemon.plugins.color", "night-light-enabled"],
+				["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"],
+			],
+		],
+		[
+			"typing",
+			[
+				["im-config", "-m"],
+				["pgrep", "-l", "-x", "ibus-daemon"],
+				["pgrep", "-l", "-x", "fcitx5"],
+			],
+		],
+		["updates", [["apt", "list", "--upgradable"]]],
+	])("runs the GNOME checks for %s", (area, argvs) => {
+		expect(diagnoseChecks(area).map(check => check.argv)).toEqual(argvs);
+	});
+
+	it("labels the screen list as the XWayland view so it is not over-trusted", () => {
+		const screens = diagnoseChecks("display").find(check => check.argv[0] === "xrandr");
+		expect(screens?.label).toMatch(/XWayland/);
+	});
+
+	it("reads the sound device name and the mute state through wpctl", async () => {
+		const inspect = [
+			"id 45, type PipeWire:Interface:Node",
+			'    alsa.card = "2"',
+			'    api.alsa.path = "iec958:2"',
+			'  * node.description = "BTD 700 Digital Stereo (IEC958)"',
+			'    node.driver = "true"',
+		].join("\n");
+		const { exec } = recorder(call => (call.args[0] === "inspect" ? `${inspect}\n` : "Volume: 0.34 [MUTED]\n"));
+		const output = text(await tool("diagnose", { execFile: exec }).execute("t1", { area: "sound" }));
+		expect(output).toContain('Default output: * node.description = "BTD 700 Digital Stereo (IEC958)"');
+		expect(output).not.toContain("alsa.card");
+		expect(output).toContain("Volume and mute: Volume: 0.34 [MUTED]");
+	});
+
+	it("offers the system monitor that is installed, preferring Resources", async () => {
+		const hint = async () =>
+			text(await tool("diagnose", { execFile: recorder().exec }).execute("t1", { area: "performance" }));
+		expect(await hint()).not.toContain("open_item app");
+		writeFileSync(join(apps, "gnome-system-monitor.desktop"), "[Desktop Entry]");
+		expect(await hint()).toContain("open_item app gnome-system-monitor");
+		writeFileSync(join(apps, "net.nokyan.Resources.desktop"), "[Desktop Entry]");
+		expect(await hint()).toContain("open_item app net.nokyan.Resources");
+	});
+
+	it("offers the Ubuntu updater for updates", async () => {
+		const result = await tool("diagnose", { execFile: recorder().exec }).execute("t1", { area: "updates" });
+		expect(text(result)).toContain("open_item app update-manager");
+	});
+
 	it("runs only the fixed read-only checks of the area", async () => {
 		const { exec, calls } = recorder();
 		const result = await tool("diagnose", { execFile: exec }).execute("t1", { area: "storage" });
@@ -274,7 +372,7 @@ describe("os_setting and open_item", () => {
 		const { exec, calls } = recorder();
 		const result = await tool("os_setting", { execFile: exec }).execute("t1", { setting: "volume", value: 30 });
 		expect(result.isError).not.toBe(true);
-		expect(calls).toEqual([{ file: "pactl", args: ["set-sink-volume", "@DEFAULT_SINK@", "30%"] }]);
+		expect(calls).toEqual([{ file: "wpctl", args: ["set-volume", "@DEFAULT_AUDIO_SINK@", "30%"] }]);
 	});
 
 	it("refuse a bad value without running anything", async () => {
@@ -292,7 +390,7 @@ describe("os_setting and open_item", () => {
 		expect((await opener.execute("t2", { kind: "settings", value: "sound" })).isError).not.toBe(true);
 		expect(calls).toEqual([
 			{ file: "xdg-open", args: [join(home, "notes.md")] },
-			{ file: "cinnamon-settings", args: ["sound"] },
+			{ file: "gnome-control-center", args: ["sound"] },
 		]);
 	});
 
@@ -314,6 +412,8 @@ describe("os_setting and open_item", () => {
 		expect(reason(tool("open_item", { lang: "vi" }), { kind: "settings", value: "sound" })).toBe(
 			"Mở cài đặt âm thanh",
 		);
+		expect(reason(tool("open_item"), { kind: "settings", value: "background" })).toBe("Open appearance settings");
+		expect(reason(tool("open_item"), { kind: "settings", value: "wifi" })).toBe("Open Wi-Fi settings");
 		expect(reason(tool("open_item"), null)).toBeTruthy();
 		writeFileSync(join(apps, "org.gnome.Calculator.desktop"), "[Desktop Entry]");
 		expect(reason(tool("open_item"), { kind: "app", value: "org.gnome.Calculator" })).toBe(
