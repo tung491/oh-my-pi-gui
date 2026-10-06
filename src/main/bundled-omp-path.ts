@@ -20,9 +20,9 @@ export function resolveOmpCandidate(...parts: string[]): string | null {
 /**
  * Sidecar filename under resources/ for a cross-target build. Each packaged
  * platform needs its own file: electron-builder.x64.yml ships omp.x64 (Intel
- * macOS), electron-builder.win.yml ships omp.exe, and scripts/stage-tauri-sidecar.ts
- * stages omp.linux-<arch> into the Tauri Linux bundle. The host build keeps writing
- * resources/omp.
+ * macOS) and scripts/stage-tauri-sidecar.ts stages omp.linux-<arch> into the
+ * Tauri Linux bundle. The host build keeps writing resources/omp; a Windows
+ * target, which no package ships, still compiles to omp.exe.
  */
 export function sidecarOutName(osName: string, arch: string): string {
 	if (osName === "win32" || osName === "windows") return "omp.exe";

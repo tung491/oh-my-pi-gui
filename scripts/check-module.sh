@@ -60,8 +60,8 @@ case "$MODULE" in
     SNAPSHOTS=(ports omp tabs desktop services ollama updater)
     ;;
   updater)
-    OWNED=("src-tauri/src/updater/" "src-tauri/tauri.conf.json" "src-tauri/tauri.macos.conf.json" "src-tauri/tauri.linux.conf.json" "src-tauri/tauri.windows.conf.json"
-      "src-tauri/Info.plist" "src-tauri/icons/" "src-tauri/windows/" "src-tauri/linux/" "src-tauri/macos/"
+    OWNED=("src-tauri/src/updater/" "src-tauri/tauri.conf.json" "src-tauri/tauri.macos.conf.json" "src-tauri/tauri.linux.conf.json"
+      "src-tauri/Info.plist" "src-tauri/icons/" "src-tauri/linux/" "src-tauri/macos/"
       "scripts/stage-tauri-sidecar.ts" "scripts/release-feeds.ts" "scripts/release-feeds.test.ts" "scripts/tauri-packaging-config.test.ts"
       "scripts/mac-update-floor.ts" "scripts/mac-update-floor.test.ts" "scripts/check-mac-update-floor.ts"
       "package.json" ".github/workflows/ci.yml" "src/main/packaging-config.test.ts")
@@ -205,16 +205,16 @@ if [[ "$MODULE" == "updater" ]]; then
 fi
 
 # --- gate 9: cross-OS check -----------------------------------------------------
-step 9 "cargo check for aarch64-apple-darwin and x86_64-pc-windows-msvc"
-for target in aarch64-apple-darwin x86_64-pc-windows-msvc; do
+step 9 "cargo check for aarch64-apple-darwin"
+for target in aarch64-apple-darwin; do
   if ! "$CARGO_HOME_BIN/rustup" target list --installed 2>/dev/null | grep -qx "$target"; then
     warn 9 "target $target is not installed (rustup target add $target); skipped"
     continue
   fi
   OUT=$("$CARGO" check --manifest-path "$MANIFEST" --target "$target" --all-features 2>&1)
   if [[ $? -ne 0 ]]; then
-    # Without the platform toolchain, cc-rs cannot build the Objective-C / Windows C helpers in the dependency tree.
-    if echo "$OUT" | grep -qiE 'sdk|xcrun|linker|could not find native static library|pkg-config|\.framework|cc-rs|objective-c|unrecognized command-line option|windows\.h|winapi'; then
+    # Without the platform toolchain, cc-rs cannot build the Objective-C helpers in the dependency tree.
+    if echo "$OUT" | grep -qiE 'sdk|xcrun|linker|could not find native static library|pkg-config|\.framework|cc-rs|objective-c|unrecognized command-line option'; then
       warn 9 "cargo check --target $target needs the platform SDK; skipped"
     else
       echo "$OUT" | tail -40 >&2

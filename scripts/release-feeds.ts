@@ -3,20 +3,20 @@
  *
  *   bun scripts/release-feeds.ts --version 1.0.0 \
  *     --linux src-tauri/target/x86_64-unknown-linux-gnu/release/bundle \
- *     [--mac-arm64 <bundle dir>] [--mac-x64 <bundle dir>] [--windows <bundle dir>] \
- *     [--electron-mac-feed <dir>/latest-mac.yml] [--electron-windows-feed <dir>/latest.yml] \
+ *     [--mac-arm64 <bundle dir>] [--mac-x64 <bundle dir>] \
+ *     [--electron-mac-feed <dir>/latest-mac.yml] \
  *     [--out dist-release]
  *
  * Output (`dist-release/` by default): the bundles renamed to the asset names
  * every installed updater looks for, the `omp-` bridge copies of the DMGs
  * (0.9.x Macs look only for those names until 1.0.0), and electron-builder
  * style feeds with base64 SHA-512 and size per file: `latest-linux.yml`
- * (AppImage and deb), `latest-mac.yml` (both DMGs and ZIPs plus the bridge
- * copies, with `minimumSystemVersion`), and `latest.yml` (NSIS).
+ * (AppImage and deb) and `latest-mac.yml` (both DMGs and ZIPs plus the bridge
+ * copies, with `minimumSystemVersion`).
  *
- * While macOS and Windows still ship Electron builds, pass their
- * electron-builder feeds instead of Tauri bundle dirs: each feed and every
- * asset it lists (read from the feed's directory) is copied unchanged.
+ * While macOS still ships Electron builds, pass its electron-builder feed
+ * instead of Tauri bundle dirs: the feed and every asset it lists (read from
+ * the feed's directory) is copied unchanged.
  */
 
 import { spawnSync } from "node:child_process";
@@ -77,7 +77,6 @@ export function assetNames(version: string) {
 		macX64Zip: `Sai-ATLAS-${version}.zip`,
 		bridgeArm64Dmg: `omp-${version}-arm64.dmg`,
 		bridgeX64Dmg: `omp-${version}.dmg`,
-		windowsSetup: `Sai-ATLAS-${version}-setup.exe`,
 	};
 }
 
@@ -89,10 +88,8 @@ export interface ReleaseInputs {
 	linux?: string;
 	macArm64?: string;
 	macX64?: string;
-	windows?: string;
-	/** electron-builder feeds to merge unchanged while that OS still ships Electron. */
+	/** The electron-builder feed to merge unchanged while macOS still ships Electron. */
 	electronMacFeed?: string;
-	electronWindowsFeed?: string;
 	/** Darwin version for `latest-mac.yml`; defaults to the Tauri macOS floor's. */
 	macMinimumSystemVersion?: string;
 	/** ISO timestamp for the feeds; defaults to now. */
@@ -200,9 +197,6 @@ export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 	if (inputs.electronMacFeed && (inputs.macArm64 || inputs.macX64)) {
 		throw new Error("pass either the Tauri macOS bundles or the Electron latest-mac.yml, not both");
 	}
-	if (inputs.electronWindowsFeed && inputs.windows) {
-		throw new Error("pass either the Tauri Windows bundle or the Electron latest.yml, not both");
-	}
 	const names = assetNames(version);
 	const releaseDate = inputs.releaseDate ?? new Date().toISOString();
 	const written: string[] = [];
@@ -254,14 +248,6 @@ export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 		written.push(...mergeElectronFeed(inputs.electronMacFeed, outDir, "latest-mac.yml"));
 	}
 
-	if (inputs.windows) {
-		place(onlyBundle(path.join(inputs.windows, "nsis"), "-setup.exe", version), names.windowsSetup);
-		writeFeed(outDir, "latest.yml", version, [await feedFile(outDir, names.windowsSetup)], releaseDate);
-		written.push("latest.yml");
-	} else if (inputs.electronWindowsFeed) {
-		written.push(...mergeElectronFeed(inputs.electronWindowsFeed, outDir, "latest.yml"));
-	}
-
 	// Every macOS feed this script publishes must keep Macs below the floor off builds they cannot open.
 	const macFeed = path.join(outDir, "latest-mac.yml");
 	if (written.includes("latest-mac.yml")) {
@@ -281,16 +267,7 @@ function parseArgs(argv: string[]): ReleaseInputs {
 			throw new Error(`expected --flag value pairs, got ${flag ?? "nothing"}`);
 		options[flag.slice(2)] = value;
 	}
-	const known = [
-		"version",
-		"out",
-		"linux",
-		"mac-arm64",
-		"mac-x64",
-		"windows",
-		"electron-mac-feed",
-		"electron-windows-feed",
-	];
+	const known = ["version", "out", "linux", "mac-arm64", "mac-x64", "electron-mac-feed"];
 	for (const key of Object.keys(options)) if (!known.includes(key)) throw new Error(`unknown option --${key}`);
 	if (!options.version) throw new Error("--version is required");
 	return {
@@ -299,9 +276,7 @@ function parseArgs(argv: string[]): ReleaseInputs {
 		linux: options.linux,
 		macArm64: options["mac-arm64"],
 		macX64: options["mac-x64"],
-		windows: options.windows,
 		electronMacFeed: options["electron-mac-feed"],
-		electronWindowsFeed: options["electron-windows-feed"],
 	};
 }
 

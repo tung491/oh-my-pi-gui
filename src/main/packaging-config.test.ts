@@ -9,7 +9,6 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { type PlistObject, parsePlistFile, savePlistFile } from "app-builder-lib/out/util/plist";
-import { UUID } from "builder-util-runtime";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { APP_ID, PRODUCT_NAME } from "../shared/product";
@@ -22,10 +21,6 @@ interface BuilderConfig {
 	extraResources?: { from: string; to: string }[];
 	protocols?: { name: string; schemes?: string[] }[];
 	mac?: { icon?: string; artifactName?: string; minimumSystemVersion?: string; extendInfo?: Record<string, unknown> };
-	win?: { target?: { target?: string; arch?: string[] }[] };
-	nsis?: { guid?: string; shortcutName?: string; artifactName?: string };
-	portable?: { artifactName?: string };
-	electronLanguages?: string[];
 	linux?: unknown;
 	extraMetadata?: { name?: string; productName?: string };
 	publish?: { provider?: string; owner?: string; repo?: string };
@@ -161,55 +156,16 @@ describe("mac bundle configs", () => {
 	});
 });
 
-describe("Windows package config", () => {
-	it("ships a Windows sidecar and both x64 installer targets", () => {
-		const file = "electron-builder.win.yml";
-		const config = parse(fs.readFileSync(path.join(PACKAGE_ROOT, file), "utf8")) as BuilderConfig;
-		expect(
-			config.protocols?.flatMap(protocol => protocol.schemes ?? []),
-			`${file} ships no URL scheme`,
-		).toContain("omp");
-		expect(config.extraResources).toContainEqual({ from: "resources/omp.exe", to: "omp.exe" });
-		expect(config.win?.target).toEqual([
-			{ target: "nsis", arch: ["x64"] },
-			{ target: "portable", arch: ["x64"] },
-		]);
-	});
-
-	it("keeps a Chromium locale pak the renderer can load", () => {
-		// Windows paks are named locales/en-US.pak; a bare "en" filter strips all
-		// of them and the sandboxed renderer crashes at startup (blank window).
-		const file = "electron-builder.win.yml";
-		const config = parse(fs.readFileSync(path.join(PACKAGE_ROOT, file), "utf8")) as BuilderConfig;
-		expect(config.electronLanguages).toContain("en-US");
-	});
-});
-
-/**
- * electron-builder derives the NSIS GUID as
- * `UUID.v5(appId, UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3"))` (NsisTarget.js) —
- * with the namespace parsed, not passed as a string, which yields another id.
- * This is that GUID for the old appId `sh.omp.gui`: pinned so the installer
- * finds an existing omp install and upgrades it in place. Never change it.
- */
-const OMP_NSIS_GUID = "9d72fc94-91dd-54d1-8fda-3b6e5e8d23f2";
-
 /** Expands electron-builder's `${macro}` placeholders in an artifact file name. */
 function artifactFile(pattern: string | undefined, macros: Record<string, string>): string | undefined {
 	return pattern?.replace(/\$\{(\w+)\}/g, (placeholder, key: string) => macros[key] ?? placeholder);
 }
 
-/** The option block that names each electron-builder target's output file. */
-const ARTIFACT_OPTIONS: Record<string, "nsis" | "portable"> = {
-	nsis: "nsis",
-	portable: "portable",
-};
-
 describe("product identity in every builder config", () => {
 	const configs = builderConfigs();
 
 	it("names the product and app id the main process uses", () => {
-		expect(configs.length).toBeGreaterThanOrEqual(3);
+		expect(configs.map(({ file }) => file).sort()).toEqual(["electron-builder.x64.yml", "electron-builder.yml"]);
 		for (const { file, config } of configs) {
 			expect(config.productName, file).toBe(PRODUCT_NAME);
 			expect(config.appId, file).toBe(APP_ID);
@@ -236,25 +192,10 @@ describe("product identity in every builder config", () => {
 		expect(pkg.desktopName).toBe(`${APP_ID}.desktop`);
 	});
 
-	it("keeps the old install's NSIS GUID so Windows upgrades in place", () => {
-		expect(UUID.v5("sh.omp.gui", UUID.parse("50e065bc-3134-11e6-9bab-38c9862bdaf3"))).toBe(OMP_NSIS_GUID);
-		const windows = configs.filter(({ config }) => config.win?.target?.some(target => target.target === "nsis"));
-		expect(windows.map(entry => entry.file).sort()).toEqual(["electron-builder.win.yml", "electron-builder.yml"]);
-		for (const { file, config } of windows) {
-			expect(config.nsis?.guid, file).toBe(OMP_NSIS_GUID);
-			expect(config.nsis?.shortcutName, file).toBe(PRODUCT_NAME);
-		}
-	});
-
 	it("gives every target it builds an explicit file name without spaces", () => {
 		for (const { file, config } of configs) {
 			const names: [string, string | undefined][] = [];
 			if (config.mac) names.push(["mac", config.mac.artifactName]);
-			for (const { target } of config.win?.target ?? []) {
-				const option = target ? ARTIFACT_OPTIONS[target] : undefined;
-				expect(option, `${file} builds an unknown target ${target}`).toBeDefined();
-				if (option) names.push([option, config[option]?.artifactName]);
-			}
 			for (const [option, name] of names) {
 				expect(name, `${file} → ${option}.artifactName`).toBeDefined();
 				expect(name, `${file} → ${option}.artifactName`).not.toContain(" ");
