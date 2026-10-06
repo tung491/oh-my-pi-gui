@@ -23,8 +23,35 @@ jobs:
           bun-version: "1.4.2"
       - run: bun install --frozen-lockfile
       - run: bun run check:types
+      # A clean clone has no sidecar binary; the assistant-pack job covers the pack itself.
       - run: bunx vitest run
+        env:
+          SKIP_COMPILED: "1"
       - run: bun run build
+
+  # The assistant pack: its unit tests, the build script, and every office file it makes
+  # opened in LibreOffice. The compiled-sidecar cases need a local sidecar and stay local.
+  assistant-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - run: bun install --frozen-lockfile
+      - name: Install LibreOffice
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreoffice-writer libreoffice-calc libreoffice-impress
+      - run: bun run build:pack
+      - run: bunx vitest run assistant-pack scripts/build-assistant-pack.test.ts
+        env:
+          SKIP_COMPILED: "1"
+      - run: bunx vitest run assistant-pack/test/visual.test.ts
+        env:
+          CI_VISUAL: "1"
 
   # The Tauri core: clippy, the Rust tests, test parity with the Electron suite and
   # the frozen API snapshots (checked with the pinned cargo-public-api). Every check
