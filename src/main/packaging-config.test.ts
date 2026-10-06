@@ -20,7 +20,13 @@ interface BuilderConfig {
 	afterPack?: string;
 	extraResources?: { from: string; to: string }[];
 	protocols?: { name: string; schemes?: string[] }[];
-	mac?: { icon?: string; artifactName?: string; minimumSystemVersion?: string; extendInfo?: Record<string, unknown> };
+	mac?: {
+		icon?: string;
+		artifactName?: string;
+		minimumSystemVersion?: string;
+		category?: string;
+		extendInfo?: Record<string, unknown>;
+	};
 	linux?: unknown;
 	extraMetadata?: { name?: string; productName?: string };
 	publish?: { provider?: string; owner?: string; repo?: string };
@@ -218,6 +224,14 @@ describe("product identity in every builder config", () => {
 
 	it("converts the PNG app icon for both mac bundles", () => {
 		for (const { file, config } of macConfigs()) expect(config.mac?.icon, file).toBe("resources/icon.png");
+	});
+
+	it("files both mac bundles under productivity apps", () => {
+		const files = macConfigs().map(({ file, config }) => {
+			expect(config.mac?.category, file).toBe("public.app-category.productivity");
+			return file;
+		});
+		expect(files).toEqual(expect.arrayContaining(["electron-builder.yml", "electron-builder.x64.yml"]));
 	});
 
 	it("declares the macOS 13 floor Electron 44 needs in both mac bundles", () => {

@@ -7,8 +7,8 @@
     ],
     "publisher": "Tung Son Do <dosontung007@gmail.com>",
     "homepage": "https://github.com/tung491/oh-my-pi-gui",
-    "shortDescription": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
-    "longDescription": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
+    "shortDescription": "Sai ATLAS, the private AI assistant for everyday work on SAI OS",
+    "longDescription": "Sai ATLAS, the private AI assistant for everyday work on SAI OS",
     "linux": {
       "appimage": {
         "bundleMediaFramework": true

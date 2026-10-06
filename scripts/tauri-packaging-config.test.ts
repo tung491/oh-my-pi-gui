@@ -45,6 +45,7 @@ interface TauriConfig {
 	plugins?: { "deep-link"?: { desktop?: { schemes?: string[] }; mobile?: unknown[] } };
 	bundle?: {
 		active?: boolean;
+		category?: string;
 		targets?: string[];
 		externalBin?: string[];
 		resources?: Record<string, string> | string[];
@@ -311,6 +312,13 @@ describe("Linux package", () => {
 		expect(bundle?.homepage).toBe("https://github.com/tung491/oh-my-pi-gui");
 		expect(bundle?.shortDescription).toBe(description);
 		expect(bundle?.longDescription).toBe(description);
+	});
+
+	it("describes the app as an everyday-work assistant filed under productivity", () => {
+		expect(readJson<{ description: string }>("package.json").description).toBe(
+			"Sai ATLAS, the private AI assistant for everyday work on SAI OS",
+		);
+		expect(base().bundle?.category).toBe("Productivity");
 	});
 
 	it("deb depends only on what the app cannot start without", () => {

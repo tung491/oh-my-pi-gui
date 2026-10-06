@@ -3,7 +3,7 @@
   "version": "0.9.16",
   "private": true,
   "type": "module",
-  "description": "Sai ATLAS, the AI assistant for SAI OS: a desktop GUI for the omp coding agent",
+  "description": "Sai ATLAS, the private AI assistant for everyday work on SAI OS",
   "main": "./out/main/index.js",
   "desktopName": "vn.io.vif.saiatlas.desktop",
   "scripts": {

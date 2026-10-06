@@ -22,7 +22,7 @@ asar: true
 compression: maximum
 
 mac:
-  category: public.app-category.developer-tools
+  category: public.app-category.productivity
   # electron-builder converts the PNG to ICNS on any build host.
   icon: resources/icon.png
   # Seal the complete bundle even when no Developer ID certificate is available.
