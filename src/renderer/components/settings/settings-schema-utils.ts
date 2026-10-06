@@ -67,13 +67,17 @@ const TERMINAL_DISPLAY_SETTINGS = new Set([
 
 /**
  * Agent settings for features the assistant does not offer. Plan mode has no
- * surface here (hydration turns it off), so "Start in Plan Mode" is not shown.
+ * surface here (hydration turns it off), so none of its settings are shown.
  */
-const UNOFFERED_AGENT_SETTINGS = new Set(["plan.defaultOnStartup"]);
+const UNOFFERED_AGENT_SETTING_PREFIXES = ["plan."];
 
 export function isSettingSupportedInGui(entry: { path?: string; tuiOnly?: boolean }): boolean {
 	const path = entry.path ?? "";
-	return entry.tuiOnly !== true && !TERMINAL_DISPLAY_SETTINGS.has(path) && !UNOFFERED_AGENT_SETTINGS.has(path);
+	return (
+		entry.tuiOnly !== true &&
+		!TERMINAL_DISPLAY_SETTINGS.has(path) &&
+		!UNOFFERED_AGENT_SETTING_PREFIXES.some(prefix => path.startsWith(prefix))
+	);
 }
 
 export function isSettingVisibleInGui(entry: SettingEntry, values: Record<string, unknown>): boolean {
