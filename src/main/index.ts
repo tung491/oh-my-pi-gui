@@ -382,8 +382,9 @@ app.whenReady().then(() => {
 				);
 			},
 			// A refused start spawns nothing, so the tab's message is its only other trace.
+			// `child-process` is the listed source for the sidecar; any other is filed as `unknown`.
 			reportStartRefusal: report => {
-				writeRuntimeLog({ source: "sidecar-start", message: report.message }, { cwd: report.cwd });
+				writeRuntimeLog({ source: "child-process", message: report.message }, { cwd: report.cwd });
 			},
 		});
 		// Ready-health-check applies to every pooled sidecar, not just the first.

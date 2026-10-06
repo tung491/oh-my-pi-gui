@@ -457,9 +457,10 @@ fn report_to_runtime_log(report: SidecarFailureReport) {
     crate::runtime_log::write(&entry, None, Some(&report.cwd));
 }
 
-/// The production refusal reporter: one `sidecar-start` entry in `gui-runtime.jsonl`.
+/// The production refusal reporter: one `child-process` entry in `gui-runtime.jsonl`
+/// (the log keeps only its listed sources and files any other as `unknown`).
 fn report_refusal_to_runtime_log(report: SidecarStartRefusalReport) {
-    let entry = json!({ "source": "sidecar-start", "message": report.message });
+    let entry = json!({ "source": "child-process", "message": report.message });
     crate::runtime_log::write(&entry, None, Some(&report.cwd));
 }
 
