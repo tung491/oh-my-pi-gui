@@ -25,6 +25,7 @@ import {
 import { useSettingsStore } from "../../stores/settings";
 import { createTabRuntime, replaceTabRuntime } from "../../stores/tab-runtime";
 import { useTabsStore } from "../../stores/tabs";
+import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { InputArea } from "./InputArea";
 
@@ -244,6 +245,7 @@ afterEach(async () => {
 	useSettingsStore.getState().reset();
 	useTabsStore.getState().reset();
 	useUiStore.getState().closeComposerEditor();
+	useToastStore.setState({ toasts: [] });
 	setWindowWidth(1200);
 	vi.restoreAllMocks();
 });
@@ -367,6 +369,37 @@ describe("InputArea queue shorthand submit", () => {
 		expect(prompt).toHaveBeenCalledWith("ord alpha", [], "followUp");
 		expect(followUp).not.toHaveBeenCalled();
 		expect(steer).not.toHaveBeenCalled();
+	});
+
+	it("blocks a removed command in the queue shorthand (=> /share)", async () => {
+		await mount();
+		await act(async () => useSessionStore.setState({ isStreaming: false }));
+		await typeInto(findTextarea(), "=> /share");
+		await pressEnter(findTextarea());
+		await flush();
+		await flush();
+
+		expect(prompt).not.toHaveBeenCalled();
+		expect(followUp).not.toHaveBeenCalled();
+		expect(steer).not.toHaveBeenCalled();
+		expect(useComposerStore.getState().draft).toBe("=> /share");
+		expect(useToastStore.getState().toasts.filter(toast => toast.variant === "warning")).toHaveLength(1);
+		expect(useInputHistoryStore.getState().entries).toEqual([]);
+	});
+
+	it("blocks a removed command anywhere in a queued list (-> hello, /collab:start)", async () => {
+		await mount();
+		const draft = "->\n1. hello\n2. /collab:start";
+		await typeInto(findTextarea(), draft);
+		await pressEnter(findTextarea());
+		await flush();
+		await flush();
+
+		expect(prompt).not.toHaveBeenCalled();
+		expect(followUp).not.toHaveBeenCalled();
+		expect(steer).not.toHaveBeenCalled();
+		expect(useComposerStore.getState().draft).toBe(draft);
+		expect(useToastStore.getState().toasts.filter(toast => toast.variant === "warning")).toHaveLength(1);
 	});
 
 	it("still steers a plain (non-shorthand) message while streaming", async () => {

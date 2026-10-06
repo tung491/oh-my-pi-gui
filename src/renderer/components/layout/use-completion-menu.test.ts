@@ -52,4 +52,16 @@ describe("slashCommandItems", () => {
 		expect(slashCommandItems(advertised, "agent", "").map(item => item.label)).toEqual(["/compact"]);
 		expect(slashCommandItems(advertised, "agent", "sha")).toEqual([]);
 	});
+
+	it("never suggests the plugin or worktree commands, by name or by alias", () => {
+		const advertised: AvailableCommand[] = [
+			{ name: "plugins", aliases: ["plugin"], description: "Plugins", source: "builtin" },
+			{ name: "wt", aliases: ["worktree"], description: "Worktree", source: "builtin" },
+			{ name: "compact", description: "Compact", source: "builtin" },
+		];
+		expect(slashCommandItems(advertised, "agent", "").map(item => item.label)).toEqual(["/compact"]);
+		expect(slashCommandItems(advertised, "agent", "plug")).toEqual([]);
+		expect(slashCommandItems(advertised, "agent", "work")).toEqual([]);
+		expect(slashCommandItems(advertised, "agent", "wt")).toEqual([]);
+	});
 });

@@ -390,6 +390,45 @@ describe("planComposerSubmit removed commands", () => {
 		expect(omp.rpc.prompt).not.toHaveBeenCalled();
 		expect(useToastStore.getState().toasts.some(toast => toast.variant === "warning")).toBe(true);
 	});
+
+	it.each([
+		["the colon form", "/share:x"],
+		["an alias", "/plugin list"],
+		["the worktree command", "/wt"],
+		["the worktree alias", "/worktree feature"],
+	])("blocks a removed command in %s (%s)", (_label, message) => {
+		const omp = installMockOmp();
+		const submit = planComposerSubmit({
+			message,
+			images: [],
+			isStreaming: false,
+			mode: "prompt",
+			commands: [
+				{ name: "share", description: "x", source: "builtin", textModeExecutable: true },
+				{ name: "plugins", aliases: ["plugin"], description: "x", source: "builtin", textModeExecutable: true },
+				{ name: "wt", aliases: ["worktree"], description: "x", source: "builtin", textModeExecutable: true },
+			],
+			rpc: omp.rpc,
+		});
+		expect(submit.kind).toBe("blocked");
+		expect(omp.rpc.prompt).not.toHaveBeenCalled();
+		expect(useToastStore.getState().toasts.filter(toast => toast.variant === "warning")).toHaveLength(1);
+	});
+
+	it("still sends a skill invocation, whose name is cut at the colon", async () => {
+		const omp = installMockOmp();
+		const submit = planComposerSubmit({
+			message: "/skill:word-report write it up",
+			images: [],
+			isStreaming: false,
+			mode: "prompt",
+			commands: [],
+			rpc: omp.rpc,
+		});
+		expect(submit.kind).toBe("send");
+		if (submit.kind === "send") await submit.request();
+		expect(omp.rpc.prompt).toHaveBeenCalledWith("/skill:word-report write it up", []);
+	});
 });
 
 describe("settleComposerResponse", () => {

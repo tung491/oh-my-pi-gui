@@ -11,7 +11,7 @@
 import type { AvailableCommand, ImageContent, RpcResponse } from "../../shared/rpc-types";
 import { hydrateSession } from "../hooks/use-rpc-events";
 import { toast } from "../stores/toast";
-import { REMOVED_COMMANDS } from "./command-availability";
+import { removedCommandName } from "./command-availability";
 import { buildCurrentCommandMenu, type CommandAffordance } from "./command-registry";
 import { translate } from "./i18n";
 import type { TabRpc } from "./tab-rpc";
@@ -104,8 +104,7 @@ export function planComposerSubmit(input: {
 }): ComposerSubmit {
 	const { message, images, isStreaming, mode, commands, rpc = window.omp.rpc } = input;
 	const isSlashCommand = message.startsWith("/");
-	const slashName = isSlashCommand ? /^\/(\S+)/.exec(message)?.[1]?.toLowerCase() : undefined;
-	if (slashName !== undefined && REMOVED_COMMANDS.has(slashName)) {
+	if (removedCommandName(message, commands) !== null) {
 		toast({ variant: "warning", message: translate("unavailable.tuiOnly") });
 		return { kind: "blocked" };
 	}

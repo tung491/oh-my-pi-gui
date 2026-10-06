@@ -86,6 +86,7 @@ const DELETED_COMMANDS = [
 	"marketplace installed",
 	"plugins",
 	"plugins panel",
+	"plugin",
 	"reload-plugins",
 	"memory",
 	"memory panel",
@@ -112,6 +113,8 @@ const DELETED_COMMANDS = [
 	"live",
 	"plan-review",
 	"guided-goal",
+	"wt",
+	"worktree",
 ];
 
 const KEPT_COMMANDS = [
@@ -153,6 +156,18 @@ describe("command inventory", () => {
 	it("drops every deleted command, GUI-owned and sidecar-advertised alike", () => {
 		const names = flattenNames(buildCommandMenu({ ...baseCtx, availableCommands: advertised }));
 		expect(DELETED_COMMANDS.filter(name => names.includes(name))).toEqual([]);
+	});
+
+	it("drops the plugin and worktree commands the agent advertises under an alias", () => {
+		const items = buildCommandMenu({
+			...baseCtx,
+			availableCommands: [
+				{ name: "plugins", aliases: ["plugin"], description: "x", source: "builtin", textModeExecutable: true },
+				{ name: "wt", aliases: ["worktree"], description: "x", source: "builtin", textModeExecutable: true },
+			],
+		});
+		const spellings = items.flatMap(item => [item.name, ...(item.aliases ?? [])]);
+		expect(spellings.filter(name => ["plugins", "plugin", "wt", "worktree"].includes(name))).toEqual([]);
 	});
 
 	it("keeps the everyday commands", () => {
