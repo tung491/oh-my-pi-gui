@@ -202,7 +202,15 @@ test("real bundled sidecar persists settings and sessions", async () => {
 			Reflect.set(globalThis, "releaseAuditPrefs", pending.resolve);
 			ipcMain.removeHandler("prefs:get");
 			ipcMain.handle("prefs:get", async (_event, payload: { key?: string }) => {
-				if (payload.key) return (prefs as Record<string, unknown>)[payload.key];
+				// The real handler reads a dotted key as a nested path (electron-store's get).
+				if (payload.key)
+					return payload.key
+						.split(".")
+						.reduce<unknown>(
+							(value, segment) =>
+								value && typeof value === "object" ? (value as Record<string, unknown>)[segment] : undefined,
+							prefs,
+						);
 				Reflect.set(globalThis, "auditPrefsRequested", true);
 				await pending.promise;
 				return prefs;

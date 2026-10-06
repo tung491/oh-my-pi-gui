@@ -61,7 +61,9 @@ test("a bottom-pinned transcript rides the stream, and 'jump to latest' re-engag
 			await scroll.hover();
 			await page.mouse.wheel(0, -1500);
 			await expect.poll(jumpOffered).toBe(true);
-			expect(await gap()).toBeGreaterThan(LIVE_EDGE_PX);
+			// The control is offered as soon as the wheel unpins the view, before the
+			// animated scroll lands, so wait for the distance rather than sampling it once.
+			await expect.poll(gap).toBeGreaterThan(LIVE_EDGE_PX);
 		};
 		// The fixture streams a chunk every 16ms, so a handful of samples proves
 		// sustained following rather than one lucky frame.
