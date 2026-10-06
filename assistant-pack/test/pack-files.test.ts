@@ -97,6 +97,12 @@ describe("skills", () => {
 		expect(text.toLowerCase()).not.toContain("bash");
 		expect(text.toLowerCase()).not.toContain("task");
 	});
+
+	it("sai-os-helpdesk writes each support note under a new dated name", () => {
+		const text = read("skills/sai-os-helpdesk/SKILL.md");
+		expect(text).toContain("support-note-YYYY-MM-DD-HHMM.md");
+		expect(text).not.toContain("`support-note.md`");
+	});
 });
 
 describe("system prompt", () => {
