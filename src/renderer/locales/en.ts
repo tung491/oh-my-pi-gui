@@ -144,6 +144,13 @@ export const en: Record<string, string> = {
 	"input.history.legacy": "Older history · workspace unknown",
 	"input.history.hint": "↑↓ navigate · Enter insert · Esc close",
 	"input.agentConnecting": "The agent is still connecting.",
+	"input.agentUnavailable": "Sai ATLAS can't start right now. See the message above.",
+	"input.starterKept.connecting":
+		"Sai ATLAS is still starting. Your request is waiting in the message box: send it once Sai ATLAS is ready.",
+	"input.starterKept.unavailable":
+		"Sai ATLAS can't start right now, so your request is waiting in the message box. See the message above.",
+	"input.starterKept.busy":
+		"Sai ATLAS is still sending your last message. Your request is waiting in the message box: send it when that is done.",
 	"input.sendFailed": "Message not sent",
 	"input.sendLabel": "Send",
 	"input.sendPrompt": "Send prompt",

@@ -1,8 +1,9 @@
 /**
  * A starter card sends its skill prompt through the composer's send pipeline
  * without the composer's own draft: the typed text and pasted images stay in
- * the composer, and the prompt carries no image. The composer's placeholder
- * says why it cannot send while the agent is not ready.
+ * the composer, and the prompt carries no image. A starter that cannot go out
+ * yet is kept in the composer, with a notice that says why. The composer's
+ * placeholder says why it cannot send while the agent is not ready.
  */
 import { parseHTML } from "linkedom";
 import { act } from "react";
@@ -17,6 +18,7 @@ import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useSettingsStore } from "../../stores/settings";
 import { useTabsStore } from "../../stores/tabs";
+import { useToastStore } from "../../stores/toast";
 import { InputArea } from "./InputArea";
 
 const { document, window, Event, CustomEvent, HTMLElement, Node } = parseHTML("<html><body></body></html>");
@@ -121,6 +123,7 @@ afterEach(async () => {
 	useComposerStore.getState().reset();
 	useSettingsStore.getState().reset();
 	useTabsStore.getState().reset();
+	useToastStore.setState({ toasts: [] });
 	vi.restoreAllMocks();
 });
 
@@ -178,6 +181,50 @@ describe("InputArea starter card send", () => {
 		expect(prompt).toHaveBeenCalledTimes(1);
 		expect(prompt.mock.calls[0]?.[0]).toBe("/skill:sai-os-helpdesk I need help with my computer.");
 		expect(useComposerStore.getState().draft).toBe("");
+	});
+});
+
+describe("InputArea starter card that cannot go out yet", () => {
+	const card = "/skill:word-report '/home/u/notes.md'";
+	const toastMessages = () => useToastStore.getState().toasts.map(entry => entry.message);
+
+	it("keeps the starter in the composer while the agent starts, and says so", async () => {
+		await mount("starting");
+		await startCard(card);
+		expect(prompt).not.toHaveBeenCalled();
+		expect(useComposerStore.getState().draft).toBe(card);
+		expect(toastMessages()).toEqual([en["input.starterKept.connecting"]]);
+	});
+
+	it("says the agent cannot start, not that it is connecting, when it failed", async () => {
+		await mount("error");
+		await act(async () => {
+			useComposerStore.getState().setDraft("my unrelated paragraph");
+			useComposerStore.getState().setImages([screenshot]);
+		});
+		await flush();
+		await startCard(card);
+		expect(prompt).not.toHaveBeenCalled();
+		expect(useComposerStore.getState().draft).toBe(`my unrelated paragraph\n${card}`);
+		expect(useComposerStore.getState().images).toEqual([screenshot]);
+		expect(toastMessages()).toEqual([en["input.starterKept.unavailable"]]);
+		expect(toastMessages()).not.toContain(en["input.agentConnecting"]);
+	});
+
+	it("keeps a second starter while the first one is still being sent", async () => {
+		await mount("ready");
+		const pending = Promise.withResolvers<ReturnType<typeof ok>>();
+		prompt.mockImplementation(() => pending.promise);
+		await startCard("/skill:sai-os-helpdesk I need help with my computer.");
+		expect(prompt).toHaveBeenCalledTimes(1);
+
+		await startCard(card);
+		expect(prompt).toHaveBeenCalledTimes(1);
+		expect(useComposerStore.getState().draft).toBe(card);
+		expect(toastMessages()).toEqual([en["input.starterKept.busy"]]);
+
+		await act(async () => pending.resolve(ok()));
+		await flush();
 	});
 });
 

@@ -134,6 +134,13 @@ export const vi: Record<string, string> = {
 	"input.history.legacy": "Lịch sử cũ hơn · không rõ không gian làm việc",
 	"input.history.hint": "↑↓ điều hướng · Enter chèn · Esc đóng",
 	"input.agentConnecting": "Agent vẫn đang kết nối.",
+	"input.agentUnavailable": "Sai ATLAS chưa thể khởi động. Xem thông báo ở trên.",
+	"input.starterKept.connecting":
+		"Sai ATLAS vẫn đang khởi động. Yêu cầu của bạn đang chờ trong ô nhập tin nhắn: hãy gửi khi Sai ATLAS sẵn sàng.",
+	"input.starterKept.unavailable":
+		"Sai ATLAS chưa thể khởi động, nên yêu cầu của bạn đang chờ trong ô nhập tin nhắn. Xem thông báo ở trên.",
+	"input.starterKept.busy":
+		"Sai ATLAS vẫn đang gửi tin nhắn trước của bạn. Yêu cầu của bạn đang chờ trong ô nhập tin nhắn: hãy gửi khi việc đó xong.",
 	"input.sendFailed": "Chưa gửi được tin nhắn",
 	"input.sendLabel": "Gửi",
 	"input.sendPrompt": "Gửi lời nhắc",

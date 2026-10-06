@@ -25,6 +25,13 @@ import { toast } from "../../stores/toast";
 
 type SendMode = "prompt" | "steer" | "followUp";
 
+/** Why a starter card waits in the composer, by the locale key of its notice. */
+const STARTER_KEPT_KEYS = {
+	connecting: "input.starterKept.connecting",
+	unavailable: "input.starterKept.unavailable",
+	busy: "input.starterKept.busy",
+} as const;
+
 export function useComposerSubmit({
 	text,
 	images: composerImages,
@@ -72,16 +79,38 @@ export function useComposerSubmit({
 			const keepDraft = options?.keepDraft === true && overrideText !== undefined;
 			const images = keepDraft ? [] : composerImages;
 			const message = (overrideText ?? text).trim();
-			if ((!message && images.length === 0) || sending) return;
-			if (!routeReady || !runtimeTabId) return;
+			if (!message && images.length === 0) return;
+			// A starter card that cannot go out now waits in the composer, after any
+			// typed draft, so the file it names is not lost; the notice says why.
+			const keepStarter = (reason: keyof typeof STARTER_KEPT_KEYS) => {
+				if (!keepDraft) return;
+				setText(current => (current.trim() ? `${current}\n${message}` : message));
+				toast({ variant: "warning", message: t(STARTER_KEPT_KEYS[reason]) });
+			};
+			if (sending) {
+				keepStarter("busy");
+				return;
+			}
+			const notReady = status === "error" ? "unavailable" : "connecting";
+			if (!routeReady || !runtimeTabId) {
+				keepStarter(notReady);
+				return;
+			}
 			if (status !== "ready") {
-				toast({ variant: "warning", message: t("input.agentConnecting") });
+				if (keepDraft) keepStarter(notReady);
+				else {
+					const key = notReady === "unavailable" ? "input.agentUnavailable" : "input.agentConnecting";
+					toast({ variant: "warning", message: t(key) });
+				}
 				return;
 			}
 			const originTabId = runtimeTabId;
 			const originSession = sessionRuntimeStore<SessionStore>(originTabId, "session");
 			const originComposer = sessionRuntimeStore<ComposerStore>(originTabId, "composer") ?? useComposerStore;
-			if (originComposer.getState().sending || originComposer.getState().submissionUncertain) return;
+			if (originComposer.getState().sending || originComposer.getState().submissionUncertain) {
+				keepStarter("busy");
+				return;
+			}
 			if ((originSession?.getState() ?? useSessionStore.getState()).collab?.readOnly) {
 				toast({ variant: "warning", message: t("collab.readOnlyInput") });
 				return;
