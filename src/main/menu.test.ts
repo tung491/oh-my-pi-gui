@@ -27,7 +27,7 @@ const EVERYDAY_ACTIONS: MenuAction[] = [
 	"toggle-sidebar",
 ];
 
-const DEVELOPER_ACTIONS: MenuAction[] = [
+const DEVELOPER_ACTIONS: readonly string[] = [
 	"new-chat-tab",
 	"open-branch-picker",
 	"open-context-report",
@@ -53,8 +53,8 @@ function flatten(items: MenuItemConstructorOptions[]): MenuItemConstructorOption
 }
 
 /** Click every item of the menu bar and collect the actions that reach the renderer. */
-function menuActions(platform: NodeJS.Platform): Set<MenuAction> {
-	const sent = new Set<MenuAction>();
+function menuActions(platform: NodeJS.Platform): Set<string> {
+	const sent = new Set<string>();
 	const template = appMenuTemplate(platform, key => key, {
 		appName: "Sai ATLAS",
 		send: action => sent.add(action),

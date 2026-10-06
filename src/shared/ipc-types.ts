@@ -306,41 +306,22 @@ export type UpdateStatus =
 export type MenuAction =
 	| "new-session"
 	| "new-tab"
-	| "new-chat-tab"
 	| "close-tab"
-	| "open-project"
 	| "toggle-sidebar"
 	| "toggle-panel"
 	| "open-settings"
-	| "open-usage"
 	| "open-command-center"
-	| "open-context-report"
 	| "open-jobs"
-	| "open-stats"
 	| "open-hotkeys"
 	| "open-session-info"
-	| "open-share-session"
-	| "open-import"
-	| "open-branch-picker"
-	| "open-session-tree"
 	| "open-capabilities"
 	| "open-model-picker"
-	| "open-git"
 	| "restart-sidecar"
-	| "open-workspace-dirs"
 	| "open-agent-hub"
-	| "open-modes"
 	| "open-providers"
-	| "open-model-roles"
-	| "open-extensions"
-	| "open-inventory"
-	| "open-pr-center"
-	| "open-debug"
 	| "export-html"
-	| "handoff"
 	| "toggle-fast"
 	| "cycle-thinking"
-	| "set-approval"
 	| "toggle-language"
 	| "switch-project";
 
@@ -442,9 +423,8 @@ export interface QuickEntryBarApi {
 	dismiss(): void;
 }
 
-/** Optional payload carried alongside a MenuAction (approval mode / project cwd). */
+/** Optional payload carried alongside a MenuAction (the project cwd of switch-project). */
 export interface MenuActionPayload {
-	approvalMode?: "always-ask" | "write" | "yolo";
 	cwd?: string;
 }
 
