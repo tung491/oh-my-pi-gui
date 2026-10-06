@@ -21,7 +21,7 @@ import { useSessionStore } from "../../stores/session";
 import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { WELCOME_COMPLETED_PREF } from "../dialogs/FirstRunOnboardingDialog";
-import { isCloudTag, normalizePullTag, ProvidersWindow } from "./ProvidersWindow";
+import { normalizePullTag, ProvidersWindow } from "./ProvidersWindow";
 
 const { document, window, Event, HTMLElement, Element, Node } = parseHTML("<html><body></body></html>");
 Object.assign(globalThis as Record<string, unknown>, {
@@ -191,9 +191,6 @@ describe("cloud models", () => {
 		expect(normalizePullTag("gpt-oss:120b-cloud")).toBeNull();
 		expect(normalizePullTag("kimi-k2:cloud")).toBeNull();
 		expect(normalizePullTag("x-cloud")).toBeNull();
-		expect(isCloudTag("gpt-oss:120b-cloud")).toBe(true);
-		expect(isCloudTag("kimi-k2:cloud")).toBe(true);
-		expect(isCloudTag("x-cloud")).toBe(true);
 	});
 
 	it("keeps local tags, including names that merely contain the word", () => {
@@ -201,8 +198,7 @@ describe("cloud models", () => {
 			"hf.co/google/gemma-4-E4B-it-qat-q4_0-gguf",
 		);
 		expect(normalizePullTag("llama3:8b")).toBe("llama3:8b");
-		expect(isCloudTag("cloudy:7b")).toBe(false);
-		expect(isCloudTag("llama3:8b")).toBe(false);
+		expect(normalizePullTag("cloudy:7b")).toBe("cloudy:7b");
 	});
 });
 

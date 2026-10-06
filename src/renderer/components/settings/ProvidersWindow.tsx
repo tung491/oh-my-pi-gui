@@ -11,6 +11,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import type { OllamaInstallProgress, OllamaRemedyId, OllamaStatus, PullProgress } from "../../../shared/ollama-types";
 import { applyModelInfo } from "../../hooks/use-rpc-events";
 import { useT } from "../../lib/i18n";
+import { isCloudTag } from "../../lib/ollama-cloud";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
@@ -24,18 +25,6 @@ import { PullBar } from "../onboarding/PullBar";
 
 /** Main answers a second concurrent pull with this status: the single download slot is taken. */
 const PULL_BUSY_STATUS = "busy";
-
-/**
- * Ollama cloud models (`gpt-oss:120b-cloud`, `kimi-k2:cloud`, `x-cloud`) run on
- * Ollama's servers, so a conversation sent to one leaves the computer. A tag is
- * one when its name or its `:tag` part ends with `-cloud` or is `cloud`.
- */
-export function isCloudTag(input: string): boolean {
-	const tag = input.trim().toLowerCase();
-	const colon = tag.indexOf(":", tag.lastIndexOf("/") + 1);
-	const parts = colon === -1 ? [tag] : [tag.slice(0, colon), tag.slice(colon + 1)];
-	return parts.some(part => part === "cloud" || part.endsWith("-cloud"));
-}
 
 /** What `ollama pull` accepts as a tag: no whitespace, no option-looking prefix, bounded length, never a cloud model. */
 export function normalizePullTag(input: string): string | null {

@@ -63,6 +63,19 @@ describe("cycleAllowedModel", () => {
 		expect(setModel).not.toHaveBeenCalled();
 	});
 
+	it("skips cloud models, which would send the conversation online", async () => {
+		const cloud = model("kimi-k2:cloud");
+		useModelStore.setState({ availableModels: [MODELS[0], cloud, MODELS[2]], model: MODELS[0] });
+		await cycleAllowedModel({ setModel });
+		expect(setModel).toHaveBeenLastCalledWith("ollama", "qwen3:14b");
+
+		useModelStore.setState({ availableModels: [MODELS[0], cloud], model: MODELS[0] });
+		setModel.mockClear();
+		await cycleAllowedModel({ setModel });
+		await cycleAllowedModel({ setModel }, "backward");
+		expect(setModel).not.toHaveBeenCalled();
+	});
+
 	it("toasts a refused switch", async () => {
 		setModel.mockResolvedValue({
 			type: "response",

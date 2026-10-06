@@ -21,6 +21,7 @@ import type {
 import { isAllowedProvider } from "../../../shared/provider-policy";
 import type { ProviderInfo } from "../../../shared/rpc-types";
 import { useT } from "../../lib/i18n";
+import { isCloudTag } from "../../lib/ollama-cloud";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
@@ -84,7 +85,7 @@ export function hasUsableModelProvider(
  * the model it already runs).
  */
 export function defaultPick(choices: readonly ModelChoice[], currentTag: string | null): string | null {
-	const installed = choices.filter(choice => choice.installed === true);
+	const installed = choices.filter(choice => choice.installed === true && !isCloudTag(choice.tag));
 	const ready =
 		installed.find(choice => choice.tag === currentTag) ??
 		installed.find(choice => choice.tiers.includes("recommended")) ??
@@ -301,9 +302,10 @@ export function FirstRunOnboardingDialog() {
 		window.omp.ollama.warm(tag).catch(cause => console.warn("[welcome] warm failed:", errorText(cause)));
 	}, []);
 
-	const choices: ModelChoice[] = (screen?.choices ?? []).map(choice =>
-		pulledTags.has(choice.tag) ? { ...choice, installed: true } : choice,
-	);
+	// A cloud model would send conversations online, so it is never offered.
+	const choices: ModelChoice[] = (screen?.choices ?? [])
+		.filter(choice => !isCloudTag(choice.tag))
+		.map(choice => (pulledTags.has(choice.tag) ? { ...choice, installed: true } : choice));
 	const pickedChoice = choices.find(choice => choice.tag === picked && choice.installed === true);
 	const fallbackTag = defaultPick(choices, currentTag);
 	const continueTag = pickedChoice?.tag ?? fallbackTag;

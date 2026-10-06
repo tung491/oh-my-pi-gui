@@ -9,7 +9,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { ModelInfo } from "../../../shared/rpc-types";
-import { I18nProvider } from "../../lib/i18n";
+import { I18nProvider, translate } from "../../lib/i18n";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useUiStore } from "../../stores/ui";
@@ -44,6 +44,7 @@ const ok = (data?: unknown) => ({ type: "response" as const, command: "x", succe
 const QWEN: ModelInfo = { provider: "ollama", id: "qwen3:8b", name: "Qwen3 8B", reasoning: true };
 const GEMMA: ModelInfo = { provider: "ollama", id: "gemma3:4b", name: "Gemma 3 4B", reasoning: false };
 const LLAMA: ModelInfo = { provider: "ollama", id: "llama3.2:3b", name: "Llama 3.2 3B", reasoning: false };
+const KIMI_CLOUD: ModelInfo = { provider: "ollama", id: "kimi-k2:cloud", name: "Kimi K2 cloud", reasoning: false };
 const SONNET: ModelInfo = {
 	provider: "anthropic",
 	id: "claude-sonnet-4-5",
@@ -247,5 +248,54 @@ describe("Ollama only", () => {
 
 		expect(rpc.setModel).toHaveBeenCalledWith("ollama", "qwen3:8b");
 		expect(useUiStore.getState().modelPickerOpen).toBe(false);
+	});
+});
+
+describe("cloud models", () => {
+	function cloudOption(): TestElement {
+		const option = body()
+			.querySelectorAll('[role="option"]')
+			.find(candidate => candidate.textContent?.includes("Kimi K2 cloud"));
+		if (!option) throw new Error("cloud option missing");
+		return option;
+	}
+
+	it("shows a cloud model disabled with the refusal, and selecting it sends nothing", async () => {
+		catalog = [KIMI_CLOUD, QWEN];
+		rpc.setModel = vi.fn(async () => ok(QWEN));
+		await mount();
+
+		const refusal = translate("ollama.settings.cloudRefused");
+		const option = cloudOption();
+		expect(option.getAttribute("disabled")).not.toBeNull();
+		expect(option.getAttribute("aria-disabled")).toBe("true");
+		expect(option.getAttribute("title")).toBe(refusal);
+		expect(option.textContent).toContain(refusal);
+
+		await click(option);
+		const input = body().querySelector('input[aria-label="Search models"]');
+		if (!input) throw new Error("search input missing");
+		const enter = new Event("keydown", { bubbles: true, cancelable: true });
+		Object.defineProperty(enter, "key", { value: "Enter" });
+		await dispatch(input, enter);
+		await flush();
+
+		expect(rpc.setModel).not.toHaveBeenCalled();
+		expect(useUiStore.getState().modelPickerOpen).toBe(true);
+	});
+
+	it("still switches to a local model listed beside a cloud one", async () => {
+		catalog = [KIMI_CLOUD, QWEN];
+		rpc.setModel = vi.fn(async () => ok(QWEN));
+		await mount();
+
+		const option = body()
+			.querySelectorAll('[role="option"]')
+			.find(candidate => candidate.textContent?.includes("Qwen3 8B"));
+		if (!option) throw new Error("local option missing");
+		await click(option);
+
+		expect(rpc.setModel).toHaveBeenCalledTimes(1);
+		expect(rpc.setModel).toHaveBeenCalledWith("ollama", "qwen3:8b");
 	});
 });
