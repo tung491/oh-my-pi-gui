@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -83,6 +92,13 @@ describe("writeUnique", () => {
 		for (const path of paths) expect(existsSync(path)).toBe(true);
 	});
 
+	it("removes the partial file when the write fails", () => {
+		// A Proxy is not a buffer view, so the write throws after the exclusive create.
+		const unwritable = new Proxy(new Uint8Array([1, 2, 3]), {});
+		expect(() => writeUnique(tmp, "broken", "docx", unwritable)).toThrow();
+		expect(readdirSync(tmp)).toEqual([]);
+	});
+
 	it("opens with the exclusive flag instead of checking first", () => {
 		const source = readFileSync(fileURLToPath(new URL("../src/office/output.ts", import.meta.url)), "utf8");
 		expect(source).toContain('openSync(path, "wx")');
@@ -109,6 +125,11 @@ describe("safeBaseName", () => {
 		expect(safeBaseName("Báo cáo quý 3")).toBe("Báo cáo quý 3");
 		const long = safeBaseName("ệ".repeat(400));
 		expect(Buffer.byteLength(`${long} (9999).docx`)).toBeLessThanOrEqual(255);
+	});
+
+	it("caps a very long name in one pass", { timeout: 2_000 }, () => {
+		const capped = safeBaseName("ệ".repeat(100_000));
+		expect(capped).toBe("ệ".repeat(66));
 	});
 });
 
