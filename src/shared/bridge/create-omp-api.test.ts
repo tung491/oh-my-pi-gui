@@ -44,8 +44,10 @@ function fakePort(respond: (call: Call) => unknown = () => undefined) {
 describe("createOmpApi", () => {
 	it("forwards invokes with their channel and positional args, and exposes the platform", async () => {
 		const { port, invokes } = fakePort(() => "/profile/logs/gui-runtime.jsonl");
-		const api = createOmpApi(port, "linux");
+		const api = createOmpApi(port, "linux", "/home/u");
 		expect(api.platform).toBe("linux");
+		expect(api.homeDir).toBe("/home/u");
+		expect(createOmpApi(port, "linux").homeDir).toBe("");
 		await expect(api.runtime.logPath()).resolves.toBe("/profile/logs/gui-runtime.jsonl");
 		await api.system.showSaveDialog("a.html", [{ name: "HTML", extensions: ["html"] }]);
 		await api.system.showSaveDialog();

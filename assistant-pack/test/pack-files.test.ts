@@ -23,6 +23,8 @@ function skill(name: string): { meta: Record<string, unknown>; body: string } {
 const EXPECTED_CONFIG = {
 	temperature: 0.2,
 	autoResume: false,
+	modelPolicy: { providers: ["ollama"], localOnly: true },
+	memory: { backend: "off" },
 	shellPath: "/bin/sh",
 	bash: {
 		patterns: [{ match: "*", approval: "deny" }],
@@ -136,6 +138,12 @@ describe("config overlay", () => {
 		const config = parse(read("config.yml")) as Record<string, unknown>;
 		expect(config).toEqual(EXPECTED_CONFIG);
 		expect((config.bash as { direnv: unknown }).direnv).toBe("off");
+	});
+
+	it("keeps every session on local Ollama models with no remote memory", () => {
+		const config = parse(read("config.yml")) as Record<string, unknown>;
+		expect(config.modelPolicy).toEqual({ providers: ["ollama"], localOnly: true });
+		expect(config.memory).toEqual({ backend: "off" });
 	});
 });
 

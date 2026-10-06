@@ -16,9 +16,26 @@ export const ATTACH_FILTERS: { name: string; extensions: string[] }[] = [
 	},
 ];
 
-/** Wraps a file path in single quotes for a prompt line, as the pack skills expect. */
+/** C0/C1 controls and the Unicode line and paragraph separators. */
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
+/**
+ * Whether a path can be named on a prompt line: a line break would split the
+ * one-path-per-line draft, and no control character survives a model copying
+ * the path back exactly.
+ */
+export function isPromptSafePath(path: string): boolean {
+	return !CONTROL_CHARACTER.test(path);
+}
+
+/**
+ * Quotes a file path for a prompt line. Single quotes, as the pack skills were
+ * measured with, unless the name holds one (`Bob's notes.docx`); then double
+ * quotes, escaping any double quote or backslash inside.
+ */
 export function quotePromptPath(path: string): string {
-	return `'${path}'`;
+	if (!path.includes("'")) return `'${path}'`;
+	return `"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 function extensionOf(path: string): string {

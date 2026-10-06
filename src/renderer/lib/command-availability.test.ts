@@ -40,6 +40,12 @@ describe("removedCommandName", () => {
 		expect(REMOVED_COMMANDS.has("worktree")).toBe(true);
 	});
 
+	it("blocks signing in to or out of an online provider", () => {
+		expect(removedCommandName("/login", [])).toBe("login");
+		expect(removedCommandName("/login anthropic", [])).toBe("login");
+		expect(removedCommandName("/logout:openai", [])).toBe("logout");
+	});
+
 	it("resolves advertised aliases to their removed canonical command", () => {
 		const commands = [builtin("share", ["publish"]), builtin("compact", ["squash"])];
 		expect(removedCommandName("/publish now", commands)).toBe("share");
@@ -64,6 +70,9 @@ describe("cloudModelCommand", () => {
 		"/model:kimi-k2:cloud",
 		"/MODEL  ollama/gpt-oss:120b-cloud ",
 		"/models kimi-k2:cloud",
+		"/model kimi-k2:cloud:low",
+		"/switch kimi-k2:cloud",
+		"/switch ollama/gpt-oss:120b-cloud:high",
 	])("refuses a cloud model chosen by %s", message => {
 		expect(cloudModelCommand(message, [])).toBe(true);
 	});
@@ -73,10 +82,17 @@ describe("cloudModelCommand", () => {
 		expect(cloudModelCommand("/m kimi-k2:cloud", [])).toBe(false);
 	});
 
-	it.each(["/model", "/model ", "/model llama3:8b", "/model qwen3:cloudy", "/compact kimi-k2:cloud", "model x-cloud"])(
-		"lets %s through",
-		message => {
-			expect(cloudModelCommand(message, [])).toBe(false);
-		},
-	);
+	it.each([
+		"/model",
+		"/model ",
+		"/model llama3:8b",
+		"/model llama3:8b:high",
+		"/model qwen3:cloudy",
+		"/switch",
+		"/switch gemma4:e4b",
+		"/compact kimi-k2:cloud",
+		"model x-cloud",
+	])("lets %s through", message => {
+		expect(cloudModelCommand(message, [])).toBe(false);
+	});
 });

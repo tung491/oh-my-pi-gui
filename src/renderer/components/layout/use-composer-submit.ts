@@ -27,7 +27,7 @@ type SendMode = "prompt" | "steer" | "followUp";
 
 export function useComposerSubmit({
 	text,
-	images,
+	images: composerImages,
 	sending,
 	status,
 	isStreaming,
@@ -65,7 +65,12 @@ export function useComposerSubmit({
 		// `overrideText` sends a freshly computed value (voice dictation submit
 		// trigger) instead of the rendered `text` state, which lags a setText.
 		// `forceMode` overrides the steer/followUp toggle for one send (⌃Enter).
-		(overrideText?: string, forceMode?: SendMode) => {
+		// `keepDraft` sends `overrideText` on its own (a starter card): no composer
+		// image rides along, and the typed draft and images are never cleared or
+		// overwritten, not even to restore a failed send.
+		(overrideText?: string, forceMode?: SendMode, options?: { keepDraft?: boolean }) => {
+			const keepDraft = options?.keepDraft === true && overrideText !== undefined;
+			const images = keepDraft ? [] : composerImages;
 			const message = (overrideText ?? text).trim();
 			if ((!message && images.length === 0) || sending) return;
 			if (!routeReady || !runtimeTabId) return;
@@ -90,7 +95,8 @@ export function useComposerSubmit({
 					? sessionRuntimeStore<ComposerStore>(originTabId, "composer") === originComposer
 					: useTabsStore.getState().activeTabId === originTabId &&
 						useSessionStore.getState().sessionId === originSessionId;
-			const restoreDraft = (draft: string, attachments: ComposerImage[]) =>
+			const restoreDraft = (draft: string, attachments: ComposerImage[]) => {
+				if (keepDraft) return;
 				restoreTabComposer(
 					originTabId,
 					originSessionId,
@@ -98,6 +104,13 @@ export function useComposerSubmit({
 					attachments,
 					originSession ? originComposer : undefined,
 				);
+			};
+			const clearComposer = () => {
+				if (keepDraft) return;
+				setText("");
+				setImages([]);
+				setMenu(null);
+			};
 
 			let uncertain = false;
 			const showSendError = (title: string, message: string) =>
@@ -127,7 +140,7 @@ export function useComposerSubmit({
 			// enumerated list into one queue entry per item; first item prompts with
 			// streamingBehavior:"followUp" when idle, everything else followUps;
 			// images ride on the first item only.
-			const queueBody = parseQueueShorthand(expandedMessage);
+			const queueBody = keepDraft ? undefined : parseQueueShorthand(expandedMessage);
 			if (queueBody !== undefined) {
 				const payload = images.map(image => image.content);
 				const items = splitQueuedMessages(queueBody);
@@ -247,9 +260,7 @@ export function useComposerSubmit({
 			if (submit.kind === "blocked") return;
 			if (submit.kind === "handled") {
 				useInputHistoryStore.getState().record(message, originCwd);
-				setText("");
-				setImages([]);
-				setMenu(null);
+				clearComposer();
 				dropReferencedPastes(message);
 				return;
 			}
@@ -257,9 +268,7 @@ export function useComposerSubmit({
 			// is restored when the server refuses (busy).
 			if (submit.kind === "clear") {
 				const previousImages = images;
-				setText("");
-				setImages([]);
-				setMenu(null);
+				clearComposer();
 				void clearSessionContext(rpc, () => hydrateTabSession(originTabId)).then(cleared => {
 					if (cleared) {
 						useInputHistoryStore.getState().record(message, originCwd);
@@ -286,9 +295,7 @@ export function useComposerSubmit({
 			// Sending owns the live edge: pull the transcript back to the bottom even
 			// when the user had scrolled up through history before pressing Enter.
 			(originSession ?? useSessionStore).getState().pinTranscriptToBottom();
-			setText("");
-			setImages([]);
-			setMenu(null);
+			clearComposer();
 			setSending(true);
 			let accepted = false;
 			// Let React commit the cleared draft before contextBridge serializes the
@@ -333,7 +340,7 @@ export function useComposerSubmit({
 		},
 		[
 			text,
-			images,
+			composerImages,
 			sending,
 			status,
 			isStreaming,

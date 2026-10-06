@@ -39,7 +39,13 @@ import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { IconButton } from "../common";
-import { ATTACH_FILTERS, appendDocumentPaths, readImageAttachment, splitAttachments } from "./attach-document";
+import {
+	ATTACH_FILTERS,
+	appendDocumentPaths,
+	isPromptSafePath,
+	readImageAttachment,
+	splitAttachments,
+} from "./attach-document";
 import { HistorySearchOverlay } from "./HistorySearchOverlay";
 import { fileToImage, listMentionFiles, mentionFileCache } from "./input-area-utils";
 import { ThinkingControl } from "./ThinkingControl";
@@ -335,7 +341,7 @@ export function InputArea() {
 
 	// The send pipeline is built further down; starter cards reach it through
 	// `omp:fill-composer` with `submit`, so they send exactly as the Send button does.
-	const sendRef = useRef<((text?: string) => void) | null>(null);
+	const sendRef = useRef<ReturnType<typeof useComposerSubmit> | null>(null);
 	useEffect(() => {
 		const fillComposer = (event: Event) => {
 			const detail = (
@@ -350,7 +356,9 @@ export function InputArea() {
 			).detail;
 			if ((detail?.tabId ?? useTabsStore.getState().activeTabId) !== runtimeTabId) return;
 			if (detail?.submit) {
-				if (detail.text) sendRef.current?.(detail.text);
+				// The card's prompt goes out on its own: the typed draft and attached
+				// images stay in the composer.
+				if (detail.text) sendRef.current?.(detail.text, undefined, { keepDraft: true });
 				return;
 			}
 			const next = detail?.text;
@@ -466,7 +474,9 @@ export function InputArea() {
 			try {
 				const paths = await window.omp.system.showOpenDialog(ATTACH_FILTERS);
 				if (!paths || paths.length === 0 || !stillOrigin()) return;
-				const { images: imagePaths, documents } = splitAttachments(paths);
+				const { images: imagePaths, documents: picked } = splitAttachments(paths);
+				const documents = picked.filter(isPromptSafePath);
+				if (documents.length < picked.length) toast({ variant: "warning", message: t("input.attach.unusualName") });
 				if (documents.length > 0) setText(current => appendDocumentPaths(current, documents));
 				const read = await Promise.allSettled(
 					imagePaths.map(path => readImageAttachment(path, imagePath => window.omp.fs.readImage(imagePath))),
@@ -968,13 +978,15 @@ export function InputArea() {
 								onPaste={handlePaste}
 								rows={2}
 								placeholder={
-									status !== "ready"
-										? t("input.placeholder.connecting")
-										: isStreaming
-											? t("input.placeholder.streaming")
-											: isChat
-												? t("input.placeholder.chat")
-												: t("input.placeholder.idle")
+									status === "error"
+										? t("input.placeholder.unavailable")
+										: status !== "ready"
+											? t("input.placeholder.connecting")
+											: isStreaming
+												? t("input.placeholder.streaming")
+												: isChat
+													? t("input.placeholder.chat")
+													: t("input.placeholder.idle")
 								}
 								className="max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent text-omp-xl leading-[1.5] text-[var(--omp-text)] outline-none placeholder:text-[var(--omp-dim)]"
 							/>

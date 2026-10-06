@@ -40,6 +40,8 @@ import { useQueueStore } from "../stores/queue";
 import { type SessionStore, useSessionStore } from "../stores/session";
 import {
 	activeTabCommand,
+	focusedSessionRuntime,
+	onFocusedSessionRuntimeChange,
 	sessionRuntime,
 	sessionRuntimeStore,
 	type TabCommand,
@@ -663,6 +665,36 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 			.catch(() => {
 				// Status pushes and GET_TABS remain authoritative when this read fails.
 			});
+		// Mounted before the tab list loaded, the snapshot above had no tab to land
+		// in, and a push that arrived before the tab's runtime existed was lost the
+		// same way (a start refusal is pushed once). The main process keeps the last
+		// status, so read it again once the focused tab's runtime first appears,
+		// unless a newer push for any tab arrives while that read is in flight.
+		let stopAwaitingRuntime: (() => void) | null = null;
+		if (!snapshotRuntime) {
+			stopAwaitingRuntime = onFocusedSessionRuntimeChange(() => {
+				const runtime = focusedSessionRuntime();
+				if (!runtime || disposed) return;
+				stopAwaitingRuntime?.();
+				stopAwaitingRuntime = null;
+				const replayVersion = statusVersion;
+				void window.omp.sidecar
+					.getStatus()
+					.then(status => {
+						if (
+							disposed ||
+							statusVersion !== replayVersion ||
+							focusedTabId() !== runtime.tabId ||
+							sessionRuntime(runtime.tabId) !== runtime
+						)
+							return;
+						handleStatus(status, runtime.tabId);
+					})
+					.catch(() => {
+						// Status pushes remain authoritative when this read fails.
+					});
+			});
+		}
 
 		const handleSubagent = (frame: SubagentFrame, tabId: string) => {
 			if (closedTabFrame(tabId)) return;
@@ -771,6 +803,7 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 
 		return () => {
 			disposed = true;
+			stopAwaitingRuntime?.();
 			stopHeartbeat();
 			unsubscribe();
 			unsubStatus();

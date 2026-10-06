@@ -4,6 +4,9 @@
 // The working folder holds planted `.omp/APPEND_SYSTEM.md` and `.claude/APPEND_SYSTEM.md` files, and
 // it and its parent hold planted instruction files (AGENTS.md, CLAUDE.md, GEMINI.md,
 // .github/copilot-instructions.md); none of them may reach the system prompt.
+// Local models only: the sidecar talks to a fake local Ollama that also lists cloud models, and the
+// scratch HOME's ~/.env holds online provider keys; only the local model may be listed or selected,
+// through set_model, /model or /switch, and no model request may be sent.
 //   bun scripts/check-assistant-pack.ts <omp binary> [<pack dir>] [--tools <comma list>] [--lang en|vi]
 // The pack dir defaults to the one the shells resolve for that binary. Prints one row per tool,
 // skill and setting; exits 1 naming every failed check, 2 on bad usage.
@@ -24,6 +27,38 @@ const PACK_SKILLS = ["sai-os-helpdesk", "slides-from-report", "spreadsheet-clean
 const APPEND_PROMPT_DIRS = [".omp", ".claude"];
 /** Folder instruction files omp loads as context files unless the session skips them. */
 const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", join(".github", "copilot-instructions.md")];
+/** The fake Ollama's models: one local model, two cloud tags and a renamed copy Ollama runs remotely. */
+const LOCAL_MODEL = "gemma4:e4b";
+const FAKE_OLLAMA_TAGS = {
+	models: [
+		{ name: LOCAL_MODEL, model: LOCAL_MODEL },
+		{ name: "kimi-k2:cloud", model: "kimi-k2:cloud", remote_model: "kimi-k2", remote_host: "https://ollama.com:443" },
+		{ name: "gpt-oss:120b-cloud", model: "gpt-oss:120b-cloud" },
+		{
+			name: "mine:latest",
+			model: "mine:latest",
+			remote_model: "gpt-oss:120b",
+			remote_host: "https://ollama.com:443",
+		},
+	],
+};
+/** Model switches that must all be refused; the first two have keys in ~/.env. */
+const REFUSED_SET_MODELS = [
+	{ provider: "anthropic", modelId: "claude-sonnet-4-5" },
+	{ provider: "openai", modelId: "gpt-4" },
+	{ provider: "ollama", modelId: "kimi-k2:cloud" },
+	{ provider: "ollama", modelId: "gpt-oss:120b-cloud" },
+	{ provider: "ollama", modelId: "mine:latest" },
+];
+const REFUSED_MODEL_COMMANDS = [
+	"/model anthropic/claude-sonnet-4-5",
+	"/model claude-sonnet-4-5:high",
+	"/model kimi-k2:cloud:low",
+	"/switch kimi-k2:cloud",
+	"/switch openai/gpt-4",
+];
+/** Settings that keep sessions local; the readback must find them pinned by the overlay. */
+const LOCAL_ONLY_SETTINGS = ["modelPolicy.providers", "modelPolicy.localOnly"];
 const READY_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const KILL_GRACE_MS = 5_000;
@@ -217,12 +252,71 @@ function parseCommandLine() {
 	});
 }
 
+/** A local Ollama stand-in on loopback; records every model request it receives. */
+function startFakeOllama(): { server: ReturnType<typeof Bun.serve>; modelRequests: string[] } {
+	const modelRequests: string[] = [];
+	const server = Bun.serve({
+		hostname: "127.0.0.1",
+		port: 0,
+		fetch(request) {
+			const path = new URL(request.url).pathname;
+			if (path === "/api/tags") return Response.json(FAKE_OLLAMA_TAGS);
+			if (path === "/api/show") return Response.json({ capabilities: ["completion", "tools"] });
+			if (path === "/api/version") return Response.json({ version: "0.12.0" });
+			modelRequests.push(`${request.method} ${path}`);
+			return new Response("not found", { status: 404 });
+		},
+	});
+	return { server, modelRequests };
+}
+
+function modelKey(model: unknown): string {
+	if (!isPlainObject(model)) return "none";
+	return `${String(model.provider)}/${String(model.id)}`;
+}
+
+async function checkLocalOnly(sidecar: Sidecar, modelRequests: readonly string[]): Promise<string[]> {
+	const failures: string[] = [];
+	const local = `ollama/${LOCAL_MODEL}`;
+	const catalog = await sidecar.data<{ models?: unknown[] }>({ type: "get_available_models", forceRefresh: true });
+	const listed = sorted((catalog.models ?? []).map(modelKey));
+	for (const key of listed) console.log(`model   ${key}`);
+	if (!sameSet(listed, [local])) failures.push(`available models are [${listed.join(", ")}], not [${local}]`);
+
+	const before = modelKey((await sidecar.data<{ model?: unknown }>({ type: "get_state" })).model);
+	if (before !== local) failures.push(`the session starts on ${before}, not ${local}`);
+	for (const target of REFUSED_SET_MODELS) {
+		const key = `${target.provider}/${target.modelId}`;
+		let refused = false;
+		try {
+			await sidecar.data({ type: "set_model", ...target });
+		} catch {
+			refused = true;
+		}
+		console.log(`switch  set_model ${key} ${refused ? "refused" : "ACCEPTED"}`);
+		if (!refused) failures.push(`set_model ${key} was accepted`);
+	}
+	for (const message of REFUSED_MODEL_COMMANDS) {
+		try {
+			await sidecar.data({ type: "prompt", message });
+		} catch {
+			// A refused switch may fail the prompt; the model readback below decides.
+		}
+		const now = modelKey((await sidecar.data<{ model?: unknown }>({ type: "get_state" })).model);
+		console.log(`switch  ${message} -> ${now}`);
+		if (now !== local) failures.push(`${message} switched the session to ${now}`);
+	}
+	if (modelRequests.length > 0) failures.push(`model requests reached Ollama: ${modelRequests.join(", ")}`);
+	return failures;
+}
+
 async function check(
 	sidecar: Sidecar,
 	pack: string,
 	tools: readonly string[],
 	appendMarker: string,
 	instructionMarkers: ReadonlyMap<string, string>,
+	modelRequests: readonly string[],
 ): Promise<string[]> {
 	const failures: string[] = [];
 	await sidecar.data({ type: "negotiate_protocol", protocolVersion: 2 });
@@ -284,6 +378,13 @@ async function check(
 	const unknown: string[] = [];
 	flattenToSchema(config, "", new Set(types.keys()), expected, unknown);
 	for (const path of unknown) failures.push(`config.yml key ${path} is not a known setting`);
+	for (const path of LOCAL_ONLY_SETTINGS) {
+		if (!expected.some(row => row.path === path)) {
+			failures.push(
+				`config.yml does not pin ${path} (the sidecar needs patches/omp/0003-model-policy-local-only.patch)`,
+			);
+		}
+	}
 	const read = await sidecar.data<{
 		values: Record<string, unknown>;
 		provenance: Record<string, { layers?: unknown }>;
@@ -305,6 +406,8 @@ async function check(
 		// A rejected value falls back to its default with only a log warning; the layer proves the pack value won.
 		if (!layerList.includes("overlay")) failures.push(`setting ${row.path} does not come from the overlay`);
 	}
+
+	failures.push(...(await checkLocalOnly(sidecar, modelRequests)));
 
 	// Load warnings arrive as notice or extension_error frames.
 	const packNames = [pack, "sai-atlas-assistant-pack", "tools.js"];
@@ -384,18 +487,24 @@ async function main(): Promise<number> {
 	}
 	env.HOME = home;
 	Object.assign(env, assistantPackEnv({ language: lang }));
+	// Online keys omp still finds after the shells strip its env: ~/.env is read as a fallback.
+	writeFileSync(join(home, ".env"), "ANTHROPIC_API_KEY=sk-ant-pack-check\nOPENAI_API_KEY=sk-pack-check\n");
+	const ollama = startFakeOllama();
+	delete env.OLLAMA_HOST;
+	env.OLLAMA_BASE_URL = `http://127.0.0.1:${ollama.server.port}`;
 	const argv = [omp, "--mode", "rpc-ui", "--no-session", ...packFlags];
 
 	const sidecar = new Sidecar(argv, env, cwd);
 	let failures: string[];
 	try {
 		await sidecar.ready(READY_TIMEOUT_MS);
-		failures = await check(sidecar, pack, tools, appendMarker, instructionMarkers);
+		failures = await check(sidecar, pack, tools, appendMarker, instructionMarkers, ollama.modelRequests);
 	} catch (error) {
 		const tail = sidecar.stderr.slice(-20).join("\n");
 		failures = [`${error instanceof Error ? error.message : String(error)}${tail ? `\n${tail}` : ""}`];
 	} finally {
 		await sidecar.stop();
+		await ollama.server.stop(true);
 		rmSync(scratch, { recursive: true, force: true });
 	}
 

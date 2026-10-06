@@ -81,12 +81,15 @@ export const en: Record<string, string> = {
 
 	// InputArea
 	"input.placeholder.connecting": "Connecting to Sai ATLAS…",
+	"input.placeholder.unavailable": "Sai ATLAS can't start right now. See the message above.",
 	"input.placeholder.streaming": "Add guidance while Sai ATLAS is working…",
 	"input.placeholder.idle": "Ask Sai ATLAS to build, explain, or fix something…",
 	"input.placeholder.chat": "Ask anything — no tools, just conversation…",
 	"tabs.kind.chat": "Chat session (no tools)",
 	"input.attach": "Attach a file",
 	"input.attach.failed": "Could not attach the file",
+	"input.attach.unusualName":
+		"That file's name has a line break or another hidden character. Rename the file, then try again.",
 	"input.model": "Change model",
 	"input.thinking": "Thinking: {level} — click to change",
 	"input.thinking.failed": "Thinking level",
@@ -587,6 +590,8 @@ export const en: Record<string, string> = {
 	"approval.details": "Details",
 	"approval.sentence.generic": "Sai ATLAS wants to {action}. Allow it?",
 	"approval.sentence.write": "Save a file to {path}?",
+	"approval.sentence.writeUnclear":
+		"Sai ATLAS wants to save a file, but its name is unusual and could hide where it really goes. Read the full request below before you approve.",
 	"approval.action.officeReport": "make a Word report",
 	"approval.action.officeSlides": "make a slide deck",
 	"approval.action.officeClean": "make a cleaned copy of a spreadsheet",
@@ -1340,6 +1345,7 @@ export const en: Record<string, string> = {
 	"modelValue.noneAvailable": "No {noun} available.",
 	"modelValue.noMatch": 'No {noun} match "{query}".',
 	"modelValue.useCustom": 'Use "{query}"',
+	"modelValue.localOnly": "Only models that run on this computer can be used.",
 	"modelValue.clear": "Clear (use default)",
 	"modelValue.providerDisabled": "{name} (disabled)",
 
@@ -1595,6 +1601,9 @@ export const en: Record<string, string> = {
 	"ollama.settings.useAsDefault": "Use as default",
 	"ollama.settings.cloudRefused":
 		"Cloud models send your conversations online. Sai ATLAS uses only models that run on this computer.",
+	"model.localOnly.refused":
+		"That model would send your conversations online. Sai ATLAS uses only models that run on this computer.",
+	"model.localOnly.switchBackFailed": "Couldn't switch back to a local model",
 	"ollama.settings.noModels": "No local models yet. Pull one below.",
 	"providers.cleanup.notice":
 		"Sai ATLAS now runs on local models through Ollama. Other providers were signed out, and your previous model config was saved to {path}.",

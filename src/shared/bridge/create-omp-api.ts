@@ -73,7 +73,7 @@ import type {
 import { DeepLinkBuffer } from "./deep-link-buffer";
 import type { IpcPort } from "./ipc-port";
 
-export function createOmpApi(port: IpcPort, platform: OmpApi["platform"]): OmpApi {
+export function createOmpApi(port: IpcPort, platform: OmpApi["platform"], homeDir = ""): OmpApi {
 	function rpcCommand(cmd: RpcCommand, timeoutMs?: number): Promise<RpcResponse> {
 		return port.invoke(IPC_COMMANDS.RPC_COMMAND, {
 			command: cmd,
@@ -128,6 +128,7 @@ export function createOmpApi(port: IpcPort, platform: OmpApi["platform"]): OmpAp
 
 	return {
 		platform,
+		homeDir,
 		runtime: {
 			report: (error: RuntimeErrorReport) => port.send(IPC_COMMANDS.RUNTIME_ERROR_REPORT, error),
 			logPath: () => port.invoke(IPC_COMMANDS.RUNTIME_LOG_PATH) as Promise<string>,

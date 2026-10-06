@@ -1,0 +1,612 @@
+From 6df258aa56d672ac92369f71057b5051f8969848 Mon Sep 17 00:00:00 2001
+From: Tung Son Do <dosontung007@gmail.com>
+Date: Tue, 6 Oct 2026 19:59:25 +0900
+Subject: [PATCH] feat(models): add a modelPolicy that limits sessions to
+ allowed, local models
+
+modelPolicy.providers lists the only model providers a session may use;
+modelPolicy.localOnly admits only models on a loopback endpoint and no
+Ollama cloud model (a cloud tag, or an entry Ollama reports with
+remote_host). The registry applies the policy to every catalog
+projection, to discovery, to credential lookups and to request resolvers:
+a blocked model is never listed, found or selected, and a request to it
+fails instead of going out without a key, which a provider that allows a
+missing key (ollama) would otherwise do. setModel and setModelTemporary
+refuse a blocked model with a ModelPolicyError. Both settings default to
+no restriction.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ docs/settings.md                              |  13 +
+ .../src/config/model-discovery.ts             |   9 +-
+ .../coding-agent/src/config/model-policy.ts   |  90 +++++++
+ .../coding-agent/src/config/model-registry.ts |  60 ++++-
+ .../coding-agent/src/config/model-settings.ts |  20 ++
+ .../src/session/model-controls.ts             |   9 +-
+ .../coding-agent/test/model-policy.test.ts    | 224 ++++++++++++++++++
+ 7 files changed, 414 insertions(+), 11 deletions(-)
+ create mode 100644 packages/coding-agent/src/config/model-policy.ts
+ create mode 100644 packages/coding-agent/test/model-policy.test.ts
+
+diff --git a/docs/settings.md b/docs/settings.md
+index ba2948e481..61b4d06fc0 100644
+--- a/docs/settings.md
++++ b/docs/settings.md
+@@ -363,6 +363,19 @@ disabledProviders:
+   - groq
+ ```
+ 
++`modelPolicy` restricts the models a session may select and send requests to, wherever they come from (`/model`, role settings, a restored session, discovery):
++
++- `modelPolicy.providers`: the only model providers allowed. Empty (the default) allows every provider. A provider outside the list behaves as if it were in `disabledProviders`.
++- `modelPolicy.localOnly`: admit only models served from this computer: the model's endpoint must be a loopback address, and no Ollama cloud model is admitted (a tag whose name or `:tag` part is `cloud` or ends in `-cloud`, or an entry Ollama reports with `remote_host`). Default `false`.
++
++A blocked model is absent from the catalog, `setModel` refuses it, and a request to it fails instead of being sent without a key.
++
++```yaml
++modelPolicy:
++  providers: [ollama]
++  localOnly: true
++```
++
+ The default is an empty array (nothing disabled). For the two subsystems' provider ids and ordering, see [Providers](./providers.md) and [Context files](./context-files.md).
+ 
+ Native project `modelRoles` are also read directly from `.omp/config.yml`; disabling the `native` discovery provider does not suppress that model-role layer.
+diff --git a/packages/coding-agent/src/config/model-discovery.ts b/packages/coding-agent/src/config/model-discovery.ts
+index e7475dfd71..9f79cb2051 100644
+--- a/packages/coding-agent/src/config/model-discovery.ts
++++ b/packages/coding-agent/src/config/model-discovery.ts
+@@ -217,6 +217,12 @@ export interface DiscoveryContext {
+ 	 * central force-refresh/rotate auth-retry policy on 401/usage-limit.
+ 	 */
+ 	getBearerApiKeyResolver(provider: string): Promise<ApiKey | undefined>;
++	/**
++	 * Leave out models a local server forwards to a remote host (Ollama reports
++	 * `remote_host` for its cloud models and their copies). Set under
++	 * `modelPolicy.localOnly`.
++	 */
++	excludeRemoteModels?: boolean;
+ }
+ 
+ type OllamaDiscoveredModelMetadata = {
+@@ -562,11 +568,12 @@ export async function discoverOllamaModels(
+ 			throw new DiscoveryHttpError(response.status, tagsUrl);
+ 		}
+ 		return (await response.json()) as {
+-			models?: Array<{ name?: string; model?: string }>;
++			models?: Array<{ name?: string; model?: string; remote_host?: string; remote_model?: string }>;
+ 		};
+ 	});
+ 	const entries = (payload.models ?? []).flatMap(item => {
+ 		const id = item.model || item.name;
++		if (ctx.excludeRemoteModels && (item.remote_host || item.remote_model)) return [];
+ 		return id ? [{ id, name: item.name || id }] : [];
+ 	});
+ 	const metadataById = new Map(
+diff --git a/packages/coding-agent/src/config/model-policy.ts b/packages/coding-agent/src/config/model-policy.ts
+new file mode 100644
+index 0000000000..88ae0e44a7
+--- /dev/null
++++ b/packages/coding-agent/src/config/model-policy.ts
+@@ -0,0 +1,90 @@
++/**
++ * `modelPolicy`: which models a session may resolve, switch to and send
++ * requests to. `modelPolicy.providers` lists the only providers allowed (empty:
++ * every provider). `modelPolicy.localOnly` admits only models served from this
++ * computer: a loopback endpoint, and no Ollama cloud model, which a local
++ * daemon forwards to ollama.com.
++ *
++ * The registry applies the policy to its catalog, its credential lookups and
++ * its request resolvers, so a blocked model can be neither selected nor sent a
++ * request, however it was obtained.
++ */
++import type { Api, Model } from "@oh-my-pi/pi-ai/types";
++import { cfgModelPolicyLocalOnly, cfgModelPolicyProviders } from "./model-settings";
++import { settings as globalSettings, type Settings } from "./settings";
++
++export type ModelPolicySubject = Pick<Model<Api>, "provider" | "id"> & {
++	baseUrl?: string;
++};
++
++export interface ModelPolicy {
++	/** Lower-cased allowed provider ids; null when every provider is allowed. */
++	readonly providers: ReadonlySet<string> | null;
++	readonly localOnly: boolean;
++}
++
++const UNRESTRICTED: ModelPolicy = { providers: null, localOnly: false };
++
++/** Thrown when a blocked model is selected or a request to it is resolved. */
++export class ModelPolicyError extends Error {
++	constructor(provider: string, modelId?: string) {
++		super(
++			`${modelId === undefined ? `Provider "${provider}"` : `Model ${provider}/${modelId}`} is not allowed by modelPolicy`,
++		);
++		this.name = "ModelPolicyError";
++	}
++}
++
++/** The policy in effect; unrestricted when no settings are available (early boot, SDK embedding). */
++export function readModelPolicy(settingsInstance?: Settings): ModelPolicy {
++	try {
++		const source = settingsInstance ?? globalSettings;
++		const providers = cfgModelPolicyProviders.get(source);
++		const localOnly = cfgModelPolicyLocalOnly.get(source) === true;
++		if (providers.length === 0 && !localOnly) return UNRESTRICTED;
++		return {
++			providers: providers.length === 0 ? null : new Set(providers.map(id => id.trim().toLowerCase())),
++			localOnly,
++		};
++	} catch {
++		return UNRESTRICTED;
++	}
++}
++
++export function isPolicyRestricted(policy: ModelPolicy): boolean {
++	return policy.providers !== null || policy.localOnly;
++}
++
++export function isProviderAllowed(policy: ModelPolicy, provider: string): boolean {
++	return policy.providers === null || policy.providers.has(provider.trim().toLowerCase());
++}
++
++/**
++ * An Ollama cloud tag: any `:`-separated part of the id equal to `cloud` or
++ * ending in `-cloud` (`kimi-k2:cloud`, `gpt-oss:120b-cloud`).
++ */
++export function isOllamaCloudTag(modelId: string): boolean {
++	return modelId
++		.toLowerCase()
++		.split(":")
++		.some(part => part === "cloud" || part.endsWith("-cloud"));
++}
++
++/** Whether a base URL points at this computer (`localhost`, `127.0.0.0/8`, `::1`, `0.0.0.0`). */
++export function isLoopbackBaseUrl(baseUrl: string | undefined): boolean {
++	if (!baseUrl) return false;
++	let hostname: string;
++	try {
++		hostname = new URL(baseUrl).hostname.toLowerCase();
++	} catch {
++		return false;
++	}
++	hostname = hostname.replace(/^\[/, "").replace(/\]$/, "");
++	return hostname === "localhost" || hostname === "0.0.0.0" || hostname === "::1" || hostname.startsWith("127.");
++}
++
++export function isModelAllowed(policy: ModelPolicy, model: ModelPolicySubject): boolean {
++	if (!isProviderAllowed(policy, model.provider)) return false;
++	if (!policy.localOnly) return true;
++	return isLoopbackBaseUrl(model.baseUrl) && !isOllamaCloudTag(model.id);
++}
+diff --git a/packages/coding-agent/src/config/model-registry.ts b/packages/coding-agent/src/config/model-registry.ts
+index d5d799a64d..74c7a52d80 100644
+--- a/packages/coding-agent/src/config/model-registry.ts
++++ b/packages/coding-agent/src/config/model-registry.ts
+@@ -130,6 +130,14 @@ import { ModelsConfigFile, type ProviderValidationModel, validateProviderConfigu
+ import type { ModelOverride, ModelsConfig, ProviderAuthMode } from "./models-config-schema";
+ import { type Settings, settings } from "./settings";
+ 
++import {
++	isModelAllowed,
++	isPolicyRestricted,
++	isProviderAllowed,
++	ModelPolicyError,
++	type ModelPolicySubject,
++	readModelPolicy,
++} from "./model-policy";
+ import { cfgDisabledProviders } from "./model-settings";
+ import { cfgExtendedContext } from "../session/context-settings";
+ 
+@@ -195,12 +203,20 @@ interface ConfiguredModelDiscoveryResult {
+  */
+ type ModifyModelsHook = (models: Model<Api>[], credentials: OAuthCredentials) => Model<Api>[];
+ 
+-function getDisabledProviderIdsFromSettings(settingsInstance?: Settings): Set<string> {
++/**
++ * Providers the settings rule out: listed in `disabledProviders`, or outside a
++ * `modelPolicy.providers` allowlist. A predicate rather than a set, because an
++ * allowlist rules out every provider it does not name.
++ */
++function getDisabledProviderIdsFromSettings(settingsInstance?: Settings): { has(provider: string): boolean } {
++	let disabled: Set<string>;
+ 	try {
+-		return new Set(cfgDisabledProviders.get(settingsInstance ?? settings));
++		disabled = new Set(cfgDisabledProviders.get(settingsInstance ?? settings));
+ 	} catch {
+-		return new Set();
++		disabled = new Set();
+ 	}
++	const policy = readModelPolicy(settingsInstance);
++	return { has: provider => disabled.has(provider) || !isProviderAllowed(policy, provider) };
+ }
+ 
+ /**
+@@ -326,7 +342,23 @@ export class ModelRegistry {
+ 	}
+ 
+ 	#withCatalogMetrics(models: Model<Api>[]): Model<Api>[] {
+-		return applyCatalogMetrics(models, this.#catalogMetrics);
++		return applyCatalogMetrics(this.#applyModelPolicy(models), this.#catalogMetrics);
++	}
++
++	/**
++	 * Drop every model `modelPolicy` blocks. Every catalog projection passes
++	 * through here, so `getAll`, `getAvailable`, `find` and role resolution
++	 * never see a blocked model.
++	 */
++	#applyModelPolicy(models: Model<Api>[]): Model<Api>[] {
++		const policy = readModelPolicy(this.#settings);
++		if (!isPolicyRestricted(policy)) return models;
++		return models.filter(model => isModelAllowed(policy, model));
++	}
++
++	/** Whether `modelPolicy` lets a session select this model and send it requests. */
++	isModelAllowed(model: ModelPolicySubject): boolean {
++		return isModelAllowed(readModelPolicy(this.#settings), model);
+ 	}
+ 
+ 	/**
+@@ -1846,7 +1878,9 @@ export class ModelRegistry {
+ 			const cacheProviderId = resolveOllamaModelCacheProviderId(providerConfig.provider, providerConfig.baseUrl);
+ 			// Rows carry their api and base URL, so native-api rows must not satisfy a
+ 			// cache read for the OpenAI-compatible provider, or the reverse.
+-			return providerConfig.api === "ollama-chat" ? `${cacheProviderId}:ollama-chat` : cacheProviderId;
++			const apiScoped = providerConfig.api === "ollama-chat" ? `${cacheProviderId}:ollama-chat` : cacheProviderId;
++			// Rows cached without the remote-model filter may hold a renamed cloud model.
++			return readModelPolicy(this.#settings).localOnly ? `${apiScoped}:local-only` : apiScoped;
+ 		}
+ 		if (providerConfig.discovery.type === "openai-models-list") {
+ 			// context-v3 invalidates rows cached before server-advertised input
+@@ -1986,6 +2020,7 @@ export class ModelRegistry {
+ 	#discoveryContext(): DiscoveryContext {
+ 		return {
+ 			fetch: this.#fetch,
++			excludeRemoteModels: readModelPolicy(this.#settings).localOnly,
+ 			getBearerApiKeyResolver: async provider => {
+ 				const apiKey = await this.getApiKeyForProvider(provider);
+ 				if (!isDiscoveryBearerApiKey(apiKey)) {
+@@ -2738,6 +2773,7 @@ export class ModelRegistry {
+ 	 * ignores that alias so SuperGrok is not auto-selected from a paid key.
+ 	 */
+ 	hasConfiguredAuth(model: Model<Api>): boolean {
++		if (!this.isModelAllowed(model)) return false;
+ 		const keyConfig = this.#customProviderApiKeys.get(model.provider);
+ 		return (
+ 			keyConfig !== undefined ||
+@@ -2919,9 +2955,10 @@ export class ModelRegistry {
+ 		sessionId?: string,
+ 		options?: { signal?: AbortSignal },
+ 	): Promise<string | undefined> {
+-		// A disabled provider gets no credential, so no request reaches it however
+-		// its model was obtained.
+-		if (this.#isProviderDisabled(model.provider)) return undefined;
++		// A disabled provider or a model the policy blocks gets no credential. A
++		// keyless provider still sends a request without one, so the request
++		// path also goes through `resolver`, which refuses a blocked model.
++		if (this.#isProviderDisabled(model.provider) || !this.isModelAllowed(model)) return undefined;
+ 		if (this.#isKeylessProvider(model.provider)) {
+ 			return kNoAuth;
+ 		}
+@@ -2994,9 +3031,16 @@ export class ModelRegistry {
+ 	resolver(model: ApiKeyResolverModel, sessionId?: string): ApiKeyResolver;
+ 	resolver(target: string | ApiKeyResolverModel, optionsOrSessionId?: ApiKeyResolverOptions | string): ApiKeyResolver {
+ 		const options = typeof optionsOrSessionId === "string" ? { sessionId: optionsOrSessionId } : optionsOrSessionId;
++		// A blocked target fails the request outright: an `undefined` key would let
++		// a provider that allows a missing key (ollama) send the request anyway.
++		const policy = readModelPolicy(this.#settings);
+ 		if (typeof target === "string") {
++			if (!isProviderAllowed(policy, target)) return () => Promise.reject(new ModelPolicyError(target));
+ 			return createApiKeyResolver(this, target, options);
+ 		}
++		if (!isModelAllowed(policy, target)) {
++			return () => Promise.reject(new ModelPolicyError(target.provider, target.id));
++		}
+ 		return createApiKeyResolver(this, target.provider, {
+ 			...options,
+ 			baseUrl: target.baseUrl,
+diff --git a/packages/coding-agent/src/config/model-settings.ts b/packages/coding-agent/src/config/model-settings.ts
+index d2688b9839..fc8912d2ab 100644
+--- a/packages/coding-agent/src/config/model-settings.ts
++++ b/packages/coding-agent/src/config/model-settings.ts
+@@ -81,6 +81,26 @@ export const cfgDisabledProviders = register({
+ 	pathScoped: { valuesKey: "providers" },
+ });
+ 
++/**
++ * `modelPolicy.providers`: the only providers a session may resolve, switch to
++ * or send a request to. Empty (the default) allows every provider.
++ */
++export const cfgModelPolicyProviders = register({
++	id: "modelPolicy.providers",
++	type: "array",
++	default: EMPTY_STRING_ARRAY,
++});
++
++/**
++ * `modelPolicy.localOnly`: admit only models served from this computer, a
++ * loopback endpoint and no Ollama cloud model. Off by default.
++ */
++export const cfgModelPolicyLocalOnly = register({
++	id: "modelPolicy.localOnly",
++	type: "boolean",
++	default: false,
++});
++
+ export const cfgModelRoleStorage = register({
+ 	id: "modelRoleStorage",
+ 	type: "enum",
+diff --git a/packages/coding-agent/src/session/model-controls.ts b/packages/coding-agent/src/session/model-controls.ts
+index b2b830040b..133fb81eac 100644
+--- a/packages/coding-agent/src/session/model-controls.ts
++++ b/packages/coding-agent/src/session/model-controls.ts
+@@ -47,6 +47,7 @@ import type { SessionManager } from "./session-manager";
+ 
+ import { cfgDefaultThinkingLevel, cfgProvidersFireworksTier } from "./settings";
+ import { cfgDisabledProviders, cfgEnabledModels } from "../config/model-settings";
++import { ModelPolicyError } from "../config/model-policy";
+ 
+ /** Capabilities borrowed from the owning AgentSession. */
+ export interface ModelControlsHost {
+@@ -143,8 +144,10 @@ export class ModelControls {
+ 	/** Models explicitly scoped to the session's cycle command, minus currently disabled providers. */
+ 	get scopedModels(): ReadonlyArray<{ model: Model; thinkingLevel?: ThinkingLevel }> {
+ 		const disabledProviders = cfgDisabledProviders.get(this.#host.settings);
+-		if (disabledProviders.length === 0) return this.#scopedModels;
+-		return this.#scopedModels.filter(scoped => !disabledProviders.includes(scoped.model.provider));
++		const registry = this.#host.modelRegistry;
++		return this.#scopedModels.filter(
++			scoped => !disabledProviders.includes(scoped.model.provider) && registry.isModelAllowed(scoped.model),
++		);
+ 	}
+ 
+ 	/**
+@@ -231,6 +234,7 @@ export class ModelControls {
+ 		},
+ 	): Promise<{ switched: boolean }> {
+ 		const previousEditMode = this.#host.resolveActiveEditMode();
++		if (!this.#host.modelRegistry.isModelAllowed(model)) throw new ModelPolicyError(model.provider, model.id);
+ 		if (!this.#host.modelRegistry.hasConfiguredAuth(model)) {
+ 			throw new Error(`No API key for ${model.provider}/${model.id}`);
+ 		}
+@@ -276,6 +280,7 @@ export class ModelControls {
+ 		options?: { ephemeral?: boolean },
+ 	): Promise<void> {
+ 		const previousEditMode = this.#host.resolveActiveEditMode();
++		if (!this.#host.modelRegistry.isModelAllowed(model)) throw new ModelPolicyError(model.provider, model.id);
+ 		if (!this.#host.modelRegistry.hasConfiguredAuth(model)) {
+ 			throw new Error(`No API key for ${model.provider}/${model.id}`);
+ 		}
+diff --git a/packages/coding-agent/test/model-policy.test.ts b/packages/coding-agent/test/model-policy.test.ts
+new file mode 100644
+index 0000000000..9ee3f95f34
+--- /dev/null
++++ b/packages/coding-agent/test/model-policy.test.ts
+@@ -0,0 +1,224 @@
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import * as fs from "node:fs";
++import * as os from "node:os";
++import * as path from "node:path";
++import { Agent } from "@oh-my-pi/pi-agent-core";
++import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
++import type { FetchImpl } from "@oh-my-pi/pi-ai/types";
++import { getBundledModels } from "@oh-my-pi/pi-catalog/models";
++import { isLoopbackBaseUrl, isOllamaCloudTag, ModelPolicyError } from "@oh-my-pi/pi-coding-agent/config/model-policy";
++import { kNoAuth, ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
++import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
++import { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
++import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
++import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
++import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
++
++const LOCAL_ONLY = {
++	"modelPolicy.providers": ["ollama"],
++	"modelPolicy.localOnly": true,
++};
++
++/** `/api/tags` as a signed-in Ollama daemon reports it: two cloud tags and a renamed remote copy. */
++const OLLAMA_TAGS = {
++	models: [
++		{ name: "gemma4:e4b", model: "gemma4:e4b" },
++		{
++			name: "kimi-k2:cloud",
++			model: "kimi-k2:cloud",
++			remote_model: "kimi-k2",
++			remote_host: "https://ollama.com:443",
++		},
++		{ name: "gpt-oss:120b-cloud", model: "gpt-oss:120b-cloud" },
++		{
++			name: "mine:latest",
++			model: "mine:latest",
++			remote_model: "gpt-oss:120b",
++			remote_host: "https://ollama.com:443",
++		},
++	],
++};
++
++const ollamaFetch: FetchImpl = input => {
++	const url = String(input);
++	if (url.endsWith(":11434/api/tags")) return Promise.resolve(Response.json(OLLAMA_TAGS));
++	if (url.endsWith(":11434/api/show")) return Promise.resolve(Response.json({}));
++	return Promise.resolve(new Response(null, { status: 404 }));
++};
++
++describe("modelPolicy", () => {
++	let tempDir: string;
++	let modelsJsonPath: string;
++	let authStorage: AuthStorage;
++	let originalOllamaBaseUrl: string | undefined;
++	let originalOllamaHost: string | undefined;
++
++	beforeEach(async () => {
++		originalOllamaBaseUrl = Bun.env.OLLAMA_BASE_URL;
++		originalOllamaHost = Bun.env.OLLAMA_HOST;
++		delete Bun.env.OLLAMA_BASE_URL;
++		delete Bun.env.OLLAMA_HOST;
++		tempDir = path.join(os.tmpdir(), `pi-test-model-policy-${Snowflake.next()}`);
++		fs.mkdirSync(tempDir, { recursive: true });
++		modelsJsonPath = path.join(tempDir, "models.json");
++		authStorage = await AuthStorage.create(path.join(tempDir, "auth.db"));
++		await authStorage.credentials.set("anthropic", [{ type: "api_key", key: "sk-ant-test" }]);
++	});
++
++	afterEach(() => {
++		authStorage.close();
++		if (originalOllamaBaseUrl === undefined) delete Bun.env.OLLAMA_BASE_URL;
++		else Bun.env.OLLAMA_BASE_URL = originalOllamaBaseUrl;
++		if (originalOllamaHost === undefined) delete Bun.env.OLLAMA_HOST;
++		else Bun.env.OLLAMA_HOST = originalOllamaHost;
++		removeSyncWithRetries(tempDir);
++	});
++
++	function registry(overrides: Record<string, unknown>): ModelRegistry {
++		return new ModelRegistry(authStorage, modelsJsonPath, {
++			fetch: ollamaFetch,
++			settings: Settings.isolated(overrides),
++		});
++	}
++
++	function anthropicModel() {
++		const model = getBundledModels("anthropic")[0];
++		if (!model) throw new Error("the bundled catalog has no anthropic model");
++		return model;
++	}
++
++	test("recognises Ollama cloud tags in any part of the id", () => {
++		for (const id of [
++			"kimi-k2:cloud",
++			"gpt-oss:120b-cloud",
++			"x-cloud",
++			"kimi-k2:cloud:low",
++			"qwen3-coder:480b-cloud",
++		]) {
++			expect(isOllamaCloudTag(id)).toBe(true);
++		}
++		for (const id of ["gemma4:e4b", "llama3:8b", "hf.co/google/gemma-4-E4B-it-qat-q4_0-gguf", "cloudy:7b"]) {
++			expect(isOllamaCloudTag(id)).toBe(false);
++		}
++	});
++
++	test("treats only this computer's addresses as local", () => {
++		for (const url of [
++			"http://127.0.0.1:11434",
++			"http://localhost:11434/v1",
++			"http://[::1]:11434",
++			"http://127.0.1.1",
++		]) {
++			expect(isLoopbackBaseUrl(url)).toBe(true);
++		}
++		for (const url of [undefined, "", "https://ollama.com", "http://192.168.1.5:11434", "not a url"]) {
++			expect(isLoopbackBaseUrl(url)).toBe(false);
++		}
++	});
++
++	test("an unset policy leaves every provider and model in place", async () => {
++		const open = registry({});
++		await open.refresh("online");
++		const model = anthropicModel();
++		expect(open.find("anthropic", model.id)?.id).toBe(model.id);
++		expect(open.hasConfiguredAuth(model)).toBe(true);
++		expect(
++			open
++				.getAll()
++				.filter(entry => entry.provider === "ollama")
++				.map(entry => entry.id)
++				.sort(),
++		).toEqual(["gemma4:e4b", "gpt-oss:120b-cloud", "kimi-k2:cloud", "mine:latest"]);
++	});
++
++	test("a provider outside the policy neither resolves, gets a key, nor counts as configured", async () => {
++		const local = registry(LOCAL_ONLY);
++		const model = anthropicModel();
++		expect(local.getAll().some(entry => entry.provider === "anthropic")).toBe(false);
++		expect(local.getAvailable().some(entry => entry.provider === "anthropic")).toBe(false);
++		expect(local.find("anthropic", model.id)).toBeUndefined();
++		expect(local.isModelAllowed(model)).toBe(false);
++		expect(local.hasConfiguredAuth(model)).toBe(false);
++		expect(await local.getApiKey(model)).toBeUndefined();
++		expect(await local.getApiKeyForProvider("anthropic")).toBeUndefined();
++		await expect(
++			Promise.resolve(local.resolver(model)({ lastChance: false, error: undefined })),
++		).rejects.toBeInstanceOf(ModelPolicyError);
++		await expect(
++			Promise.resolve(local.resolver("anthropic")({ lastChance: false, error: undefined })),
++		).rejects.toBeInstanceOf(ModelPolicyError);
++	});
++
++	test("local only drops Ollama cloud tags and remote entries from discovery", async () => {
++		const local = registry(LOCAL_ONLY);
++		await local.refresh("online");
++		expect(
++			local
++				.getAll()
++				.filter(entry => entry.provider === "ollama")
++				.map(entry => entry.id),
++		).toEqual(["gemma4:e4b"]);
++		expect(local.find("ollama", "kimi-k2:cloud")).toBeUndefined();
++		expect(local.find("ollama", "mine:latest")).toBeUndefined();
++		const gemma = local.find("ollama", "gemma4:e4b");
++		if (!gemma) throw new Error("the local model was not discovered");
++		expect(local.isModelAllowed(gemma)).toBe(true);
++		expect(await local.resolver(gemma)({ lastChance: false, error: undefined })).toEqual({ apiKey: kNoAuth });
++	});
++
++	test("local only refuses a cloud tag or a remote endpoint however the model was built", async () => {
++		const local = registry(LOCAL_ONLY);
++		const base = {
++			provider: "ollama",
++			api: "ollama-chat" as const,
++			baseUrl: "http://127.0.0.1:11434",
++		};
++		const blocked = [
++			{ ...base, id: "kimi-k2:cloud" },
++			{ ...base, id: "gemma4:e4b", baseUrl: "https://ollama.com" },
++			{ ...base, id: "gemma4:e4b", baseUrl: "" },
++			{ ...base, id: "gemma4:e4b", baseUrl: "http://192.168.1.5:11434" },
++		];
++		for (const model of blocked) {
++			expect(local.isModelAllowed(model)).toBe(false);
++			expect(await local.getApiKey(model as never)).toBeUndefined();
++			await expect(
++				Promise.resolve(local.resolver(model)({ lastChance: false, error: undefined })),
++			).rejects.toBeInstanceOf(ModelPolicyError);
++		}
++		expect(local.isModelAllowed({ ...base, id: "gemma4:e4b" })).toBe(true);
++	});
++
++	test("a session refuses to switch to a model the policy blocks", async () => {
++		const modelRegistry = registry(LOCAL_ONLY);
++		const local = createMockModel({
++			provider: "ollama",
++			id: "gemma4:e4b",
++			baseUrl: "http://127.0.0.1:11434",
++			responses: [],
++		});
++		const agent = new Agent({
++			getApiKey: () => "test-key",
++			initialState: { model: local, systemPrompt: ["Test"], tools: [] },
++			streamFn: local.stream,
++		});
++		const session = new AgentSession({
++			agent,
++			sessionManager: SessionManager.inMemory(),
++			settings: Settings.isolated({
++				...LOCAL_ONLY,
++				"compaction.enabled": false,
++			}),
++			modelRegistry,
++		});
++		try {
++			const cloud = { ...local, id: "kimi-k2:cloud" };
++			await expect(session.setModel(cloud)).rejects.toBeInstanceOf(ModelPolicyError);
++			await expect(session.setModelTemporary(cloud)).rejects.toBeInstanceOf(ModelPolicyError);
++			await expect(session.setModel(anthropicModel())).rejects.toBeInstanceOf(ModelPolicyError);
++			expect(session.model?.id).toBe("gemma4:e4b");
++		} finally {
++			await session.dispose();
++		}
++	});
++});
+-- 
+2.53.0
+

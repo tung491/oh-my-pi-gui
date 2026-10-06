@@ -4,6 +4,8 @@ interface OmpBootstrap {
 	platform: "darwin" | "win32" | "linux";
 	version: string;
 	windowKind: "main" | "quick-entry";
+	/** The user's home folder; empty when the shell could not tell. */
+	homeDir: string;
 	winId: number;
 }
 

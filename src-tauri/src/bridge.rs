@@ -996,6 +996,7 @@ pub fn bootstrap_script(ctx: &AppCtx, caller: Caller) -> String {
             "version": ctx.host.app_version(),
             "windowKind": caller.kind,
             "winId": caller.win_id,
+            "homeDir": dirs::home_dir().map(|home| home.to_string_lossy().into_owned()).unwrap_or_default(),
         },
         "storage": storage,
     });
@@ -1371,7 +1372,8 @@ mod tests {
         let start = script.find("var data = ").unwrap() + "var data = ".len();
         let end = script[start..].find(";\n").unwrap() + start;
         let data: Value = serde_json::from_str(&script[start..end]).unwrap();
-        assert_eq!(data["bootstrap"], json!({ "platform": node_platform(), "version": "0.0.0-test", "windowKind": "main", "winId": 4 }));
+        let home = dirs::home_dir().map(|home| home.to_string_lossy().into_owned()).unwrap_or_default();
+        assert_eq!(data["bootstrap"], json!({ "platform": node_platform(), "version": "0.0.0-test", "windowKind": "main", "winId": 4, "homeDir": home }));
         assert_eq!(data["storage"]["omp.lang"], json!(hostile));
         let bar = bootstrap_script(&ctx, Caller::quick_entry());
         assert!(bar.contains("\"windowKind\":\"quick-entry\""));

@@ -431,6 +431,23 @@ test("narrow windows and 200 percent zoom keep settings and primary actions reac
 	});
 });
 
+test("removed commands stay inert: a notice, no dialog and no agent call", async () => {
+	// The composer refuses a removed command before it reaches the agent, so
+	// nothing opens and nothing is sent: not as a prompt, not as a collaboration join.
+	const prompts = (await recorded("prompt")).length;
+	for (const name of ["collab", "tools", "debug", "import", "login"]) {
+		await command(`/${name}`);
+		await expect(
+			page.getByRole("status").filter({ hasText: "TUI-only — not yet available via RPC" }).first(),
+		).toBeVisible();
+		await expect(page.getByRole("dialog")).toHaveCount(0);
+	}
+	expect(await recorded("prompt")).toHaveLength(prompts);
+	expect(await recorded("collab_join")).toHaveLength(0);
+	expect(errors).toEqual([]);
+	await page.locator("textarea").first().fill("");
+});
+
 test("settings search opens advanced controls and old refreshes cannot undo a saved edit", async () => {
 	await page.getByRole("button", { name: "Settings", exact: true }).click();
 	const settings = page.getByRole("dialog");

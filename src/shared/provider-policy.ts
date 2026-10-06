@@ -21,6 +21,7 @@ export function filterAllowedModels<T extends { provider: string }>(models: read
 /**
  * Sidecar commands that sign in to or out of a remote provider. Ollama runs
  * locally and needs no account, so neither the palette nor the composer's
- * slash autocomplete offers them; typed by hand they are still forwarded.
+ * slash autocomplete offers them; typed by hand the composer refuses them as
+ * removed commands.
  */
 export const HIDDEN_ACCOUNT_COMMANDS: ReadonlySet<string> = new Set(["login", "logout"]);

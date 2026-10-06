@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "../../lib/i18n";
-import { ApprovalDialog, normalizePosixPath, parseApprovalTitle } from "./ApprovalDialog";
+import { ApprovalDialog, normalizePosixPath, parseApprovalTitle, resolveWritePath } from "./ApprovalDialog";
 
 const { document, window, Event, HTMLElement, Element, Node } = parseHTML("<html><body></body></html>");
 const globals = globalThis as Record<string, unknown>;
@@ -23,7 +23,10 @@ function setLanguage(lang: "en" | "vi"): void {
 	};
 }
 
-async function showApproval(title: string): Promise<string> {
+async function showApproval(
+	title: string,
+	where: { cwd: string; homeDir: string } = { cwd: "/home/u/Documents", homeDir: "/home/u" },
+): Promise<string> {
 	const host = document.createElement("div") as unknown as Element;
 	document.body.appendChild(host as never);
 	container = host;
@@ -33,6 +36,8 @@ async function showApproval(title: string): Promise<string> {
 		mounted.render(
 			<I18nProvider>
 				<ApprovalDialog
+					cwd={where.cwd}
+					homeDir={where.homeDir}
 					onRespond={() => {}}
 					request={{
 						type: "extension_ui_request",
@@ -100,6 +105,67 @@ describe("parseApprovalTitle", () => {
 	});
 });
 
+describe("resolveWritePath", () => {
+	const where = { cwd: "/home/u/Documents", homeDir: "/home/u" };
+	const details = (path: string, content = "x") => `Path: ${path}\nContent:\n${content}`;
+
+	it("resolves an absolute path with dot segments", () => {
+		expect(resolveWritePath(details("/home/u/Documents/Sai ATLAS/../../.config/x.desktop"), where)).toBe(
+			"/home/u/.config/x.desktop",
+		);
+	});
+
+	it("resolves a relative path against the session folder", () => {
+		expect(resolveWritePath(details("../../.config/autostart/x.desktop"), where)).toBe(
+			"/home/.config/autostart/x.desktop",
+		);
+		expect(resolveWritePath(details("Sai ATLAS/notes.md"), where)).toBe("/home/u/Documents/Sai ATLAS/notes.md");
+	});
+
+	it("expands the home folder the way the agent does", () => {
+		expect(resolveWritePath(details("~/notes.md"), where)).toBe("/home/u/notes.md");
+		expect(resolveWritePath(details("~"), where)).toBe("/home/u");
+		expect(resolveWritePath(details("~notes.md"), where)).toBe("/home/u/notes.md");
+		expect(resolveWritePath(details("@~/notes.md"), where)).toBe("/home/u/notes.md");
+		expect(resolveWritePath(details(":~/notes.md"), where)).toBe("/home/u/notes.md");
+		expect(resolveWritePath(details("@/tmp/notes.md"), where)).toBe("/tmp/notes.md");
+	});
+
+	it("refuses a path with a newline in it", () => {
+		const payload = "/home/u/Documents/Sai ATLAS/notes.md\n../../../../.config/autostart/x.desktop";
+		expect(resolveWritePath(details(payload), where)).toBeNull();
+	});
+
+	it("refuses a path that hides a second Content line", () => {
+		const payload = "/home/u/Documents/Sai ATLAS/notes.md\nContent:\n../../../../.config/autostart/x.desktop";
+		expect(resolveWritePath(details(payload), where)).toBeNull();
+	});
+
+	it("refuses a path the agent cut short", () => {
+		const long = `/home/u/Documents/Sai ATLAS/${"a".repeat(1990)}`;
+		expect(resolveWritePath(details(`${long.slice(0, 2000)}[…37ch elided…]`), where)).toBeNull();
+	});
+
+	it("refuses a path with a control character", () => {
+		expect(resolveWritePath(details("/home/u/notes\r.md"), where)).toBeNull();
+		expect(resolveWritePath(details("/home/u/notes\u0000.md"), where)).toBeNull();
+		expect(resolveWritePath(details("/home/u/notes\u2028.md"), where)).toBeNull();
+	});
+
+	it("refuses a path it cannot resolve the way the agent would", () => {
+		expect(resolveWritePath(details("notes.md"), { cwd: "", homeDir: "/home/u" })).toBeNull();
+		expect(resolveWritePath(details("~/notes.md"), { cwd: "/home/u", homeDir: "" })).toBeNull();
+		expect(resolveWritePath(details("file:///home/u/notes.md"), where)).toBeNull();
+		expect(resolveWritePath(details("skill://word-report/x.md"), where)).toBeNull();
+		expect(resolveWritePath(details("[notes.md#AB12]"), where)).toBeNull();
+		expect(resolveWritePath(details("/home/u/notes\u00a0x.md"), where)).toBeNull();
+		expect(resolveWritePath(details("C:\\notes.md"), where)).toBeNull();
+		expect(resolveWritePath(details("/"), where)).toBeNull();
+		expect(resolveWritePath(details(""), where)).toBeNull();
+		expect(resolveWritePath("Content:\nx", where)).toBeNull();
+	});
+});
+
 describe("ApprovalDialog sentence", () => {
 	const cases: [string, string, string, string][] = [
 		[
@@ -154,6 +220,39 @@ describe("ApprovalDialog sentence", () => {
 		setLanguage("en");
 		expect(await showApproval("Allow tool: write\nPath: /home/u/$&$'.md\nContent:\nx")).toBe(
 			"Save a file to /home/u/$&$'.md?",
+		);
+	});
+
+	it.each([
+		["a relative", "../../.config/autostart/x.desktop", "/home/.config/autostart/x.desktop"],
+		["a home", "~/notes.md", "/home/u/notes.md"],
+	])("names the resolved file for %s path", async (_label, path, resolved) => {
+		setLanguage("en");
+		expect(await showApproval(`Allow tool: write\nPath: ${path}\nContent:\nx`)).toBe(`Save a file to ${resolved}?`);
+	});
+
+	it.each([
+		["a newline", "/home/u/Documents/Sai ATLAS/notes.md\n../../../../.config/autostart/x.desktop"],
+		["a second Content line", "/home/u/Documents/Sai ATLAS/notes.md\nContent:\n../../.config/autostart/x.desktop"],
+		["a cut-short name", `/home/u/Documents/Sai ATLAS/${"a".repeat(1972)}[…40ch elided…]`],
+	])("warns about a write path with %s and opens the full request", async (_label, path) => {
+		const title = `Allow tool: write\nPath: ${path}\nContent:\n[Desktop Entry]`;
+		setLanguage("en");
+		const sentence = await showApproval(title);
+		expect(sentence).toBe(
+			"Sai ATLAS wants to save a file, but its name is unusual and could hide where it really goes. Read the full request below before you approve.",
+		);
+		expect(sentence).not.toContain("notes.md");
+		expect(document.querySelector("[data-approval-warning]")).not.toBeNull();
+		const details = document.querySelector("details");
+		expect(details?.hasAttribute("open")).toBe(true);
+		expect(details?.querySelector("pre")?.textContent).toContain(path);
+	});
+
+	it("warns in Vietnamese too", async () => {
+		setLanguage("vi");
+		expect(await showApproval("Allow tool: write\nPath: /a/b.md\n../../c\nContent:\nx")).toBe(
+			"Sai ATLAS muốn lưu một tệp, nhưng tên tệp bất thường và có thể che giấu nơi tệp thực sự được lưu. Hãy đọc toàn bộ yêu cầu bên dưới trước khi cho phép.",
 		);
 	});
 

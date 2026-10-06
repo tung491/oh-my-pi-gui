@@ -11,8 +11,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ProviderInfo, ProvidersResult, RpcResponse } from "../../../shared/rpc-types";
+import type { ModelInfo, ProviderInfo, ProvidersResult, RpcResponse } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
+import { en } from "../../locales/en";
 import { useModelStore } from "../../stores/model";
 import { ModelValueSelect, settingRefKind } from "./ModelValueSelect";
 
@@ -34,6 +35,7 @@ function provider(id: string, disabled: boolean): ProviderInfo {
 
 const DEFAULT_PROVIDERS = [provider("ollama", false), provider("anthropic", false)];
 let catalogProviders: ProviderInfo[] = DEFAULT_PROVIDERS;
+let catalogModels: ModelInfo[] = [];
 
 const command = vi.fn(
 	async (): Promise<RpcResponse> => ({
@@ -42,7 +44,7 @@ const command = vi.fn(
 		success: true,
 		data: {
 			providers: catalogProviders,
-			models: [],
+			models: catalogModels,
 			discoveryStates: [],
 			refreshPending: false,
 			generation: 1,
@@ -65,14 +67,20 @@ function rowFor(value: string): HTMLButtonElement {
 let root: Root | null = null;
 
 /** Mount the dropdown and open its panel, letting the fetch-on-open settle. */
-async function openDropdown(): Promise<void> {
+async function openDropdown(
+	props: { kind?: "model" | "provider"; value?: string; onCommit?: (value: string) => void } = {},
+): Promise<void> {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
 	root = createRoot(container as unknown as Element);
 	await act(async () => {
 		root?.render(
 			<I18nProvider>
-				<ModelValueSelect kind="provider" onCommit={() => {}} value="" />
+				<ModelValueSelect
+					kind={props.kind ?? "provider"}
+					onCommit={props.onCommit ?? (() => {})}
+					value={props.value ?? ""}
+				/>
 			</I18nProvider>,
 		);
 	});
@@ -93,6 +101,7 @@ afterEach(async () => {
 	useModelStore.getState().reset();
 	command.mockClear();
 	catalogProviders = DEFAULT_PROVIDERS;
+	catalogModels = [];
 });
 
 describe("settingRefKind", () => {
@@ -170,5 +179,75 @@ describe("ModelValueSelect", () => {
 		// `*Provider` setting value fails at call time, far from this row.
 		expect(rowFor("ollama").hasAttribute("disabled")).toBe(true);
 		expect(rowFor("ollama").textContent).toContain("(disabled)");
+	});
+
+	describe("model settings", () => {
+		const LOCAL_MODELS: ModelInfo[] = [
+			{ provider: "ollama", id: "gemma4:e4b" },
+			{ provider: "ollama", id: "kimi-k2:cloud" },
+			{ provider: "ollama", id: "gpt-oss:120b-cloud" },
+			{ provider: "anthropic", id: "claude-sonnet-4-5" },
+			{ provider: "ollama", id: "qwen3:8b" },
+		];
+
+		/** Type into the search box through React's own change handler (linkedom fires no input event React reads). */
+		async function search(text: string): Promise<void> {
+			const input = document.body.querySelector("input") as unknown as HTMLInputElement & Record<string, unknown>;
+			input.value = text;
+			const propsKey = Object.getOwnPropertyNames(input).find(key => key.startsWith("__reactProps$"));
+			const props = propsKey ? (input[propsKey] as { onChange?: (event: object) => void }) : undefined;
+			await act(async () => {
+				props?.onChange?.({ target: input });
+			});
+		}
+
+		function buttonWithText(text: string): HTMLButtonElement | undefined {
+			return (Array.from(document.body.querySelectorAll("button")) as HTMLButtonElement[]).find(button =>
+				(button.textContent ?? "").includes(text),
+			);
+		}
+
+		it("lists only local Ollama models, never a cloud tag or an online provider", async () => {
+			catalogModels = LOCAL_MODELS;
+			await openDropdown({ kind: "model" });
+
+			expect(optionRows().map(row => row.textContent)).toEqual(["ollama/gemma4:e4b", "ollama/qwen3:8b"]);
+		});
+
+		it.each(["anthropic/claude-sonnet-4-5", "ollama/kimi-k2:cloud", "pi/smol", "gpt-4"])(
+			"refuses %s typed as a custom value",
+			async typed => {
+				catalogModels = LOCAL_MODELS;
+				const onCommit = vi.fn();
+				await openDropdown({ kind: "model", onCommit });
+				await search(typed);
+
+				expect(buttonWithText(typed)).toBeUndefined();
+				expect(document.body.textContent).toContain(en["modelValue.localOnly"]);
+				expect(onCommit).not.toHaveBeenCalled();
+			},
+		);
+
+		it("offers a typed local Ollama model as a custom value", async () => {
+			catalogModels = LOCAL_MODELS;
+			const onCommit = vi.fn();
+			await openDropdown({ kind: "model", onCommit });
+			await search("ollama/mine:latest");
+
+			const custom = buttonWithText("ollama/mine:latest");
+			expect(custom).toBeDefined();
+			await act(async () => {
+				custom?.click();
+			});
+			expect(onCommit).toHaveBeenCalledWith("ollama/mine:latest");
+		});
+
+		it("shows a saved online model as current but will not keep it selectable", async () => {
+			catalogModels = LOCAL_MODELS;
+			await openDropdown({ kind: "model", value: "anthropic/claude-sonnet-4-5" });
+
+			expect(rowFor("anthropic/claude-sonnet-4-5").hasAttribute("disabled")).toBe(true);
+			expect(buttonWithText(en["modelValue.clear"])).toBeDefined();
+		});
 	});
 });

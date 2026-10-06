@@ -17,5 +17,5 @@ if (!bootstrap) {
 if (bootstrap.windowKind === "quick-entry") {
 	window.ompQuickEntry = createQuickEntryApi(createTauriPort("omp_quick_entry_invoke"), bootstrap.platform);
 } else {
-	window.omp = createOmpApi(createTauriPort("omp_invoke"), bootstrap.platform);
+	window.omp = createOmpApi(createTauriPort("omp_invoke"), bootstrap.platform, bootstrap.homeDir);
 }

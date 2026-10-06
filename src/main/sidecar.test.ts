@@ -107,15 +107,16 @@ describe("SidecarManager", () => {
 		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
 		await fs.writeFile(
 			binaryPath,
-			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null, ompProfile: process.env.OMP_PROFILE ?? null, piProfile: process.env.PI_PROFILE ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null, ompProfile: process.env.OMP_PROFILE ?? null, piProfile: process.env.PI_PROFILE ?? null, smolModel: process.env.PI_SMOL_MODEL ?? null, anthropic: process.env.ANTHROPIC_API_KEY ?? null, openai: process.env.OPENAI_API_KEY ?? null, ollamaCloud: process.env.OLLAMA_CLOUD_API_KEY ?? null, ollamaHost: process.env.OLLAMA_HOST ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
 		const pack = await makePackFixture(tempDir);
 
 		// A tab created as a chat still gets the pack: the chat branch is gone.
-		// Shell startup files and omp profile selectors reaching the spawn env are
-		// removed, whether from the login shell or the app's own env; the app
-		// language is set last.
+		// Shell startup files, omp profile selectors, role model overrides and
+		// online provider credentials reaching the spawn env are removed, whether
+		// from the login shell or the app's own env; the local Ollama address
+		// survives; the app language is set last.
 		const sidecar = new SidecarManager({
 			binaryPath,
 			cwd: tempDir,
@@ -126,11 +127,16 @@ describe("SidecarManager", () => {
 					BASH_ENV: "/rc/bash_env",
 					ENV: "/rc/env",
 					OMP_PROFILE: "work",
+					PI_SMOL_MODEL: "anthropic/claude-haiku-4-5",
+					ANTHROPIC_API_KEY: "sk-ant",
+					OLLAMA_CLOUD_API_KEY: "cloud",
+					OLLAMA_HOST: "127.0.0.1:11434",
 					SAI_ATLAS_LANG: "xx",
 				}),
 			language: () => "vi",
 		});
 		vi.stubEnv("PI_PROFILE", "work");
+		vi.stubEnv("OPENAI_API_KEY", "sk-openai");
 		try {
 			const ready = waitForReady(sidecar);
 			sidecar.start();
@@ -164,6 +170,11 @@ describe("SidecarManager", () => {
 				env: null,
 				ompProfile: null,
 				piProfile: null,
+				smolModel: null,
+				anthropic: null,
+				openai: null,
+				ollamaCloud: null,
+				ollamaHost: "127.0.0.1:11434",
 			});
 		} finally {
 			vi.unstubAllEnvs();

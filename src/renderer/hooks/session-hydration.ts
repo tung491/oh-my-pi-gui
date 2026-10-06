@@ -54,6 +54,7 @@ export function applySessionState(state: RpcSessionState, fallbackName?: string)
 	if (runtime) runtime.recovering = false;
 	if (useSessionStore.getState().sessionId !== state.sessionId) useSubagentGraphStore.getState().reset();
 	useModelStore.getState().setFromState(state);
+	void useModelStore.getState().enforceLocalModel();
 	useSessionStore.getState().setFromState(state);
 	writeUsage(state);
 	if (!state.sessionName && fallbackName) {
@@ -118,6 +119,7 @@ export async function refreshModelState(tabId = useTabsStore.getState().activeTa
 		const state = res.data as RpcSessionState;
 		withSessionRuntime(tabId, () => {
 			useModelStore.getState().setFromState(state);
+			void useModelStore.getState().enforceLocalModel();
 			// Another model means another context window, so the usage ring has to
 			// follow the switch even though the token count did not change.
 			writeUsage(state);
@@ -138,12 +140,16 @@ function asModelInfo(value: unknown): ModelInfo | undefined {
  * `config_update` frames both carry the sidecar's live model. This is the only
  * channel for a switch that emits no `model_changed` at all — re-selecting the
  * current provider+id is a no-op server-side, so without it a stale label can
- * never be corrected.
+ * never be corrected. Like every place the agent reports the session model, it
+ * refuses a model that is not local.
  */
 export function applyModelInfo(model: unknown, tabId: string | null): void {
 	const info = asModelInfo(model);
 	if (!info || !tabId) return;
-	withSessionRuntime(tabId, () => useModelStore.setState({ model: info }));
+	withSessionRuntime(tabId, () => {
+		useModelStore.setState({ model: info });
+		void useModelStore.getState().enforceLocalModel();
+	});
 }
 
 type HydrationGuard = () => boolean;

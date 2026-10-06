@@ -33,7 +33,6 @@
  *   bun run build:omp                                       # host arch → resources/omp
  *   bun run build:omp:x64                                   # Intel cross-build → resources/omp.x64
  *   bun scripts/build-bundled-omp.ts --target bun-darwin-x64 --out custom/path
- *   bun scripts/build-bundled-omp.ts --target bun-windows-x64-baseline # → resources/omp.exe
  *
  * After upgrading the monorepo (upstream sync), run scripts/sync-upstream.sh
  * instead — it merges upstream and re-runs this end-to-end.
@@ -124,20 +123,18 @@ function resolveTarget(): SidecarTarget {
 		const platformTag = `${process.platform}-${process.arch}`;
 		return {
 			platformTag,
-			out: path.join(guiRoot, "resources", process.platform === "win32" ? "omp.exe" : "omp"),
+			out: path.join(guiRoot, "resources", "omp"),
 			addonFilenames: addonFilenamesFor(platformTag),
 		};
 	}
-	const match = /^bun-(darwin|linux|win32|windows)-(arm64|x64)(?:-.*)?$/.exec(targetFlag);
+	const match = /^bun-(darwin|linux)-(arm64|x64)(?:-.*)?$/.exec(targetFlag);
 	if (!match) {
-		throw new Error(
-			`Unsupported --target '${targetFlag}'. Expected bun-<os>-<arch> (e.g. bun-windows-x64-baseline).`,
-		);
+		throw new Error(`Unsupported --target '${targetFlag}'. Expected bun-<darwin|linux>-<arch> (e.g. bun-linux-x64).`);
 	}
-	const osName = match[1] === "windows" ? "win32" : match[1]!;
+	const osName = match[1]!;
 	const arch = match[2]!;
 	const platformTag = `${osName}-${arch}`;
-	const bunTarget = targetFlag.replace("bun-win32-", "bun-windows-") as Bun.Build.CompileTarget;
+	const bunTarget = targetFlag as Bun.Build.CompileTarget;
 	return {
 		target: bunTarget,
 		platformTag,

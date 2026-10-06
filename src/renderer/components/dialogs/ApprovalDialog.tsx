@@ -10,12 +10,20 @@
 import { ShieldAlert, ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 import type { ExtensionUIRequest } from "../../../shared/rpc-types";
+import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { Badge, type BadgeVariant, Button, Modal } from "../common";
 
 const APPROVAL_TITLE_PREFIX = "Allow tool: ";
 const REASON_PREFIX = "Reason: ";
 const PATH_PREFIX = "Path: ";
+const CONTENT_LINE = "Content:";
+/** The marker omp appends to a value it cut at 2000 characters (`truncateForPrompt`). */
+const ELIDED_MARKER = /\[…\d+ch elided…\]$/;
+/** C0/C1 controls and the Unicode line and paragraph separators. */
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+/** Spaces omp rewrites to an ASCII space before resolving a path (`normalizeUnicodeSpaces`). */
+const UNICODE_SPACE = /[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]/;
 
 type ApprovalSelect = Extract<ExtensionUIRequest, { method: "select" }>;
 
@@ -108,18 +116,79 @@ export function normalizePosixPath(path: string): string {
 	return absolute ? `/${joined}` : joined || ".";
 }
 
+/** Where a pack session resolves relative and `~` paths. */
+export interface WriteLocation {
+	/** The session's working folder; empty when unknown. */
+	cwd: string;
+	/** The user's home folder; empty when unknown. */
+	homeDir: string;
+}
+
+/**
+ * Resolves a path the way omp's `resolveToCwd` does for the shapes a model
+ * writes (`expandPath` in `tools/path-utils.ts`): a stray leading `:`, an `@`
+ * before `/` or `~`, `~` for the home folder, and relative paths against the
+ * session folder. Any other shape omp rewrites (URLs, hashline wrappers,
+ * Unicode spaces, Windows forms) returns null, as does a path that needs a
+ * folder the renderer does not know.
+ */
+function resolveLikeAgent(raw: string, where: WriteLocation): string | null {
+	let path = /^:(?=[/~]|\.\.?\/)/.test(raw) ? raw.slice(1) : raw;
+	if (path.startsWith("@")) {
+		const rest = path.slice(1);
+		if (rest.startsWith("/") || rest === "~" || rest.startsWith("~/")) path = rest;
+	}
+	if (path === "" || /^\/+$/.test(path) || path.startsWith("[") || path.includes("://") || path.includes("\\")) {
+		return null;
+	}
+	if (UNICODE_SPACE.test(path)) return null;
+	if (path.startsWith("~")) {
+		if (!where.homeDir.startsWith("/")) return null;
+		// `~` alone, `~/x`, and `~x` (joined under the home folder, as omp does).
+		path = path === "~" ? where.homeDir : `${where.homeDir}/${path.slice(path.startsWith("~/") ? 2 : 1)}`;
+	}
+	if (!path.startsWith("/")) {
+		if (!where.cwd.startsWith("/")) return null;
+		path = `${where.cwd}/${path}`;
+	}
+	return normalizePosixPath(path);
+}
+
+/**
+ * The absolute file a `write` request saves to, or null when the request
+ * cannot be read without doubt: omp prints `Path: <path>` then `Content:`
+ * (`formatApprovalDetails` in `tools/write.ts`), so a path that spans lines,
+ * hides a second `Content:` line, holds a control character or was cut short
+ * could make a one-line reading name the wrong file.
+ */
+export function resolveWritePath(details: string, where: WriteLocation): string | null {
+	const lines = details.split("\n");
+	const pathLine = lines.findIndex(line => line.startsWith(PATH_PREFIX));
+	if (pathLine === -1 || lines[pathLine + 1] !== CONTENT_LINE) return null;
+	if (lines.filter(line => line === CONTENT_LINE).length !== 1) return null;
+	const raw = lines[pathLine].slice(PATH_PREFIX.length);
+	if (CONTROL_CHARACTER.test(raw) || ELIDED_MARKER.test(raw)) return null;
+	return resolveLikeAgent(raw, where);
+}
+
+type Translate = (key: string, params?: Record<string, string>) => string;
+
 function approvalSentence(
 	parsed: ParsedApprovalTitle,
 	toolName: string,
-	t: (key: string, params?: Record<string, string>) => string,
-): string {
+	where: WriteLocation,
+	t: Translate,
+): { text: string; warning: boolean } {
 	const reason = parsed.reason?.trim();
-	if (REASON_TOOLS.has(parsed.toolName) && reason) return reason;
-	if (parsed.toolName === "write" && parsed.path?.trim()) {
-		return t("approval.sentence.write", { path: normalizePosixPath(parsed.path.trim()) });
+	if (REASON_TOOLS.has(parsed.toolName) && reason) return { text: reason, warning: false };
+	if (parsed.toolName === "write") {
+		const path = resolveWritePath(parsed.details, where);
+		return path
+			? { text: t("approval.sentence.write", { path }), warning: false }
+			: { text: t("approval.sentence.writeUnclear"), warning: true };
 	}
 	const actionKey = OFFICE_ACTION_KEYS[parsed.toolName];
-	return t("approval.sentence.generic", { action: actionKey ? t(actionKey) : toolName });
+	return { text: t("approval.sentence.generic", { action: actionKey ? t(actionKey) : toolName }), warning: false };
 }
 
 /** Tier badge: read=green, write=yellow, exec=red (default tier is exec). */
@@ -131,15 +200,20 @@ function tierFor(toolName: string): { key: string; variant: BadgeVariant } {
 
 export function ApprovalDialog({
 	request,
+	cwd,
+	homeDir,
 	onRespond,
 }: {
 	request: ApprovalSelect;
+	/** The session's working folder, which relative paths resolve against. */
+	cwd: string;
+	homeDir: string;
 	onRespond: (response: ApprovalResponse) => void;
 }) {
 	const t = useT();
 	const parsed = useMemo(() => parseApprovalTitle(request.title), [request.title]);
 	const toolName = parsed.toolName || t("approval.unknownTool");
-	const sentence = approvalSentence(parsed, toolName, t);
+	const sentence = approvalSentence(parsed, toolName, { cwd, homeDir }, t);
 	const body = parsed.details.trim();
 
 	const tier = tierFor(toolName);
@@ -148,8 +222,15 @@ export function ApprovalDialog({
 	return (
 		<Modal onClose={deny} open size="md" title={t("approval.title")}>
 			<div className="flex flex-col">
-				<p data-approval-sentence className="text-omp-xl leading-relaxed text-(--omp-text) break-words">
-					{sentence}
+				<p
+					data-approval-sentence
+					data-approval-warning={sentence.warning ? "" : undefined}
+					className={cx(
+						"text-omp-xl leading-relaxed break-words",
+						sentence.warning ? "font-medium text-(--omp-error)" : "text-(--omp-text)",
+					)}
+				>
+					{sentence.text}
 				</p>
 				<div className="mt-3 flex items-center gap-2.5">
 					<ShieldAlert className="shrink-0 text-(--omp-warning)" size={16} />
@@ -159,7 +240,10 @@ export function ApprovalDialog({
 					</Badge>
 				</div>
 				{body ? (
-					<details className="mt-2 rounded-md border border-(--omp-border-muted) bg-(--omp-code-bg)">
+					<details
+						open={sentence.warning}
+						className="mt-2 rounded-md border border-(--omp-border-muted) bg-(--omp-code-bg)"
+					>
 						<summary className="cursor-pointer px-3 py-1.5 text-omp-sm text-(--omp-dim) hover:text-(--omp-text)">
 							{t("approval.details")}
 						</summary>

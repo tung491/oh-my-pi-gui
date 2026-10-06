@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	ATTACH_FILTERS,
 	appendDocumentPaths,
+	isPromptSafePath,
 	quotePromptPath,
 	readImageAttachment,
 	splitAttachments,
@@ -55,5 +56,19 @@ describe("attach any document", () => {
 		expect(appendDocumentPaths("", ["/a/y.docx", "/a/z.pdf"])).toBe("'/a/y.docx'\n'/a/z.pdf'");
 		expect(appendDocumentPaths("hi", [])).toBe("hi");
 		expect(quotePromptPath("/a/b c.md")).toBe("'/a/b c.md'");
+	});
+
+	it("quotes a path so its own quote marks cannot end the quoting", () => {
+		expect(quotePromptPath("/home/u/Bob's notes.docx")).toBe(`"/home/u/Bob's notes.docx"`);
+		expect(quotePromptPath('/home/u/the "final" plan.md')).toBe(`'/home/u/the "final" plan.md'`);
+		expect(quotePromptPath(`/home/u/Bob's "final" \\ plan.md`)).toBe(`"/home/u/Bob's \\"final\\" \\\\ plan.md"`);
+	});
+
+	it("refuses a path with a line break or another control character", () => {
+		expect(isPromptSafePath("/home/u/Bob's notes.docx")).toBe(true);
+		expect(isPromptSafePath("/home/u/notes\nx.docx")).toBe(false);
+		expect(isPromptSafePath("/home/u/notes\rx.docx")).toBe(false);
+		expect(isPromptSafePath("/home/u/notes\u0007x.docx")).toBe(false);
+		expect(isPromptSafePath("/home/u/notes\u2028x.docx")).toBe(false);
 	});
 });

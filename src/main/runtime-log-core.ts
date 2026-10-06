@@ -22,6 +22,7 @@ const RUNTIME_ERROR_SOURCES = new Set<RuntimeErrorSource>([
 	"renderer-unresponsive",
 	"application-resources",
 	"child-process",
+	"sidecar-restart",
 	"main-uncaught",
 	"main-unhandled-rejection",
 	"global-shortcut",

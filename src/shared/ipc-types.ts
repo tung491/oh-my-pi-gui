@@ -249,6 +249,7 @@ export type RuntimeErrorSource =
 	| "renderer-unresponsive"
 	| "application-resources"
 	| "child-process"
+	| "sidecar-restart"
 	| "main-uncaught"
 	| "main-unhandled-rejection"
 	| "global-shortcut"
@@ -944,6 +945,8 @@ export interface LogBatch {
 export interface OmpApi {
 	/** process.platform of the host; drives the keyboard layout (Ctrl vs ⌘). */
 	readonly platform: string;
+	/** The user's home folder, as the sidecar expands `~`; empty when the shell could not tell. */
+	readonly homeDir: string;
 	runtime: {
 		/** Best-effort fire-and-forget reporting so fatal render paths never wait on IPC. */
 		report(error: RuntimeErrorReport): void;

@@ -54,6 +54,16 @@ describe("runtime crash log", () => {
 		expect(report.details).toEqual({ kept: 3 });
 	});
 
+	it("keeps sidecar crash reports under their own listed source", () => {
+		const report = normalizeRuntimeErrorReport({
+			source: "sidecar-restart",
+			message: "omp exited with code 1",
+			details: { attempt: 1, maxAttempts: 3, stderr: "boom" },
+		});
+		expect(report.source).toBe("sidecar-restart");
+		expect(report.details).toEqual({ attempt: 1, maxAttempts: 3, stderr: "boom" });
+	});
+
 	it("preserves packaged resource replacement reports", () => {
 		const report = normalizeRuntimeErrorReport({
 			source: "application-resources",

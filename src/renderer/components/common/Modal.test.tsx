@@ -102,6 +102,8 @@ describe("Modal", () => {
 		const respond = vi.fn();
 		await mount(
 			<ApprovalDialog
+				cwd="/home/u"
+				homeDir="/home/u"
 				request={{
 					type: "extension_ui_request",
 					id: "approval",

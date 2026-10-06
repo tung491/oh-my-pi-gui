@@ -4,6 +4,14 @@ temperature: 0.2
 # Never resume the folder's newest session on a sessionless start: it could be an old chat or
 # coding session the pack cannot run.
 autoResume: false
+# Local models only: no online provider, no Ollama cloud model, and only an endpoint on this
+# computer (needs the sidecar's modelPolicy patch, patches/omp/0003-model-policy-local-only.patch).
+modelPolicy:
+  providers: [ollama]
+  localOnly: true
+# No memory backend: Hindsight would send the conversation to a remote service.
+memory:
+  backend: "off"
 # No bash tool is loaded: shellPath and bash.* are inert, kept as a deny-all guard
 # for any shell path omp still has.
 shellPath: /bin/sh

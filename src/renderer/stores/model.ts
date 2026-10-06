@@ -11,6 +11,7 @@ import type {
 	ThinkingLevel,
 } from "../../shared/rpc-types";
 import { translate } from "../lib/i18n";
+import { isLocalModel } from "../lib/ollama-cloud";
 import { activeTabCommand, createScopedStoreHook, type TabCommand } from "./session-runtime-context";
 import { toast } from "./toast";
 
@@ -46,6 +47,11 @@ export interface ModelStore {
 	/** Toggle fast mode via RPC and apply the returned {enabled, active} (fixes
 	 * call sites that fired setFastMode and ignored the response, desyncing the store). */
 	toggleFastMode: () => Promise<void>;
+	/** Refuse a session model that is not local (an online provider or an Ollama
+	 * cloud tag): show the refusal and switch the session back to the last local
+	 * model it had, else the first local catalog model. Call it wherever the
+	 * agent reports the session model. */
+	enforceLocalModel: () => Promise<void>;
 	reset: () => void;
 }
 
@@ -89,6 +95,10 @@ const initialState = {
 
 export const createModelStore = (command: TabCommand = activeTabCommand) =>
 	createStore<ModelStore>()((set, get) => {
+		/** The last local model the session ran, the one a refusal switches back to. */
+		let lastLocal: ModelInfo | null = null;
+		/** A switch back in flight, so repeated reports of the same refusal send one. */
+		let reverting: Promise<void> | null = null;
 		/** Commit one catalog read, dropping anything older than what is already applied. */
 		const applyCatalog = (snapshot: CatalogSnapshot): void => {
 			set(state =>
@@ -175,7 +185,42 @@ export const createModelStore = (command: TabCommand = activeTabCommand) =>
 					toast({ variant: "error", title: translate("model.fastMode"), message: res.error });
 				}
 			},
-			reset: () => set(initialState),
+			enforceLocalModel: () => {
+				const model = get().model;
+				if (!model) return Promise.resolve();
+				if (isLocalModel(model)) {
+					lastLocal = model;
+					return Promise.resolve();
+				}
+				if (reverting) return reverting;
+				toast({ variant: "warning", message: translate("model.localOnly.refused") });
+				const fallback = lastLocal ?? get().availableModels.find(isLocalModel);
+				if (!fallback) return Promise.resolve();
+				reverting = (async () => {
+					try {
+						const res = await command({ type: "set_model", provider: fallback.provider, modelId: fallback.id });
+						if (!res.success) throw new Error(res.error);
+						const live = res.data as Partial<ModelInfo> | undefined;
+						const switched =
+							typeof live?.provider === "string" && typeof live.id === "string" ? (live as ModelInfo) : fallback;
+						set({ model: switched });
+						if (isLocalModel(switched)) lastLocal = switched;
+					} catch (error) {
+						toast({
+							variant: "error",
+							title: translate("model.localOnly.switchBackFailed"),
+							message: error instanceof Error ? error.message : String(error),
+						});
+					} finally {
+						reverting = null;
+					}
+				})();
+				return reverting;
+			},
+			reset: () => {
+				lastLocal = null;
+				set(initialState);
+			},
 		};
 	});
 

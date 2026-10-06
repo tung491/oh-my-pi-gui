@@ -5,7 +5,9 @@
  * credential and models.yml changes never leave a process-lifetime cache.
  * Custom values stay allowed: the current value is pinned when it is not in
  * the fetched list, and the search text can be committed verbatim. Commits go
- * through the caller's setSetting flow.
+ * through the caller's setSetting flow. A model setting lists and accepts only
+ * local Ollama models (`ollama/<tag>`, no cloud tag): any other model would send
+ * conversations off the computer.
  */
 
 import { Check, ChevronDown, Search } from "lucide-react";
@@ -13,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AvailableModelsResult, ProvidersResult } from "../../../shared/rpc-types";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
+import { isLocalModel } from "../../lib/ollama-cloud";
 import { useModelStore } from "../../stores/model";
 import { Spinner } from "../common";
 
@@ -29,6 +32,12 @@ export function settingRefKind(path: string): SettingRefKind | null {
 	if (/model$/i.test(segment)) return "model";
 	if (/provider$/i.test(segment)) return "provider";
 	return null;
+}
+
+/** Whether a model setting value names a local Ollama model (`ollama/<tag>`, no cloud tag). */
+function isLocalModelValue(value: string): boolean {
+	const slash = value.indexOf("/");
+	return slash > 0 && isLocalModel({ provider: value.slice(0, slash), id: value.slice(slash + 1) });
 }
 
 interface SelectOption {
@@ -48,6 +57,7 @@ async function modelOptions(read: () => Promise<AvailableModelsResult>): Promise
 	const seen = new Set<string>();
 	const options: SelectOption[] = [];
 	for (const model of models) {
+		if (!isLocalModel(model)) continue;
 		const value = `${model.provider}/${model.id}`;
 		if (seen.has(value)) continue;
 		seen.add(value);
@@ -163,7 +173,11 @@ export function ModelValueSelect({ kind, value, disabled, onCommit, placeholder 
 		setOpen(true);
 	};
 
+	/** A value this dropdown may commit: anything for a provider setting, a local model for a model setting. */
+	const acceptable = (next: string) => kind !== "model" || isLocalModelValue(next);
+
 	const choose = (next: string) => {
+		if (next !== "" && !acceptable(next)) return;
 		setOpen(false);
 		setQuery("");
 		if (next !== value) onCommit(next);
@@ -185,7 +199,9 @@ export function ModelValueSelect({ kind, value, disabled, onCommit, placeholder 
 	const currentIsCustom = value !== "" && !options.some(option => option.value === value);
 	// The search text doubles as a custom-value entry when it is not an exact
 	// known option.
-	const queryIsCustom = trimmedQuery !== "" && !options.some(option => option.value.toLowerCase() === loweredQuery);
+	const queryIsKnown = options.some(option => option.value.toLowerCase() === loweredQuery);
+	const queryIsCustom = trimmedQuery !== "" && !queryIsKnown && acceptable(trimmedQuery);
+	const queryIsRefused = trimmedQuery !== "" && !queryIsKnown && !acceptable(trimmedQuery);
 
 	const noun = kind === "model" ? t("modelValue.noun.models") : t("modelValue.noun.providers");
 
@@ -289,11 +305,14 @@ export function ModelValueSelect({ kind, value, disabled, onCommit, placeholder 
 										<div className="px-2 pt-1 pb-0.5 text-omp-xxs font-semibold tracking-widest text-(--omp-dim) uppercase">
 											{t("modelValue.currentCustom")}
 										</div>
-										{renderOption({ value })}
+										{renderOption({ value, disabled: !acceptable(value) })}
 									</>
 								)}
 								{filtered.map(renderOption)}
-								{filtered.length === 0 && !queryIsCustom && (
+								{queryIsRefused && (
+									<div className="px-2 py-2 text-xs text-(--omp-warning)">{t("modelValue.localOnly")}</div>
+								)}
+								{filtered.length === 0 && !queryIsCustom && !queryIsRefused && (
 									<div className="px-2 py-6 text-center text-xs text-(--omp-dim)">
 										{options.length === 0
 											? t("modelValue.noneAvailable", { noun })
