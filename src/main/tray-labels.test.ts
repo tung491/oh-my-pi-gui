@@ -5,8 +5,9 @@
  * change nothing a user can read while still catching every change the menu
  * routes on — including a workspace entry whose path moved under a stable name.
  */
+import type { MenuItemConstructorOptions } from "electron";
 import { describe, expect, it } from "vitest";
-import type { TrayState } from "../shared/ipc-types";
+import type { MenuAction, MenuActionPayload, TrayState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 import {
 	aggregateTrayStatus,
@@ -14,6 +15,7 @@ import {
 	formatTokens,
 	menuSignature,
 	statusLabel,
+	trayMenuTemplate,
 	trayTooltip,
 } from "./tray-labels";
 
@@ -48,7 +50,7 @@ describe("tray status surface", () => {
 });
 
 describe("tray label mapping", () => {
-	it("maps each approval mode to one label shared by the header and the radios", () => {
+	it("maps each approval mode to the label the header shows", () => {
 		expect(approvalLabel("en", "yolo")).toBe("Full access");
 		expect(approvalLabel("en", "write")).toBe("Auto-edit");
 		expect(approvalLabel("en", "always-ask")).toBe("Ask every time");
@@ -116,5 +118,41 @@ describe("aggregateTrayStatus", () => {
 	it("is idle with nothing to aggregate", () => {
 		expect(aggregateTrayStatus([])).toBe("idle");
 		expect(aggregateTrayStatus([state()])).toBe("idle");
+	});
+});
+
+/** Every item of a menu, submenus included, depth first. */
+function flatten(items: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
+	return items.flatMap(item => [item, ...(Array.isArray(item.submenu) ? flatten(item.submenu) : [])]);
+}
+
+/** Click every item of the tray menu and record what reaches the renderer. */
+function trayActions(snapshot: TrayState | null): Array<{ action: MenuAction; payload?: MenuActionPayload }> {
+	const sent: Array<{ action: MenuAction; payload?: MenuActionPayload }> = [];
+	const template = trayMenuTemplate(snapshot, {
+		send: (action, payload) => sent.push(payload ? { action, payload } : { action }),
+		showHide: () => {},
+		quit: () => {},
+	});
+	for (const item of flatten(template)) item.click?.(undefined as never, undefined as never, undefined as never);
+	return sent;
+}
+
+describe("tray menu", () => {
+	it("tray offers no developer actions", () => {
+		const actions = [...trayActions(state()), ...trayActions(null)].map(sent => sent.action);
+		expect(actions).toContain("new-session");
+		for (const removed of ["open-usage", "open-project", "handoff"] as const) {
+			expect(actions).not.toContain(removed);
+		}
+	});
+
+	it("tray offers no approval choice", () => {
+		const actions = [...trayActions(state()), ...trayActions(null)].map(sent => sent.action);
+		expect(actions).not.toContain("set-approval");
+		const template = flatten(trayMenuTemplate(state(), { send: () => {}, showHide: () => {}, quit: () => {} }));
+		expect(template.some(item => item.type === "radio")).toBe(false);
+		const readOnly = template.find(item => item.label === "Fast Mode: — · Tool Approval: Auto-edit");
+		expect(readOnly?.enabled).toBe(false);
 	});
 });

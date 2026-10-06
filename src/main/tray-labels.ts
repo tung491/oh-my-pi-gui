@@ -1,11 +1,12 @@
 /**
- * Pure tray vocabulary: every string the native menu shows, plus the signature
- * that decides whether the menu has to be rebuilt. Lives outside `tray.ts`
- * because that module needs electron — the label mapping and the churn guard
- * are the parts worth testing.
+ * Pure tray vocabulary: every string the native menu shows, the menu template,
+ * and the signature that decides whether the menu has to be rebuilt. Lives
+ * outside `tray.ts` because that module needs electron — the label mapping, the
+ * offered actions and the churn guard are the parts worth testing.
  */
 
-import type { TrayState } from "../shared/ipc-types";
+import type { MenuItemConstructorOptions } from "electron";
+import type { MenuAction, MenuActionPayload, TrayState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 
 export type TrayStatus = TrayState["status"];
@@ -17,11 +18,7 @@ export const TRAY_LABELS = {
 	showHide: { vi: "Hiện / Ẩn", en: "Show / Hide" },
 	quit: { vi: "Thoát", en: "Quit" },
 	newSession: { vi: "Phiên mới", en: "New Session" },
-	openProject: { vi: "Mở dự án…", en: "Open Project…" },
-	handoff: { vi: "Bàn giao (Handoff)", en: "Handoff" },
-	usageStats: { vi: "Thống kê sử dụng…", en: "Usage Stats…" },
 	workspaces: { vi: "Chuyển không gian làm việc", en: "Switch Workspace" },
-	addWorkspace: { vi: "Thêm không gian làm việc…", en: "Add Workspace…" },
 	quickStart: { vi: "Khởi động nhanh", en: "Quick Start" },
 	quickConfig: { vi: "Cấu hình nhanh", en: "Quick Config" },
 	fastMode: { vi: "Chế độ nhanh", en: "Fast Mode" },
@@ -109,4 +106,86 @@ export function menuSignature(state: TrayState): string {
 		tokens,
 		workspaces,
 	].join("\u0002");
+}
+
+/** What the tray menu's clickable items do; `tray.ts` binds them to electron. */
+export interface TrayMenuHandlers {
+	/** Route an action to the renderer, which owns the RPC, i18n and UI stores. */
+	send(action: MenuAction, payload?: MenuActionPayload): void;
+	showHide(): void;
+	quit(): void;
+}
+
+/** The tray menu for a snapshot (or none, before the renderer pushed one). */
+export function trayMenuTemplate(state: TrayState | null, handlers: TrayMenuHandlers): MenuItemConstructorOptions[] {
+	const lang: TrayLang = state?.language === "en" ? "en" : "vi";
+	const template: MenuItemConstructorOptions[] = [];
+
+	// Header: app + current project + the aggregate run status. This is where
+	// status surfaces — the icon is a static template mark by design.
+	template.push({ label: trayTooltip(state), enabled: false }, { type: "separator" });
+
+	// Config info (read-only): model · thinking · fast · approval.
+	if (state) {
+		const model = state.modelId || t(lang, "noModel");
+		template.push({ label: `${model} · ${t(lang, "thinking")} ${state.thinkingLevel}`, enabled: false });
+		const fastLabel = `${t(lang, "fastMode")}: ${state.fastMode ? "✓" : "—"}`;
+		template.push({
+			label: `${fastLabel} · ${t(lang, "approval")}: ${approvalLabel(lang, state.approvalMode)}`,
+			enabled: false,
+		});
+		// Usage / token consumption (read-only). The percent is absent — never 0 —
+		// for a model whose context window Core does not know.
+		if (state.contextPercent !== null || state.contextTokens !== null) {
+			const share = state.contextPercent === null ? "—" : `${Math.round(state.contextPercent)}%`;
+			const tokens =
+				state.contextTokens !== null ? ` · ${formatTokens(state.contextTokens)} ${t(lang, "tokens")}` : "";
+			template.push({ label: `${t(lang, "context")}: ${share}${tokens}`, enabled: false });
+		}
+		template.push({ type: "separator" });
+	}
+
+	// Workspace jumping, when the renderer reports more than nothing.
+	const workspaceItems: MenuItemConstructorOptions[] = (state?.workspaces ?? []).map(ws => ({
+		label: `${ws.current ? "✓ " : ""}${ws.name}`,
+		enabled: !ws.current,
+		click: () => handlers.send("switch-project", { cwd: ws.cwd }),
+	}));
+	if (workspaceItems.length > 0) template.push({ label: t(lang, "workspaces"), submenu: workspaceItems });
+
+	// Quick start.
+	template.push({
+		label: t(lang, "quickStart"),
+		submenu: [{ label: t(lang, "newSession"), click: () => handlers.send("new-session") }],
+	});
+
+	// Quick config: fast toggle, thinking cycle, language. The approval mode is
+	// read-only here: every session runs the pack's always-ask policy.
+	template.push({
+		label: t(lang, "quickConfig"),
+		submenu: [
+			{
+				label: t(lang, "fastMode"),
+				type: "checkbox",
+				checked: state?.fastMode ?? false,
+				click: () => handlers.send("toggle-fast"),
+			},
+			{
+				label: `${t(lang, "thinking")}: ${state?.thinkingLevel ?? "off"}`,
+				click: () => handlers.send("cycle-thinking"),
+			},
+			{
+				label: `${t(lang, "language")}: ${lang === "vi" ? "Tiếng Việt" : "English"}`,
+				click: () => handlers.send("toggle-language"),
+			},
+		],
+	});
+
+	template.push(
+		{ type: "separator" },
+		{ label: t(lang, "showHide"), click: () => handlers.showHide() },
+		{ type: "separator" },
+		{ label: t(lang, "quit"), click: () => handlers.quit() },
+	);
+	return template;
 }

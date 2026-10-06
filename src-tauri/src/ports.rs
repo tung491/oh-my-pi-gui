@@ -454,6 +454,9 @@ pub type SidecarEvents = tokio::sync::mpsc::UnboundedReceiver<SidecarEvent>;
 /// the pool can be tested with fakes.
 pub trait SidecarHandle: Send + Sync {
     fn status(&self) -> SidecarStatus;
+    /// The last status reported, whole (message, restart progress, refusal), so a
+    /// window that subscribes after a push still shows it.
+    fn status_payload(&self) -> SidecarStatusPayload;
     fn cwd(&self) -> String;
     fn kind(&self) -> SessionKind;
     /// The agent's pid, once the supervisor has reported it.
@@ -509,8 +512,6 @@ pub trait OmpPort: Send + Sync {
     fn spawn_env(&self) -> BoxFuture<'_, HashMap<String, String>>;
     /// `$VISUAL` / `$EDITOR` from the login shell, if any.
     fn resolve_editor_command(&self) -> BoxFuture<'_, Option<String>>;
-    /// Stop the stats server and any benchmark run.
-    fn shutdown(&self) -> BoxFuture<'_, ()>;
 }
 
 // ---------------------------------------------------------------------------

@@ -29,8 +29,6 @@ import { SessionIndex } from "./session-index";
 import { shellSpawnEnv } from "./shell-env";
 import { SidecarManager } from "./sidecar";
 import { SidecarPool } from "./sidecar-pool";
-import { StatsClient } from "./stats-client";
-import { StatsServerManager } from "./stats-server";
 import { type PersistedTabLayout, sanitizePersistedTabLayouts } from "./tab-layout";
 import { createTray, destroyTray } from "./tray";
 import { setupUpdater } from "./updater";
@@ -230,9 +228,7 @@ async function resolveProxyEnvForSpawn(): Promise<Record<string, string>> {
 // Module-level instances (alive for app lifetime)
 let windowManager: WindowManager;
 let sidecarPool: SidecarPool;
-let statsServer: StatsServerManager | null = null;
 let sessionIndex: SessionIndex;
-let statsClient: StatsClient;
 let logWatcher: LogWatcher;
 let quickEntry: QuickEntryController | null = null;
 let quickEntryShortcut: QuickEntryShortcut | null = null;
@@ -385,6 +381,11 @@ app.whenReady().then(() => {
 					{ cwd: report.cwd },
 				);
 			},
+			// A refused start spawns nothing, so the tab's message is its only other trace.
+			// `child-process` is the listed source for the sidecar; any other is filed as `unknown`.
+			reportStartRefusal: report => {
+				writeRuntimeLog({ source: "child-process", message: report.message }, { cwd: report.cwd });
+			},
 		});
 		// Ready-health-check applies to every pooled sidecar, not just the first.
 		sc.on("status", ({ status }) => {
@@ -407,32 +408,14 @@ app.whenReady().then(() => {
 	// launch resurrects a window the user deliberately shut.
 	windowManager.subscribeWindowClosed(() => persistTabLayouts());
 	sessionIndex = new SessionIndex(undefined, initialCwd);
-	statsClient = new StatsClient();
-	// Built-in stats dashboard: spawned from the SAME bundled binary. No
-	// external `omp stats` process is required (closed loop). Not started here:
-	// it is a whole second runtime most sessions never read, so the first
-	// dashboard request spawns it through the STATS_FETCH revive path.
-	if (bundledOmp) {
-		statsServer = new StatsServerManager(bundledOmp);
-		statsServer.on("ready", (port: number) => {
-			statsClient.port = port;
-		});
-		statsServer.on("exit", () => {
-			statsClient.port = 0;
-		});
-	}
 	logWatcher = new LogWatcher();
 
 	// Register all handlers and sidecar listeners before loading the renderer.
 	registerIpcHandlers({
 		sidecarPool,
 		sessionIndex,
-		statsClient,
-		statsRestart: () => statsServer?.ensureRunning() ?? "exhausted",
 		logWatcher,
 		windowManager,
-		benchmarkBinaryPath: bundledOmp,
-		benchmarkEnv: async () => ({ ...process.env, ...(await shellSpawnEnv()), ...(await resolveProxyEnvForSpawn()) }),
 		spawnWindow,
 		initialCwd: resolveInitialCwd,
 	});
@@ -526,9 +509,6 @@ app.whenReady().then(() => {
 	createMenu(windowManager, spawnWindow);
 	setupDeepLinks(windowManager, spawnWindow, () => quickEntry?.showWhenSettled());
 	setupUpdater();
-
-	// Probe stats server (non-blocking)
-	statsClient.probe().catch(() => {});
 });
 
 // macOS: re-create window on dock click
@@ -550,7 +530,6 @@ app.on("window-all-closed", () => {
 installQuitGuard(
 	() => (sidecarPool ? sidecarPool.tabInventory() : []),
 	() => {
-		statsServer?.kill();
 		sidecarPool?.disposeAll();
 		sessionIndex?.stop();
 		logWatcher?.stop();

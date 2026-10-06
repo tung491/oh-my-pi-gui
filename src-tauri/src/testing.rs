@@ -183,6 +183,8 @@ pub struct FakeSidecar {
     pub log: CallLog,
     pub options: SidecarOptions,
     pub status: Mutex<SidecarStatus>,
+    /// The whole last status, when a test sets one; otherwise built from `status` and `cwd`.
+    pub status_payload: Mutex<Option<SidecarStatusPayload>>,
     pub cwd: Mutex<String>,
     pub pids: Mutex<(Option<u32>, Option<u32>)>,
     /// Scripted `request` answers in order; an empty list answers `{ "success": true }`.
@@ -199,6 +201,7 @@ impl FakeSidecar {
             log: CallLog::default(),
             options,
             status: Mutex::new(SidecarStatus::Asleep),
+            status_payload: Mutex::new(None),
             cwd: Mutex::new(cwd),
             pids: Mutex::new((None, None)),
             responses: Mutex::new(Vec::new()),
@@ -225,6 +228,10 @@ impl FakeSidecar {
 impl SidecarHandle for FakeSidecar {
     fn status(&self) -> SidecarStatus {
         *lock(&self.status)
+    }
+
+    fn status_payload(&self) -> SidecarStatusPayload {
+        lock(&self.status_payload).clone().unwrap_or_else(|| SidecarStatusPayload { status: self.status(), message: None, cwd: self.cwd(), restart: None, refusal: None })
     }
 
     fn cwd(&self) -> String {
@@ -352,11 +359,6 @@ impl OmpPort for FakeOmp {
     fn resolve_editor_command(&self) -> BoxFuture<'_, Option<String>> {
         self.log.record("resolve_editor_command()");
         ready(lock(&self.editor_command).clone())
-    }
-
-    fn shutdown(&self) -> BoxFuture<'_, ()> {
-        self.log.record("shutdown()");
-        ready(())
     }
 }
 

@@ -10,7 +10,7 @@ use crate::bridge::{IpcError, Reply};
 use crate::ctx::AppCtx;
 use crate::i18n::MainTextKey;
 use crate::paths;
-use crate::ports::{Caller, IpcTabViewSplit, OpenDialogOptions, SidecarHandle, SidecarStatus};
+use crate::ports::{Caller, IpcTabViewSplit, OpenDialogOptions, SidecarHandle, SidecarStatus, SidecarStatusPayload};
 
 use super::pool::UserExecGuard;
 use super::tab_spawn::{spawn_tab_for_window, SpawnTabDeps};
@@ -460,19 +460,26 @@ pub fn sidecar_default_workspace(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Va
     }
 }
 
-/// `sidecar:status-get`: the focused sidecar's status (`starting` before one binds) and the window's cwd.
+/// `sidecar:status-get`: the focused sidecar's last status, whole (`starting`
+/// before one binds), with the window's cwd. A page reads it as it subscribes,
+/// so a status pushed before it listened (a refused start) still reaches it.
 pub fn sidecar_status_get(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
     let _ = args;
-    let status = ctx.tabs.sidecar_for_window(caller.win_id).map_or(SidecarStatus::Starting, |sidecar| sidecar.status());
     let cwd = ctx.tabs.cwd_for(caller, None).unwrap_or_default();
-    Reply::ok(json!({ "status": status_name(status), "cwd": cwd }))
+    let Some(sidecar) = ctx.tabs.sidecar_for_window(caller.win_id) else {
+        return Reply::ok(json!({ "status": status_name(SidecarStatus::Starting), "cwd": cwd }));
+    };
+    match serde_json::to_value(SidecarStatusPayload { cwd, ..sidecar.status_payload() }) {
+        Ok(payload) => Reply::ok(payload),
+        Err(error) => Reply::err(IpcError::new(format!("sidecar status did not serialize: {error}"))),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::bridge::{dispatch_for_test, Registry};
-    use crate::ports::{AcquireOptions, SidecarError, SidecarEvent, TabStatus, WindowId, WindowRecord};
+    use crate::ports::{AcquireOptions, SidecarError, SidecarEvent, SidecarRefusal, TabStatus, WindowId, WindowRecord};
     use crate::tabs::Tabs;
     use futures_util::future::BoxFuture;
     use crate::testing::{fake_ctx_cyclic, FakeSidecar, Fakes, RecordingSink};
@@ -943,6 +950,25 @@ mod tests {
         assert_eq!(h.ok("sidecar:status-get", vec![]).await, json!({ "status": "starting", "cwd": "/window-cwd" }));
         h.ready_tab("/a", "tab-a");
         assert_eq!(h.ok("sidecar:status-get", vec![]).await, json!({ "status": "ready", "cwd": "/a" }));
+    }
+
+    #[tokio::test]
+    async fn the_status_query_replays_the_whole_last_status_to_a_late_subscriber() {
+        let h = harness();
+        let sidecar = h.tab("/a", "tab-a");
+        // The refusal was pushed before the page listened; the query is how it still arrives.
+        *sidecar.status.lock().unwrap() = SidecarStatus::Error;
+        *sidecar.status_payload.lock().unwrap() = Some(SidecarStatusPayload {
+            status: SidecarStatus::Error,
+            message: Some("The session file is stamped chat: /s/old.jsonl".into()),
+            cwd: "/a".into(),
+            restart: None,
+            refusal: Some(SidecarRefusal::KindMismatch),
+        });
+        assert_eq!(
+            h.ok("sidecar:status-get", vec![]).await,
+            json!({ "status": "error", "message": "The session file is stamped chat: /s/old.jsonl", "cwd": "/a", "refusal": "kind-mismatch" })
+        );
     }
 
     #[tokio::test]

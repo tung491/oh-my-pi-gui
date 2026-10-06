@@ -44,7 +44,6 @@ test.beforeAll(async () => {
 		PI_PROFILE: "",
 		OMP_BUNDLED_OMP: fixture,
 		OMP_GUI_TEST_RECORD: record,
-		OMP_GUI_TEST_STATS_BINARY: path.resolve("resources/omp"),
 	};
 	Reflect.deleteProperty(env, "ELECTRON_RUN_AS_NODE");
 	app = await electron.launch({
@@ -430,20 +429,6 @@ test("narrow windows and 200 percent zoom keep settings and primary actions reac
 		win.webContents.setZoomFactor(1);
 		win.setSize(1400, 900);
 	});
-});
-
-test("model benchmark, collaboration, tools and debug open without external mutations", async () => {
-	for (const name of ["benchmark", "collab", "tools", "debug", "import"]) {
-		await command(`/${name}`);
-		const modal = page.getByRole("dialog");
-		await expect(modal).toBeVisible();
-		await expect.poll(() => modal.evaluate(node => node.contains(document.activeElement))).toBe(true);
-		await page.screenshot({ path: `test-results/03-${name}.png`, scale: "css", animations: "disabled" });
-		await page.keyboard.press("Escape");
-		await expect(modal).toHaveCount(0);
-	}
-	expect(await recorded("collab_join")).toHaveLength(0);
-	expect(errors).toEqual([]);
 });
 
 test("settings search opens advanced controls and old refreshes cannot undo a saved edit", async () => {

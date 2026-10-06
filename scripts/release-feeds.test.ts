@@ -25,7 +25,7 @@ function write(file: string, contents: string): void {
 }
 
 /** A Tauri bundle tree with the bundler's own names and distinct contents per file. */
-function bundles(): { linux: string; macArm64: string; macX64: string; windows: string } {
+function bundles(): { linux: string; macArm64: string; macX64: string } {
 	const linux = path.join(dir, "linux/bundle");
 	write(path.join(linux, `appimage/Sai ATLAS_${VERSION}_amd64.AppImage`), "appimage bytes");
 	write(path.join(linux, `deb/Sai ATLAS_${VERSION}_amd64.deb`), "deb bytes");
@@ -35,9 +35,7 @@ function bundles(): { linux: string; macArm64: string; macX64: string; windows: 
 	const macX64 = path.join(dir, "x64/bundle");
 	write(path.join(macX64, `dmg/Sai ATLAS_${VERSION}_x64.dmg`), "x64 dmg bytes");
 	write(path.join(macX64, `macos/Sai ATLAS_${VERSION}_x64.zip`), "x64 zip bytes");
-	const windows = path.join(dir, "win/bundle");
-	write(path.join(windows, `nsis/Sai ATLAS_${VERSION}_x64-setup.exe`), "nsis bytes");
-	return { linux, macArm64, macX64, windows };
+	return { linux, macArm64, macX64 };
 }
 
 function feed(out: string, name: string): Feed {
@@ -67,23 +65,20 @@ describe("release feeds", () => {
 				"Sai-ATLAS-1.2.3.zip",
 				"omp-1.2.3-arm64.dmg",
 				"omp-1.2.3.dmg",
-				"Sai-ATLAS-1.2.3-setup.exe",
 				"latest-linux.yml",
 				"latest-mac.yml",
-				"latest.yml",
 			].sort(),
 		);
 		expect(readFileSync(path.join(out, names.deb), "utf8")).toBe("deb bytes");
 		expect(readFileSync(path.join(out, names.macX64Zip), "utf8")).toBe("x64 zip bytes");
 		expect(feed(out, "latest-linux.yml").files.map(file => file.url)).toEqual([names.appImage, names.deb]);
-		expect(feed(out, "latest.yml").files.map(file => file.url)).toEqual([names.windowsSetup]);
 		expect(feed(out, "latest-linux.yml").version).toBe(VERSION);
 	});
 
 	it("writes sha512 that matches the file", async () => {
 		const out = path.join(dir, "out");
 		await buildRelease({ version: VERSION, outDir: out, ...bundles() });
-		for (const name of ["latest-linux.yml", "latest-mac.yml", "latest.yml"]) {
+		for (const name of ["latest-linux.yml", "latest-mac.yml"]) {
 			const document = feed(out, name);
 			for (const file of document.files) {
 				const bytes = readFileSync(path.join(out, file.url));
@@ -135,26 +130,21 @@ describe("release feeds", () => {
 		expect(sha(names.bridgeX64Dmg)).toBe(sha(names.macX64Dmg));
 	});
 
-	it("merges the Electron macOS and Windows feeds unchanged while those builds still ship", async () => {
+	it("merges the Electron macOS feed unchanged while that build still ships", async () => {
 		const out = path.join(dir, "out");
 		const electron = path.join(dir, "electron");
 		const macFeed = `version: ${VERSION}\nfiles:\n  - url: Sai-ATLAS-${VERSION}-arm64.dmg\n    sha512: abc\n    size: 3\nminimumSystemVersion: 22.0.0\npath: Sai-ATLAS-${VERSION}-arm64.dmg\nsha512: abc\nreleaseDate: '2026-10-01T00:00:00.000Z'\n`;
-		const winFeed = `version: ${VERSION}\nfiles:\n  - url: Sai-ATLAS-${VERSION}-setup.exe\n    sha512: def\n    size: 3\npath: Sai-ATLAS-${VERSION}-setup.exe\nsha512: def\nreleaseDate: '2026-10-01T00:00:00.000Z'\n`;
 		write(path.join(electron, "latest-mac.yml"), macFeed);
 		write(path.join(electron, `Sai-ATLAS-${VERSION}-arm64.dmg`), "dmg");
-		write(path.join(electron, "latest.yml"), winFeed);
-		write(path.join(electron, `Sai-ATLAS-${VERSION}-setup.exe`), "exe");
 		const { linux } = bundles();
 		await buildRelease({
 			version: VERSION,
 			outDir: out,
 			linux,
 			electronMacFeed: path.join(electron, "latest-mac.yml"),
-			electronWindowsFeed: path.join(electron, "latest.yml"),
 		});
 		expect(readFileSync(path.join(out, "latest-mac.yml"), "utf8")).toBe(macFeed);
-		expect(readFileSync(path.join(out, "latest.yml"), "utf8")).toBe(winFeed);
-		expect(readFileSync(path.join(out, `Sai-ATLAS-${VERSION}-setup.exe`), "utf8")).toBe("exe");
+		expect(readFileSync(path.join(out, `Sai-ATLAS-${VERSION}-arm64.dmg`), "utf8")).toBe("dmg");
 		// An Electron feed below the macOS floor is refused, not published.
 		write(path.join(electron, "latest-mac.yml"), macFeed.replace("minimumSystemVersion: 22.0.0\n", ""));
 		await expect(

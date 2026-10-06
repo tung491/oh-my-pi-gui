@@ -16,13 +16,11 @@
     "package:tauri:linux": "bun run build:pack && bun scripts/stage-tauri-sidecar.ts x86_64-unknown-linux-gnu && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target x86_64-unknown-linux-gnu --config src-tauri/linux/sidecar.conf.json' && bun src-tauri/linux/finalize-deb.ts src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb && bun src-tauri/linux/finalize-appimage.ts src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage",
     "package:tauri:mac:arm64": "bun scripts/stage-tauri-sidecar.ts aarch64-apple-darwin && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target aarch64-apple-darwin --config src-tauri/macos/sidecar.conf.json'",
     "package:tauri:mac:x64": "bun scripts/stage-tauri-sidecar.ts x86_64-apple-darwin && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target x86_64-apple-darwin --config src-tauri/macos/sidecar.conf.json'",
-    "package:tauri:win": "bun scripts/stage-tauri-sidecar.ts x86_64-pc-windows-msvc && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target x86_64-pc-windows-msvc --config src-tauri/windows/sidecar.conf.json'",
     "preview": "electron-vite preview",
     "package": "bun run build:pack && bun run build && electron-builder",
     "package:mac": "bun run build:pack && bun run build && electron-builder --mac",
     "package:mac:arm64": "bun run build:pack && bun run build && electron-builder --mac --arm64",
     "package:mac:x64": "bun run build:pack && bun run build && electron-builder --config electron-builder.x64.yml --mac --x64",
-    "package:win": "bun run build && electron-builder --config electron-builder.win.yml --win --x64",
     "package:linux": "bash scripts/tauri-linux-build.sh",
     "gen:types": "bun scripts/gen-types.ts",
     "gen:icons": "bun scripts/gen-icons.ts",
@@ -43,9 +41,7 @@
     "test:e2e:tauri": "wdio run wdio.conf.ts",
     "test:e2e:tauri:packaged": "wdio run wdio.packaged.conf.ts",
     "bench": "vitest bench",
-    "build:omp:win": "bun scripts/build-bundled-omp.ts --target bun-windows-x64-baseline",
-    "build:omp:linux": "bun scripts/build-bundled-omp.ts --target bun-linux-x64-baseline",
-    "package:win:dir": "bun run build && electron-builder --config electron-builder.win.yml --win --x64 --dir"
+    "build:omp:linux": "bun scripts/build-bundled-omp.ts --target bun-linux-x64-baseline"
   },
   "dependencies": {
     "@codemirror/commands": "6.10.4",

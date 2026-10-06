@@ -1,7 +1,7 @@
 /**
- * System tray with a rich quick-access menu: live config info (model / thinking
- * / fast / approval), usage + token consumption, workspace jumping, quick-start
- * and quick-config actions, and a language toggle. The renderer pushes a
+ * System tray with a quick-access menu: live config info (model / thinking
+ * / fast / approval, read-only), token consumption, workspace jumping, a new
+ * session, quick-config toggles and a language toggle. The renderer pushes a
  * TrayState snapshot on every relevant change; main installs a new native menu
  * only when a visible label actually changes, and never while one is open.
  * Actions route back to the renderer via MENU_ACTION (it owns the RPC + i18n +
@@ -12,7 +12,7 @@ import { app, Menu, nativeImage, Tray } from "electron";
 import { IPC_EVENTS, type MenuAction, type MenuActionPayload, type TrayState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 import { trayIconBitmap } from "./app-icons";
-import { approvalLabel, formatTokens, menuSignature, type TrayLang, t, trayTooltip } from "./tray-labels";
+import { menuSignature, trayMenuTemplate, trayTooltip } from "./tray-labels";
 import type { SpawnWindow, WindowManager } from "./window";
 
 let tray: Tray | null = null;
@@ -55,111 +55,20 @@ function send(windowManager: WindowManager, action: MenuAction, payload?: MenuAc
 }
 
 function buildContextMenu(windowManager: WindowManager, state: TrayState | null): Electron.Menu {
-	const lang: TrayLang = state?.language === "en" ? "en" : "vi";
-	const template: Electron.MenuItemConstructorOptions[] = [];
-
-	// Header: app + current project + the aggregate run status. This is where
-	// status surfaces — the icon is a static template mark by design.
-	template.push({ label: trayTooltip(state), enabled: false }, { type: "separator" });
-
-	// Config info (read-only): model · thinking · fast · approval.
-	if (state) {
-		const model = state.modelId || t(lang, "noModel");
-		template.push({ label: `${model} · ${t(lang, "thinking")} ${state.thinkingLevel}`, enabled: false });
-		const fastLabel = `${t(lang, "fastMode")}: ${state.fastMode ? "✓" : "—"}`;
-		template.push({
-			label: `${fastLabel} · ${t(lang, "approval")}: ${approvalLabel(lang, state.approvalMode)}`,
-			enabled: false,
-		});
-		// Usage / token consumption (read-only). The percent is absent — never 0 —
-		// for a model whose context window Core does not know.
-		if (state.contextPercent !== null || state.contextTokens !== null) {
-			const share = state.contextPercent === null ? "—" : `${Math.round(state.contextPercent)}%`;
-			const tokens =
-				state.contextTokens !== null ? ` · ${formatTokens(state.contextTokens)} ${t(lang, "tokens")}` : "";
-			template.push({
-				label: `${t(lang, "context")}: ${share}${tokens}`,
-				enabled: false,
-			});
-		}
-		template.push({ type: "separator" });
-	}
-
-	// Usage stats window.
-	template.push(
-		{ label: t(lang, "usageStats"), click: () => send(windowManager, "open-usage") },
-		{ type: "separator" },
-	);
-
-	// Workspace jumping.
-	const workspaceItems: Electron.MenuItemConstructorOptions[] = (state?.workspaces ?? []).map(ws => ({
-		label: `${ws.current ? "✓ " : ""}${ws.name}`,
-		enabled: !ws.current,
-		click: () => send(windowManager, "switch-project", { cwd: ws.cwd }),
-	}));
-	if (workspaceItems.length > 0) workspaceItems.push({ type: "separator" });
-	workspaceItems.push({ label: t(lang, "addWorkspace"), click: () => send(windowManager, "open-project") });
-	template.push({ label: t(lang, "workspaces"), submenu: workspaceItems });
-
-	// Quick start.
-	template.push({
-		label: t(lang, "quickStart"),
-		submenu: [
-			{ label: t(lang, "newSession"), click: () => send(windowManager, "new-session") },
-			{ label: t(lang, "openProject"), click: () => send(windowManager, "open-project") },
-			{ label: t(lang, "handoff"), click: () => send(windowManager, "handoff") },
-		],
-	});
-
-	// Quick config: fast toggle, thinking cycle, approval radios, language.
-	template.push({
-		label: t(lang, "quickConfig"),
-		submenu: [
-			{
-				label: t(lang, "fastMode"),
-				type: "checkbox",
-				checked: state?.fastMode ?? false,
-				click: () => send(windowManager, "toggle-fast"),
-			},
-			{
-				label: `${t(lang, "thinking")}: ${state?.thinkingLevel ?? "off"}`,
-				click: () => send(windowManager, "cycle-thinking"),
-			},
-			{
-				label: t(lang, "approval"),
-				submenu: (["yolo", "write", "always-ask"] as const).map(mode => ({
-					label: approvalLabel(lang, mode),
-					type: "radio" as const,
-					checked: state?.approvalMode === mode,
-					click: () => send(windowManager, "set-approval", { approvalMode: mode }),
-				})),
-			},
-			{
-				label: `${t(lang, "language")}: ${lang === "vi" ? "Tiếng Việt" : "English"}`,
-				click: () => send(windowManager, "toggle-language"),
-			},
-		],
-	});
-
-	template.push({ type: "separator" });
-
-	// Show / Hide + Quit. Targets the focused window, not the first-created one,
-	// so the toggle acts on the window the user is looking at.
-	template.push(
-		{
-			label: t(lang, "showHide"),
-			click: () => {
+	return Menu.buildFromTemplate(
+		trayMenuTemplate(state, {
+			send: (action, payload) => send(windowManager, action, payload),
+			// Show / Hide targets the focused window, not the first-created one,
+			// so the toggle acts on the window the user is looking at.
+			showHide: () => {
 				const win = windowManager.getTargetWindow();
 				if (win?.isVisible()) win.hide();
 				else if (win) win.show();
 				else spawnWindowRef?.();
 			},
-		},
-		{ type: "separator" },
-		{ label: t(lang, "quit"), click: () => app.quit() },
+			quit: () => app.quit(),
+		}),
 	);
-
-	return Menu.buildFromTemplate(template);
 }
 
 /**

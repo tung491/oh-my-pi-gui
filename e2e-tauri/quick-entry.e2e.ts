@@ -12,10 +12,9 @@
  */
 
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { $, browser, expect } from "@wdio/globals";
 import type { IpcTabInfo } from "../src/shared/ipc-types";
-import { awaitMainWindow, type Launch, launch, ROOT, recorded, until } from "./session";
+import { awaitMainWindow, type Launch, launch, recorded, until } from "./session";
 import { quickEntryVisible, secondInstance } from "./test-hooks";
 
 /** The bar's content size (Phase 5's 680×168 window, no empty band below the input). */
@@ -81,7 +80,6 @@ describe("quick entry", () => {
 		app = await launch({
 			name: "quick-entry",
 			prefs: { firstRunComplete: true },
-			env: { OMP_GUI_TEST_STATS_BINARY: path.join(ROOT, "resources", "omp") },
 		});
 		await awaitMainWindow(browser);
 		main = await browser.getWindowHandle();

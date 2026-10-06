@@ -11,7 +11,6 @@ import {
 	launch,
 	nodeOf,
 	pageErrorLog,
-	ROOT,
 	recorded,
 	relaunch,
 	textOf,
@@ -100,7 +99,6 @@ describe("desktop", () => {
 		app = await launch({
 			name: "desktop",
 			prefs: { firstRunComplete: true },
-			env: { OMP_GUI_TEST_STATS_BINARY: path.join(ROOT, "resources", "omp") },
 		});
 		await awaitMainWindow(browser);
 		await collectPageErrors(browser);
@@ -562,28 +560,6 @@ describe("desktop", () => {
 		await setPageZoom(browser, 1);
 		await browser.setWindowSize(1400, 900);
 	}).timeout(90_000);
-
-	it("model benchmark, collaboration, tools and debug open without external mutations", async () => {
-		for (const name of ["benchmark", "collab", "tools", "debug", "import"]) {
-			await command(`/${name}`);
-			const modal = $(DIALOG);
-			await expect(modal).toBeDisplayed();
-			expect(
-				await until(
-					() =>
-						browser.execute(
-							() => document.querySelector('[role="dialog"]')?.contains(document.activeElement) ?? false,
-						),
-					focused => focused,
-				),
-			).toBe(true);
-			await browser.saveScreenshot(`test-results/03-${name}.png`);
-			await browser.keys("Escape");
-			await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
-		}
-		expect(await rpc("collab_join")).toHaveLength(0);
-		expect(await errors()).toEqual([]);
-	});
 
 	it("settings search opens advanced controls and old refreshes cannot undo a saved edit", async () => {
 		await (await byRole("button", { name: "Settings", exact: true })).click();

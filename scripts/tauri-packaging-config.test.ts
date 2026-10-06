@@ -49,7 +49,6 @@ interface TauriConfig {
 		externalBin?: string[];
 		resources?: Record<string, string> | string[];
 		macOS?: { minimumSystemVersion?: string; signingIdentity?: string; entitlements?: string };
-		windows?: { nsis?: { installMode?: string; installerHooks?: string } };
 		linux?: {
 			appimage?: { bundleMediaFramework?: boolean };
 			deb?: {
@@ -67,8 +66,8 @@ function readJson<T = Json>(relative: string): T {
 }
 
 const base = (): TauriConfig => readJson("src-tauri/tauri.conf.json");
-const platform = (os: "linux" | "macos" | "windows"): TauriConfig => readJson(`src-tauri/tauri.${os}.conf.json`);
-const overlay = (os: "linux" | "macos" | "windows"): TauriConfig => readJson(`src-tauri/${os}/sidecar.conf.json`);
+const platform = (os: "linux" | "macos"): TauriConfig => readJson(`src-tauri/tauri.${os}.conf.json`);
+const overlay = (os: "linux" | "macos"): TauriConfig => readJson(`src-tauri/${os}/sidecar.conf.json`);
 
 /** RFC 7396 merge, as tauri-cli applies the platform file and then each `--config` overlay. */
 function merge(target: Json, patch: Json): Json {
@@ -88,7 +87,7 @@ function merge(target: Json, patch: Json): Json {
 }
 
 /** The configuration a `package:tauri:*` build of `os` bundles with. */
-function bundled(os: "linux" | "macos" | "windows"): TauriConfig {
+function bundled(os: "linux" | "macos"): TauriConfig {
 	return merge(merge(base() as Json, platform(os) as Json), overlay(os) as Json) as TauriConfig;
 }
 
@@ -103,17 +102,13 @@ function filesUnder(directory: string): string[] {
 	});
 }
 
-/** Every packaging input: the four configs, the overlays and every file under the per-OS dirs. */
+/** Every packaging input: the three configs, the overlays and every file under the per-OS dirs. */
 function packagingFiles(): string[] {
 	return [
-		...[
-			"tauri.conf.json",
-			"tauri.linux.conf.json",
-			"tauri.macos.conf.json",
-			"tauri.windows.conf.json",
-			"Info.plist",
-		].map(name => path.join(TAURI, name)),
-		...["linux", "macos", "windows"].flatMap(dir => filesUnder(path.join(TAURI, dir))),
+		...["tauri.conf.json", "tauri.linux.conf.json", "tauri.macos.conf.json", "Info.plist"].map(name =>
+			path.join(TAURI, name),
+		),
+		...["linux", "macos"].flatMap(dir => filesUnder(path.join(TAURI, dir))),
 	];
 }
 
@@ -171,7 +166,6 @@ describe("product identity", () => {
 		expect(base().bundle?.active).toBe(true);
 		expect(platform("linux").bundle?.targets).toEqual(["appimage", "deb"]);
 		expect(platform("macos").bundle?.targets).toEqual(["dmg", "app"]);
-		expect(platform("windows").bundle?.targets).toEqual(["nsis"]);
 		expect(assetNames("1.0.0")).toMatchObject({
 			macArm64Dmg: "Sai-ATLAS-1.0.0-arm64.dmg",
 			macX64Dmg: "Sai-ATLAS-1.0.0.dmg",
@@ -188,11 +182,9 @@ describe("product identity", () => {
 });
 
 describe("sidecar placement", () => {
-	it("macOS and Windows configs ship binaries/omp as externalBin", () => {
+	it("the macOS config ships binaries/omp as externalBin", () => {
 		expect(bundled("macos").bundle?.externalBin).toEqual(["binaries/omp"]);
-		expect(bundled("windows").bundle?.externalBin).toEqual(["binaries/omp"]);
 		expect(bundled("macos").bundle?.resources).toBeUndefined();
-		expect(bundled("windows").bundle?.resources).toBeUndefined();
 	});
 
 	it("the Linux config ships the sidecar as the omp resource and sets no externalBin", () => {
@@ -210,7 +202,7 @@ describe("sidecar placement", () => {
 
 	it("tauri.conf.json and the platform configs declare no externalBin or resources, so cargo builds never need a staged sidecar", () => {
 		// tauri-build copies both at compile time and fails when the file is missing.
-		for (const config of [base(), platform("linux"), platform("macos"), platform("windows")]) {
+		for (const config of [base(), platform("linux"), platform("macos")]) {
 			expect(config.bundle?.externalBin).toBeUndefined();
 			expect(config.bundle?.resources).toBeUndefined();
 		}
@@ -221,7 +213,6 @@ describe("sidecar placement", () => {
 			"package:tauri:linux": ["x86_64-unknown-linux-gnu", "src-tauri/linux/sidecar.conf.json"],
 			"package:tauri:mac:arm64": ["aarch64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
 			"package:tauri:mac:x64": ["x86_64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
-			"package:tauri:win": ["x86_64-pc-windows-msvc", "src-tauri/windows/sidecar.conf.json"],
 		};
 		expect(
 			packageScripts()
@@ -276,7 +267,7 @@ describe("renderer security", () => {
 	});
 
 	it("no bundle or package script enables e2e-hooks", () => {
-		for (const os of ["linux", "macos", "windows"] as const)
+		for (const os of ["linux", "macos"] as const)
 			expect(bundled(os).build?.features ?? []).not.toContain("e2e-hooks");
 		for (const file of packagingFiles()) {
 			expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain("e2e-hooks");
@@ -474,19 +465,18 @@ describe("Linux package", () => {
 	});
 });
 
-describe("Windows installer", () => {
-	it("the NSIS hook names the old Electron GUID", () => {
-		const nsis = platform("windows").bundle?.windows?.nsis;
-		expect(nsis?.installMode).toBe("currentUser");
-		expect(nsis?.installerHooks).toBe("windows/hooks.nsh");
-		const hooks = fs.readFileSync(path.join(TAURI, "windows/hooks.nsh"), "utf8");
-		expect(hooks).toContain("!macro NSIS_HOOK_PREINSTALL");
-		expect(hooks).toContain(
-			"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\9d72fc94-91dd-54d1-8fda-3b6e5e8d23f2",
+describe("Windows", () => {
+	it("no windows build config remains", () => {
+		// Windows is not a target: no installer config, overlay or package script may bring it back.
+		for (const file of ["electron-builder.win.yml", "src-tauri/tauri.windows.conf.json", "src-tauri/windows"]) {
+			expect(fs.existsSync(path.join(ROOT, file)), file).toBe(false);
+		}
+		const electron: Record<string, unknown> = parseYaml(
+			fs.readFileSync(path.join(ROOT, "electron-builder.yml"), "utf8"),
 		);
-		expect(hooks).toMatch(/ReadRegStr \$R0 HKCU .*"QuietUninstallString"/);
-		expect(hooks).toMatch(/ReadRegStr \$R0 HKLM .*"QuietUninstallString"/);
-		expect(hooks).toContain("ExecWait");
+		expect(Object.keys(electron)).not.toContain("win");
+		expect(Object.keys(electron)).not.toContain("nsis");
+		expect(Object.keys(scripts()).filter(name => name.includes("win"))).toEqual([]);
 	});
 });
 

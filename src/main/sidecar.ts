@@ -99,6 +99,12 @@ const AGENT_EVENT_TYPES: Record<string, true> = {
 	collab_state: true,
 };
 
+/** A start refused before any spawn: no process runs, so nothing else logs it. */
+export interface SidecarStartRefusalReport {
+	message: string;
+	cwd: string;
+}
+
 export interface SidecarOptions {
 	binaryPath: string;
 	cwd: string;
@@ -121,6 +127,8 @@ export interface SidecarOptions {
 	 * A packaged build with its own binary passes none.
 	 */
 	packSearchFrom?: readonly string[];
+	/** Records a start refused for an install problem (missing binary or pack). */
+	reportStartRefusal?: (report: SidecarStartRefusalReport) => void;
 	/** The app language at spawn, handed to the pack's tools; `en` when absent. */
 	language?: () => AssistantPackLanguage;
 	/** When set, spawn the workspace source CLI via bun instead of the installed binary. */
@@ -246,6 +254,8 @@ export class SidecarManager extends EventEmitter {
 	 * "is a spawn already under way?" is answerable from this field alone.
 	 */
 	#status: SidecarStatus = "asleep";
+	/** The last status pushed, whole, for a window that subscribes after the push. */
+	#lastStatus: Omit<SidecarStatusPayload, "cwd"> = { status: "asleep" };
 	#options: SidecarOptions;
 	#proxyEnvVars: Record<string, string> = {};
 	#shellEnvVars: Record<string, string> = {};
@@ -269,6 +279,15 @@ export class SidecarManager extends EventEmitter {
 		return this.#options.cwd;
 	}
 
+	/**
+	 * The last status, whole (message, restart progress, refusal), in the
+	 * folder the sidecar runs in now. A page reads it as it subscribes, so a
+	 * status pushed before it listened (a refused start) still reaches it.
+	 */
+	get statusPayload(): SidecarStatusPayload {
+		return { ...this.#lastStatus, cwd: this.#options.cwd };
+	}
+
 	get rpcClient(): RpcClient | null {
 		return this.#rpcClient;
 	}
@@ -278,7 +297,7 @@ export class SidecarManager extends EventEmitter {
 		// Closed loop: only the bundled binary (or an explicit source override)
 		// may run. Missing it is an actionable error, never an external fallback.
 		if (!this.#options.binaryPath && !this.#options.sourceCli) {
-			this.#setStatus("error", missingSidecarMessage(!!this.#options.packaged, process.resourcesPath));
+			this.#refuseStart(missingSidecarMessage(!!this.#options.packaged, process.resourcesPath));
 			return;
 		}
 		// The session is only an assistant with the whole pack: omp skips a missing
@@ -286,7 +305,7 @@ export class SidecarManager extends EventEmitter {
 		const packDir = resolveAssistantPackDir(this.#options.binaryPath, this.#options.packSearchFrom);
 		const missingPackFile = missingAssistantPackFile(packDir);
 		if (missingPackFile) {
-			this.#setStatus("error", missingAssistantPackMessage(missingPackFile, !!this.#options.packaged));
+			this.#refuseStart(missingAssistantPackMessage(missingPackFile, !!this.#options.packaged));
 			return;
 		}
 		this.#packDir = packDir;
@@ -605,6 +624,12 @@ export class SidecarManager extends EventEmitter {
 		}, delay);
 	}
 
+	/** An install problem stops the start: the tab shows it, the runtime log keeps it. */
+	#refuseStart(message: string): void {
+		this.#setStatus("error", message);
+		this.#options.reportStartRefusal?.({ message, cwd: this.#options.cwd });
+	}
+
 	#setStatus(
 		status: SidecarStatus,
 		message?: string,
@@ -614,6 +639,12 @@ export class SidecarManager extends EventEmitter {
 		this.#status = status;
 		const payload: SidecarStatusPayload = { status, message, cwd: this.#options.cwd, restart };
 		if (refusal) payload.refusal = refusal;
+		this.#lastStatus = {
+			status,
+			...(message !== undefined && { message }),
+			...(restart && { restart }),
+			...(refusal && { refusal }),
+		};
 		this.emit("status", payload);
 	}
 

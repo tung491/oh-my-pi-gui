@@ -72,28 +72,6 @@ dmg:
       type: link
       path: /Applications
 
-win:
-  icon: resources/icon.ico
-  target:
-    - target: nsis
-      arch: [x64]
-    - target: portable
-      arch: [x64]
-
-nsis:
-  # UUIDv5 of the old appId sh.omp.gui in electron-builder's namespace, kept so
-  # the installer finds an existing omp install and upgrades it in place.
-  # Never change or remove it.
-  guid: 9d72fc94-91dd-54d1-8fda-3b6e5e8d23f2
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-  deleteAppDataOnUninstall: false
-  shortcutName: Sai ATLAS
-  artifactName: Sai-ATLAS-${version}-setup.${ext}
-
-portable:
-  artifactName: Sai-ATLAS-${version}-portable.${ext}
-
 # Linux packages build with Tauri in an Ubuntu 24.04 container (bun run package:linux).
 
 publish:

@@ -33,7 +33,7 @@ import {
 	waylandAppIds,
 	webProcesses,
 } from "./outside";
-import { byRole, fill, type LaunchOptions, launch, type PreparedLaunch, relaunch, until } from "./session";
+import { fill, type LaunchOptions, launch, type PreparedLaunch, relaunch, until } from "./session";
 
 const executablePath = process.env.OMP_GUI_TEST_APP;
 /** The quick-entry bar's content size; nothing else the app shows has it. */
@@ -362,27 +362,26 @@ describe("installed package", () => {
 				{ timeout: 30_000 },
 			),
 		).toBeGreaterThan(0);
-		// Session stats starts the dashboard server, the shell's other omp child.
-		await (await byRole("button", { name: "Session stats", exact: true })).click();
+		// A second task (the sidebar's "New task" button) runs its own sidecar beside the first.
+		await $("[data-sidebar-new-agent]").click();
 		expect(
 			await until(
-				() => below(" stats --host").length,
-				count => count > 0,
+				() => below("--mode rpc-ui").length,
+				count => count >= 2,
 				{ timeout: 30_000 },
 			),
-		).toBeGreaterThan(0);
+		).toBeGreaterThanOrEqual(2);
 		const sidecars = below("--mode rpc-ui");
 		const supervisors = below("--omp-supervise");
 		const tools = below("/usr/bin/sleep 600");
-		const statsServers = below(" stats --host");
 		expect(sidecars.length).toBeGreaterThan(0);
 		expect(supervisors.length).toBeGreaterThan(0);
 		process.kill(pid, "SIGKILL");
-		const survivors = () => [...sidecars, ...supervisors, ...tools, ...statsServers].filter(alive);
+		const survivors = () => [...sidecars, ...supervisors, ...tools].filter(alive);
 		expect(await until(survivors, left => left.length === 0, { timeout: 10_000, interval: 100 })).toEqual([]);
 		// The plan's pgrep checks, scoped to this profile's agent dir so another
 		// omp on the machine (the user's own app, another checkout) never counts.
-		for (const pattern of ["omp --mode rpc-ui", "--omp-supervise", "/usr/bin/sleep 600", "omp stats --host"]) {
+		for (const pattern of ["omp --mode rpc-ui", "--omp-supervise", "/usr/bin/sleep 600"]) {
 			const left = pgrepFull(pattern).filter(other => environOf(other).PI_CODING_AGENT_DIR === profile.launch.agent);
 			labelled(pattern, () => expect(left).toEqual([]));
 		}
