@@ -22,7 +22,8 @@
           "desktop-file-utils",
           "xdg-utils",
           "gstreamer1.0-plugins-good",
-          "gstreamer1.0-pipewire"
+          "gstreamer1.0-pipewire",
+          "libglib2.0-bin"
         ],
         "desktopTemplate": "linux/vn.io.vif.saiatlas.desktop",
         "files": {

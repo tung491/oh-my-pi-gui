@@ -332,11 +332,13 @@ describe("Linux package", () => {
 		// logs a failed omp:// registration (upgraders keep the handler 0.9.x registered);
 		// without gstreamer1.0-plugins-good dictation reports a failure (WebKit depends on it
 		// on Ubuntu anyway); gstreamer1.0-pipewire is unused by WebKit's capture.
+		// libglib2.0-bin ships gio: the assistant's open_item tool runs `gio launch` to open an app.
 		expect(recommends()).toEqual([
 			"desktop-file-utils",
 			"xdg-utils",
 			"gstreamer1.0-plugins-good",
 			"gstreamer1.0-pipewire",
+			"libglib2.0-bin",
 		]);
 		expect(recommends().join(", ")).toBe(DEB_RECOMMENDS);
 	});

@@ -71,7 +71,7 @@ export const TRAY_ALTERNATION = "libayatana-appindicator3-1 | libappindicator3-1
 export const DEB_DEPENDS = `bubblewrap, xdg-dbus-proxy, ${TRAY_ALTERNATION}, libwebkit2gtk-4.1-0, libgtk-3-0`;
 
 /** The finished package's Recommends: the configured `deb.recommends`, which the app runs without. */
-export const DEB_RECOMMENDS = "desktop-file-utils, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-pipewire";
+export const DEB_RECOMMENDS = "desktop-file-utils, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-pipewire, libglib2.0-bin";
 
 /** The only control-archive members the package may carry: no maintainer scripts, triggers or conffiles. */
 export const CONTROL_MEMBERS: readonly string[] = ["control", "md5sums"];
