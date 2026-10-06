@@ -90,8 +90,8 @@ afterEach(() => {
 });
 
 describe("quick-entry tab arguments", () => {
-	it("uses the existing new-chat, Work and workspace shapes", () => {
-		expect(quickEntryTabArgs({ kind: "chat" })).toEqual({ kind: "chat" });
+	it("opens a task tab for every target, a stored chat target included", () => {
+		expect(quickEntryTabArgs({ kind: "chat" })).toEqual({ kind: "agent", work: true });
 		expect(quickEntryTabArgs({ kind: "work" })).toEqual({ kind: "agent", work: true });
 		expect(quickEntryTabArgs({ kind: "workspace", cwd: "/w" })).toEqual({ kind: "agent", cwd: "/w" });
 	});

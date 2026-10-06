@@ -47,7 +47,6 @@ export function ModelPicker() {
 	const current = useModelStore(state => state.model);
 	const refreshAvailableModels = useModelStore(state => state.refreshAvailableModels);
 	const openProviders = useUiStore(state => state.openProviders);
-	const openModelRoles = useUiStore(state => state.openModelRoles);
 	// Live session usage: models whose window is smaller render with an
 	// over-context warning and compact-first on pick (TUI markOverContext parity).
 	const contextUsage = useSessionStore(state => state.contextUsage);
@@ -397,16 +396,6 @@ export function ModelPicker() {
 					data-model-picker-footer
 				>
 					<span className="min-w-0 flex-1 text-omp-sm text-(--omp-muted)">{t("modelPicker.footer.hint")}</span>
-					<Button
-						onClick={() => {
-							close();
-							openModelRoles();
-						}}
-						size="sm"
-						variant="ghost"
-					>
-						{t("modelPicker.footer.assignRoles")}
-					</Button>
 					<Button onClick={openOllama} size="sm" variant="secondary">
 						{t("modelPicker.openOllama")}
 					</Button>

@@ -30,7 +30,6 @@ import type {
 import { acceptsActiveTabEvents } from "../lib/tab-routing";
 import { useComposerStore } from "./composer";
 import { useExtensionUiStore } from "./extension-ui";
-import { useForkHandoffStore } from "./fork-handoff";
 import { useMessagesStore } from "./messages";
 import { useModelStore } from "./model";
 import { usePlanApprovalStore } from "./plan-approval";
@@ -230,8 +229,7 @@ function resetAll(): void {
 	usePlanApprovalStore.getState().clearProposal();
 	useExtensionUiStore.getState().clearAll();
 	useUiStore.getState().closeSessionOverlays();
-	useUiStore.getState().closeStatsDashboard();
-	useForkHandoffStore.getState().closeHandoffDialog();
+	useUiStore.getState().closeProviders();
 }
 
 afterEach(() => {
@@ -450,18 +448,16 @@ describe("tabs store switch", () => {
 	it("closes outgoing session overlays while keeping global windows open", async () => {
 		seedTabs();
 		useUiStore.getState().openSettings();
-		useUiStore.getState().openContextReport();
-		useUiStore.getState().openModes("goal");
-		useUiStore.getState().openStatsDashboard();
-		useForkHandoffStore.getState().openHandoffDialog();
+		useUiStore.getState().openSessionInfo();
+		useUiStore.getState().openRenameDialog();
+		useUiStore.getState().openProviders();
 
 		await useTabsStore.getState().switchTab("t1");
 
 		expect(useUiStore.getState().settingsOpen).toBe(false);
-		expect(useUiStore.getState().contextReportOpen).toBe(false);
-		expect(useUiStore.getState().modesOpen).toBe(false);
-		expect(useForkHandoffStore.getState().handoffDialogOpen).toBe(false);
-		expect(useUiStore.getState().statsDashboardOpen).toBe(true);
+		expect(useUiStore.getState().sessionInfoOpen).toBe(false);
+		expect(useUiStore.getState().renameDialogOpen).toBe(false);
+		expect(useUiStore.getState().providersOpen).toBe(true);
 	});
 
 	it("serializes rapid switches and hydrates only the latest visible tab", async () => {

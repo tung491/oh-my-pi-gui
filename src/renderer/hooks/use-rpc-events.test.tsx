@@ -5,7 +5,7 @@
  * retry) is otherwise indistinguishable from a dead UI. Covers the
  * useRpcEvents event wiring (which events arm/clear `awaitingModelSince`) and
  * the PendingModelRow elapsed-time rendering. Rendered with react-dom/client
- * into a linkedom document (same harness as ForkHandoffDialogs.test.tsx).
+ * into a linkedom document (same harness as ThinkingBlock.test.tsx).
  */
 
 import { parseHTML } from "linkedom";
@@ -924,40 +924,24 @@ describe("useRpcEvents non-transcript frames", () => {
 });
 
 describe("useRpcEvents mode-state sync", () => {
-	it("keeps live goal and loop updates when older hydration replies arrive later", async () => {
+	it("keeps a live goal update when an older hydration reply arrives later", async () => {
 		const { omp, emitBatch } = installMockOmp();
 		await mount(<RpcEventsProbe />);
 		await flush();
 		const goal = Promise.withResolvers<RpcResponse>();
-		const loop = Promise.withResolvers<RpcResponse>();
 		omp.rpc.getGoal.mockReturnValueOnce(goal.promise);
-		omp.rpc.getLoopMode.mockReturnValueOnce(loop.promise);
 		const hydration = hydrateSession();
 		await act(async () =>
-			emitBatch([
-				{ type: "goal_updated", goal: { objective: "new objective", status: "active" } },
-				{ type: "loop_mode_update", state: { enabled: true, state: "waiting", prompt: "new loop" } },
-			]),
+			emitBatch([{ type: "goal_updated", goal: { objective: "new objective", status: "active" } }]),
 		);
 		goal.resolve(success({ enabled: false }));
-		loop.resolve(success({ enabled: false, state: "off" }));
 		await act(async () => hydration);
 		expect(useSessionStore.getState().goal?.objective).toBe("new objective");
-		expect(useSessionStore.getState().loopMode).toMatchObject({ enabled: true, prompt: "new loop" });
 	});
 
-	it("hydrates loop, vibe, and project-scoped display settings into the active tab", async () => {
+	it("hydrates vibe and project-scoped display settings into the active tab", async () => {
 		const { omp } = installMockOmp();
-		// Loop/vibe aren't on the get_state wire — hydration must pull the
-		// dedicated RPCs so composer chips and footer badges are right at boot.
-		omp.rpc.getLoopMode.mockImplementation(async () =>
-			success({
-				enabled: true,
-				state: "running",
-				prompt: "keep going",
-				limit: { kind: "iterations", initial: 10, remaining: 7 },
-			}),
-		);
+		// Vibe isn't on the get_state wire — hydration must pull the dedicated RPC.
 		omp.rpc.getVibeMode.mockImplementation(async () => success({ enabled: true }));
 		omp.rpc.getSettings.mockImplementation(async () =>
 			success({
@@ -970,42 +954,9 @@ describe("useRpcEvents mode-state sync", () => {
 		await mount(<RpcEventsProbe />);
 		await flush();
 
-		expect(useSessionStore.getState().loopMode).toEqual({
-			enabled: true,
-			state: "running",
-			prompt: "keep going",
-			limit: { kind: "iterations", initial: 10, remaining: 7 },
-		});
 		expect(useSessionStore.getState().vibeModeEnabled).toBe(true);
 		expect(useSettingsStore.getState().showTokenUsage).toBe(false);
 		expect(useSettingsStore.getState().approvalMode).toBe("always-ask");
-	});
-
-	it("applies loop_mode_update frames to the session store, including disable", async () => {
-		const { emitBatch } = installMockOmp();
-		await mount(<RpcEventsProbe />);
-		await flush();
-		expect(useSessionStore.getState().loopMode).toEqual({ enabled: false, state: "off" });
-
-		await act(async () => {
-			emitBatch([
-				{
-					type: "loop_mode_update",
-					state: { enabled: true, state: "waiting", prompt: "poll the queue" },
-				},
-			]);
-		});
-		expect(useSessionStore.getState().loopMode).toEqual({
-			enabled: true,
-			state: "waiting",
-			prompt: "poll the queue",
-		});
-
-		// Auto-disable arrives as a frame too — the chip/badge must clear.
-		await act(async () => {
-			emitBatch([{ type: "loop_mode_update", state: { enabled: false, state: "off" } }]);
-		});
-		expect(useSessionStore.getState().loopMode).toEqual({ enabled: false, state: "off" });
 	});
 });
 

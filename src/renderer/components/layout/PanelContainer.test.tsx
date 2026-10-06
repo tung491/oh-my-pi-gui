@@ -1,7 +1,6 @@
 /**
- * PanelContainer chat filter: a tool-free chat tab renders only the files +
- * logs drawer tabs (diffs can't exist without tools); an agent tab also gets
- * diff. Todo/plan/agents/queue moved to the center dock — they must not
+ * PanelContainer drawer tabs: chat and agent tabs both render the files + logs
+ * drawer tabs. Todo/plan/agents/queue moved to the center dock — they must not
  * appear here. Same linkedom + react-dom harness as mode-visibility.test.tsx.
  */
 
@@ -101,36 +100,16 @@ function FileLinkHarness({ content = "[report](docs/report.md)" }: { content?: s
 	);
 }
 
-describe("PanelContainer chat tab filter", () => {
-	it("renders only files + logs tabs in a chat tab", async () => {
-		seedActiveTab("chat");
+describe("PanelContainer drawer tabs", () => {
+	it.each(["chat", "agent"] as const)("renders the files and logs tabs in a %s tab", async kind => {
+		seedActiveTab(kind);
 		useUiStore.setState({ panelTab: "files", panelVisible: true });
 		await mount(<PanelContainer />);
 
 		const labels = drawerTabLabels();
 		expect(labels).toContain("Files");
 		expect(labels).toContain("Logs");
-		// Diff is agent-only; todo/plan/agents/queue live in the center dock now.
 		expect(labels).not.toContain("Diff");
-	});
-
-	it("falls back to the files surface when the agent-only diff tab was selected before entering chat", async () => {
-		seedActiveTab("chat");
-		useUiStore.setState({ panelTab: "diff", panelVisible: true });
-		await mount(<PanelContainer />);
-
-		expect(document.querySelector('button[aria-label="Refresh file tree"]')).not.toBeNull();
-	});
-
-	it("renders all drawer tabs in an agent tab", async () => {
-		seedActiveTab("agent");
-		useUiStore.setState({ panelTab: "files", panelVisible: true });
-		await mount(<PanelContainer />);
-
-		const labels = drawerTabLabels();
-		for (const visible of ["Diff", "Files", "Logs"]) {
-			expect(labels).toContain(visible);
-		}
 		// The drawer's old live-execution tabs moved to the center dock.
 		for (const moved of ["Todo", "Plan", "Agents", "Queue"]) {
 			expect(labels).not.toContain(moved);
@@ -251,7 +230,6 @@ describe("PanelContainer chat tab filter", () => {
 			button.getAttribute("aria-pressed"),
 		]);
 		expect(tabs).toEqual([
-			["Diff", "false"],
 			["Files", "true"],
 			["Logs", "false"],
 		]);
@@ -260,35 +238,5 @@ describe("PanelContainer chat tab filter", () => {
 			close?.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
 		});
 		expect(useUiStore.getState().panelVisible).toBe(false);
-	});
-
-	it("groups the diff sources under one labelled control", async () => {
-		seedActiveTab("agent");
-		useUiStore.setState({ panelTab: "diff", panelVisible: true });
-		ompWindow.omp = {
-			rpc: {
-				getGitChanges: vi.fn(async () => ({
-					type: "response",
-					command: "get_git_changes",
-					success: true,
-					data: { isRepo: true, root: "/work", base: "main", files: [], truncated: false },
-				})),
-			},
-		};
-		await mount(<PanelContainer />);
-
-		const group = document.querySelector('[role="group"][aria-label="Diff source"]');
-		expect(group).not.toBeNull();
-		const modes = [...(group?.querySelectorAll("button") ?? [])].map(button => [
-			(button.textContent ?? "").trim(),
-			button.getAttribute("aria-pressed"),
-		]);
-		expect(modes).toEqual([
-			["Repository", "true"],
-			["Edit results", "false"],
-			["History", "false"],
-			["Artifacts", "false"],
-		]);
-		expect(document.querySelector('[role="alert"]')).toBeNull();
 	});
 });

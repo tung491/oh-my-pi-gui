@@ -87,9 +87,6 @@ afterEach(() => {
 		settingsOpen: false,
 		copySelectorOpen: false,
 		btwRequest: null,
-		collabOpen: false,
-		shareSessionOpen: false,
-		liveOpen: false,
 	});
 	useSessionStore.setState({ agentsPaused: false, agentsPausedAt: null });
 });
@@ -101,33 +98,8 @@ const guiOnly = (name: string): AvailableCommand => ({
 	textModeExecutable: false,
 });
 describe("planComposerSubmit", () => {
-	it("typed share still requires a desktop preview when Core can upload directly or discovery is pending", () => {
+	it("a text-capable side-question command opens its explicit start surface", () => {
 		const omp = installMockOmp();
-		for (const commands of [[{ ...guiOnly("share"), textModeExecutable: true }], []]) {
-			useUiStore.setState({ shareSessionOpen: false });
-			const submit = planComposerSubmit({
-				message: "/share",
-				images: [],
-				isStreaming: false,
-				mode: "prompt",
-				commands,
-			});
-			expect(submit.kind).toBe("handled");
-			expect(useUiStore.getState().shareSessionOpen).toBe(true);
-		}
-		expect(omp.rpc.prompt).not.toHaveBeenCalled();
-	});
-
-	it("text-capable voice and side-question commands open their explicit start surfaces", () => {
-		const omp = installMockOmp();
-		planComposerSubmit({
-			message: "/live",
-			images: [],
-			isStreaming: false,
-			mode: "prompt",
-			commands: [{ ...guiOnly("live"), textModeExecutable: true }],
-		});
-		expect(useUiStore.getState().liveOpen).toBe(true);
 		planComposerSubmit({
 			message: "/btw local question",
 			images: [],
@@ -290,21 +262,6 @@ describe("planComposerSubmit GUI-only routing", () => {
 		expect(omp.rpc.prompt).not.toHaveBeenCalled();
 	});
 
-	it("passes typed /guided-goal arguments to the native guided interview RPC", () => {
-		const omp = installMockOmp();
-		const submit = planComposerSubmit({
-			message: "/guided-goal ship reliable sync",
-			images: [],
-			isStreaming: false,
-			mode: "prompt",
-			commands: [guiOnly("guided-goal")],
-		});
-
-		expect(submit.kind).toBe("handled");
-		expect(omp.rpc.guidedGoal).toHaveBeenCalledWith("ship reliable sync");
-		expect(omp.rpc.prompt).not.toHaveBeenCalled();
-	});
-
 	it("toggles the process-wide pause gate from typed /pause", async () => {
 		const omp = installMockOmp();
 		const submit = planComposerSubmit({
@@ -402,21 +359,6 @@ describe("planComposerSubmit GUI-only routing", () => {
 		expect(omp.rpc.prompt).not.toHaveBeenCalled();
 	});
 
-	it("opens native live collaboration for typed /collab without leaking it to the model", () => {
-		const omp = installMockOmp();
-		const submit = planComposerSubmit({
-			message: "/collab",
-			images: [],
-			isStreaming: false,
-			mode: "prompt",
-			commands: [guiOnly("collab")],
-		});
-		expect(submit.kind).toBe("handled");
-		expect(useUiStore.getState().collabOpen).toBe(true);
-		expect(omp.rpc.collabStart).not.toHaveBeenCalled();
-		expect(omp.rpc.prompt).not.toHaveBeenCalled();
-	});
-
 	it("blocks an advertised non-text command until it has a native GUI affordance", () => {
 		const omp = installMockOmp();
 		const submit = planComposerSubmit({
@@ -425,6 +367,24 @@ describe("planComposerSubmit GUI-only routing", () => {
 			isStreaming: false,
 			mode: "prompt",
 			commands: [guiOnly("future-native")],
+		});
+		expect(submit.kind).toBe("blocked");
+		expect(omp.rpc.prompt).not.toHaveBeenCalled();
+		expect(useToastStore.getState().toasts.some(toast => toast.variant === "warning")).toBe(true);
+	});
+});
+
+describe("planComposerSubmit removed commands", () => {
+	it.each(["/share", "/collab x", "/mcp"])("blocks %s instead of handing it to the agent's own command", message => {
+		const omp = installMockOmp();
+		const name = message.slice(1).split(" ")[0] ?? "";
+		const submit = planComposerSubmit({
+			message,
+			images: [],
+			isStreaming: false,
+			mode: "prompt",
+			commands: [{ name, description: "x", source: "builtin", textModeExecutable: true }],
+			rpc: omp.rpc,
 		});
 		expect(submit.kind).toBe("blocked");
 		expect(omp.rpc.prompt).not.toHaveBeenCalled();

@@ -171,7 +171,7 @@ describe("HotkeysDialog", () => {
 		(window as unknown as { omp: { platform: string } }).omp = { platform: "linux" };
 		await mount();
 		const chords = displayedChords();
-		expect(chords).toContain("Ctrl+Shift+T / Shift+Super+T");
+		expect(chords).toContain("Ctrl+T / Super+T");
 		expect(chords).toContain("Ctrl+W / Super+W");
 		expect(chords).toContain("Ctrl+Shift+O");
 		expect(chords).toContain("Shift+Enter");
@@ -234,7 +234,7 @@ describe("HotkeysDialog", () => {
 		await mount();
 		const chords = displayedChords();
 		expect(chords).toContain("Ctrl+W / Win+W");
-		expect(chords).toContain("Ctrl+Shift+T / Shift+Win+T");
+		expect(chords).toContain("Ctrl+T / Win+T");
 		expect(chords.filter(chord => /Super|[⌘⌃⌥⇧]/.test(chord))).toEqual([]);
 	});
 });

@@ -1,25 +1,20 @@
 import {
-	ChevronRight,
 	CircleGauge,
 	Clock3,
 	Coins,
 	Database,
-	FolderOpen,
 	Gauge,
-	GitBranch,
 	Info,
 	MoreHorizontal,
 	PanelLeft,
 	PanelRight,
 	Search,
-	Share2,
-	Wrench,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { SessionStats } from "../../../shared/rpc-types";
 import { useSessionList } from "../../hooks/use-session-list";
 import { contextUsageView } from "../../lib/context-usage";
-import { basename, cx, formatCost, formatDuration, formatPercent, formatTokens } from "../../lib/format";
+import { cx, formatCost, formatDuration, formatPercent, formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
 import { onEscape } from "../../lib/keymap";
@@ -27,13 +22,11 @@ import { useTabRpc } from "../../lib/tab-rpc";
 import { useMessagesStore } from "../../stores/messages";
 import { type SessionStore, useSessionStore } from "../../stores/session";
 import { sessionRuntimeStore, useRuntimeTabId } from "../../stores/session-runtime-context";
-import { useActiveTabKind } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
 import { Badge, type BadgeVariant, Button, IconButton } from "../common";
 import { ContextMenu, type ContextMenuAnchor, type ContextMenuItem } from "../common/ContextMenu";
-import { WorkspaceDialog } from "../dialogs/WorkspaceDialog";
 import { sessionCacheHitPercent, sessionExecutionDurationMs } from "./session-metrics";
 
 /**
@@ -46,13 +39,11 @@ export function TitleBar() {
 	const tabId = useRuntimeTabId();
 	const sessionId = useSessionStore(s => s.sessionId);
 	const sessionName = useSessionStore(s => s.sessionName);
-	const cwd = useSessionStore(s => s.cwd);
 	const status = useSessionStore(s => s.status);
 	const isStreaming = useSessionStore(s => s.isStreaming);
 	const isCompacting = useSessionStore(s => s.isCompacting);
 	const statsPulse = useSessionStore(s => s.statsPulse);
 	const contextUsage = useSessionStore(s => s.contextUsage);
-	const isChat = useActiveTabKind() === "chat";
 
 	const planModeEnabled = useSessionStore(s => s.planModeEnabled);
 	const awaitingModelSince = useSessionStore(s => s.awaitingModelSince);
@@ -64,20 +55,10 @@ export function TitleBar() {
 	const panelVisible = useUiStore(s => s.panelVisible);
 	const togglePanel = useUiStore(s => s.togglePanel);
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
-	const openUsage = useUiStore(s => s.openUsage);
-	const openStatsDashboard = useUiStore(s => s.openStatsDashboard);
-	const openImportDialog = useUiStore(s => s.openImportDialog);
-	const openContextReport = useUiStore(s => s.openContextReport);
-	const openActiveTools = useUiStore(s => s.openActiveTools);
-	const openShareSession = useUiStore(s => s.openShareSession);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
-	const openBranchPicker = useUiStore(s => s.openBranchPicker);
-	const openSessionTree = useUiStore(s => s.openSessionTree);
 	const { sessions } = useSessionList("local");
-	const projectName = !isChat && cwd ? basename(cwd) : t("titlebar.openProject");
 
 	const [editingName, setEditingName] = useState(false);
-	const [workspaceOpen, setWorkspaceOpen] = useState(false);
 	const [actionsMenu, setActionsMenu] = useState<ContextMenuAnchor | null>(null);
 	const [draft, setDraft] = useState("");
 	const [stats, setStats] = useState<SessionStats | null>(null);
@@ -199,37 +180,6 @@ export function TitleBar() {
 
 	const actionMenuItems: ContextMenuItem[] = [
 		{
-			id: "import",
-			label: t("cmd.import"),
-			description: t("cmd.import.desc"),
-			icon: FolderOpen,
-			onSelect: () => {
-				setActionsMenu(null);
-				openImportDialog();
-			},
-		},
-		{
-			id: "branch",
-			label: t("cmd.branch"),
-			description: t("cmd.branch.desc"),
-			icon: GitBranch,
-			onSelect: () => {
-				setActionsMenu(null);
-				openBranchPicker();
-			},
-		},
-		{
-			id: "tree",
-			label: t("cmd.tree"),
-			description: t("cmd.tree.desc"),
-			disabled: isChat,
-			icon: GitBranch,
-			onSelect: () => {
-				setActionsMenu(null);
-				openSessionTree();
-			},
-		},
-		{
 			id: "session-info",
 			label: t("cmd.session"),
 			description: t("cmd.session.desc"),
@@ -237,56 +187,6 @@ export function TitleBar() {
 			onSelect: () => {
 				setActionsMenu(null);
 				openSessionInfo();
-			},
-		},
-		{
-			id: "share",
-			label: t("cmd.share"),
-			description: t("cmd.share.desc"),
-			icon: Share2,
-			onSelect: () => {
-				setActionsMenu(null);
-				openShareSession();
-			},
-		},
-		{
-			id: "context",
-			label: t("cmd.context"),
-			description: t("cmd.context.desc"),
-			icon: Gauge,
-			onSelect: () => {
-				setActionsMenu(null);
-				openContextReport();
-			},
-		},
-		{
-			id: "tools",
-			label: t("cmd.tools"),
-			description: t("cmd.tools.desc"),
-			icon: Wrench,
-			onSelect: () => {
-				setActionsMenu(null);
-				openActiveTools();
-			},
-		},
-		{
-			id: "usage",
-			label: t("cmd.usage"),
-			description: t("cmd.usage.desc"),
-			icon: Gauge,
-			onSelect: () => {
-				setActionsMenu(null);
-				openUsage();
-			},
-		},
-		{
-			id: "stats",
-			label: t("cmd.stats"),
-			description: t("cmd.stats.desc"),
-			icon: Database,
-			onSelect: () => {
-				setActionsMenu(null);
-				openStatsDashboard();
 			},
 		},
 	];
@@ -311,17 +211,6 @@ export function TitleBar() {
 			/>
 
 			<div className="omp-titlebar-identity no-drag flex min-w-0 items-center gap-1.5 overflow-hidden">
-				<button
-					className="omp-pressable flex min-w-0 max-w-48 items-center gap-2 truncate rounded-lg px-2 py-1.5 text-omp-lg font-medium text-(--omp-text-secondary) hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)] disabled:cursor-not-allowed disabled:text-[var(--omp-dim)]"
-					disabled={isStreaming}
-					onClick={() => setWorkspaceOpen(true)}
-					title={isStreaming ? t("titlebar.abortHint") : t("titlebar.openProject")}
-					type="button"
-				>
-					<FolderOpen className="shrink-0" size={15} />
-					<span className="truncate">{projectName}</span>
-				</button>
-				<ChevronRight size={14} className="text-[var(--omp-dim)]" />
 				{editingName ? (
 					<input
 						ref={nameInputRef}
@@ -441,7 +330,6 @@ export function TitleBar() {
 					items={actionMenuItems}
 				/>
 			)}
-			<WorkspaceDialog open={workspaceOpen} onClose={() => setWorkspaceOpen(false)} />
 		</header>
 	);
 }

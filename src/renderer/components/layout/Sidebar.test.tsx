@@ -1,7 +1,6 @@
 /**
- * Sidebar integration contracts: Code/Work modes, first-class global chats,
- * workspace group context menu (5 items), session row
- * context menu (6 items), pinned-first ordering, per-task busy gates, and
+ * Sidebar integration contracts: one task lane listing every session, session
+ * row context menu (6 items), pinned-first ordering, per-task busy gates, and
  * tab-first opening.
  * Same linkedom + react-dom harness as TabBar.test.tsx.
  */
@@ -211,8 +210,10 @@ function accessibleName(element: TestElement): string {
 	return visibleText(element as unknown as NameNode).trim();
 }
 
-function modeButtons(): TestElement[] {
-	return [...container.querySelectorAll('[aria-label="Choose workspace mode"] button')];
+function listedTitles(): string[] {
+	return [...container.querySelectorAll("[data-session-list] .omp-sidebar-session-row")].map(
+		element => element.textContent ?? "",
+	);
 }
 
 afterEach(async () => {
@@ -230,9 +231,7 @@ afterEach(async () => {
 		panelVisible: false,
 		sessionPickerOpen: false,
 		hotkeysOpen: false,
-		usageOpen: false,
 		providersOpen: false,
-		statsDashboardOpen: false,
 	});
 });
 
@@ -257,46 +256,21 @@ function SidebarWithRecency() {
 }
 
 describe("Sidebar menus and pinned ordering", () => {
-	it("lists the former titlebar actions below New session and collapses them as one menu", async () => {
+	it("lists the navigation below New task and collapses it as one menu", async () => {
 		installMockOmp(LIST);
 		seedStores();
 		await mount(<Sidebar />);
 
 		const navigation = container.querySelector("[data-sidebar-navigation]");
-		for (const label of [
-			"Commands",
-			"Start with what makes OMP different",
-			"Agent Hub",
-			"Ollama",
-			"Usage & quotas",
-			"Session stats",
-			"PR Center",
-			"Open workspace",
-			"Keyboard shortcuts",
-			"Settings",
-		]) {
+		for (const label of ["Commands", "Ollama", "Settings"]) {
 			expect(navigation?.textContent).toContain(label);
 		}
-		const capabilities = [...navigation!.querySelectorAll("button")].find(button =>
-			(button.textContent ?? "").includes("Start with what makes OMP different"),
-		);
-		if (!capabilities) throw new Error("Capabilities navigation item missing");
-		await fire(capabilities, "onClick");
-		expect(useUiStore.getState().settingsOpen).toBe(true);
-		expect(useUiStore.getState().settingsTab).toBe("capabilities");
 		const commandCenter = navigation?.querySelector('button[data-command-center-entry="true"]');
 		expect(commandCenter?.textContent).toContain("⌘K / ⌃K");
 		await act(async () => useUiStore.setState({ keymapOverrides: { palette: ["⌘⇧K"] } }));
 		expect(commandCenter?.textContent).toContain("⇧⌘K");
 		expect(commandCenter?.textContent).not.toContain("⌃K");
 		await act(async () => useUiStore.setState({ keymapOverrides: {} }));
-
-		const hotkeys = [...navigation!.querySelectorAll("button")].find(button =>
-			(button.textContent ?? "").includes("Keyboard shortcuts"),
-		);
-		if (!hotkeys) throw new Error("Keyboard shortcuts navigation item missing");
-		await fire(hotkeys, "onClick");
-		expect(useUiStore.getState().hotkeysOpen).toBe(true);
 
 		const collapse = navigation!.querySelector('[aria-label="Collapse navigation"]');
 		expect(collapse?.getAttribute("title")).toBe("Collapse navigation");
@@ -305,8 +279,7 @@ describe("Sidebar menus and pinned ordering", () => {
 			"true",
 		);
 	});
-
-	it("moves the most recently used session and its workspace to the front immediately", async () => {
+	it("moves the most recently used session to the front immediately", async () => {
 		const omp = installMockOmp(LIST);
 		useSessionStore.setState({ sessionId: "", cwd: "/neutral", isStreaming: false });
 		useTabsStore.setState({
@@ -316,24 +289,8 @@ describe("Sidebar menus and pinned ordering", () => {
 		});
 		useSidebarPrefs.setState({ hydrated: true });
 		await mount(<SidebarWithRecency />);
-		// Non-active workspaces start collapsed and render no rows; expand alpha
-		// so its session order is inspectable.
-		const alphaToggle = [...container.querySelectorAll("button")].find(button =>
-			(button.textContent ?? "").includes("alpha"),
-		);
-		await fire(alphaToggle as unknown as TestElement, "onClick");
 
-		const workspaceOrder = () =>
-			[...container.querySelectorAll("[data-workspace-group]")].map(element =>
-				(element as unknown as Element).getAttribute("data-workspace-group"),
-			);
-		const alphaSessionOrder = () =>
-			[...container.querySelectorAll('[data-session-group="/work/alpha"] .omp-sidebar-session-row')].map(
-				element => element.textContent ?? "",
-			);
-
-		expect(workspaceOrder()).toEqual(["/work/beta", "/work/alpha"]);
-		expect(alphaSessionOrder()[0]).toContain("Session /work/alpha/one");
+		expect(listedTitles()[0]).toContain("Session /work/beta/three");
 
 		await act(async () => {
 			useTabsStore.setState({
@@ -348,10 +305,8 @@ describe("Sidebar menus and pinned ordering", () => {
 		});
 		await flush();
 
-		expect(workspaceOrder()).toEqual(["/work/alpha", "/work/beta"]);
-		expect(alphaSessionOrder()[0]).toContain("Session /work/alpha/two");
+		expect(listedTitles()[0]).toContain("Session /work/alpha/two");
 		expect(useSidebarPrefs.getState().sessionLastUsed["/work/alpha/two.jsonl"]).toBeGreaterThan(0);
-		expect(useSidebarPrefs.getState().workspaceLastUsed["/work/alpha"]).toBeGreaterThan(0);
 		expect(omp.prefs.set).toHaveBeenCalledWith(
 			"sidebar",
 			expect.objectContaining({
@@ -359,8 +314,7 @@ describe("Sidebar menus and pinned ordering", () => {
 			}),
 		);
 	});
-
-	it("switches from an active Chat to Work and exposes only the full agent action", async () => {
+	it("starts a task in the default workspace from New task, even from an active chat", async () => {
 		const omp = installMockOmp(LIST);
 		useSessionStore.setState({ sessionId: "chat", cwd: "/work/alpha", isStreaming: false });
 		useTabsStore.setState({
@@ -370,13 +324,6 @@ describe("Sidebar menus and pinned ordering", () => {
 		});
 		await mount(<Sidebar />);
 
-		expect(modeButtons().map(button => button.getAttribute("title"))).toEqual([
-			"Build, debug, and ship in a project",
-			"Full agent in your default workspace",
-		]);
-		const workButton = () => modeButtons().find(button => (button.textContent ?? "").trim() === "Work") ?? null;
-		await fire(workButton(), "onClick");
-		expect(workButton()?.getAttribute("aria-pressed")).toBe("true");
 		expect(container.querySelector("[data-sidebar-new-chat]")).toBeNull();
 		await fire(container.querySelector("[data-sidebar-new-agent]"), "onClick");
 
@@ -392,33 +339,8 @@ describe("Sidebar menus and pinned ordering", () => {
 			activeTabId: "t-new",
 			tabs: expect.arrayContaining([expect.objectContaining({ id: "t-new", kind: "agent", cwd: "/default/work" })]),
 		});
-	});
-
-	it("creates an agent tab from New session even when the active tab is chat", async () => {
-		const omp = installMockOmp(LIST);
-		useSessionStore.setState({ sessionId: "chat", cwd: "/work/alpha", isStreaming: false });
-		useTabsStore.setState({
-			tabs: [{ id: "chat", cwd: "/work/alpha", status: "ready", kind: "chat", unreadDone: false }],
-			activeTabId: "chat",
-			bundles: new Map(),
-		});
-		await mount(<Sidebar />);
-
-		await fire(container.querySelector("[data-sidebar-new-agent]"), "onClick");
-		const currentWorkspace = [...document.body.querySelectorAll("button")].find(button =>
-			(button.textContent ?? "").includes("/work/alpha"),
-		);
-		await fire(currentWorkspace as Element, "onClick");
-
-		expect(omp.tabs.spawn).toHaveBeenCalledWith({
-			cwd: "/work/alpha",
-			kind: "agent",
-			sessionPath: undefined,
-			worktree: undefined,
-		});
 		expect(omp.sidecar.setProject).not.toHaveBeenCalled();
 	});
-
 	it("opens the existing global session picker from the header", async () => {
 		installMockOmp(LIST);
 		seedStores();
@@ -473,37 +395,17 @@ describe("Sidebar menus and pinned ordering", () => {
 		expect(signal().className).toContain("omp-signal-light--active");
 	});
 
-	it("aligns workspace and session titles with folder, chat, and reserved icon slots", async () => {
-		installMockOmp(LIST);
+	it("marks chat sessions with an icon and leaves task rows unmarked", async () => {
+		installMockOmp([...LIST, session("/work/alpha/chat.jsonl", "/work/alpha", { kind: "chat" })]);
 		seedStores();
 		await mount(<Sidebar />);
 
-		expect(container.querySelectorAll("[data-sidebar-workspace-icon]").length).toBeGreaterThan(0);
 		const chatRow = container.querySelector('[data-session-kind="chat"]');
-		const groupedAgentRow = container.querySelector('[data-session-group="/work/alpha"] [data-session-kind="agent"]');
+		const taskRow = container.querySelector('[data-session-kind="agent"]');
 		expect(chatRow?.querySelector("svg[data-sidebar-session-icon]")).not.toBeNull();
-		expect(groupedAgentRow?.querySelector("span[data-sidebar-session-icon]")).not.toBeNull();
+		expect(taskRow).not.toBeNull();
+		expect(taskRow?.querySelector("[data-sidebar-session-icon]")).toBeNull();
 	});
-
-	it("right-click on a workspace header opens the agent-only 5-item group menu", async () => {
-		installMockOmp(LIST);
-		seedStores();
-		await mount(<Sidebar />);
-
-		const header = container.querySelector('[data-workspace-group="/work/alpha"]');
-		expect(header).not.toBeUndefined();
-		await fire(header as unknown as TestElement, "onContextMenu");
-
-		const labels = menuItemLabels();
-		expect(labels.some(label => label.includes("New agent session here"))).toBe(true);
-		expect(labels.some(label => label.includes("New chat session here"))).toBe(false);
-		expect(labels.some(label => label.includes("New worktree tab here"))).toBe(true);
-		expect(labels.some(label => label.includes("Rename"))).toBe(true);
-		expect(labels.some(label => label.includes("Pin to top"))).toBe(true);
-		expect(labels.some(label => label.includes("Delete"))).toBe(true);
-		expect(labels).toHaveLength(5);
-	});
-
 	it("right-click on a session row opens the 6-item session menu", async () => {
 		const omp = installMockOmp(LIST);
 		seedStores();
@@ -603,19 +505,17 @@ describe("Sidebar menus and pinned ordering", () => {
 		expect(omp.sessions.openInNewWindow).not.toHaveBeenCalled();
 	});
 
-	it("keeps chats visible in their global section and creates one from the adjacent quick action", async () => {
+	it("lists chat sessions in the one lane and opens them, with no way to start a new chat", async () => {
 		const chat = session("/work/alpha/chat.jsonl", "/work/alpha", { kind: "chat" });
 		const agent = session("/work/alpha/agent.jsonl", "/work/alpha");
 		const omp = installMockOmp([chat, agent]);
 		seedStores();
 		await mount(<Sidebar />);
 
-		const workspace = container.querySelector('[data-session-group="/work/alpha"]');
-		const chats = container.querySelector('[data-session-group="__chats__"]');
-		expect(workspace?.textContent).toContain("Session /work/alpha/agent");
-		expect(workspace?.textContent).not.toContain("Session /work/alpha/chat");
-		expect(chats?.textContent).toContain("Session /work/alpha/chat");
-		const chatRow = [...chats!.querySelectorAll('div[role="button"]')].find(element =>
+		const list = container.querySelector("[data-session-list]");
+		expect(list?.textContent).toContain("Session /work/alpha/agent");
+		expect(list?.textContent).toContain("Session /work/alpha/chat");
+		const chatRow = [...list!.querySelectorAll('div[role="button"]')].find(element =>
 			(element.textContent ?? "").includes("Session /work/alpha/chat"),
 		);
 		await fire(chatRow as unknown as Element, "onClick");
@@ -625,32 +525,8 @@ describe("Sidebar menus and pinned ordering", () => {
 			sessionPath: "/work/alpha/chat.jsonl",
 			worktree: undefined,
 		});
-
-		await fire(container.querySelector("[data-sidebar-new-chat]"), "onClick");
-		expect(omp.tabs.spawn).toHaveBeenLastCalledWith({
-			cwd: "/work/alpha",
-			kind: "chat",
-			sessionPath: undefined,
-			worktree: undefined,
-		});
+		expect(container.querySelector("[data-sidebar-new-chat]")).toBeNull();
 	});
-
-	it("keeps an active chat in Code even when its internal cwd is the Work workspace", async () => {
-		const chat = session("/default/work/chat.jsonl", "/default/work", { kind: "chat" });
-		installMockOmp([chat]);
-		useSessionStore.setState({ sessionId: chat.id, cwd: "/default/work", isStreaming: false });
-		useTabsStore.setState({
-			tabs: [{ id: "chat", cwd: "/default/work", status: "ready", kind: "chat", unreadDone: false }],
-			activeTabId: "chat",
-			bundles: new Map(),
-		});
-		await mount(<Sidebar />);
-
-		expect(container.querySelector("[data-chat-section]")).not.toBeNull();
-		const codeButton = modeButtons().find(button => (button.textContent ?? "").trim() === "Code");
-		expect(codeButton?.getAttribute("aria-pressed")).toBe("true");
-	});
-
 	it("keeps the active task protected while it is compacting", async () => {
 		const attached = session("/work/alpha/mine.jsonl", "/work/alpha", { id: "attached-id" });
 		installMockOmp([attached]);
@@ -671,68 +547,18 @@ describe("Sidebar menus and pinned ordering", () => {
 		);
 	});
 
-	it("workspace rows expose a hover action that creates an agent tab in that workspace", async () => {
-		const omp = installMockOmp(LIST);
-		seedStores();
-		await mount(<Sidebar />);
-
-		const header = container.querySelector('[data-workspace-group="/work/alpha"]') as unknown as Element;
-		const add = header.querySelector('[aria-label="New agent session here"]');
-		expect(add).not.toBeNull();
-		await fire(add, "onClick");
-		expect(omp.tabs.spawn).toHaveBeenCalledWith({
-			cwd: "/work/alpha",
-			kind: "agent",
-			sessionPath: undefined,
-			worktree: undefined,
-		});
-	});
-
-	it("renders collapsed groups as absent from the DOM instead of inert subtrees", async () => {
+	it("keeps a pinned session first in the one list", async () => {
 		installMockOmp(LIST);
 		seedStores();
+		useSidebarPrefs.setState({ pinnedSessions: ["/work/alpha/two.jsonl"], hydrated: true });
 		await mount(<Sidebar />);
 
-		const alphaHeader = [...container.querySelectorAll("button")].find(button =>
-			(button.textContent ?? "").includes("alpha"),
-		);
-		// Active workspace expanded; other groups render nothing at all — a
-		// long-lived install must not build hundreds of hidden rows per refresh.
-		const alphaContent = () =>
-			container.querySelector('[data-session-group="/work/alpha"]') as unknown as Element | null;
-		expect(alphaContent()?.getAttribute("data-state")).toBe("expanded");
-		expect(container.querySelector('[data-session-group="/work/beta"]')).toBeNull();
-
-		await fire(alphaHeader as unknown as TestElement, "onClick");
-		expect(alphaContent()).toBeNull();
-
-		await fire(alphaHeader as unknown as TestElement, "onClick");
-		expect(alphaContent()?.getAttribute("data-state")).toBe("expanded");
+		const titles = listedTitles();
+		expect(titles[0]).toContain("Session /work/alpha/two");
+		expect(titles[1]).toContain("Session /work/beta/three");
+		expect(titles[2]).toContain("Session /work/alpha/one");
+		expect(container.querySelector("[data-workspace-group]")).toBeNull();
 	});
-
-	it("pinned groups sort before unpinned; pinned sessions sort first inside their group", async () => {
-		installMockOmp(LIST);
-		seedStores();
-		useSidebarPrefs.setState({
-			pinnedGroups: ["/work/alpha"],
-			pinnedSessions: ["/work/alpha/two.jsonl"],
-			hydrated: true,
-		});
-		await mount(<Sidebar />);
-
-		const headers = [...container.querySelectorAll("button")]
-			.filter(b => (b.textContent ?? "").match(/alpha|beta/i))
-			.map(b => (b.textContent ?? "").trim());
-		expect(headers[0]).toContain("alpha");
-
-		const rows = [...document.querySelectorAll('div[role="button"]')].map(el => (el.textContent ?? "").trim());
-		const oneIndex = rows.findIndex(text => text.includes("Session /work/alpha/one"));
-		const twoIndex = rows.findIndex(text => text.includes("Session /work/alpha/two"));
-		expect(twoIndex).toBeGreaterThanOrEqual(0);
-		expect(oneIndex).toBeGreaterThanOrEqual(0);
-		expect(twoIndex).toBeLessThan(oneIndex);
-	});
-
 	it("session titles truncate in place and hover actions do not claim row width", async () => {
 		installMockOmp(LIST);
 		seedStores();
@@ -779,34 +605,45 @@ describe("Sidebar menus and pinned ordering", () => {
 		await fire(confirm, "onClick");
 		expect(omp.sessions.delete).toHaveBeenCalledWith("/work/alpha/one.jsonl");
 	});
+});
 
-	it("names the whole workspace and its session count before a group delete", async () => {
-		const omp = installMockOmp(LIST);
+describe("Sidebar single task lane", () => {
+	it("keeps only the everyday nav items, no lane switch and one New task button", async () => {
+		installMockOmp(LIST);
 		seedStores();
 		await mount(<Sidebar />);
 
-		const header = container.querySelector('[data-workspace-group="/work/alpha"]') as unknown as Element;
-		await fire(header, "onContextMenu");
-		const items = [...document.body.querySelectorAll('[role="menu"] button')];
-		await fire(items.find(b => (b.textContent ?? "").includes("Delete")) as unknown as Element, "onClick");
-
-		expect(omp.sessions.delete).not.toHaveBeenCalled();
-		const dialog = document.body.querySelector('[role="dialog"]');
-		expect(dialog?.textContent).toContain("alpha");
-		expect(dialog?.textContent).toContain("2");
-		expect(dialog?.textContent).toContain("permanently deletes the session files");
-
-		await fire(
-			[...document.body.querySelectorAll('[role="dialog"] button')].find(
-				b => (b.textContent ?? "").trim() === "Delete",
-			) as unknown as Element,
-			"onClick",
+		const navIds = [...container.querySelectorAll("[data-sidebar-nav]")].map(item =>
+			item.getAttribute("data-sidebar-nav"),
 		);
-		// Both alpha sessions, and nothing from the other workspace.
-		expect(omp.sessions.delete.mock.calls.map(call => call[0]).sort()).toEqual([
-			"/work/alpha/one.jsonl",
-			"/work/alpha/two.jsonl",
-		]);
+		expect(navIds).toEqual(["commands", "providers", "settings"]);
+		const codeLabel = en["sidebar.mode.code"];
+		expect(
+			[...container.querySelectorAll("*")].filter(element => (element.textContent ?? "").trim() === codeLabel),
+		).toHaveLength(0);
+		const newWork = en["sidebar.newWork"];
+		expect(
+			[...container.querySelectorAll("button")].filter(button => (button.textContent ?? "").trim() === newWork),
+		).toHaveLength(1);
+	});
+
+	it("lists project sessions in the one lane", async () => {
+		const work = session("/default/work/plan.jsonl", "/default/work", { modified: "2026-01-04T00:00:00Z" });
+		const chat = session("/work/gamma/chat.jsonl", "/work/gamma", { kind: "chat", modified: "2026-01-05T00:00:00Z" });
+		installMockOmp([...LIST, work, chat]);
+		seedStores();
+		await mount(<Sidebar />);
+
+		// Work-folder, project-folder and chat sessions share one list by last activity,
+		// with no project group headers.
+		const titles = listedTitles();
+		expect(titles).toHaveLength(5);
+		expect(titles[0]).toContain("Session /work/gamma/chat");
+		expect(titles[1]).toContain("Session /default/work/plan");
+		expect(titles[2]).toContain("Session /work/beta/three");
+		expect(titles[3]).toContain("Session /work/alpha/one");
+		expect(titles[4]).toContain("Session /work/alpha/two");
+		expect(container.querySelector("[data-workspace-group]")).toBeNull();
 	});
 });
 
@@ -828,16 +665,16 @@ describe("Sidebar VIF rail", () => {
 		const navigation = container.querySelector("[data-sidebar-navigation]");
 		if (!navigation) throw new Error("sidebar navigation missing");
 		const navButtons = navigation.querySelectorAll("button");
-		for (const [index, label] of ["Commands", "Agent Hub", "PR Center", "Session stats", "Ollama"].entries()) {
+		for (const [index, label] of ["Commands", "Ollama", "Settings"].entries()) {
 			expect((navButtons[index]?.textContent ?? "").startsWith(label), `navigation item ${index}: ${label}`).toBe(
 				true,
 			);
 		}
-		const agentHub = navButtons[1];
-		if (!agentHub) throw new Error("Agent Hub navigation item missing");
-		expect(agentHub.querySelector("kbd")?.textContent).toBe("⌥A");
-		expect(accessibleName(agentHub)).toBe("Agent Hub");
-		expect(agentHub.getAttribute("title")).toBe("Agent Hub (⌥A)");
+		const commands = navButtons[0];
+		if (!commands) throw new Error("Commands navigation item missing");
+		expect(commands.querySelector("kbd")?.textContent).toBe("⌘K / ⌃K");
+		expect(accessibleName(commands)).toBe("Commands");
+		expect(commands.getAttribute("title")).toBe("Open Command Center (⌘K / ⌃K)");
 
 		// Strict e2e clicks resolve `{ name: "Settings", exact: true }`: only the nav item may carry it.
 		const sidebarButtons = container.querySelectorAll("aside button");

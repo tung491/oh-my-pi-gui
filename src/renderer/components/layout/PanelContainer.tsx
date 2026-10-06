@@ -1,14 +1,13 @@
-import { Diff, FolderTree, ScrollText, X } from "lucide-react";
+import { FolderTree, ScrollText, X } from "lucide-react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveTabRouteReady } from "../../hooks/use-active-tab-route";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
-import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
+import { useTabsStore } from "../../stores/tabs";
 import type { PanelTab } from "../../stores/ui";
 import { useUiStore } from "../../stores/ui";
 import { IconButton, PanelErrorBoundary } from "../common";
-import { DiffPanel } from "../panels/DiffPanel";
 import { FilesPanel } from "../panels/FilesPanel";
 import { LogPanel } from "../panels/LogPanel";
 
@@ -23,18 +22,14 @@ function defaultPanelWidth(): number {
 	return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(viewportWidth * 0.28)));
 }
 
-const TABS: { id: PanelTab; labelKey: string; icon: typeof Diff }[] = [
-	{ id: "diff", labelKey: "panel.tabs.diff", icon: Diff },
+const TABS: { id: PanelTab; labelKey: string; icon: typeof FolderTree }[] = [
 	{ id: "files", labelKey: "panel.tabs.files", icon: FolderTree },
 	{ id: "logs", labelKey: "panel.tabs.logs", icon: ScrollText },
 ];
 
-/** Drawer tabs meaningful in a tool-free chat tab (no diffs without tools). */
-const CHAT_TAB_IDS: ReadonlySet<PanelTab> = new Set(["files", "logs"]);
-
 /**
  * Contextual workspace drawer. Hidden by default; opened explicitly for
- * diffs, files, or logs without shrinking the core chat. Live execution
+ * files or logs without shrinking the core chat. Live execution
  * state (todos, plan, subagents, queue) renders in the center dock above
  * the composer instead — see chat/dock/WorkspaceDock.
  */
@@ -59,10 +54,6 @@ export function PanelContainer() {
 		media.addEventListener("change", onChange);
 		return () => media.removeEventListener("change", onChange);
 	}, []);
-	/** Chat tabs only expose files + logs — diffs can't exist without tools. */
-	const isChat = useActiveTabKind() === "chat";
-	const visibleTabs = isChat ? TABS.filter(tab => CHAT_TAB_IDS.has(tab.id)) : TABS;
-	const visiblePanelTab = isChat && !CHAT_TAB_IDS.has(panelTab) ? "files" : panelTab;
 
 	const [width, setWidth] = useState(defaultPanelWidth);
 	const [widthHydrated, setWidthHydrated] = useState(false);
@@ -147,8 +138,8 @@ export function PanelContainer() {
 			</div>
 			<div className="shrink-0 px-3 pt-1">
 				<div className="flex items-center gap-0.5 overflow-x-auto border-b border-(--omp-border-muted)">
-					{visibleTabs.map(({ id, labelKey, icon: Icon }) => {
-						const active = visiblePanelTab === id;
+					{TABS.map(({ id, labelKey, icon: Icon }) => {
+						const active = panelTab === id;
 						return (
 							<button
 								key={id}
@@ -172,10 +163,9 @@ export function PanelContainer() {
 				</div>
 			</div>
 			<div className="min-h-0 flex-1 overflow-hidden">
-				<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:${visiblePanelTab}`}>
-					{visiblePanelTab === "diff" && <DiffPanel />}
-					{visiblePanelTab === "files" && <FilesPanel />}
-					{visiblePanelTab === "logs" && <LogPanel />}
+				<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:${panelTab}`}>
+					{panelTab === "files" && <FilesPanel />}
+					{panelTab === "logs" && <LogPanel />}
 				</PanelErrorBoundary>
 			</div>
 			<div

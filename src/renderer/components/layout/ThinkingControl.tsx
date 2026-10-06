@@ -9,7 +9,7 @@
  * hydrated from get_state and thinking_level_changed events); selection goes
  * through `set_thinking_level`, which the agent resolves/clamps per model.
  * The dropdown renders in a portal so the composer's overflow-hidden never
- * clips it (same pattern as ApprovalControl).
+ * clips it.
  */
 
 import { Brain, Check, ChevronDown } from "lucide-react";

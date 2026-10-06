@@ -262,10 +262,10 @@ afterEach(async () => {
 	useSubagentsStore.getState().reset();
 	useModelStore.getState().reset();
 	useToolsStore.getState().reset();
-	// The arm-confirm and worktree-prompt flags live in the UI store; a chip left
+	// The arm-confirm flag lives in the UI store; a chip left
 	// armed by the previous test renders ✓/✕ instead of ×, so the next test's
 	// `[aria-label="Close tab"]` query finds nothing.
-	useUiStore.setState({ armedCloseTab: null, worktreeClosePrompt: null });
+	useUiStore.setState({ armedCloseTab: null });
 	vi.restoreAllMocks();
 	omp = installMockOmp();
 });
@@ -580,7 +580,7 @@ describe("TabBar", () => {
 		expect(omp.tabs.spawn).toHaveBeenCalledWith({ cwd: "/beta", sessionPath: undefined, kind: "agent" });
 	});
 
-	it("the chat button spawns a chat tab in one click", async () => {
+	it("the new-tab button spawns a task tab in one click", async () => {
 		useTabsStore.setState({
 			tabs: [{ kind: "agent", id: "t0", cwd: "/beta", status: "ready", unreadDone: false }],
 			activeTabId: "t0",
@@ -589,13 +589,13 @@ describe("TabBar", () => {
 		useSessionStore.setState({ cwd: "/beta" });
 		await mount(<TabBar />);
 
-		const chatButton = container.querySelector('[aria-label="New Chat Tab"]');
-		expect(chatButton).not.toBeNull();
-		await click(chatButton!);
-		expect(omp.tabs.spawn).toHaveBeenCalledWith({ cwd: "/beta", sessionPath: undefined, kind: "chat" });
+		const newTab = container.querySelector('[aria-label="New Agent Tab"]');
+		expect(newTab).not.toBeNull();
+		await click(newTab!);
+		expect(omp.tabs.spawn).toHaveBeenCalledWith(expect.objectContaining({ kind: "agent" }));
 	});
 
-	it("agent and chat creation buttons are visible with labeled affordances", async () => {
+	it("offers one labelled new-tab button and no chat tab", async () => {
 		useTabsStore.setState({
 			tabs: [{ kind: "agent", id: "t0", cwd: "/beta", status: "ready", unreadDone: false }],
 			activeTabId: "t0",
@@ -603,10 +603,10 @@ describe("TabBar", () => {
 		});
 		await mount(<TabBar />);
 
-		// Discoverability contract: both session types are one visible click away —
-		// nothing behind right-click or a collapsed menu.
+		// Discoverability contract: a new task is one visible click away — nothing
+		// behind right-click or a collapsed menu.
 		expect(container.querySelector('[aria-label="New Agent Tab"]')).not.toBeNull();
-		expect(container.querySelector('[aria-label="New Chat Tab"]')).not.toBeNull();
+		expect(container.querySelector('[aria-label="New Chat Tab"]')).toBeNull();
 		expect(container.querySelector('[role="menu"]')).toBeNull();
 	});
 
@@ -765,7 +765,7 @@ describe("TabBar close confirm", () => {
 		expect(useUiStore.getState().armedCloseTab).toBeNull();
 	});
 
-	it("an idle worktree tab's × routes to the cleanup prompt, never straight to close (plan/20)", async () => {
+	it("an idle worktree tab's × closes it like any other tab", async () => {
 		useTabsStore.setState({
 			tabs: [
 				{ kind: "agent", id: "t0", cwd: "/alpha", status: "ready", unreadDone: false },
@@ -787,11 +787,9 @@ describe("TabBar close confirm", () => {
 		expect(chips()[1]?.getAttribute("title")).toBe("fix — gui-fix-deadbeef — omp/gui/fix");
 		expect(chips()[1]?.textContent).toContain("fix");
 
-		// …and its × opens the cleanup prompt WITHOUT closing the tab.
+		// …and its × closes it straight away, leaving the checkout on disk.
 		await click(chips()[1]!.querySelector('[aria-label="Close tab"]')!);
-		expect(omp.tabs.close).not.toHaveBeenCalled();
-		expect(useTabsStore.getState().tabs.map(tab => tab.id)).toEqual(["t0", "t1"]);
-		expect(useUiStore.getState().worktreeClosePrompt).toEqual({ tabId: "t1" });
+		expect(omp.tabs.close).toHaveBeenCalledWith("t1");
 	});
 });
 

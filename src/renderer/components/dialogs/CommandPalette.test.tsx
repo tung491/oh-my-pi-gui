@@ -157,7 +157,7 @@ describe("chat-tab rows", () => {
 		seedTab("chat");
 		await mount();
 
-		const plan = rowByLabel(translate("cmd.plan"));
+		const plan = rowByLabel(translate("cmd.tan"));
 		expect(plan.getAttribute("disabled")).not.toBeNull();
 		expect(plan.getAttribute("aria-disabled")).toBe("true");
 		expect(plan.textContent).toContain(translate("unavailable.chatSession"));
@@ -173,7 +173,7 @@ describe("chat-tab rows", () => {
 		sidecarCommands = [DEPLOY];
 		seedTab("agent");
 		await mount();
-		const plan = rowByLabel(translate("cmd.plan"));
+		const plan = rowByLabel(translate("cmd.tan"));
 		expect(plan.getAttribute("disabled")).toBeNull();
 		expect(plan.getAttribute("aria-disabled")).toBe("false");
 	});
@@ -195,12 +195,12 @@ describe("panel keyboard handling", () => {
 		// on <body>, outside the panel. Escape must keep working from there.
 		seedTab("agent");
 		await mount();
-		await click(rowByLabel(translate("cmd.security")));
+		await click(rowByLabel(translate("cmd.shake")));
 		expect(rows().some(row => row.getAttribute("data-command-kind") === "submenu")).toBe(false);
 
 		await keyDown(document.body as unknown as TestElement, "Escape");
 		expect(useUiStore.getState().commandPaletteOpen).toBe(true);
-		expect(rows().some(row => row.getAttribute("data-command-name") === "security")).toBe(true);
+		expect(rows().some(row => row.getAttribute("data-command-name") === "shake")).toBe(true);
 
 		await keyDown(document.body as unknown as TestElement, "Escape");
 		expect(useUiStore.getState().commandPaletteOpen).toBe(false);
@@ -230,11 +230,11 @@ describe("row execution", () => {
 	it("drills into a submenu row instead of executing anything", async () => {
 		seedTab("agent");
 		await mount();
-		await click(rowByLabel(translate("cmd.security")));
+		await click(rowByLabel(translate("cmd.shake")));
 		expect(rpc.prompt).not.toHaveBeenCalled();
 		expect(useUiStore.getState().commandPaletteOpen).toBe(true);
 		// The top level is replaced by the submenu's own rows.
-		expect(rows().some(row => row.textContent?.includes(translate("cmd.plan")))).toBe(false);
+		expect(rows().some(row => row.textContent?.includes(translate("cmd.settings")))).toBe(false);
 	});
 });
 
@@ -310,7 +310,7 @@ describe("footer", () => {
 		expect(footerText().endsWith(countText(distinct))).toBe(true);
 
 		// Drilling into a submenu swaps the rows (no recents there), and the count follows them.
-		await click(rowByLabel(translate("cmd.security")));
+		await click(rowByLabel(translate("cmd.shake")));
 		expect(rows().length).toBeGreaterThan(0);
 		expect(footerText().endsWith(countText(rows().length))).toBe(true);
 	});

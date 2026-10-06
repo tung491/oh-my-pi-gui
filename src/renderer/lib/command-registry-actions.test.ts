@@ -1,14 +1,13 @@
 /**
  * Wiring tests for the one-shot action nativization: /prewalk (toggle),
- * /fresh, /shake elide|images|thinking, /reload-plugins, /queue (composer prefill) and
- * /force (dialog picker) must drive their RPC/native affordance — never
+ * /fresh, /shake elide|images|thinking and /queue (composer prefill) must
+ * drive their RPC/native affordance — never
  * inject "/cmd" prompt text — and surface the result as a toast or dialog.
  * Exercises buildCommandMenu directly with a mocked window.omp.rpc.
  */
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import { useSessionStore } from "../stores/session";
 import { useToastStore } from "../stores/toast";
-import { useUiStore } from "../stores/ui";
 import { buildCommandMenu, type CommandAffordance, type CommandRegistryContext } from "./command-registry";
 import { translate } from "./i18n";
 
@@ -29,27 +28,14 @@ const baseCtx: CommandRegistryContext = {
 	availableCommands: [],
 	openModelPicker: () => {},
 	openSettings: () => {},
-	openUsage: () => {},
 	openProviders: () => {},
 	openCommandPalette: () => {},
-	openModelRoles: () => {},
-	openStatsDashboard: () => {},
 	openRenameDialog: () => {},
 	openSessionPicker: () => {},
-	openBranchPicker: () => {},
-	openSessionTree: () => {},
 	openSessionInfo: () => {},
-	openModelCompare: () => {},
-	openBenchmark: () => {},
-	openHandoffDialog: () => {},
-	openExtensions: () => {},
-	openInventory: () => {},
 	openThemePicker: () => {},
-	openModes: () => {},
 	openAgentHub: () => {},
-	openPrCenter: () => {},
 	openHotkeys: () => {},
-	openImportDialog: () => {},
 	focusDockCard: () => {},
 	retryTurn: async () => {},
 	retryLastTurn: async () => {},
@@ -64,7 +50,6 @@ const baseCtx: CommandRegistryContext = {
 		setInterruptMode: async () => {},
 		compact: async () => ok(),
 		newSession: async () => {},
-		handoff: async () => {},
 		prompt: async () => {},
 		setPlanMode: async () => ok(),
 		setPrewalk: async () => ok({ enabled: true }),
@@ -103,7 +88,6 @@ beforeEach(() => {
 	ctx = { ...baseCtx, hydrateSession, rpc: { ...baseCtx.rpc, setPrewalk: rpc.setPrewalk } };
 	useToastStore.setState({ toasts: [] });
 	useSessionStore.setState({ isStreaming: false, isCompacting: false, prewalkArmed: false });
-	useUiStore.setState({ forceToolOpen: false });
 });
 
 afterEach(() => {
@@ -188,32 +172,6 @@ describe("one-shot action wiring", () => {
 		expect(lastToast()?.variant).toBe("warning");
 	});
 
-	it("reload-plugins toasts the counts and rehydrates the inventory", async () => {
-		const affordance = wired("reload-plugins");
-		if (affordance.kind !== "action") throw new Error("expected action");
-		await affordance.run();
-		expect(rpc.reloadPlugins).toHaveBeenCalled();
-		expect(lastToast()?.variant).toBe("success");
-		expect(lastToast()?.message).toContain("3");
-		expect(lastToast()?.message).toContain("5");
-		expect(lastToast()?.message).toContain("42");
-		expect(hydrateSession).toHaveBeenCalled();
-	});
-
-	it("reload-plugins failure toasts the error and skips the rehydrate", async () => {
-		rpc.reloadPlugins.mockResolvedValueOnce({
-			type: "response",
-			command: "reload_plugins",
-			success: false,
-			error: "boom",
-		});
-		const affordance = wired("reload-plugins");
-		if (affordance.kind !== "action") throw new Error("expected action");
-		await affordance.run();
-		expect(lastToast()?.variant).toBe("error");
-		expect(hydrateSession).not.toHaveBeenCalled();
-	});
-
 	it("queue dispatches the composer prefill with the yield-queue shorthand", async () => {
 		const affordance = wired("queue");
 		if (affordance.kind !== "action") throw new Error("expected action");
@@ -224,12 +182,6 @@ describe("one-shot action wiring", () => {
 		expect(event.detail.text).toBe("-> ");
 	});
 
-	it("force opens the ForceToolDialog via the ui store", () => {
-		const affordance = wired("force");
-		if (affordance.kind !== "picker") throw new Error("expected picker");
-		affordance.open();
-		expect(useUiStore.getState().forceToolOpen).toBe(true);
-	});
 	it("restart forwards the active session origin to the sidecar", async () => {
 		useSessionStore.setState({ sessionFile: "/tmp/session.json" });
 		const affordance = wired("restart");

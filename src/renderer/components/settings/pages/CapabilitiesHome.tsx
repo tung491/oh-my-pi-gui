@@ -10,11 +10,9 @@ import {
 	Command,
 	Database,
 	FolderOpen,
-	GitPullRequest,
 	Keyboard,
 	Network,
 	Plug,
-	Route,
 	ShieldCheck,
 	Sparkles,
 	Wrench,
@@ -25,34 +23,11 @@ import { Button } from "../../common";
 
 export type CapabilityTarget =
 	| "model"
-	| "modelRoles"
-	| "modelCompare"
-	| "benchmark"
 	| "providers"
-	| "usage"
 	| "agents"
-	| "skills"
-	| "mcp"
-	| "resources"
-	| "marketplaces"
-	| "templates"
-	| "memoryResources"
-	| "hooks"
-	| "commands"
-	| "security"
-	| "ssh"
 	| "updates"
-	| "modes"
-	| "vibe"
-	| "collab"
-	| "live"
-	| "debug"
 	| "clear"
-	| "import"
 	| "sessionInfo"
-	| "sessionTree"
-	| "share"
-	| "handoff"
 	| "export"
 	| "dump"
 	| "fork"
@@ -61,20 +36,13 @@ export type CapabilityTarget =
 	| "btw"
 	| "tan"
 	| "omfg"
-	| "guidedGoal"
 	| "queue"
-	| "workspaceDirs"
-	| "prCenter"
-	| "context"
-	| "tools"
-	| "stats"
 	| "jobs"
 	| "hotkeys"
 	| "theme"
 	| "settings"
 	| "changelog"
-	| "copy"
-	| "force";
+	| "copy";
 
 interface CapabilitiesHomeProps {
 	ready: boolean;
@@ -84,10 +52,7 @@ interface CapabilitiesHomeProps {
 	memoryBackend: string;
 	onConfigureTtsr: () => void;
 	onOpenAgents: () => void;
-	onOpenModelRoles: () => void;
 	onConfigureAdvisor: () => void;
-	onOpenGoal: () => void;
-	onOpenLoop: () => void;
 	onOpenMemory: () => void;
 	onOpenTools: () => void;
 	onOpenCommandCenter: () => void;
@@ -173,10 +138,7 @@ export function CapabilitiesHome({
 	memoryBackend,
 	onConfigureTtsr,
 	onOpenAgents,
-	onOpenModelRoles,
 	onConfigureAdvisor,
-	onOpenGoal,
-	onOpenLoop,
 	onOpenMemory,
 	onOpenTools,
 	onOpenCommandCenter,
@@ -228,7 +190,6 @@ export function CapabilitiesHome({
 					<TargetButton label={t("cmd.btw")} onOpen={onOpenTarget} target="btw" variant="secondary" />
 					<TargetButton label={t("cmd.tan")} onOpen={onOpenTarget} target="tan" />
 					<TargetButton label={t("cmd.omfg")} onOpen={onOpenTarget} target="omfg" />
-					<TargetButton label={t("cmd.guidedGoal")} onOpen={onOpenTarget} target="guidedGoal" />
 					<TargetButton label={t("cmd.queue")} onOpen={onOpenTarget} target="queue" />
 				</CapabilityCard>
 
@@ -258,16 +219,6 @@ export function CapabilitiesHome({
 				</CapabilityCard>
 
 				<CapabilityCard
-					description={t("settings.capabilities.modelRolesDesc")}
-					icon={<Bot size={16} />}
-					title={t("settings.capabilities.modelRoles")}
-				>
-					<Button onClick={onOpenModelRoles} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.configureModelRoles")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
 					description={t("settings.capabilities.advisorDesc")}
 					icon={<BrainCircuit size={16} />}
 					status={
@@ -281,19 +232,6 @@ export function CapabilitiesHome({
 					{/* Toggle lives in Model › Advisor (schema owns the value). */}
 					<Button onClick={onConfigureAdvisor} size="sm" type="button" variant="secondary">
 						{t("settings.capabilities.configureAdvisor")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("settings.capabilities.modesDesc")}
-					icon={<Route size={16} />}
-					title={t("settings.capabilities.modes")}
-				>
-					<Button onClick={onOpenGoal} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.goalMode")}
-					</Button>
-					<Button onClick={onOpenLoop} size="sm" type="button" variant="ghost">
-						{t("settings.capabilities.loopMode")}
 					</Button>
 				</CapabilityCard>
 
@@ -326,45 +264,15 @@ export function CapabilitiesHome({
 				</CapabilityCard>
 				<CapabilityCard description={t("cmd.model.desc")} icon={<Bot size={16} />} title={t("cmd.model")}>
 					<TargetButton label={t("cmd.model")} onOpen={onOpenTarget} target="model" variant="secondary" />
-					<TargetButton label={t("cmd.modelRoles")} onOpen={onOpenTarget} target="modelRoles" />
-					<TargetButton label={t("cmd.modelCompare")} onOpen={onOpenTarget} target="modelCompare" />
-					<TargetButton label={t("cmd.benchmark")} onOpen={onOpenTarget} target="benchmark" />
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.providers.desc")} icon={<Plug size={16} />} title={t("cmd.providers")}>
 					<TargetButton label={t("cmd.providers")} onOpen={onOpenTarget} target="providers" variant="secondary" />
-					<TargetButton label={t("cmd.usage")} onOpen={onOpenTarget} target="usage" />
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("cmd.extensions.desc")}
-					icon={<Network size={16} />}
-					title={t("cmd.extensions")}
-				>
-					<TargetButton label={t("cmd.skills")} onOpen={onOpenTarget} target="skills" variant="secondary" />
-					<TargetButton label={t("cmd.mcp")} onOpen={onOpenTarget} target="mcp" />
-					<TargetButton label={t("cmd.plugins")} onOpen={onOpenTarget} target="resources" />
-					<TargetButton label={t("cmd.marketplace")} onOpen={onOpenTarget} target="marketplaces" />
-					<TargetButton label={t("cmd.templates")} onOpen={onOpenTarget} target="templates" />
-					<TargetButton label={t("cmd.memory")} onOpen={onOpenTarget} target="memoryResources" />
-					<TargetButton label={t("cmd.hooks")} onOpen={onOpenTarget} target="hooks" />
-					<TargetButton label={t("cmd.commands")} onOpen={onOpenTarget} target="commands" />
-				</CapabilityCard>
-
-				<CapabilityCard description={t("cmd.modes.desc")} icon={<Route size={16} />} title={t("cmd.modes")}>
-					<TargetButton label={t("cmd.modes")} onOpen={onOpenTarget} target="modes" variant="secondary" />
-					<TargetButton label={t("cmd.vibe")} onOpen={onOpenTarget} target="vibe" />
-					<TargetButton label={t("cmd.collab")} onOpen={onOpenTarget} target="collab" />
-					<TargetButton label={t("cmd.live")} onOpen={onOpenTarget} target="live" />
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.import.desc")} icon={<FolderOpen size={16} />} title={t("cmd.session")}>
 					<TargetButton label={t("cmd.clear")} onOpen={onOpenTarget} target="clear" variant="secondary" />
-					<TargetButton label={t("cmd.import")} onOpen={onOpenTarget} target="import" variant="secondary" />
 					<TargetButton label={t("cmd.session")} onOpen={onOpenTarget} target="sessionInfo" />
-					<TargetButton label={t("cmd.tree")} onOpen={onOpenTarget} target="sessionTree" />
-					<TargetButton label={t("cmd.share")} onOpen={onOpenTarget} target="share" />
-					<TargetButton label={t("cmd.handoff")} onOpen={onOpenTarget} target="handoff" />
 					<TargetButton label={t("cmd.export")} onOpen={onOpenTarget} target="export" />
 					<TargetButton label={t("cmd.dump")} onOpen={onOpenTarget} target="dump" />
 					<TargetButton label={t("cmd.fork")} onOpen={onOpenTarget} target="fork" />
@@ -372,31 +280,16 @@ export function CapabilitiesHome({
 					<TargetButton label={t("cmd.resend")} onOpen={onOpenTarget} target="resend" />
 				</CapabilityCard>
 
-				<CapabilityCard
-					description={t("cmd.prCenter.desc")}
-					icon={<GitPullRequest size={16} />}
-					title={t("cmd.prCenter")}
-				>
-					<TargetButton label={t("cmd.prCenter")} onOpen={onOpenTarget} target="prCenter" variant="secondary" />
-					<TargetButton label={t("cmd.dirs")} onOpen={onOpenTarget} target="workspaceDirs" />
-				</CapabilityCard>
-
-				<CapabilityCard description={t("cmd.context.desc")} icon={<BarChart3 size={16} />} title={t("cmd.stats")}>
-					<TargetButton label={t("cmd.context")} onOpen={onOpenTarget} target="context" variant="secondary" />
-					<TargetButton label={t("cmd.tools")} onOpen={onOpenTarget} target="tools" />
-					<TargetButton label={t("cmd.stats")} onOpen={onOpenTarget} target="stats" />
-					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" />
-					<TargetButton label={t("cmd.debug")} onOpen={onOpenTarget} target="debug" />
+				<CapabilityCard description={t("cmd.jobs.desc")} icon={<BarChart3 size={16} />} title={t("cmd.jobs")}>
+					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" variant="secondary" />
 				</CapabilityCard>
 
 				<CapabilityCard
-					description={t("cmd.security.desc")}
+					description={t("cmd.settings.desc")}
 					icon={<ShieldCheck size={16} />}
-					title={t("cmd.security")}
+					title={t("settings.nav.application")}
 				>
-					<TargetButton label={t("cmd.security")} onOpen={onOpenTarget} target="security" variant="secondary" />
-					<TargetButton label={t("cmd.ssh")} onOpen={onOpenTarget} target="ssh" />
-					<TargetButton label={t("cmd.hotkeys")} onOpen={onOpenTarget} target="hotkeys" />
+					<TargetButton label={t("cmd.hotkeys")} onOpen={onOpenTarget} target="hotkeys" variant="secondary" />
 					<TargetButton label={t("cmd.theme")} onOpen={onOpenTarget} target="theme" />
 					<TargetButton label={t("cmd.settings")} onOpen={onOpenTarget} target="settings" />
 					<TargetButton label={t("cmd.changelog")} onOpen={onOpenTarget} target="changelog" />
@@ -405,7 +298,6 @@ export function CapabilitiesHome({
 
 				<CapabilityCard description={t("cmd.copy.desc")} icon={<Keyboard size={16} />} title={t("cmd.copy")}>
 					<TargetButton label={t("cmd.copy")} onOpen={onOpenTarget} target="copy" variant="secondary" />
-					<TargetButton label={t("cmd.force")} onOpen={onOpenTarget} target="force" />
 				</CapabilityCard>
 			</div>
 		</div>

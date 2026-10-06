@@ -26,7 +26,6 @@ import { isImeKeyEvent } from "../../lib/ime";
 import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { retryLastTurn as retryLastTurnShared } from "../../lib/messages";
 import { writePersisted } from "../../lib/persisted-storage";
-import { openHandoffDialog } from "../../stores/fork-handoff";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useSettingsStore } from "../../stores/settings";
@@ -144,25 +143,13 @@ export function CommandPalette() {
 	const close = useUiStore(state => state.closeCommandPalette);
 	const openModelPicker = useUiStore(state => state.openModelPicker);
 	const openSettings = useUiStore(state => state.openSettings);
-	const openUsage = useUiStore(state => state.openUsage);
 	const openProviders = useUiStore(state => state.openProviders);
-	const openModelRoles = useUiStore(state => state.openModelRoles);
-	const openStatsDashboard = useUiStore(state => state.openStatsDashboard);
 	const openRenameDialog = useUiStore(state => state.openRenameDialog);
 	const openSessionPicker = useUiStore(state => state.openSessionPicker);
-	const openBranchPicker = useUiStore(state => state.openBranchPicker);
-	const openSessionTree = useUiStore(state => state.openSessionTree);
 	const openSessionInfo = useUiStore(state => state.openSessionInfo);
-	const openModelCompare = useUiStore(state => state.openModelCompare);
-	const openBenchmark = useUiStore(state => state.openBenchmark);
-	const openExtensions = useUiStore(state => state.openExtensions);
-	const openInventory = useUiStore(state => state.openInventory);
 	const openThemePicker = useUiStore(state => state.openThemePicker);
-	const openModes = useUiStore(state => state.openModes);
 	const openAgentHub = useUiStore(state => state.openAgentHub);
-	const openPrCenter = useUiStore(state => state.openPrCenter);
 	const openHotkeys = useUiStore(state => state.openHotkeys);
-	const openImportDialog = useUiStore(state => state.openImportDialog);
 	const focusDockCard = useUiStore(state => state.focusDockCard);
 
 	const isStreaming = useSessionStore(s => s.isStreaming);
@@ -320,28 +307,15 @@ export function CommandPalette() {
 				availableCommands,
 				openModelPicker,
 				openSettings,
-				openUsage,
 				openProviders,
-				openModelRoles,
-				openStatsDashboard,
 				openRenameDialog,
 				openSessionPicker,
-				openBranchPicker,
-				openSessionTree,
 				openSessionInfo,
-				openModelCompare,
-				openBenchmark,
-				openHandoffDialog,
 				forkSession: forkSessionFromGui,
 				hydrateSession: () => (tabId ? hydrateTabSession(tabId) : hydrateSession()),
-				openExtensions,
-				openInventory,
 				openThemePicker,
-				openModes,
 				openAgentHub,
-				openPrCenter,
 				openHotkeys,
-				openImportDialog,
 				focusDockCard,
 				openCommandPalette: () => {},
 				retryTurn,
@@ -355,7 +329,6 @@ export function CommandPalette() {
 					setInterruptMode: mode => tabRpc.setInterruptMode(mode),
 					compact: instructions => tabRpc.compact(instructions),
 					newSession: newSessionNow,
-					handoff: () => tabRpc.handoff(),
 					prompt: message => tabRpc.prompt(message),
 					setPlanMode: enabled => tabRpc.setPlanMode(enabled),
 					setPrewalk: enabled => tabRpc.setPrewalk(enabled),
@@ -380,28 +353,16 @@ export function CommandPalette() {
 			availableCommands,
 			openModelPicker,
 			openSettings,
-			openUsage,
 			openProviders,
-			openModelRoles,
-			openStatsDashboard,
 			openRenameDialog,
 			openSessionPicker,
-			openBranchPicker,
-			openSessionTree,
 			openSessionInfo,
 			retryLastTurn,
 			retryTurn,
-			openModes,
 			focusDockCard,
-			openModelCompare,
-			openBenchmark,
 			openAgentHub,
-			openPrCenter,
 			openHotkeys,
-			openImportDialog,
 			openThemePicker,
-			openInventory,
-			openExtensions,
 			tabRpc.setPrewalk,
 			tabRpc.setSteeringMode,
 			tabRpc.setSessionName,
@@ -411,7 +372,6 @@ export function CommandPalette() {
 			tabRpc.setFastMode,
 			tabRpc.prompt,
 			tabRpc.setAutoRetry,
-			tabRpc.handoff,
 			tabRpc.setModel,
 			tabRpc.setAutoCompaction,
 			tabRpc.exportHtml,

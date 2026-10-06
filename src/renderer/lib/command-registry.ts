@@ -27,7 +27,6 @@ import { HIDDEN_ACCOUNT_COMMANDS } from "../../shared/provider-policy";
 import type { AvailableCommand, CopyTarget, RpcResponse } from "../../shared/rpc-types";
 import { applyModelInfo, hydrateSession, hydrateTabSession } from "../hooks/use-rpc-events";
 import { newSessionNow } from "../hooks/use-session-switch";
-import { openHandoffDialog } from "../stores/fork-handoff";
 import { useModelStore } from "../stores/model";
 import { type SessionStore, useSessionStore } from "../stores/session";
 import { useSettingsStore } from "../stores/settings";
@@ -35,18 +34,12 @@ import { activeTabKind, useTabsStore } from "../stores/tabs";
 import { toast } from "../stores/toast";
 import { useTodoStore } from "../stores/todo";
 import { type DockCardId, useUiStore } from "../stores/ui";
-import { isCommandAvailable } from "./command-availability";
+import { isCommandAvailable, REMOVED_COMMANDS } from "./command-availability";
 import { exportSessionHtml } from "./export-session";
 import { copyText } from "./format";
 import { translate } from "./i18n";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "./messages";
-import {
-	capturePluginActivationOrigin,
-	handlePluginActivation,
-	isPluginActivationOriginActive,
-} from "./plugin-activation";
 import { copyTodosToClipboard, dumpTranscriptToClipboard, exportTodos, importTodosFromFile } from "./transcript-copy";
-import { addWorkspaceDirectory, moveSessionTo, pickWorkspaceDirectory } from "./workspace-dirs";
 
 /**
  * `action` and `prompt` carry `argUsage` when the command needs user text
@@ -108,27 +101,14 @@ export interface CommandRegistryContext {
 	availableCommands: AvailableCommand[];
 	openModelPicker: () => void;
 	openSettings: (tab?: string) => void;
-	openUsage: () => void;
 	openProviders: () => void;
 	openCommandPalette: () => void;
-	openModelRoles: () => void;
-	openStatsDashboard: () => void;
 	openRenameDialog: () => void;
 	openSessionPicker: () => void;
-	openBranchPicker: () => void;
-	openSessionTree: () => void;
 	openSessionInfo: () => void;
-	openModelCompare: () => void;
-	openBenchmark: () => void;
-	openHandoffDialog: () => void;
-	openExtensions: (tab?: "hooks" | "mcp" | "commands") => void;
-	openInventory: (tab?: "plugins" | "marketplaces" | "templates" | "memory") => void;
 	openThemePicker: () => void;
-	openModes: (tab?: "vibe" | "goal" | "loop") => void;
 	openAgentHub: (tab?: "definitions" | "hub") => void;
-	openPrCenter: () => void;
 	openHotkeys: () => void;
-	openImportDialog: () => void;
 	/** Deep-link a center-dock card (todo/plan/agents): expand + flash. */
 	focusDockCard: (id: DockCardId) => void;
 	/** Retry the last failed turn server-side (retry RPC). */
@@ -148,7 +128,6 @@ export interface CommandRegistryContext {
 		setInterruptMode: (mode: "immediate" | "wait") => Promise<unknown>;
 		compact: (instructions?: string) => Promise<RpcResponse>;
 		newSession: () => Promise<unknown>;
-		handoff: () => Promise<unknown>;
 		prompt: (message: string) => Promise<unknown>;
 		setPlanMode: (enabled: boolean) => Promise<RpcResponse>;
 		setPrewalk: (enabled: boolean) => Promise<RpcResponse>;
@@ -298,31 +277,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "action", run },
 	});
 
-	/** Helper to build a submenu item opening a native surface (panel/tab/dialog). */
-	const subWindow = (name: string, open: () => void): CommandMenuItem => ({
-		name,
-		label: t(`cmd.${keyOf(name)}`),
-		category: "extensions",
-		affordance: { kind: "window", open },
-	});
-
-	/** Read a single setting for status toasts; RPC failures throw for the palette to surface. */
-	const readSetting = async (path: string): Promise<unknown> => {
-		const res = await boundRpc.getSettings([path]);
-		if (!res.success) throw new Error(res.error);
-		return (res.data as { values?: Record<string, unknown> } | undefined)?.values?.[path];
-	};
-
-	/**
-	 * Persist a settings mutation via the same set_setting RPC the SettingsWindow
-	 * toggles use (the agent live-applies runtime keys) and toast the result.
-	 */
-	const writeSetting = async (path: string, value: unknown, message: string): Promise<void> => {
-		const res = await boundRpc.setSetting(path, value);
-		if (!res.success) throw new Error(res.error);
-		toast({ variant: "success", message });
-	};
-
 	const restartSidecar = restartSidecarFromGui;
 
 	/** /advisor on|off — set_setting live-applies advisor.enabled and reports activation state. */
@@ -337,97 +291,12 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		toast({ variant: "success", message: t(enabled ? "advisor.enabled" : "advisor.disabled") });
 	};
 
-	/** /mcp enable|disable|remove|reconnect <name>; a bare invocation opens the native MCP tab. */
-	const runMcpAction = async (verb: "enable" | "disable" | "reconnect" | "remove", args?: string): Promise<void> => {
-		const name = args?.trim();
-		if (!name) {
-			ctx.openSettings("mcp");
-			return;
-		}
-		const res = await boundRpc.mcpAction(name, verb);
-		if (!res.success) throw new Error(res.error);
-		await ctx.hydrateSession();
-		toast({ variant: "success", message: t(`mcpAction.${verb}`, { name }) });
-	};
-
-	/**
-	 * /marketplace mutations via marketplace_action. Install intentionally opens
-	 * Inventory so the trust confirmation is the only executable-code entry.
-	 */
-	const runMarketplaceAction = async (
-		verb: "add" | "remove" | "update" | "uninstall" | "upgrade",
-		args?: string,
-	): Promise<void> => {
-		const input = args?.trim() ?? "";
-		if (!input && verb !== "update") {
-			ctx.openSettings(verb === "uninstall" ? "resources:plugins" : "resources:marketplaces");
-			return;
-		}
-		const origin = verb === "uninstall" || verb === "upgrade" ? capturePluginActivationOrigin() : null;
-		if ((verb === "uninstall" || verb === "upgrade") && !origin) {
-			throw new Error(t("pluginActivation.routePending"));
-		}
-		const payload: { action: typeof verb; marketplace?: string; plugin?: string; source?: string } = {
-			action: verb,
-		};
-		if (verb === "add") payload.source = input;
-		else if (verb === "remove" || verb === "update") {
-			if (input) payload.marketplace = input;
-		} else {
-			// uninstall/upgrade address plugins as name@marketplace (TUI arg form).
-			const at = input.lastIndexOf("@");
-			if (at <= 0 || at === input.length - 1) throw new Error(t("marketplaceAction.badId", { id: input }));
-			payload.plugin = input.slice(0, at);
-			payload.marketplace = input.slice(at + 1);
-		}
-		const res = await boundRpc.marketplaceAction(payload);
-		if (!res.success) throw new Error(res.error);
-		const data = res.data as { ok?: boolean; error?: string; activation?: string } | undefined;
-		if (data?.ok === false) throw new Error(data.error ?? t("marketplaceAction.failed"));
-		if (origin) {
-			await handlePluginActivation(
-				data?.activation,
-				{ pluginId: input, expected: verb === "uninstall" ? "disabled" : "enabled" },
-				origin,
-			);
-			if (!isPluginActivationOriginActive(origin)) return;
-		}
-		await ctx.hydrateSession();
-		toast({ variant: "success", message: t(`marketplaceAction.${verb}`, { name: input }) });
-	};
-
-	/** /plugins enable|disable <name@marketplace>; a bare invocation opens the installed-plugins tab. */
-	const runPluginEnabled = async (enabled: boolean, args?: string): Promise<void> => {
-		const id = args?.trim();
-		if (!id) {
-			ctx.openSettings("resources:plugins");
-			return;
-		}
-		const origin = capturePluginActivationOrigin();
-		if (!origin) throw new Error(t("pluginActivation.routePending"));
-		const res = await boundRpc.setPluginEnabled(id, enabled);
-		if (!res.success) throw new Error(res.error);
-		const data = res.data as { activation?: string } | undefined;
-		await handlePluginActivation(
-			data?.activation,
-			{ pluginId: id, expected: enabled ? "enabled" : "disabled" },
-			origin,
-		);
-		if (isPluginActivationOriginActive(origin)) {
-			await ctx.hydrateSession();
-			toast({
-				variant: "success",
-				message: t(enabled ? "pluginAction.enabled" : "pluginAction.disabled", { name: id }),
-			});
-		}
-	};
-
 	// ═══════════════════════════════════════════════════════════════════
 	// SESSION
 	// ═══════════════════════════════════════════════════════════════════
 	// /new and /clear replace the session server-side and would silently abort
 	// an in-flight run — block while busy, same guard as the menu/deep-link
-	// paths and the WorkspaceDialog actions.
+	// paths.
 	const newSessionGuarded = (): Promise<unknown> | undefined => {
 		const { isStreaming, isCompacting } = useSessionStore.getState();
 		if (isStreaming || isCompacting) {
@@ -473,14 +342,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "action", run: () => useTabsStore.getState().openTab() },
 	});
 	add({
-		name: "new-chat-tab",
-		label: t("cmd.newChatTab"),
-		description: t("cmd.newChatTab.desc"),
-		category: "session",
-		shortcut: "⇧⌘T",
-		affordance: { kind: "action", run: () => useTabsStore.getState().openTab({ kind: "chat" }) },
-	});
-	add({
 		name: "clear",
 		label: t("cmd.clear"),
 		description: t("cmd.clear.desc"),
@@ -493,13 +354,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		description: t("cmd.resume.desc"),
 		category: "session",
 		affordance: { kind: "picker", open: ctx.openSessionPicker },
-	});
-	add({
-		name: "import",
-		label: t("cmd.import"),
-		description: t("cmd.import.desc"),
-		category: "session",
-		affordance: { kind: "window", open: () => ctx.openImportDialog() },
 	});
 	add({
 		name: "session",
@@ -529,25 +383,11 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "picker", open: ctx.openRenameDialog },
 	});
 	add({
-		name: "handoff",
-		label: t("cmd.handoff"),
-		description: t("cmd.handoff.desc"),
-		category: "session",
-		affordance: { kind: "picker", open: ctx.openHandoffDialog },
-	});
-	add({
 		name: "export",
 		label: t("cmd.export"),
 		description: t("cmd.export.desc"),
 		category: "session",
 		affordance: { kind: "action", run: () => exportSessionHtml() },
-	});
-	add({
-		name: "share",
-		label: t("cmd.share"),
-		description: t("cmd.share.desc"),
-		category: "session",
-		affordance: { kind: "window", open: () => useUiStore.getState().openShareSession() },
 	});
 	add({
 		name: "dump",
@@ -557,25 +397,11 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "action", run: () => dumpTranscriptToClipboard() },
 	});
 	add({
-		name: "branch",
-		label: t("cmd.branch"),
-		description: t("cmd.branch.desc"),
-		category: "session",
-		affordance: { kind: "picker", open: ctx.openBranchPicker },
-	});
-	add({
 		name: "fork",
 		label: t("cmd.fork"),
 		description: t("cmd.fork.desc"),
 		category: "session",
 		affordance: { kind: "action", run: () => ctx.forkSession() },
-	});
-	add({
-		name: "tree",
-		label: t("cmd.tree"),
-		description: t("cmd.tree.desc"),
-		category: "session",
-		affordance: { kind: "window", open: ctx.openSessionTree },
 	});
 	add({
 		name: "delete",
@@ -715,29 +541,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 			],
 		},
 	});
-	add({
-		name: "model-roles",
-		label: t("cmd.modelRoles"),
-		description: t("cmd.modelRoles.desc"),
-		category: "model",
-		affordance: { kind: "window", open: ctx.openModelRoles },
-	});
-	add({
-		name: "model-compare",
-		label: t("cmd.modelCompare"),
-		description: t("cmd.modelCompare.desc"),
-		category: "model",
-		aliases: ["compare"],
-		affordance: { kind: "window", open: ctx.openModelCompare },
-	});
-	add({
-		name: "benchmark",
-		label: t("cmd.benchmark"),
-		description: t("cmd.benchmark.desc"),
-		category: "model",
-		aliases: ["bench", "performance"],
-		affordance: { kind: "window", open: ctx.openBenchmark },
-	});
 
 	// ═══════════════════════════════════════════════════════════════════
 	// CONTEXT
@@ -787,13 +590,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		},
 	});
 	add({
-		name: "context",
-		label: t("cmd.context"),
-		description: t("cmd.context.desc"),
-		category: "context",
-		affordance: { kind: "window", open: () => useUiStore.getState().openContextReport() },
-	});
-	add({
 		name: "auto-compact",
 		label: t("cmd.autoCompact"),
 		description: t("cmd.autoCompact.desc"),
@@ -833,59 +629,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "action", run: () => freshGuarded() },
 	});
 
-	// ═══════════════════════════════════════════════════════════════════
-	// TOOLS
-	// ═══════════════════════════════════════════════════════════════════
-	add({
-		name: "tools",
-		label: t("cmd.tools"),
-		description: t("cmd.tools.desc"),
-		category: "tools",
-		affordance: { kind: "window", open: () => useUiStore.getState().openActiveTools() },
-	});
-	add({
-		name: "computer",
-		label: t("cmd.computer"),
-		description: t("cmd.computer.desc"),
-		category: "tools",
-		affordance: {
-			kind: "submenu",
-			items: [
-				// Same set_setting mutation the SettingsWindow computer.enabled toggle uses.
-				subAction("computer on", () => writeSetting("computer.enabled", true, t("computer.on"))),
-				subAction("computer off", () => writeSetting("computer.enabled", false, t("computer.off"))),
-				subAction("computer status", async () => {
-					const value = await readSetting("computer.enabled");
-					toast({
-						variant: "info",
-						title: t("cmd.computer"),
-						message: t(value === true ? "computer.on" : "computer.off"),
-					});
-				}),
-			],
-		},
-	});
-	add({
-		name: "browser",
-		label: t("cmd.browser"),
-		description: t("cmd.browser.desc"),
-		category: "tools",
-		affordance: {
-			kind: "submenu",
-			// Same set_setting mutation the SettingsWindow browser.headless toggle uses.
-			items: [
-				subAction("browser headless", () => writeSetting("browser.headless", true, t("browser.headlessOn"))),
-				subAction("browser visible", () => writeSetting("browser.headless", false, t("browser.visibleOn"))),
-			],
-		},
-	});
-	add({
-		name: "force",
-		label: t("cmd.force"),
-		description: t("cmd.force.desc"),
-		category: "tools",
-		affordance: { kind: "picker", open: () => useUiStore.getState().openForceTool() },
-	});
 	add({
 		name: "todo",
 		label: t("cmd.todo"),
@@ -921,329 +664,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		aliases: ["setup"],
 		affordance: { kind: "window", open: ctx.openProviders },
 	});
-	add({
-		name: "usage",
-		label: t("cmd.usage"),
-		description: t("cmd.usage.desc"),
-		category: "providers",
-		affordance: { kind: "window", open: ctx.openUsage },
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
-	// EXTENSIONS
-	// ═══════════════════════════════════════════════════════════════════
-	add({
-		name: "skills",
-		label: t("cmd.skills"),
-		description: t("cmd.skills.desc"),
-		category: "extensions",
-		affordance: { kind: "window", open: () => ctx.openSettings("skills") },
-	});
-	add({
-		name: "hooks",
-		label: t("cmd.hooks"),
-		description: t("cmd.hooks.desc"),
-		category: "extensions",
-		affordance: { kind: "window", open: () => ctx.openSettings("hooks") },
-	});
-	add({
-		name: "commands",
-		label: t("cmd.commands"),
-		description: t("cmd.commands.desc"),
-		category: "extensions",
-		affordance: { kind: "window", open: () => ctx.openSettings("commands") },
-	});
-	add({
-		name: "mcp",
-		label: t("cmd.mcp"),
-		description: t("cmd.mcp.desc"),
-		category: "extensions",
-		affordance: {
-			kind: "submenu",
-			items: [
-				{
-					name: "mcp panel",
-					label: t("cmd.mcp.panel"),
-					description: t("cmd.mcp.panel.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("mcp") },
-				},
-				{
-					name: "mcp list",
-					label: t("cmd.mcp.list"),
-					description: t("cmd.mcp.list.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("mcp") },
-				},
-				// add/test/reauth are covered natively by the MCP tab (wizard + cards).
-				subWindow("mcp add", () => ctx.openSettings("mcp")),
-				subAction("mcp remove", args => runMcpAction("remove", args)),
-				subWindow("mcp test", () => ctx.openSettings("mcp")),
-				subAction("mcp enable", args => runMcpAction("enable", args)),
-				subAction("mcp disable", args => runMcpAction("disable", args)),
-				subWindow("mcp reauth", () => ctx.openSettings("mcp")),
-				sub("mcp unauth", "/mcp unauth ", "<name>"),
-				subAction("mcp reconnect", args => runMcpAction("reconnect", args)),
-				sub("mcp reload", "/mcp reload"),
-				sub("mcp resources", "/mcp resources"),
-				sub("mcp prompts", "/mcp prompts"),
-				sub("mcp notifications", "/mcp notifications"),
-				sub("mcp smithery-search", "/mcp smithery-search ", "<keyword>"),
-				sub("mcp smithery-login", "/mcp smithery-login"),
-				sub("mcp smithery-logout", "/mcp smithery-logout"),
-				sub("mcp help", "/mcp help"),
-			],
-		},
-	});
-	add({
-		name: "marketplace",
-		label: t("cmd.marketplace"),
-		description: t("cmd.marketplace.desc"),
-		category: "extensions",
-		affordance: {
-			kind: "submenu",
-			items: [
-				{
-					name: "marketplace panel",
-					label: t("cmd.marketplace.panel"),
-					description: t("cmd.marketplace.panel.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("resources:marketplaces") },
-				},
-				{
-					name: "marketplace list",
-					label: t("cmd.marketplace.list"),
-					description: t("cmd.marketplace.list.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("resources:marketplaces") },
-				},
-				subAction("marketplace add", args => runMarketplaceAction("add", args)),
-				subAction("marketplace remove", args => runMarketplaceAction("remove", args)),
-				subAction("marketplace update", args => runMarketplaceAction("update", args)),
-				subWindow("marketplace discover", () => ctx.openSettings("resources:marketplaces")),
-				subWindow("marketplace install", () => ctx.openSettings("resources:marketplaces")),
-				subAction("marketplace uninstall", args => runMarketplaceAction("uninstall", args)),
-				{
-					name: "marketplace installed",
-					label: t("cmd.marketplace.installed"),
-					description: t("cmd.marketplace.installed.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("resources:plugins") },
-				},
-				subAction("marketplace upgrade", args => runMarketplaceAction("upgrade", args)),
-				sub("marketplace help", "/marketplace help"),
-			],
-		},
-	});
-	add({
-		name: "plugins",
-		label: t("cmd.plugins"),
-		description: t("cmd.plugins.desc"),
-		category: "extensions",
-		affordance: {
-			kind: "submenu",
-			items: [
-				{
-					name: "plugins panel",
-					label: t("cmd.plugins.panel"),
-					description: t("cmd.plugins.panel.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("resources:plugins") },
-				},
-				sub("plugins list", "/plugins list"),
-				subAction("plugins enable", args => runPluginEnabled(true, args)),
-				subAction("plugins disable", args => runPluginEnabled(false, args)),
-			],
-		},
-	});
-	add({
-		name: "reload-plugins",
-		label: t("cmd.reloadPlugins"),
-		description: t("cmd.reloadPlugins.desc"),
-		category: "extensions",
-		affordance: { kind: "action", run: () => reloadPluginsFromGui(ctx.hydrateSession) },
-	});
-	add({
-		name: "memory",
-		label: t("cmd.memory"),
-		description: t("cmd.memory.desc"),
-		category: "extensions",
-		affordance: {
-			kind: "submenu",
-			items: [
-				{
-					name: "memory panel",
-					label: t("cmd.memory.panel"),
-					description: t("cmd.memory.panel.desc"),
-					category: "extensions",
-					affordance: { kind: "window", open: () => ctx.openSettings("resources:memory") },
-				},
-				// The Inventory memory tab covers view/stats/diagnose natively.
-				subWindow("memory view", () => ctx.openSettings("resources:memory")),
-				subWindow("memory stats", () => ctx.openSettings("resources:memory")),
-				subWindow("memory diagnose", () => ctx.openSettings("resources:memory")),
-				sub("memory clear", "/memory clear"),
-				sub("memory enqueue", "/memory enqueue"),
-			],
-		},
-	});
-	add({
-		name: "security",
-		label: t("cmd.security"),
-		description: t("cmd.security.desc"),
-		category: "extensions",
-		affordance: {
-			kind: "submenu",
-			items: [
-				sub("security plan", "/security plan"),
-				sub("security scan", "/security scan"),
-				sub("security status", "/security status"),
-				sub("security cancel", "/security cancel"),
-				sub("security scans", "/security scans"),
-				sub("security show", "/security show ", "<id>"),
-				sub("security import", "/security import ", "<path>"),
-				sub("security export", "/security export"),
-				sub("security validate", "/security validate ", "<id>"),
-				sub("security compare", "/security compare"),
-				sub("security disposition", "/security disposition"),
-			],
-		},
-	});
-	add({
-		name: "templates",
-		label: t("cmd.templates"),
-		description: t("cmd.templates.desc"),
-		category: "extensions",
-		aliases: ["prompt-templates"],
-		affordance: { kind: "window", open: () => ctx.openSettings("resources:templates") },
-	});
-	add({
-		name: "ssh",
-		label: t("cmd.ssh"),
-		description: t("cmd.ssh.desc"),
-		category: "extensions",
-		affordance: {
-			kind: "submenu",
-			items: [
-				// The native page owns host selection, validation, and confirmation.
-				subWindow("ssh list", () => ctx.openSettings("ssh")),
-				subWindow("ssh add", () => ctx.openSettings("ssh")),
-				subWindow("ssh remove", () => ctx.openSettings("ssh")),
-				sub("ssh help", "/ssh help"),
-			],
-		},
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
-	// MODES
-	// ═══════════════════════════════════════════════════════════════════
-	add({
-		name: "plan",
-		label: t("cmd.plan"),
-		description: t("cmd.plan.desc"),
-		category: "modes",
-		shortcut: "⌥⇧P",
-		affordance: {
-			kind: "toggle",
-			get: () => ctx.planModeEnabled,
-			set: e =>
-				runSessionCommand(ctx.rpc.setPlanMode(e), "Plan mode", data => {
-					const d = data as { enabled?: boolean } | undefined;
-					useSessionStore.setState({ planModeEnabled: d?.enabled ?? e });
-				}),
-		},
-	});
-	add({
-		name: "vibe",
-		label: t("cmd.vibe"),
-		description: t("cmd.vibe.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes("vibe") },
-	});
-	add({
-		name: "goal",
-		label: t("cmd.goal"),
-		description: t("cmd.goal.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes("goal") },
-	});
-	add({
-		name: "loop",
-		label: t("cmd.loop"),
-		description: t("cmd.loop.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes("loop") },
-	});
-	// The Modes window is the native form of TUI /modes; without this row the
-	// sidecar-advertised command merges in as a dead "TUI-only" entry.
-	add({
-		name: "modes",
-		label: t("cmd.modes"),
-		description: t("cmd.modes.desc"),
-		category: "modes",
-		affordance: { kind: "window", open: () => ctx.openModes() },
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
-	// WORKSPACE
-	// ═══════════════════════════════════════════════════════════════════
-	// /dirs and /remove-dir open the workspace-directories dialog (it lists the
-	// roots and confirms removals inline); /add-dir and /move go straight to
-	// the native directory picker + RPC, with the same client-side busy guard
-	// as /new and /clear (the server also refuses with the "busy" code).
-	const workspaceMutationBusy = (): boolean => {
-		const { isStreaming, isCompacting } = useSessionStore.getState();
-		if (isStreaming || isCompacting) {
-			toast({ variant: "warning", message: t("sessionSwitch.busyBlocked") });
-			return true;
-		}
-		return false;
-	};
-	const pickAndAdd = async (): Promise<void> => {
-		if (workspaceMutationBusy()) return;
-		const path = await pickWorkspaceDirectory();
-		if (path) await addWorkspaceDirectory(path);
-	};
-	const pickAndMove = async (): Promise<void> => {
-		if (workspaceMutationBusy()) return;
-		const path = await pickWorkspaceDirectory();
-		if (path) await moveSessionTo(path);
-	};
-	add({
-		name: "move",
-		label: t("cmd.move"),
-		description: t("cmd.move.desc"),
-		category: "workspace",
-		affordance: { kind: "picker", open: () => void pickAndMove() },
-	});
-	add({
-		name: "add-dir",
-		label: t("cmd.addDir"),
-		description: t("cmd.addDir.desc"),
-		category: "workspace",
-		affordance: { kind: "picker", open: () => void pickAndAdd() },
-	});
-	add({
-		name: "remove-dir",
-		label: t("cmd.removeDir"),
-		description: t("cmd.removeDir.desc"),
-		category: "workspace",
-		affordance: { kind: "window", open: () => useUiStore.getState().openWorkspaceDirs() },
-	});
-	add({
-		name: "dirs",
-		label: t("cmd.dirs"),
-		description: t("cmd.dirs.desc"),
-		category: "workspace",
-		affordance: { kind: "window", open: () => useUiStore.getState().openWorkspaceDirs() },
-	});
-	add({
-		name: "git",
-		label: t("cmd.git"),
-		description: t("cmd.git.desc"),
-		category: "workspace",
-		affordance: { kind: "window", open: () => useUiStore.getState().setPanelTab("diff") },
-	});
 
 	// ═══════════════════════════════════════════════════════════════════
 	// VIEW
@@ -1262,13 +682,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		category: "view",
 		shortcut: "⌘,",
 		affordance: { kind: "window", open: ctx.openSettings },
-	});
-	add({
-		name: "stats",
-		label: t("cmd.stats"),
-		description: t("cmd.stats.desc"),
-		category: "view",
-		affordance: { kind: "window", open: ctx.openStatsDashboard },
 	});
 	add({
 		name: "jobs",
@@ -1299,14 +712,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "window", open: () => ctx.openHotkeys() },
 	});
 	add({
-		name: "extensions",
-		label: t("cmd.extensions"),
-		description: t("cmd.extensions.desc"),
-		category: "view",
-		aliases: ["status"],
-		affordance: { kind: "window", open: () => ctx.openSettings("skills") },
-	});
-	add({
 		name: "agents",
 		label: t("cmd.agents"),
 		description: t("cmd.agents.desc"),
@@ -1319,38 +724,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		description: t("cmd.hub.desc"),
 		category: "view",
 		affordance: { kind: "window", open: () => ctx.openAgentHub("hub") },
-	});
-	add({
-		name: "prs",
-		label: t("cmd.prCenter"),
-		description: t("cmd.prCenter.desc"),
-		category: "view",
-		affordance: { kind: "window", open: () => ctx.openPrCenter() },
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
-	// LIVE COLLABORATION
-	// ═══════════════════════════════════════════════════════════════════
-	add({
-		name: "collab",
-		label: t("cmd.collab"),
-		description: t("cmd.collab.desc"),
-		category: "other",
-		affordance: { kind: "action", run: args => runCollabCommand(args) },
-	});
-	add({
-		name: "join",
-		label: t("cmd.join"),
-		description: t("cmd.join.desc"),
-		category: "other",
-		affordance: { kind: "action", argUsage: "<collab-link>", run: link => joinCollab(link) },
-	});
-	add({
-		name: "leave",
-		label: t("cmd.leave"),
-		description: t("cmd.leave.desc"),
-		category: "other",
-		affordance: { kind: "action", run: () => leaveCollab() },
 	});
 
 	// ═══════════════════════════════════════════════════════════════════
@@ -1389,20 +762,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "action", argUsage: "<complaint>", run: complaint => forgeTtsrRule(complaint) },
 	});
 	add({
-		name: "debug",
-		label: t("cmd.debug"),
-		description: t("cmd.debug.desc"),
-		category: "other",
-		affordance: { kind: "window", open: () => useUiStore.getState().openDebug() },
-	});
-	add({
-		name: "live",
-		label: t("cmd.live"),
-		description: t("cmd.live.desc"),
-		category: "other",
-		affordance: { kind: "window", open: () => useUiStore.getState().openLive() },
-	});
-	add({
 		name: "pause",
 		label: t("cmd.pause"),
 		description: t("cmd.pause.desc"),
@@ -1418,42 +777,12 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 			},
 		},
 	});
-	add({
-		name: "plan-review",
-		label: t("cmd.planReview"),
-		description: t("cmd.planReview.desc"),
-		category: "other",
-		affordance: {
-			kind: "action",
-			run: () => {
-				// The dock card only renders while plan mode is on — point at the toggle otherwise.
-				if (!useSessionStore.getState().planModeEnabled) {
-					toast({ variant: "info", message: translate("planPanel.statusOff") });
-					return;
-				}
-				ctx.focusDockCard("plan");
-			},
-		},
-	});
-	add({
-		name: "guided-goal",
-		label: t("cmd.guidedGoal"),
-		description: t("cmd.guidedGoal.desc"),
-		category: "other",
-		affordance: {
-			kind: "action",
-			run: async initial => {
-				const response = await boundRpc.guidedGoal(initial);
-				if (!response.success) throw new Error(response.error);
-			},
-		},
-	});
 
 	// Merge sidecar-advertised commands not already covered. A name claimed by
 	// a native item — as its name OR one of its aliases — is dropped: `/models`
 	// and `/modes` must not appear as dead rows next to the working picker.
 	for (const cmd of ctx.availableCommands) {
-		if (claimed.has(cmd.name) || HIDDEN_ACCOUNT_COMMANDS.has(cmd.name)) continue;
+		if (claimed.has(cmd.name) || HIDDEN_ACCOUNT_COMMANDS.has(cmd.name) || REMOVED_COMMANDS.has(cmd.name)) continue;
 		// Keep terminal-only commands visible as disabled rows. The palette is
 		// the GUI's command index; hiding a command makes its client limitation opaque.
 		if (cmd.textModeExecutable === false) {
@@ -1530,72 +859,6 @@ async function freshProviderStateFromGui(): Promise<void> {
 		return;
 	}
 	toast({ variant: "success", message: translate("fresh.success") });
-}
-
-/** /reload-plugins: reload plugin state via the reload_plugins RPC, toast the
- *  post-reload counts, and rehydrate so the extensions inventory refreshes. */
-async function reloadPluginsFromGui(hydrate: () => Promise<void>): Promise<void> {
-	const runtime = focusedSessionRuntime();
-	const rpc = runtime ? createTabRpc(runtime.command) : window.omp.rpc;
-	const response = await rpc.reloadPlugins();
-	if (!response.success) {
-		toast({ variant: "error", title: translate("cmd.reloadPlugins"), message: response.error });
-		return;
-	}
-	const counts = (response.data as { plugins?: number; skills?: number; commands?: number } | undefined) ?? {};
-	toast({
-		variant: "success",
-		title: translate("cmd.reloadPlugins"),
-		message: translate("reloadPlugins.success", {
-			plugins: counts.plugins ?? 0,
-			skills: counts.skills ?? 0,
-			commands: counts.commands ?? 0,
-		}),
-	});
-	await hydrate();
-}
-
-async function runCollabCommand(args?: string): Promise<void> {
-	const runtime = focusedSessionRuntime();
-	const rpc = runtime ? createTabRpc(runtime.command) : window.omp.rpc;
-	const input = args?.trim() ?? "";
-	if (!input) {
-		useUiStore.getState().openCollab();
-		return;
-	}
-	const [verb, ...rest] = input.split(/\s+/);
-	if (verb === "stop") {
-		await leaveCollab();
-		return;
-	}
-	if (verb === "status") {
-		useUiStore.getState().openCollab();
-		return;
-	}
-	const knownVerb = verb === "start" || verb === "view";
-	const relayUrl = knownVerb ? rest.join(" ").trim() : input;
-	const response = await rpc.collabStart(relayUrl || undefined, verb === "view");
-	if (!response.success) throw new Error(response.error);
-	useUiStore.getState().openCollab();
-}
-
-async function joinCollab(link?: string): Promise<void> {
-	const trimmed = link?.trim();
-	if (!trimmed) {
-		toast({ variant: "info", message: translate("collab.joinUsage") });
-		return;
-	}
-	useUiStore.getState().openCollab(trimmed);
-}
-
-async function leaveCollab(): Promise<void> {
-	const runtime = focusedSessionRuntime();
-	const rpc = runtime ? createTabRpc(runtime.command) : window.omp.rpc;
-	const response = await rpc.collabLeave();
-	if (!response.success) throw new Error(response.error);
-	if (runtime) await hydrateTabSession(runtime.tabId);
-	else await hydrateSession();
-	toast({ variant: "success", message: translate("collab.left") });
 }
 
 async function copyFromChat(args?: string): Promise<void> {
@@ -1743,27 +1006,14 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 		availableCommands,
 		openModelPicker: ui.openModelPicker,
 		openSettings: ui.openSettings,
-		openUsage: ui.openUsage,
 		openProviders: ui.openProviders,
 		openCommandPalette: ui.openCommandPalette,
-		openModelRoles: ui.openModelRoles,
-		openStatsDashboard: ui.openStatsDashboard,
 		openRenameDialog: ui.openRenameDialog,
 		openSessionPicker: ui.openSessionPicker,
-		openBranchPicker: ui.openBranchPicker,
-		openSessionTree: ui.openSessionTree,
 		openSessionInfo: ui.openSessionInfo,
-		openModelCompare: ui.openModelCompare,
-		openBenchmark: ui.openBenchmark,
-		openHandoffDialog,
-		openExtensions: ui.openExtensions,
-		openInventory: ui.openInventory,
 		openThemePicker: ui.openThemePicker,
-		openModes: ui.openModes,
 		openAgentHub: ui.openAgentHub,
-		openPrCenter: ui.openPrCenter,
 		openHotkeys: ui.openHotkeys,
-		openImportDialog: ui.openImportDialog,
 		focusDockCard: ui.focusDockCard,
 		retryTurn: retryFailedTurn,
 		retryLastTurn: () =>
@@ -1787,7 +1037,6 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 			newSession: async () => {
 				return newSessionNow();
 			},
-			handoff: () => rpc.handoff(),
 			prompt: message => rpc.prompt(message),
 			setPlanMode: enabled => rpc.setPlanMode(enabled),
 			setPrewalk: enabled => rpc.setPrewalk(enabled),

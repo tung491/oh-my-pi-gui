@@ -54,7 +54,7 @@ afterEach(() => {
 	delete (globalThis as Record<string, unknown>).window;
 	useTabsStore.getState().reset();
 	useSessionStore.getState().reset();
-	useUiStore.setState({ armedCloseTab: null, worktreeClosePrompt: null });
+	useUiStore.setState({ armedCloseTab: null });
 });
 
 describe("tabNeedsCloseConfirm", () => {
@@ -105,16 +105,15 @@ describe("closeActiveTab", () => {
 		expect(useTabsStore.getState().tabs.map(entry => entry.id)).toEqual(["b"]);
 	});
 
-	it("routes a worktree tab's close to the cleanup prompt instead of dropping the checkout", async () => {
+	it("closes an idle worktree tab like any other tab", async () => {
 		useTabsStore.setState({
 			tabs: [tab("a", { worktree: { name: "fix", branch: "omp/gui/fix", baseCwd: "/work/base" } }), tab("b")],
 			activeTabId: "a",
 		});
 
-		expect(closeActiveTab()).toBe("worktree-prompt");
-		expect(useUiStore.getState().worktreeClosePrompt).toEqual({ tabId: "a" });
-		expect(omp.tabs.close).not.toHaveBeenCalled();
-		expect(useTabsStore.getState().tabs).toHaveLength(2);
+		expect(closeActiveTab()).toBe("closed");
+		await vi.waitFor(() => expect(omp.tabs.close).toHaveBeenCalledWith("a"));
+		expect(useTabsStore.getState().tabs.map(entry => entry.id)).toEqual(["b"]);
 	});
 
 	it("closes an idle tab with no confirm interlude", async () => {

@@ -8,18 +8,7 @@
  * overflow instead of shrinking chips past readability.
  */
 
-import {
-	Check,
-	Columns2,
-	GitBranch,
-	GitBranchPlus,
-	MessageCircle,
-	MessageCirclePlus,
-	MoreHorizontal,
-	Plus,
-	Rows2,
-	X,
-} from "lucide-react";
+import { Check, Columns2, GitBranch, MessageCircle, MoreHorizontal, Plus, Rows2, X } from "lucide-react";
 import {
 	type DragEvent as ReactDragEvent,
 	type MouseEvent as ReactMouseEvent,
@@ -543,42 +532,21 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
 }
 
 /**
- * New-tab affordance: agent, tool-free chat, and worktree.
+ * New-tab affordance: a new task tab.
  */
 function NewTabMenu() {
 	const keyboardPlatform = currentKeyboardPlatform();
 	const t = useT();
 	const openTab = useTabsStore(s => s.openTab);
-	const openWorktreeDialog = useUiStore(s => s.openWorktreeDialog);
 	return (
-		<>
-			<IconButton
-				className="no-drag"
-				icon={<Plus size={14} />}
-				label={t("tabs.new.agent")}
-				onClick={() => void openTab()}
-				size="sm"
-				title={t("tabs.new.agentHint", { chord: displayShortcut("⌘T", keyboardPlatform) })}
-				variant="ghost"
-			/>
-			<IconButton
-				className="no-drag"
-				icon={<MessageCirclePlus size={14} />}
-				label={t("tabs.new.chat")}
-				onClick={() => void openTab({ kind: "chat" })}
-				size="sm"
-				title={t("tabs.new.chatHint", { chord: displayShortcut("⇧⌘T", keyboardPlatform) })}
-				variant="ghost"
-			/>
-			<IconButton
-				className="no-drag"
-				icon={<GitBranchPlus size={14} />}
-				label={t("tabs.new.worktree")}
-				onClick={() => openWorktreeDialog()}
-				size="sm"
-				title={t("tabs.new.worktreeHint", { chord: displayShortcut("⌥T", keyboardPlatform) })}
-				variant="ghost"
-			/>
-		</>
+		<IconButton
+			className="no-drag"
+			icon={<Plus size={14} />}
+			label={t("tabs.new.agent")}
+			onClick={() => void openTab()}
+			size="sm"
+			title={t("tabs.new.agentHint", { chord: displayShortcut("⌘T", keyboardPlatform) })}
+			variant="ghost"
+		/>
 	);
 }

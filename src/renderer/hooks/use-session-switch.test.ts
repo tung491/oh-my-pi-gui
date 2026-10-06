@@ -14,7 +14,6 @@ import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { IpcSessionOwner, SessionInfo } from "../../shared/ipc-types";
 import type { RpcResponse, RpcSessionState } from "../../shared/rpc-types";
 import { useComposerStore } from "../stores/composer";
-import { useForkHandoffStore } from "../stores/fork-handoff";
 import { useMessagesStore } from "../stores/messages";
 import { useModelStore } from "../stores/model";
 import { usePlanApprovalStore } from "../stores/plan-approval";
@@ -150,7 +149,6 @@ function resetAll(): void {
 	useToolsStore.getState().reset();
 	usePlanApprovalStore.getState().clearProposal();
 	useUiStore.getState().closeSessionOverlays();
-	useForkHandoffStore.getState().closeHandoffDialog();
 	useToastStore.setState({ toasts: [] });
 }
 
@@ -301,11 +299,9 @@ describe("switchSessionNow F-OWN owner guard", () => {
 			planContent: "old plan",
 			options: ["execute"],
 		});
-		useUiStore.getState().openContextReport();
-		useForkHandoffStore.getState().openHandoffDialog();
+		useUiStore.getState().openSessionInfo();
 		useSessionStore.setState({
 			goal: { objective: "old goal" },
-			loopMode: { enabled: true, state: "running" },
 			vibeModeEnabled: true,
 		});
 		const transcript = Promise.withResolvers<RpcResponse>();

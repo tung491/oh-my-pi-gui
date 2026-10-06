@@ -256,15 +256,7 @@ export const KEYMAP_ACTIONS = [
 		hotkeyGroup: "generation",
 	},
 	{ id: "retry", labelKey: "hotkeys.row.retry", defaults: ["⌥R"], overlaySafe: false, hotkeyGroup: "generation" },
-	{ id: "pr.center", labelKey: "hotkeys.row.prCenter", defaults: ["⌥P"], overlaySafe: false, hotkeyGroup: "session" },
 	{ id: "dequeue", labelKey: "hotkeys.row.dequeue", defaults: ["⌥↑"], overlaySafe: false, hotkeyGroup: "generation" },
-	{
-		id: "plan.toggle",
-		labelKey: "hotkeys.row.planToggle",
-		defaults: ["⌥⇧P"],
-		overlaySafe: false,
-		hotkeyGroup: "generation",
-	},
 	{
 		id: "tools.expand",
 		labelKey: "hotkeys.row.expandTools",
@@ -296,20 +288,6 @@ export const KEYMAP_ACTIONS = [
 	},
 	{ id: "palette", labelKey: "hotkeys.row.palette", defaults: ["⌘K", "⌃K"], overlaySafe: true, hotkeyGroup: "view" },
 	{ id: "tab.new", labelKey: "hotkeys.row.tabNew", defaults: ["⌘T"], overlaySafe: false, hotkeyGroup: "session" },
-	{
-		id: "tab.newChat",
-		labelKey: "hotkeys.row.tabNewChat",
-		defaults: ["⇧⌘T"],
-		overlaySafe: false,
-		hotkeyGroup: "session",
-	},
-	{
-		id: "tab.newWorktree",
-		labelKey: "hotkeys.row.tabNewWorktree",
-		defaults: ["⌥T"],
-		overlaySafe: false,
-		hotkeyGroup: "session",
-	},
 	{
 		// ⌘W closes the active TAB (⇧⌘W closes the window — shared/hotkeys.ts).
 		id: "tab.close",
