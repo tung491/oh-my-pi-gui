@@ -6,7 +6,12 @@ import Store from "electron-store";
 import { describe, expect, it, vi } from "vitest";
 import type { CommandOutputFrame, PromptResultFrame, SidecarStatus, SidecarStatusPayload } from "../shared/rpc-types";
 import { ASSISTANT_PACK_FILES } from "./assistant-pack";
-import { missingSidecarMessage, type SidecarFailureReport, SidecarManager } from "./sidecar";
+import {
+	missingSidecarMessage,
+	type SidecarFailureReport,
+	SidecarManager,
+	type SidecarStartRefusalReport,
+} from "./sidecar";
 
 /** The `--tools` value of the spawn contract for the platform running the suite. */
 const PACK_TOOLS =
@@ -583,4 +588,70 @@ describe("SidecarManager", () => {
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}
 	}, 15_000);
+
+	it("keeps the whole refused-start status for a window that subscribes late", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-late-"));
+		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
+		await fs.writeFile(binaryPath, "#!/usr/bin/env bun\nprocess.stdin.resume();\n");
+		await fs.chmod(binaryPath, 0o755);
+		const sessionPath = path.join(tempDir, "old-chat.jsonl");
+		await fs.writeFile(
+			sessionPath,
+			`{"title":"Old chat"}\n${JSON.stringify({ type: "session", id: "c", kind: "chat" })}\n`,
+		);
+		const noBinary = new SidecarManager({ binaryPath: "", cwd: tempDir, packaged: true });
+		const partialPack = new SidecarManager({ binaryPath, cwd: tempDir, packaged: true });
+		const chat = new SidecarManager({ binaryPath, cwd: tempDir });
+		try {
+			// Before any start, the payload is the asleep status in the sidecar's folder.
+			expect(noBinary.statusPayload).toEqual({ status: "asleep", cwd: tempDir });
+			// Nothing listens while these starts are refused: the payload is all a late window gets.
+			noBinary.start();
+			expect(noBinary.statusPayload).toEqual({
+				status: "error",
+				message: missingSidecarMessage(true, process.resourcesPath),
+				cwd: tempDir,
+			});
+			await makePackFixture(tempDir, "config.yml");
+			partialPack.start();
+			expect(partialPack.statusPayload).toMatchObject({ status: "error", cwd: tempDir });
+			expect(partialPack.statusPayload.message).toContain("config.yml");
+			await fs.writeFile(path.join(tempDir, "assistant-pack", "config.yml"), "x");
+			chat.restart(undefined, sessionPath);
+			expect(chat.statusPayload).toEqual({
+				status: "error",
+				message: `The session file is stamped chat: ${sessionPath}`,
+				cwd: tempDir,
+				refusal: "kind-mismatch",
+			});
+		} finally {
+			for (const sidecar of [noBinary, partialPack, chat]) sidecar.dispose();
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
+	it("writes each refused start to the runtime log once", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-refusal-log-"));
+		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
+		await fs.writeFile(binaryPath, "#!/usr/bin/env bun\nprocess.stdin.resume();\n");
+		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir, "config.yml");
+		const reports: SidecarStartRefusalReport[] = [];
+		const reportStartRefusal = (report: SidecarStartRefusalReport) => reports.push(report);
+		const noBinary = new SidecarManager({ binaryPath: "", cwd: tempDir, packaged: true, reportStartRefusal });
+		const partialPack = new SidecarManager({ binaryPath, cwd: tempDir, packaged: true, reportStartRefusal });
+		try {
+			noBinary.start();
+			partialPack.start();
+			expect(reports).toEqual([
+				{ message: noBinary.statusPayload.message, cwd: tempDir },
+				{ message: partialPack.statusPayload.message, cwd: tempDir },
+			]);
+			expect(reports[1]?.message).toContain("config.yml");
+		} finally {
+			noBinary.dispose();
+			partialPack.dispose();
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
 });

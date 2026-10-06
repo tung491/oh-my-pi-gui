@@ -381,6 +381,10 @@ app.whenReady().then(() => {
 					{ cwd: report.cwd },
 				);
 			},
+			// A refused start spawns nothing, so the tab's message is its only other trace.
+			reportStartRefusal: report => {
+				writeRuntimeLog({ source: "sidecar-start", message: report.message }, { cwd: report.cwd });
+			},
 		});
 		// Ready-health-check applies to every pooled sidecar, not just the first.
 		sc.on("status", ({ status }) => {

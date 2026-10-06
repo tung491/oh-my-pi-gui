@@ -93,6 +93,15 @@ pub(crate) struct SidecarFailureReport {
 /// Persists a crash report; production writes `gui-runtime.jsonl`.
 pub(crate) type FailureReporter = Arc<dyn Fn(SidecarFailureReport) + Send + Sync>;
 
+/// A start the manager refused before spawning (no binary, an incomplete pack).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SidecarStartRefusalReport {
+    pub(crate) message: String,
+    pub(crate) cwd: String,
+}
+
+pub(crate) type StartRefusalReporter = Arc<dyn Fn(SidecarStartRefusalReport) + Send + Sync>;
+
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -347,6 +356,8 @@ struct Spawned {
 struct State {
     options: SidecarOptions,
     status: SidecarStatus,
+    /// The last status payload, whole, for a window that subscribes after it was pushed.
+    last_status: SidecarStatusPayload,
     child: Option<Arc<Spawned>>,
     rpc: Option<Arc<RpcClient>>,
     batcher: Option<Arc<dyn EventBatcher>>,
@@ -376,6 +387,7 @@ struct Inner {
     events: mpsc::UnboundedSender<SidecarEvent>,
     spawn_env: SpawnEnvProvider,
     report_failure: FailureReporter,
+    report_refusal: StartRefusalReporter,
 }
 
 pub(crate) struct SidecarManager {
@@ -384,16 +396,24 @@ pub(crate) struct SidecarManager {
 
 impl SidecarManager {
     pub(crate) fn new(ctx: CtxRef, options: SidecarOptions, spawn_env: SpawnEnvProvider) -> (Arc<Self>, SidecarEvents) {
-        Self::with_reporter(ctx, options, spawn_env, Arc::new(report_to_runtime_log))
+        Self::with_reporters(ctx, options, spawn_env, Arc::new(report_to_runtime_log), Arc::new(report_refusal_to_runtime_log))
     }
 
-    pub(crate) fn with_reporter(ctx: CtxRef, options: SidecarOptions, spawn_env: SpawnEnvProvider, report_failure: FailureReporter) -> (Arc<Self>, SidecarEvents) {
+    pub(crate) fn with_reporters(
+        ctx: CtxRef,
+        options: SidecarOptions,
+        spawn_env: SpawnEnvProvider,
+        report_failure: FailureReporter,
+        report_refusal: StartRefusalReporter,
+    ) -> (Arc<Self>, SidecarEvents) {
         let (events, receiver) = mpsc::unbounded_channel();
         let fresh = options.fresh;
         let resume = options.resume_session_path.clone();
+        let last_status = SidecarStatusPayload { status: SidecarStatus::Asleep, message: None, cwd: options.cwd.clone(), restart: None, refusal: None };
         let state = State {
             options,
             status: SidecarStatus::Asleep,
+            last_status,
             child: None,
             rpc: None,
             batcher: None,
@@ -411,7 +431,7 @@ impl SidecarManager {
             omp_pid: None,
             supervisor_pid: None,
         };
-        let inner = Arc::new(Inner { ctx, state: Mutex::new(state), events, spawn_env, report_failure });
+        let inner = Arc::new(Inner { ctx, state: Mutex::new(state), events, spawn_env, report_failure, report_refusal });
         (Arc::new(Self { inner }), receiver)
     }
 }
@@ -437,6 +457,12 @@ fn report_to_runtime_log(report: SidecarFailureReport) {
     crate::runtime_log::write(&entry, None, Some(&report.cwd));
 }
 
+/// The production refusal reporter: one `sidecar-start` entry in `gui-runtime.jsonl`.
+fn report_refusal_to_runtime_log(report: SidecarStartRefusalReport) {
+    let entry = json!({ "source": "sidecar-start", "message": report.message });
+    crate::runtime_log::write(&entry, None, Some(&report.cwd));
+}
+
 impl Inner {
     fn emit(&self, event: SidecarEvent) {
         let _ = self.events.send(event);
@@ -447,12 +473,21 @@ impl Inner {
     }
 
     fn set_status_with_refusal(&self, status: SidecarStatus, message: Option<String>, restart: Option<SidecarRestartProgress>, refusal: Option<SidecarRefusal>) {
-        let cwd = {
+        let payload = {
             let mut state = lock(&self.state);
             state.status = status;
-            state.options.cwd.clone()
+            state.last_status = SidecarStatusPayload { status, message, cwd: state.options.cwd.clone(), restart, refusal };
+            state.last_status.clone()
         };
-        self.emit(SidecarEvent::Status(SidecarStatusPayload { status, message, cwd, restart, refusal }));
+        self.emit(SidecarEvent::Status(payload));
+    }
+
+    /// An install problem stops the start before any spawn: the tab shows the
+    /// message and the runtime log keeps it, since no process will write one.
+    fn refuse_start(&self, message: String) {
+        let cwd = lock(&self.state).options.cwd.clone();
+        self.set_status(SidecarStatus::Error, Some(message.clone()), None);
+        (self.report_refusal)(SidecarStartRefusalReport { message, cwd });
     }
 
     /// Continuation guard: false once the cycle that captured `generation` was torn down or replaced.
@@ -472,14 +507,14 @@ impl Inner {
         // Closed loop: only the bundled binary may run. Missing it is an
         // actionable error, never an external fallback.
         if binary.as_os_str().is_empty() {
-            self.set_status(SidecarStatus::Error, Some(missing_sidecar_message(packaged, None)), None);
+            self.refuse_start(missing_sidecar_message(packaged, None));
             return;
         }
         // The session is only an assistant with the whole pack: omp skips a missing
         // extension silently and reads a missing prompt path as literal text.
         let pack_dir = assistant_pack::resolve_pack_dir(&binary, &pack_search_from());
         if let Some(file) = assistant_pack::missing_pack_file(&pack_dir) {
-            self.set_status(SidecarStatus::Error, Some(assistant_pack::missing_pack_message(file, packaged)), None);
+            self.refuse_start(assistant_pack::missing_pack_message(file, packaged));
             return;
         }
         let resume = {
@@ -927,6 +962,12 @@ fn describe_exit(status: &std::process::ExitStatus) -> String {
 impl SidecarHandle for SidecarManager {
     fn status(&self) -> SidecarStatus {
         lock(&self.inner.state).status
+    }
+
+    fn status_payload(&self) -> SidecarStatusPayload {
+        let state = lock(&self.inner.state);
+        // The folder may have moved since (`adopt_cwd`); report where the sidecar runs now.
+        SidecarStatusPayload { cwd: state.options.cwd.clone(), ..state.last_status.clone() }
     }
 
     fn cwd(&self) -> String {
@@ -1569,6 +1610,91 @@ process.stdin.resume();"#,
         assert!(payload.message.unwrap_or_default().contains("build:omp"));
     }
 
+    /// An `assistant-pack/` in `dir` holding every listed file except `leave_out`.
+    fn pack_fixture(dir: &Path, leave_out: Option<&str>) {
+        let pack = dir.join("assistant-pack");
+        for file in crate::omp::assistant_pack::ASSISTANT_PACK_FILES.iter().filter(|file| Some(**file) != leave_out) {
+            let path = pack.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "x").unwrap();
+        }
+        std::fs::create_dir_all(&pack).unwrap();
+    }
+
+    #[tokio::test]
+    async fn keeps_the_whole_refused_start_status_for_a_window_that_subscribes_late() {
+        let dir = tempfile::tempdir().unwrap();
+        let cwd = dir.path().to_string_lossy().into_owned();
+        let script = write_script(dir.path(), "process.stdin.resume();");
+        let session_path = dir.path().join("old-chat.jsonl");
+        std::fs::write(&session_path, "{\"title\":\"Old chat\"}\n{\"type\":\"session\",\"id\":\"c\",\"kind\":\"chat\"}\n").unwrap();
+        let mut no_binary_options = options(PathBuf::new(), dir.path());
+        no_binary_options.packaged = true;
+        let (no_binary, _no_binary_events) = manager(no_binary_options);
+        let mut partial_options = options(script.clone(), dir.path());
+        partial_options.packaged = true;
+        let (partial_pack, _partial_events) = manager(partial_options);
+        let (chat, _chat_events) = manager(options(script, dir.path()));
+        // Before any start, the payload is the asleep status in the sidecar's folder.
+        assert_eq!(no_binary.status_payload(), SidecarStatusPayload { status: SidecarStatus::Asleep, message: None, cwd: cwd.clone(), restart: None, refusal: None });
+        // Nothing listens while these starts are refused: the payload is all a late window gets.
+        no_binary.start();
+        let no_binary_payload = no_binary.status_payload();
+        pack_fixture(dir.path(), Some("config.yml"));
+        partial_pack.start();
+        let partial_payload = partial_pack.status_payload();
+        std::fs::write(dir.path().join("assistant-pack").join("config.yml"), "x").unwrap();
+        chat.restart(None, Some(&session_path.to_string_lossy()));
+        let chat_payload = chat.status_payload();
+        for sidecar in [no_binary, partial_pack, chat] {
+            sidecar.dispose().await;
+        }
+        assert_eq!(
+            no_binary_payload,
+            SidecarStatusPayload { status: SidecarStatus::Error, message: Some(missing_sidecar_message(true, None)), cwd: cwd.clone(), restart: None, refusal: None }
+        );
+        assert_eq!((partial_payload.status, partial_payload.cwd.as_str(), partial_payload.refusal), (SidecarStatus::Error, cwd.as_str(), None));
+        assert!(partial_payload.message.unwrap_or_default().contains("config.yml"));
+        assert_eq!(
+            chat_payload,
+            SidecarStatusPayload {
+                status: SidecarStatus::Error,
+                message: Some(format!("The session file is stamped chat: {}", session_path.to_string_lossy())),
+                cwd,
+                restart: None,
+                refusal: Some(SidecarRefusal::KindMismatch),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn writes_each_refused_start_to_the_runtime_log_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let cwd = dir.path().to_string_lossy().into_owned();
+        let script = write_script(dir.path(), "process.stdin.resume();");
+        pack_fixture(dir.path(), Some("config.yml"));
+        let reports: Arc<Mutex<Vec<SidecarStartRefusalReport>>> = Arc::default();
+        let refused = |binary: PathBuf| {
+            let sink = reports.clone();
+            let mut options = options(binary, dir.path());
+            options.packaged = true;
+            SidecarManager::with_reporters(Weak::new(), options, fixed_env(&[]), Arc::new(|_| {}), Arc::new(move |report| lock(&sink).push(report)))
+        };
+        let (no_binary, _no_binary_events) = refused(PathBuf::new());
+        let (partial_pack, _partial_events) = refused(script);
+        no_binary.start();
+        partial_pack.start();
+        let expected = vec![
+            SidecarStartRefusalReport { message: no_binary.status_payload().message.unwrap_or_default(), cwd: cwd.clone() },
+            SidecarStartRefusalReport { message: partial_pack.status_payload().message.unwrap_or_default(), cwd },
+        ];
+        no_binary.dispose().await;
+        partial_pack.dispose().await;
+        let reports = lock(&reports).clone();
+        assert_eq!(reports, expected);
+        assert!(reports[1].message.contains("config.yml"));
+    }
+
     #[test]
     fn names_the_missing_packaged_binary_by_path_and_the_app_to_reinstall() {
         let message = missing_sidecar_message(true, Some(Path::new("/Applications/Sai ATLAS.app/Contents/Resources")));
@@ -1587,7 +1713,7 @@ setTimeout(() => process.exit(4), 120);"#,
         );
         let reports: Arc<Mutex<Vec<SidecarFailureReport>>> = Arc::default();
         let sink = reports.clone();
-        let (sidecar, mut events) = SidecarManager::with_reporter(Weak::new(), options(script, dir.path()), fixed_env(&[]), Arc::new(move |report| lock(&sink).push(report)));
+        let (sidecar, mut events) = SidecarManager::with_reporters(Weak::new(), options(script, dir.path()), fixed_env(&[]), Arc::new(move |report| lock(&sink).push(report)), Arc::new(|_| {}));
         sidecar.start();
         let statuses = collect_until(&mut events, Duration::from_secs(9), |payload| payload.status == SidecarStatus::Restarting).await;
         sidecar.dispose().await;

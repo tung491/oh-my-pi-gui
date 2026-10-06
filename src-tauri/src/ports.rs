@@ -454,6 +454,9 @@ pub type SidecarEvents = tokio::sync::mpsc::UnboundedReceiver<SidecarEvent>;
 /// the pool can be tested with fakes.
 pub trait SidecarHandle: Send + Sync {
     fn status(&self) -> SidecarStatus;
+    /// The last status reported, whole (message, restart progress, refusal), so a
+    /// window that subscribes after a push still shows it.
+    fn status_payload(&self) -> SidecarStatusPayload;
     fn cwd(&self) -> String;
     fn kind(&self) -> SessionKind;
     /// The agent's pid, once the supervisor has reported it.

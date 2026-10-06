@@ -1106,8 +1106,11 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	);
 
 	ipcMain.handle(IPC_COMMANDS.SIDECAR_STATUS_GET, event => {
+		// The whole last status, so a page that subscribes after a push (a refused
+		// start) still shows its message.
 		const sidecar = sidecarFor(deps, event);
-		return { status: sidecar?.status ?? "starting", cwd: cwdFor(deps, event) ?? "" };
+		const cwd = cwdFor(deps, event) ?? "";
+		return sidecar ? { ...sidecar.statusPayload, cwd } : { status: "starting", cwd };
 	});
 
 	// External-editor round trip ($VISUAL/$EDITOR, temp file, exit-0 read-back)

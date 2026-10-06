@@ -796,6 +796,7 @@ pub fn sai_atlas_lib::ports::SidecarHandle::restart(&self, core::option::Option<
 pub fn sai_atlas_lib::ports::SidecarHandle::send_side_channel(&self, serde_json::value::Value)
 pub fn sai_atlas_lib::ports::SidecarHandle::start(&self)
 pub fn sai_atlas_lib::ports::SidecarHandle::status(&self) -> sai_atlas_lib::ports::SidecarStatus
+pub fn sai_atlas_lib::ports::SidecarHandle::status_payload(&self) -> sai_atlas_lib::ports::SidecarStatusPayload
 pub fn sai_atlas_lib::ports::SidecarHandle::supervisor_pid(&self) -> core::option::Option<u32>
 pub trait sai_atlas_lib::ports::TabsPort: core::marker::Send + core::marker::Sync
 pub fn sai_atlas_lib::ports::TabsPort::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
