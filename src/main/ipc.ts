@@ -16,8 +16,6 @@ import {
 import Store from "electron-store";
 import type {
 	FsTreeEntry,
-	IpcBenchmarkRunOptions,
-	IpcBenchmarkRunResult,
 	IpcCloseTabPayload,
 	IpcExtensionUiRespondPayload,
 	IpcFsListPayload,
@@ -45,7 +43,6 @@ import type {
 	IpcSetTabViewPayload,
 	IpcSidecarRestartPayload,
 	IpcSpawnTabPayload,
-	IpcStatsFetchPayload,
 	IpcUpdateLaunchProfilePayload,
 } from "../shared/ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS, type RunProgressState, type TrayState } from "../shared/ipc-types";
@@ -53,7 +50,6 @@ import { parseLaunchProfile } from "../shared/launch-profile";
 import { launchPlatformOf } from "../shared/launchable-path";
 import type { RpcCommand, RpcSessionState } from "../shared/rpc-types";
 import { requestQuit } from "./app-quit";
-import { BenchmarkRunner } from "./benchmark-runner";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
@@ -71,8 +67,6 @@ import { openSessionInNewWindow } from "./session-new-window";
 import { resolveEditorCommand } from "./shell-env";
 import type { SidecarManager } from "./sidecar";
 import type { SidecarPool } from "./sidecar-pool";
-import type { StatsClient } from "./stats-client";
-import type { Revive } from "./stats-restart-policy";
 import { spawnTabForWindow } from "./tab-spawn";
 import { setTrayState } from "./tray";
 import { aggregateTrayStatus } from "./tray-labels";
@@ -81,13 +75,8 @@ import type { SpawnWindow, WindowManager } from "./window";
 export interface IpcDeps {
 	sidecarPool: SidecarPool;
 	sessionIndex: SessionIndex;
-	statsClient: StatsClient;
-	/** Demand-driven start/revive for the bundled stats server (no server → "exhausted"). */
-	statsRestart: () => Revive;
 	logWatcher: LogWatcher;
 	windowManager: WindowManager;
-	benchmarkBinaryPath: string | null;
-	benchmarkEnv: () => Promise<NodeJS.ProcessEnv>;
 	/** Spawn a window with its own sidecar (index.ts's pool-backed helper). */
 	spawnWindow: SpawnWindow;
 	/** Where to start when the caller has no cwd. Never the volume root: a
@@ -356,8 +345,7 @@ function aggregateProgress(states: RunProgressState[]): RunProgressState {
 }
 
 export function registerIpcHandlers(deps: IpcDeps): void {
-	const benchmarkRunners = new Map<number, BenchmarkRunner>();
-	const { sidecarPool, sessionIndex, statsClient, logWatcher, windowManager } = deps;
+	const { sidecarPool, sessionIndex, logWatcher, windowManager } = deps;
 	const prefsStore = new Store<PrefsSchema>({ name: "prefs" });
 	// Last folder each window's file dialog used this session (Electron 43+
 	// dialogs no longer remember it). Per window, so one window's export never
@@ -370,8 +358,6 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 		trayStates.delete(record.id);
 		progressStates.delete(record.id);
 		lastDialogDirs.delete(record.id);
-		benchmarkRunners.get(record.id)?.abort();
-		benchmarkRunners.delete(record.id);
 	});
 
 	// Sidecar → owning-window event forwarding (events/status/extensionUi/
@@ -733,53 +719,6 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			candidates.map(info => info.path),
 		);
 	});
-
-	// Stats
-	ipcMain.handle(IPC_COMMANDS.STATS_FETCH, async (_event, payload: IpcStatsFetchPayload) => {
-		if (typeof payload.path !== "string") {
-			throw new Error("Invalid stats path");
-		}
-		if (!statsClient.port) {
-			// Nothing is listening: ask for it and let the caller keep waiting — but
-			// only while a revive is actually possible, so a permanently dead stats
-			// server ends in an error instead of an endless "loading".
-			const revive = deps.statsRestart();
-			return {
-				error:
-					revive === "exhausted"
-						? "The bundled stats server is not running."
-						: "The bundled stats server is not ready. Please retry shortly.",
-				unavailable: revive !== "exhausted",
-			};
-		}
-		try {
-			return await statsClient.fetch(payload.path, payload.params);
-		} catch (err) {
-			// A request that reached the server and failed is a failure, not a
-			// booting server: the dashboard must show it, not retry for a budget.
-			const msg = err instanceof Error ? err.message : String(err);
-			return { error: msg, unavailable: false };
-		}
-	});
-
-	ipcMain.handle(
-		IPC_COMMANDS.BENCH_RUN,
-		async (event, options: IpcBenchmarkRunOptions): Promise<IpcBenchmarkRunResult> => {
-			const binaryPath = deps.benchmarkBinaryPath;
-			const cwd = cwdFor(deps, event);
-			if (!binaryPath) return { success: false, error: "Bundled omp is unavailable" };
-			if (!cwd) return { success: false, error: "No active workspace" };
-			const senderId = event.sender.id;
-			const runner = benchmarkRunners.get(senderId) ?? new BenchmarkRunner();
-			benchmarkRunners.set(senderId, runner);
-			try {
-				return await runner.run(binaryPath, cwd, options, await deps.benchmarkEnv());
-			} finally {
-				if (!runner.running) benchmarkRunners.delete(senderId);
-			}
-		},
-	);
-	ipcMain.handle(IPC_COMMANDS.BENCH_ABORT, event => benchmarkRunners.get(event.sender.id)?.abort() ?? false);
 
 	// Renderer-initiated quit (the `quit` command). Straight to the guard, never
 	// `window.close()`: closing the focused window only hides the rest of the

@@ -345,18 +345,17 @@ fn shutdown(ctx: &Arc<AppCtx>, done: &AtomicBool, reason: &str) {
     runtime_log::note(
         "unknown",
         format!("shutdown started ({reason})"),
-        json!({ "order": "mark_quitting, tabs.dispose_all, omp.shutdown, services.shutdown, ollama.shutdown, updater.shutdown, desktop.shutdown" }),
+        json!({ "order": "mark_quitting, tabs.dispose_all, services.shutdown, ollama.shutdown, updater.shutdown, desktop.shutdown" }),
     );
     ctx.desktop.mark_quitting();
     tauri::async_runtime::block_on(async {
         ctx.tabs.dispose_all().await;
-        ctx.omp.shutdown().await;
         ctx.services.shutdown().await;
         ctx.ollama.shutdown().await;
         ctx.updater.shutdown().await;
         ctx.desktop.shutdown().await;
     });
-    runtime_log::note("unknown", "shutdown finished", json!({ "steps": 7 }));
+    runtime_log::note("unknown", "shutdown finished", json!({ "steps": 6 }));
 }
 
 /// How long the graceful exit started by a signal may take before the process exits hard.

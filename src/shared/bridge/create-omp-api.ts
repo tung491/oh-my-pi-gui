@@ -7,8 +7,6 @@ import type {
 	CustomProviderView,
 	DeepLinkPayload,
 	IpcActiveTabEnvelope,
-	IpcBenchmarkRunOptions,
-	IpcBenchmarkRunResult,
 	IpcFsListResult,
 	IpcFsReadImageResult,
 	IpcFsReadPlanPayload,
@@ -276,17 +274,6 @@ export function createOmpApi(port: IpcPort, platform: OmpApi["platform"]): OmpAp
 			},
 			getSessionOwner: (sessionPath: string) =>
 				port.invoke(IPC_COMMANDS.GET_SESSION_OWNER, { sessionPath }) as Promise<IpcSessionOwner | null>,
-		},
-
-		stats: {
-			fetch: (path: string, params?: Record<string, string>) =>
-				port.invoke(IPC_COMMANDS.STATS_FETCH, { path, params }),
-		},
-
-		bench: {
-			run: (options: IpcBenchmarkRunOptions) =>
-				port.invoke(IPC_COMMANDS.BENCH_RUN, options) as Promise<IpcBenchmarkRunResult>,
-			abort: () => port.invoke(IPC_COMMANDS.BENCH_ABORT) as Promise<boolean>,
 		},
 
 		system: {

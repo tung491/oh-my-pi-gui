@@ -84,8 +84,6 @@ export const IPC_EVENTS = {
 	SESSIONS_CHANGED: "sessions:changed",
 	/** Log line appended */
 	LOG_LINE: "log:line",
-	/** Stats data ready */
-	STATS_DATA: "stats:data",
 	/** Native application menu action */
 	MENU_ACTION: "menu:action",
 	/** omp:// deep link (new session / switch session) */
@@ -136,11 +134,6 @@ export const IPC_COMMANDS = {
 	SESSIONS_RENAME: "sessions:rename",
 	/** Full-content search over session files; returns matching paths */
 	SESSIONS_SEARCH: "sessions:search",
-	/** Fetch stats endpoint */
-	STATS_FETCH: "stats:fetch",
-	/** Run/cancel an isolated bundled `omp bench --json` process. */
-	BENCH_RUN: "bench:run",
-	BENCH_ABORT: "bench:abort",
 	/** Open external URL */
 	SYSTEM_OPEN_EXTERNAL: "system:open-external",
 	/** Open a file path in the system editor (relative resolves against the workspace) */
@@ -457,54 +450,6 @@ export interface MenuActionPayload {
 /** Run-progress state pushed by the renderer (terminal.showProgress): dock badge + window progress bar. */
 export type RunProgressState = "working" | "waiting" | "idle";
 
-export type IpcBenchmarkProfile = "mix" | "chat" | "prefill" | "generation";
-
-export interface IpcBenchmarkRunOptions {
-	models: string[];
-	profile: IpcBenchmarkProfile;
-	runs: number;
-	parallel: number;
-	maxTokens?: number;
-}
-
-export interface IpcBenchmarkMetricStats {
-	mean: number;
-	min: number;
-	p50: number;
-	p95: number;
-	max: number;
-}
-
-export interface IpcBenchmarkStats {
-	ttftMs: IpcBenchmarkMetricStats;
-	durationMs: IpcBenchmarkMetricStats;
-	tokensPerSecond: IpcBenchmarkMetricStats;
-	generationTps: IpcBenchmarkMetricStats;
-	prefillTps: IpcBenchmarkMetricStats;
-	inputTokens: number;
-	outputTokens: number;
-	cost: number;
-}
-
-export interface IpcBenchmarkModelReport {
-	selector: string;
-	model: string;
-	stats: IpcBenchmarkStats | null;
-	byChallenge: Partial<Record<Exclude<IpcBenchmarkProfile, "mix">, IpcBenchmarkStats>>;
-	results: Array<{ ok: boolean; error?: string }>;
-}
-
-export interface IpcBenchmarkSummary {
-	runs: number;
-	profile?: IpcBenchmarkProfile;
-	models: IpcBenchmarkModelReport[];
-	failures: number;
-}
-
-export type IpcBenchmarkRunResult =
-	| { success: true; summary: IpcBenchmarkSummary; exitCode: number | null; stderr?: string }
-	| { success: false; error: string; stderr?: string };
-
 /** Compact snapshot the renderer pushes to main to build the tray menu. */
 export interface TrayState {
 	status: "idle" | "streaming" | "waiting" | "error";
@@ -698,11 +643,6 @@ export interface IpcSessionsRenamePayload {
 export interface IpcSessionsSearchPayload {
 	query: string;
 	scope: "local" | "global";
-}
-
-export interface IpcStatsFetchPayload {
-	path: string;
-	params?: Record<string, string>;
 }
 
 export interface IpcNotifyPayload {
@@ -1309,13 +1249,6 @@ export interface OmpApi {
 		setView(focusedTabId: string, visibleTabIds: string[], split?: IpcSetTabViewPayload["split"]): Promise<boolean>;
 		/** The tab/window currently attached to a session file, if any (F-OWN). */
 		getSessionOwner(sessionPath: string): Promise<IpcSessionOwner | null>;
-	};
-	stats: {
-		fetch(path: string, params?: Record<string, string>): Promise<unknown>;
-	};
-	bench: {
-		run(options: IpcBenchmarkRunOptions): Promise<IpcBenchmarkRunResult>;
-		abort(): Promise<boolean>;
 	};
 	system: {
 		openExternal(url: string): Promise<void>;

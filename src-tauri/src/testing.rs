@@ -353,11 +353,6 @@ impl OmpPort for FakeOmp {
         self.log.record("resolve_editor_command()");
         ready(lock(&self.editor_command).clone())
     }
-
-    fn shutdown(&self) -> BoxFuture<'_, ()> {
-        self.log.record("shutdown()");
-        ready(())
-    }
 }
 
 // ---------------------------------------------------------------------------

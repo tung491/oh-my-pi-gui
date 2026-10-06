@@ -111,8 +111,8 @@ describe("mac bundle configs", () => {
 		for (const { file, config } of configs) {
 			const info = config.mac?.extendInfo ?? {};
 			// A stray NSAllowsArbitraryLoads in any variant turns TLS enforcement
-			// off app-wide; the stats server is the only cleartext origin, and it is
-			// local. Pin both halves instead of trusting the default.
+			// off app-wide; the local Ollama server is the only cleartext origin, and
+			// it is loopback. Pin both halves instead of trusting the default.
 			expect(info.NSAppTransportSecurity, `${file} declares no transport policy`).toMatchObject({
 				NSAllowsArbitraryLoads: false,
 				NSAllowsLocalNetworking: true,

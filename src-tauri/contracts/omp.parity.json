@@ -12,18 +12,6 @@
     "rust": "src-tauri/src/omp/shell_env.rs"
   },
   {
-    "ts": "src/main/stats-restart-policy.test.ts",
-    "rust": "src-tauri/src/omp/stats_restart_policy.rs"
-  },
-  {
-    "ts": "src/main/stats-server.test.ts",
-    "rust": "src-tauri/src/omp/stats.rs"
-  },
-  {
-    "ts": "src/main/benchmark-runner.test.ts",
-    "rust": "src-tauri/src/omp/bench.rs"
-  },
-  {
     "ts": "src/main/assistant-pack.test.ts",
     "rust": "src-tauri/src/omp/assistant_pack.rs"
   }

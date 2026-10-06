@@ -509,8 +509,6 @@ pub trait OmpPort: Send + Sync {
     fn spawn_env(&self) -> BoxFuture<'_, HashMap<String, String>>;
     /// `$VISUAL` / `$EDITOR` from the login shell, if any.
     fn resolve_editor_command(&self) -> BoxFuture<'_, Option<String>>;
-    /// Stop the stats server and any benchmark run.
-    fn shutdown(&self) -> BoxFuture<'_, ()>;
 }
 
 // ---------------------------------------------------------------------------
