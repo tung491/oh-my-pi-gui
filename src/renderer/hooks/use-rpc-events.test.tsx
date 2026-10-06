@@ -369,6 +369,54 @@ it("does not roll a ready task back to starting when its older startup snapshot 
 	expect(messages.getState().messages).toMatchObject([{ content: "History loaded after ready" }]);
 });
 
+it("shows a start refusal that the main process reported before the tab list loaded", async () => {
+	installTabRoutedMockOmp();
+	const refusal = { status: "error", cwd: "/alpha", message: "Built-in omp not found." } as IpcSidecarStatusPayload;
+	const getStatus = vi.spyOn(window.omp.sidecar, "getStatus").mockResolvedValue(refusal);
+	// The hook mounts before the tab list loads: no tab is focused and no runtime exists.
+	await mount(<RpcEventsProbe />);
+	try {
+		await act(async () => {
+			useTabsStore.setState({
+				tabs: [{ id: "t0", kind: "agent", cwd: "/alpha", status: "error", unreadDone: false }],
+				activeTabId: "t0",
+			});
+			ensureTabRuntime("t0");
+			setFocusedSessionRuntime("t0");
+		});
+		await flush();
+		expect(getStatus).toHaveBeenCalledTimes(2);
+		expect(sessionRuntimeStore<SessionStore>("t0", "session")?.getState().status).toBe("error");
+		expect(useUiStore.getState().sidecarError).toBe("Built-in omp not found.");
+	} finally {
+		useUiStore.getState().clearSidecarError();
+	}
+});
+
+it("keeps a newer status push over the status read after the tab list loaded", async () => {
+	const { emitTabStatus } = installTabRoutedMockOmp();
+	const late = Promise.withResolvers<IpcSidecarStatusPayload>();
+	const getStatus = vi
+		.spyOn(window.omp.sidecar, "getStatus")
+		.mockResolvedValueOnce({ status: "starting", cwd: "/alpha" })
+		.mockReturnValueOnce(late.promise);
+	await mount(<RpcEventsProbe />);
+	await act(async () => {
+		useTabsStore.setState({
+			tabs: [{ id: "t0", kind: "agent", cwd: "/alpha", status: "starting", unreadDone: false }],
+			activeTabId: "t0",
+		});
+		ensureTabRuntime("t0");
+		setFocusedSessionRuntime("t0");
+	});
+	expect(getStatus).toHaveBeenCalledTimes(2);
+	emitTabStatus({ status: "ready", cwd: "/alpha" }, "t0");
+	await flush();
+	late.resolve({ status: "starting", cwd: "/alpha" });
+	await flush();
+	expect(sessionRuntimeStore<SessionStore>("t0", "session")?.getState().status).toBe("ready");
+});
+
 const assistantMessage: AgentMessage = { role: "assistant", content: [], timestamp: Date.now() };
 
 afterEach(async () => {
