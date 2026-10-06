@@ -50,6 +50,8 @@ export function activeTabCommand(command: RpcCommand, timeoutMs?: number): Promi
 			return rpc.setFastMode(command.enabled);
 		case "set_subagent_subscription":
 			return rpc.setSubagentSubscription(command.level);
+		case "set_plan_mode":
+			return rpc.setPlanMode(command.enabled);
 		case "switch_session":
 			return rpc.switchSession(command.sessionPath);
 		default:

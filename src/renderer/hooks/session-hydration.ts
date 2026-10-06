@@ -148,6 +148,32 @@ export function applyModelInfo(model: unknown, tabId: string | null): void {
 
 type HydrationGuard = () => boolean;
 
+/**
+ * Turn plan mode off when a snapshot reports it on. The assistant has no plan
+ * surface: nothing shows a proposal or leaves the read-only planning state, so
+ * a session that comes back armed (a resumed journal, or a config that starts
+ * in plan mode; the agent consults neither setting when it re-arms from the
+ * journal) would end every turn waiting for an answer nobody can give. The
+ * store follows the agent's reply; a failed request leaves it for the next
+ * hydration to retry.
+ */
+async function disarmPlanMode(
+	tabId: string,
+	command: TabCommand,
+	state: RpcSessionState,
+	isCurrent: HydrationGuard,
+): Promise<void> {
+	if (state.planModeEnabled !== true) return;
+	try {
+		const res = await command({ type: "set_plan_mode", enabled: false });
+		if (!isCurrent() || !res.success) return;
+		const enabled = (res.data as { enabled?: unknown } | undefined)?.enabled === true;
+		withSessionRuntime(tabId, () => useSessionStore.setState({ planModeEnabled: enabled }));
+	} catch {
+		// Transient — the next hydration retries.
+	}
+}
+
 /** Fetch the live goal state (get_goal) into the session store; clears when no goal is active. */
 export async function syncGoal(tabId: string, command: TabCommand, isCurrent: HydrationGuard): Promise<void> {
 	const before = withSessionRuntime(tabId, () => useSessionStore.getState());
@@ -219,6 +245,7 @@ export async function hydrateLegacySession(fallbackName?: string, initialState?:
 	]);
 	const [stateResult, messagesResult] = await core;
 	if (!isCurrent()) return;
+	let planModeDisarm: Promise<void> | undefined;
 	const eventsUnchanged = useSessionStore.getState().eventVersion === beforeEventVersion;
 	const focusUnchanged = !originRuntime || focusedSessionRuntime() === originRuntime;
 	// `get_state` is the only witness to a live turn. A failed read counts as not
@@ -247,6 +274,7 @@ export async function hydrateLegacySession(fallbackName?: string, initialState?:
 		}
 		if (!wire.isStreaming) useMessagesStore.getState().clearStreaming();
 		void activeTabCommand({ type: "set_subagent_subscription", level: "events" });
+		planModeDisarm = disarmPlanMode("", activeTabCommand, wire, isCurrent);
 	}
 	if (focusUnchanged && messagesResult.status === "fulfilled" && messagesResult.value.success) {
 		const fetched = (messagesResult.value.data as { messages?: AgentMessage[] } | undefined)?.messages ?? [];
@@ -262,6 +290,7 @@ export async function hydrateLegacySession(fallbackName?: string, initialState?:
 	}
 	await subagents;
 	await secondary;
+	await planModeDisarm;
 }
 
 /** Reload every renderer store that belongs to the active sidecar session. */
@@ -314,6 +343,7 @@ export async function hydrateTabSession(tabId: string, fallbackName?: string): P
 	]);
 	const [stateResult, messagesResult] = await coreResult;
 	if (!isCurrent()) return;
+	let planModeDisarm: Promise<void> | undefined;
 	const eventsUnchanged =
 		sessionRuntimeStore<SessionStore>(tabId, "session")?.getState().eventVersion === beforeEventVersion;
 	// `get_state` is the only witness to a live turn. A failed read counts as not
@@ -362,6 +392,7 @@ export async function hydrateTabSession(tabId: string, fallbackName?: string): P
 		// background, whose frames would otherwise stay silent on return.
 		// Idempotent server-side.
 		void runtime.command({ type: "set_subagent_subscription", level: "events" });
+		planModeDisarm = disarmPlanMode(tabId, runtime.command, wire, isCurrent);
 	}
 
 	if (messagesResult.status === "fulfilled" && messagesResult.value.success) {
@@ -382,4 +413,5 @@ export async function hydrateTabSession(tabId: string, fallbackName?: string): P
 	// requests still begin in parallel, but the core session can paint first.
 	await subagentsResult;
 	await secondaryResult;
+	await planModeDisarm;
 }

@@ -232,6 +232,12 @@ describe("GUI settings visibility", () => {
 		expect(isSettingVisibleInGui(autosave, { "plan.enabled": true, "plan.autosave": true })).toBe(true);
 	});
 
+	it("never offers to start sessions in plan mode, which the assistant has no surface for", () => {
+		const startInPlan = entry({ path: "plan.defaultOnStartup", condition: "planModeEnabled", tab: "tasks" });
+		expect(isSettingVisibleInGui(startInPlan, { "plan.enabled": true })).toBe(false);
+		expect(isSettingVisibleInGui(startInPlan, { "plan.enabled": false })).toBe(false);
+	});
+
 	it("renders fixed ordered arrays as choices instead of an arbitrary text field", () => {
 		const methodOrder = entry({
 			path: "compaction.methodOrder",
