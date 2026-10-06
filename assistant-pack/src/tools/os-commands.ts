@@ -4,7 +4,7 @@
 import { execFile as nodeExecFile, spawn } from "node:child_process";
 import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { promisify } from "node:util";
 import { expandHome, isInsideDir, PlainError } from "../office/output";
 import { ArgumentError, asRecord, type PackTool, type ToolResult, textResult } from "./types";
@@ -26,6 +26,11 @@ export interface OsEnv {
 	lang: string;
 	/** System-wide .desktop files; the person's own folder is never consulted. */
 	applicationsDir: string;
+	/**
+	 * GLib's `gio`, which launches a .desktop file by its absolute path. Launchers that take an
+	 * app id resolve it through the person's own applications folder first, so none is used.
+	 */
+	gioPath: string;
 	execFile: ExecFile;
 	launch: Launch;
 }
@@ -216,10 +221,18 @@ function resolveExisting(value: string, home: string): string | undefined {
 }
 
 /** The argv that opens one item; throws a plain sentence for anything outside the closed lists. */
-export function buildOpenItemArgv(
-	item: { kind: unknown; value: unknown },
-	context: { home: string; applicationsDir: string },
-): string[] {
+export type OpenItemContext = Pick<OsEnv, "home" | "applicationsDir" | "gioPath">;
+
+/** The system-wide .desktop file of an app id, followed through links; undefined when there is none. */
+function systemDesktopEntry(id: string, applicationsDir: string): string | undefined {
+	if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)) return undefined;
+	const entry = join(applicationsDir, `${id}.desktop`);
+	if (!isInsideDir(entry, applicationsDir)) return undefined;
+	const real = realpathSync(entry);
+	return statSync(real).isFile() ? real : undefined;
+}
+
+export function buildOpenItemArgv(item: { kind: unknown; value: unknown }, context: OpenItemContext): string[] {
 	const { kind, value } = item;
 	if (typeof value !== "string" || value.trim() === "") throw new ArgumentError("Tell me what to open.");
 	switch (kind) {
@@ -243,12 +256,10 @@ export function buildOpenItemArgv(
 			return ["xdg-open", path];
 		}
 		case "app": {
-			const id = value.trim().replace(/\.desktop$/, "");
-			const desktop = join(context.applicationsDir, `${id}.desktop`);
-			if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) || !existsSync(desktop) || !statSync(desktop).isFile()) {
-				throw new PlainError("I could not find that app.");
-			}
-			return ["gtk-launch", id];
+			const desktop = systemDesktopEntry(value.trim().replace(/\.desktop$/, ""), context.applicationsDir);
+			if (!desktop) throw new PlainError("I could not find that app.");
+			if (!existsSync(context.gioPath)) throw new PlainError(NOT_AVAILABLE);
+			return [context.gioPath, "launch", desktop];
 		}
 		case "settings":
 			if (!isPanel(value.trim())) {
@@ -295,29 +306,39 @@ export function osSettingSentence(args: unknown, lang: string): string {
 	}
 }
 
-/** The plain approval sentence for an open_item call; files and folders are named by their full path. */
-export function openItemSentence(args: unknown, lang: string, home: string): string {
+/**
+ * The plain approval sentence for an open_item call. It is built only from what
+ * buildOpenItemArgv accepted (files and folders by their full resolved path), so
+ * the dialog never repeats model text; anything it refuses gets the generic sentence.
+ */
+export function openItemSentence(args: unknown, lang: string, context: OpenItemContext): string {
 	const vi = lang === "vi";
 	const fallback = vi ? "Mở một mục trên máy tính" : "Open something on this computer";
-	if (typeof args !== "object" || args === null) return fallback;
-	const { kind, value } = args as Record<string, unknown>;
-	if (typeof value !== "string" || value.trim() === "") return fallback;
+	let argv: string[];
+	let kind: unknown;
+	try {
+		const item = asRecord(args);
+		kind = item.kind;
+		argv = buildOpenItemArgv({ kind, value: item.value }, context);
+	} catch {
+		return fallback;
+	}
+	const target = argv[argv.length - 1] ?? "";
 	switch (kind) {
-		case "file": {
-			const path = resolveExisting(value, home) ?? expandHome(value.trim(), home);
-			return vi ? `Mở ${path}` : `Open ${path}`;
+		case "file":
+			return vi ? `Mở ${target}` : `Open ${target}`;
+		case "folder":
+			return vi ? `Mở thư mục ${target}` : `Open the folder ${target}`;
+		case "app": {
+			const id = basename(target, ".desktop");
+			return vi ? `Mở ứng dụng ${id}` : `Open the app ${id}`;
 		}
-		case "folder": {
-			const path = resolveExisting(value, home) ?? expandHome(value.trim(), home);
-			return vi ? `Mở thư mục ${path}` : `Open the folder ${path}`;
-		}
-		case "app":
-			return vi ? `Mở ứng dụng ${value.trim()}` : `Open the app ${value.trim()}`;
-		case "settings": {
-			const panel = value.trim();
-			if (!isPanel(panel)) return fallback;
-			return vi ? `Mở cài đặt ${PANEL_NAMES[panel].vi}` : `Open ${PANEL_NAMES[panel].en} settings`;
-		}
+		case "settings":
+			return isPanel(target)
+				? vi
+					? `Mở cài đặt ${PANEL_NAMES[target].vi}`
+					: `Open ${PANEL_NAMES[target].en} settings`
+				: fallback;
 		default:
 			return fallback;
 	}
@@ -401,6 +422,7 @@ export function defaultOsEnv(): OsEnv {
 		home: process.env.HOME || homedir(),
 		lang: process.env.SAI_ATLAS_LANG === "vi" ? "vi" : "en",
 		applicationsDir: "/usr/share/applications",
+		gioPath: "/usr/bin/gio",
 		execFile: realExecFile,
 		launch: realLaunch,
 	};
@@ -465,7 +487,7 @@ export function createOsTools(env: OsEnv = defaultOsEnv()): PackTool[] {
 				required: ["kind", "value"],
 				additionalProperties: false,
 			},
-			approval: args => ({ tier: "exec", reason: openItemSentence(args, env.lang, env.home) }),
+			approval: args => ({ tier: "exec", reason: openItemSentence(args, env.lang, env) }),
 			loadMode: "essential",
 			execute: (_toolCallId, params) =>
 				guard(env, async () => {

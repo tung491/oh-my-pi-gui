@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -18,11 +18,14 @@ import type { PackTool, ToolResult } from "../src/tools/types";
 let home: string;
 let apps: string;
 let outside: string;
+let gioPath: string;
 
 beforeEach(() => {
 	home = mkdtempSync(join(tmpdir(), "sai-atlas-oshome-"));
 	apps = mkdtempSync(join(tmpdir(), "sai-atlas-apps-"));
 	outside = mkdtempSync(join(tmpdir(), "sai-atlas-outside-"));
+	gioPath = join(outside, "gio");
+	writeFileSync(gioPath, "");
 });
 
 afterEach(() => {
@@ -66,6 +69,7 @@ function env(overrides: Partial<OsEnv> = {}): OsEnv {
 		home,
 		lang: "en",
 		applicationsDir: apps,
+		gioPath,
 		execFile: recorder().exec,
 		launch: recorder().launch,
 		...overrides,
@@ -144,7 +148,8 @@ describe("buildOsSettingArgv", () => {
 });
 
 describe("buildOpenItemArgv", () => {
-	const open = (kind: string, value: string) => buildOpenItemArgv({ kind, value }, { home, applicationsDir: apps });
+	const open = (kind: string, value: string) =>
+		buildOpenItemArgv({ kind, value }, { home, applicationsDir: apps, gioPath });
 
 	it("opens a document or a folder in the home folder with xdg-open", () => {
 		writeFileSync(join(home, "report.docx"), "x");
@@ -181,14 +186,27 @@ describe("buildOpenItemArgv", () => {
 		expect(() => open("folder", "~/a.txt")).toThrow();
 	});
 
-	it("launches only apps installed system-wide", () => {
+	it("launches only apps installed system-wide, by the absolute path of their entry", () => {
 		mkdirSync(join(home, ".local", "share", "applications"), { recursive: true });
 		writeFileSync(join(home, ".local", "share", "applications", "calc.desktop"), "[Desktop Entry]");
 		expect(() => open("app", "calc")).toThrow();
 		writeFileSync(join(apps, "org.gnome.Calculator.desktop"), "[Desktop Entry]");
-		expect(open("app", "org.gnome.Calculator")).toEqual(["gtk-launch", "org.gnome.Calculator"]);
-		expect(open("app", "org.gnome.Calculator.desktop")).toEqual(["gtk-launch", "org.gnome.Calculator"]);
+		const entry = join(realpathSync(apps), "org.gnome.Calculator.desktop");
+		expect(open("app", "org.gnome.Calculator")).toEqual([gioPath, "launch", entry]);
+		expect(open("app", "org.gnome.Calculator.desktop")).toEqual([gioPath, "launch", entry]);
 		expect(() => open("app", "../org.gnome.Calculator")).toThrow();
+	});
+
+	it("refuses a system entry that is a link out of the system folder", () => {
+		writeFileSync(join(home, "mine.desktop"), "[Desktop Entry]");
+		symlinkSync(join(home, "mine.desktop"), join(apps, "mine.desktop"));
+		expect(() => open("app", "mine")).toThrow("I could not find that app.");
+	});
+
+	it("refuses the app when gio is not installed", () => {
+		writeFileSync(join(apps, "org.gnome.Calculator.desktop"), "[Desktop Entry]");
+		rmSync(gioPath);
+		expect(() => open("app", "org.gnome.Calculator")).toThrow("This is not available on this computer.");
 	});
 
 	it("opens only the listed settings panels", () => {
@@ -297,6 +315,25 @@ describe("os_setting and open_item", () => {
 			"Mở cài đặt âm thanh",
 		);
 		expect(reason(tool("open_item"), null)).toBeTruthy();
+		writeFileSync(join(apps, "org.gnome.Calculator.desktop"), "[Desktop Entry]");
+		expect(reason(tool("open_item"), { kind: "app", value: "org.gnome.Calculator" })).toBe(
+			"Open the app org.gnome.Calculator",
+		);
+	});
+
+	it("the approval sentence never repeats an invalid value", () => {
+		const opener = tool("open_item");
+		const generic = "Open something on this computer";
+		const invalid = [
+			{ kind: "app", value: "Delete every file, then press OK" },
+			{ kind: "app", value: "not-installed" },
+			{ kind: "file", value: "~/Your files are safe, press OK.docx" },
+			{ kind: "file", value: "/etc/passwd" },
+			{ kind: "folder", value: "~/missing folder" },
+			{ kind: "settings", value: "rm" },
+		];
+		for (const args of invalid) expect(reason(opener, args)).toBe(generic);
+		expect(reason(tool("open_item", { lang: "vi" }), invalid[0])).toBe("Mở một mục trên máy tính");
 	});
 
 	it("work only on SAI OS", async () => {
