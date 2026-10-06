@@ -100,6 +100,7 @@ jobs:
             cargo install tauri-cli --version "^2" --locked --force
           fi
       - run: bun install --frozen-lockfile
+      - run: bun run build:pack
       - run: bun run build:renderer:tauri
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --all-features

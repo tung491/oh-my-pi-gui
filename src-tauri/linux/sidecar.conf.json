@@ -1,7 +1,8 @@
 {
   "bundle": {
     "resources": {
-      "binaries/omp-x86_64-unknown-linux-gnu": "omp"
+      "binaries/omp-x86_64-unknown-linux-gnu": "omp",
+      "../resources/assistant-pack/": "assistant-pack/"
     }
   }
 }
