@@ -17,7 +17,7 @@ import {
 } from "docx";
 import type { Token, Tokens } from "marked";
 import { BODY_FONT, TITLE_FONT } from "./fonts";
-import { countOf, type InlineRun, inlineRuns, resolveTitle } from "./markdown";
+import { countOf, type InlineRun, inlineRuns, resolveTitle, splitLines } from "./markdown";
 
 export interface ReportInput {
 	markdown: string;
@@ -59,27 +59,6 @@ interface Counts {
 
 function toRuns(runs: readonly InlineRun[]): TextRun[] {
 	return runs.map(run => new TextRun({ text: run.text, bold: run.bold, italics: run.italics }));
-}
-
-/** Splits runs at line breaks: each line becomes its own paragraph. */
-function splitLines(runs: readonly InlineRun[]): InlineRun[][] {
-	const lines: InlineRun[][] = [[]];
-	for (const run of runs) {
-		const parts = run.text.split("\n");
-		parts.forEach((part, index) => {
-			if (index > 0) lines.push([]);
-			if (part) lines[lines.length - 1].push({ ...run, text: part });
-		});
-	}
-	return lines.map(line => trimLine(line)).filter(line => line.some(run => run.text.trim() !== ""));
-}
-
-function trimLine(line: InlineRun[]): InlineRun[] {
-	if (line.length === 0) return line;
-	const out = line.map(run => ({ ...run }));
-	out[0].text = out[0].text.trimStart();
-	out[out.length - 1].text = out[out.length - 1].text.trimEnd();
-	return out;
 }
 
 function stripTypedMark(runs: InlineRun[]): InlineRun[] {
@@ -245,11 +224,20 @@ export async function buildReport(input: ReportInput): Promise<BuiltDocument> {
 		creator: "Sai ATLAS",
 		styles: {
 			default: {
-				document: { run: { font: BODY_FONT, size: 22 } },
-				title: { run: { font: TITLE_FONT, size: 44, bold: true } },
-				heading1: { run: { font: TITLE_FONT, size: 32, bold: true } },
-				heading2: { run: { font: TITLE_FONT, size: 28, bold: true } },
-				heading3: { run: { font: TITLE_FONT, size: 24, bold: true } },
+				document: { run: { font: BODY_FONT, size: 22 }, paragraph: { spacing: { after: 120 } } },
+				title: { run: { font: TITLE_FONT, size: 44, bold: true }, paragraph: { spacing: { after: 240 } } },
+				heading1: {
+					run: { font: TITLE_FONT, size: 32, bold: true },
+					paragraph: { spacing: { before: 360, after: 120 } },
+				},
+				heading2: {
+					run: { font: TITLE_FONT, size: 28, bold: true },
+					paragraph: { spacing: { before: 240, after: 120 } },
+				},
+				heading3: {
+					run: { font: TITLE_FONT, size: 24, bold: true },
+					paragraph: { spacing: { before: 200, after: 80 } },
+				},
 			},
 		},
 		numbering: {

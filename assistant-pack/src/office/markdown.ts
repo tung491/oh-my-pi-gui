@@ -51,6 +51,27 @@ export function inlineRuns(tokens: readonly Token[] | undefined, bold = false, i
 	return runs;
 }
 
+/** Splits runs at line breaks into trimmed, non-blank lines. */
+export function splitLines(runs: readonly InlineRun[]): InlineRun[][] {
+	const lines: InlineRun[][] = [[]];
+	for (const run of runs) {
+		const parts = run.text.split("\n");
+		parts.forEach((part, index) => {
+			if (index > 0) lines.push([]);
+			if (part) lines[lines.length - 1].push({ ...run, text: part });
+		});
+	}
+	return lines.map(line => trimLine(line)).filter(line => line.some(run => run.text.trim() !== ""));
+}
+
+function trimLine(line: InlineRun[]): InlineRun[] {
+	if (line.length === 0) return line;
+	const out = line.map(run => ({ ...run }));
+	out[0].text = out[0].text.trimStart();
+	out[out.length - 1].text = out[out.length - 1].text.trimEnd();
+	return out;
+}
+
 /** The inline text of tokens on one line, with runs of whitespace collapsed. */
 export function plainText(tokens: readonly Token[] | undefined): string {
 	return inlineRuns(tokens)
