@@ -1,0 +1,42 @@
+# Pinned settings for every Sai ATLAS session, passed with --config. An overlay wins only for
+# the keys it sets, so every approval-relevant key is set here.
+temperature: 0.2
+# No bash tool is loaded: shellPath and bash.* are inert, kept as a deny-all guard
+# for any shell path omp still has.
+shellPath: /bin/sh
+bash:
+  patterns:
+    - match: "*"
+      approval: deny
+  allowCompoundCommands: false
+  direnv: "off"
+fetch:
+  enabled: false
+extensions: []
+skills:
+  enablePiUser: false
+  enablePiProject: false
+  enableAgentsUser: false
+  enableAgentsProject: false
+  enableClaudeUser: false
+  enableClaudeProject: false
+  enableCodexUser: false
+mcp:
+  enableProjectConfig: false
+# No task tool is loaded; disabledAgents stays as belt-and-braces.
+task:
+  disabledAgents: [task, sonic, scout, reviewer, security-reviewer]
+tools:
+  approval:
+    write: prompt
+    open_item: prompt
+    os_setting: prompt
+    office_report: prompt
+    office_slides: prompt
+    office_clean: prompt
+    edit: deny
+    ast_edit: deny
+    eval: deny
+    browser: deny
+    web_search: deny
+    github: deny
