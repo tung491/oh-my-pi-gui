@@ -481,10 +481,8 @@ function describe(state: DeckState): string {
 export async function buildSlides(input: SlidesInput): Promise<BuiltDeck> {
 	const { title, tokens } = resolveTitle(input.markdown, input.title, input.fallbackTitle);
 	const sections = parseSections(title, tokens);
-	const [cover] = sections;
-	if (sections.length === 1 && cover.items.length === 0 && cover.tables.length === 0) {
-		throw new PlainError(NO_SLIDES);
-	}
+	// A deck needs at least one # or ## section after the title slide.
+	if (sections.length === 1) throw new PlainError(NO_SLIDES);
 
 	// One pptxgenjs instance per file; the layout is set before any slide is added.
 	const pptx = new PptxGenJS();

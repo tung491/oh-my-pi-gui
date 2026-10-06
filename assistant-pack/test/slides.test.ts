@@ -100,9 +100,12 @@ describe("buildSlides", () => {
 		expect(orders).toMatch(/ sz="(?:[4-9]\d{3}|\d{5})"/);
 	});
 
-	it("refuses Markdown with nothing to show", async () => {
-		await expect(buildSlides({ markdown: "   ", fallbackTitle: "Slides" })).rejects.toThrow(
-			"There are no slides yet. Start each slide with a line beginning with ##.",
-		);
-	});
+	it.each(["   ", "Just one line of text", "# Only a title\n\nSome text\n\n- a point"])(
+		"refuses Markdown without a slide section: %j",
+		async markdown => {
+			await expect(buildSlides({ markdown, fallbackTitle: "Slides" })).rejects.toThrow(
+				"There are no slides yet. Start each slide with a line beginning with ##.",
+			);
+		},
+	);
 });
