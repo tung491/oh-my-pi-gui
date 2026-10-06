@@ -39,6 +39,7 @@ import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { IconButton } from "../common";
+import { ATTACH_FILTERS, appendDocumentPaths, readImageAttachment, splitAttachments } from "./attach-document";
 import { HistorySearchOverlay } from "./HistorySearchOverlay";
 import { fileToImage, listMentionFiles, mentionFileCache } from "./input-area-utils";
 import { ThinkingControl } from "./ThinkingControl";
@@ -180,7 +181,6 @@ export function InputArea() {
 	}, [runSettingsOpen]);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
-	const fileInputRef = useRef<HTMLInputElement>(null);
 	const mountedRef = useRef(true);
 
 	// A large-paste choice stays reversible until the user explicitly chooses a
@@ -452,6 +452,40 @@ export function InputArea() {
 	// (counter allocated agent-side so two windows can never collide) and the
 	// composer gets the returned literal reference. Any protocol or transport
 	// failure falls back to the inline marker, so clipboard content is not lost.
+	// The paperclip: one native dialog for any document. Images join the
+	// attachments; every other file is named in the draft by its quoted path.
+	const attachDocuments = useCallback(() => {
+		const origin = {
+			tabId: runtimeTabId,
+			sessionId: sessionRuntimeStore<SessionStore>(runtimeTabId, "session")?.getState().sessionId,
+		};
+		const stillOrigin = () =>
+			origin.tabId !== null &&
+			sessionRuntimeStore<SessionStore>(origin.tabId, "session")?.getState().sessionId === origin.sessionId;
+		void (async () => {
+			try {
+				const paths = await window.omp.system.showOpenDialog(ATTACH_FILTERS);
+				if (!paths || paths.length === 0 || !stillOrigin()) return;
+				const { images: imagePaths, documents } = splitAttachments(paths);
+				if (documents.length > 0) setText(current => appendDocumentPaths(current, documents));
+				const read = await Promise.allSettled(
+					imagePaths.map(path => readImageAttachment(path, imagePath => window.omp.fs.readImage(imagePath))),
+				);
+				if (!stillOrigin()) return;
+				const attached = read.flatMap(result => (result.status === "fulfilled" ? [result.value] : []));
+				if (attached.length > 0) setImages(previous => [...previous, ...attached]);
+				for (const result of read) {
+					if (result.status === "rejected") {
+						toast({ variant: "error", title: t("input.attach.failed"), message: String(result.reason) });
+					}
+				}
+				requestAnimationFrame(() => textareaRef.current?.focus());
+			} catch (cause) {
+				toast({ variant: "error", title: t("input.attach.failed"), message: String(cause) });
+			}
+		})();
+	}, [runtimeTabId, setText, setImages, t]);
+
 	const choosePasteSaveFile = useCallback(() => {
 		if (!pasteMenu) return;
 		const pendingPaste = pasteMenu;
@@ -960,25 +994,9 @@ export function InputArea() {
 								disabled={collabReadOnly}
 								icon={<Paperclip size={16} />}
 								label={t("input.attach")}
-								onClick={() => fileInputRef.current?.click()}
+								onClick={attachDocuments}
 								size="sm"
 								variant="ghost"
-							/>
-							<input
-								ref={fileInputRef}
-								type="file"
-								accept="image/*"
-								multiple
-								className="hidden"
-								onChange={event => {
-									const files = Array.from(event.target.files ?? []);
-									if (files.length > 0) {
-										void Promise.all(files.map(fileToImage)).then(pasted =>
-											setImages(previous => [...previous, ...pasted]),
-										);
-									}
-									event.target.value = "";
-								}}
 							/>
 
 							<button
