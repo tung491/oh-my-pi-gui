@@ -627,9 +627,11 @@ impl Inner {
             // Ollama's native api carries `num_ctx`; over the OpenAI-compatible one
             // the server keeps its default context, below the agent's first request.
             command.env("PI_OLLAMA_API", "ollama-chat");
-            // The pack's tools start system programs, some of them shell scripts:
-            // no startup file may ride along into them.
-            command.env_remove("BASH_ENV").env_remove("ENV");
+            // No startup file may ride along into the pack tools' system programs,
+            // and no profile may redirect omp away from the pack's settings.
+            for key in assistant_pack::REMOVED_ENV {
+                command.env_remove(key);
+            }
             for (key, value) in assistant_pack::pack_env(language) {
                 command.env(key, value);
             }
@@ -1266,9 +1268,13 @@ pub(crate) mod tests {
         // A tab created as a chat still gets the pack: the chat branch is gone.
         options.kind = SessionKind::Chat;
         options.fresh = true;
-        // Shell startup files reaching the spawn env are removed; the app language
-        // is set last (`en` without an app context).
-        let (sidecar, mut events) = SidecarManager::new(Weak::new(), options, fixed_env(&[("BASH_ENV", "/rc/bash_env"), ("ENV", "/rc/env"), ("SAI_ATLAS_LANG", "xx")]));
+        // Shell startup files and omp profile selectors reaching the spawn env are
+        // removed; the app language is set last (`en` without an app context).
+        let (sidecar, mut events) = SidecarManager::new(
+            Weak::new(),
+            options,
+            fixed_env(&[("BASH_ENV", "/rc/bash_env"), ("ENV", "/rc/env"), ("OMP_PROFILE", "work"), ("PI_PROFILE", "work"), ("SAI_ATLAS_LANG", "xx")]),
+        );
         sidecar.start();
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
@@ -1282,6 +1288,8 @@ pub(crate) mod tests {
         assert_eq!(child_env.get("SAI_ATLAS_LANG").map(String::as_str), Some("en"));
         assert_eq!(child_env.get("BASH_ENV"), None);
         assert_eq!(child_env.get("ENV"), None);
+        assert_eq!(child_env.get("OMP_PROFILE"), None);
+        assert_eq!(child_env.get("PI_PROFILE"), None);
         let pack = dev_pack();
         let expected = vec![
             "--mode".to_string(),

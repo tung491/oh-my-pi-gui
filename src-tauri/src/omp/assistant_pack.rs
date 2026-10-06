@@ -89,6 +89,11 @@ pub(crate) fn pack_flags(pack_dir: &Path, os: &str) -> Vec<String> {
     ]
 }
 
+/// Env keys removed from every pack session: shell startup files a shell would
+/// source inside the pack tools' system programs, and the omp profile
+/// selectors, which redirect omp's agent dir (user config, APPEND_SYSTEM.md, models).
+pub(crate) const REMOVED_ENV: &[&str] = &["BASH_ENV", "ENV", "OMP_PROFILE", "PI_PROFILE"];
+
 /// The env keys the pack's tools read, set last at spawn.
 pub(crate) fn pack_env(language: &str) -> Vec<(&'static str, String)> {
     vec![("SAI_ATLAS_LANG", language.to_string())]

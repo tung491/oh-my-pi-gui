@@ -31,6 +31,7 @@ import type {
 	SubagentFrame,
 } from "../shared/rpc-types";
 import {
+	ASSISTANT_PACK_REMOVED_ENV,
 	type AssistantPackLanguage,
 	assistantPackEnv,
 	assistantPackFlags,
@@ -356,10 +357,9 @@ export class SidecarManager extends EventEmitter {
 			// server keeps its default context (4096 on most GPUs), below the agent's first request.
 			PI_OLLAMA_API: "ollama-chat",
 		};
-		// The pack's tools start system programs, some of them shell scripts:
-		// no startup file may ride along into them.
-		delete env.BASH_ENV;
-		delete env.ENV;
+		// No startup file may ride along into the pack tools' system programs, and
+		// no profile may redirect omp away from the pack's settings.
+		for (const key of ASSISTANT_PACK_REMOVED_ENV) delete env[key];
 		Object.assign(env, assistantPackEnv({ language: this.#options.language?.() ?? "en" }));
 
 		let child: ChildProcess;

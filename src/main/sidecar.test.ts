@@ -97,21 +97,30 @@ describe("SidecarManager", () => {
 		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
 		await fs.writeFile(
 			binaryPath,
-			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify(process.argv.slice(2)));\nawait fs.writeFile(${JSON.stringify(envPath)}, JSON.stringify({ lang: process.env.SAI_ATLAS_LANG ?? null, bashEnv: process.env.BASH_ENV ?? null, env: process.env.ENV ?? null, ompProfile: process.env.OMP_PROFILE ?? null, piProfile: process.env.PI_PROFILE ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
 		);
 		await fs.chmod(binaryPath, 0o755);
 		const pack = await makePackFixture(tempDir);
 
 		// A tab created as a chat still gets the pack: the chat branch is gone.
-		// Shell startup files reaching the spawn env are removed; the app language is set last.
+		// Shell startup files and omp profile selectors reaching the spawn env are
+		// removed, whether from the login shell or the app's own env; the app
+		// language is set last.
 		const sidecar = new SidecarManager({
 			binaryPath,
 			cwd: tempDir,
 			kind: "chat",
 			fresh: true,
-			shellEnv: () => Promise.resolve({ BASH_ENV: "/rc/bash_env", ENV: "/rc/env", SAI_ATLAS_LANG: "xx" }),
+			shellEnv: () =>
+				Promise.resolve({
+					BASH_ENV: "/rc/bash_env",
+					ENV: "/rc/env",
+					OMP_PROFILE: "work",
+					SAI_ATLAS_LANG: "xx",
+				}),
 			language: () => "vi",
 		});
+		vi.stubEnv("PI_PROFILE", "work");
 		try {
 			const ready = waitForReady(sidecar);
 			sidecar.start();
@@ -137,8 +146,15 @@ describe("SidecarManager", () => {
 				"always-ask",
 			]);
 			expect(launch).not.toContain("--chat");
-			expect(JSON.parse(await fs.readFile(envPath, "utf8"))).toEqual({ lang: "vi", bashEnv: null, env: null });
+			expect(JSON.parse(await fs.readFile(envPath, "utf8"))).toEqual({
+				lang: "vi",
+				bashEnv: null,
+				env: null,
+				ompProfile: null,
+				piProfile: null,
+			});
 		} finally {
+			vi.unstubAllEnvs();
 			sidecar.dispose();
 			await fs.rm(tempDir, { recursive: true, force: true });
 		}

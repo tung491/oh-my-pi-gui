@@ -92,6 +92,13 @@ export function assistantPackFlags(packDir: string, platform: string): string[] 
 	];
 }
 
+/**
+ * Env keys removed from every pack session: shell startup files a shell would
+ * source inside the pack tools' system programs, and the omp profile selectors,
+ * which redirect omp's agent dir (user config, APPEND_SYSTEM.md, models).
+ */
+export const ASSISTANT_PACK_REMOVED_ENV: readonly string[] = ["BASH_ENV", "ENV", "OMP_PROFILE", "PI_PROFILE"];
+
 /** The env keys the pack's tools read, set last at spawn. */
 export function assistantPackEnv(options: { language: AssistantPackLanguage }): Record<string, string> {
 	return { SAI_ATLAS_LANG: options.language };

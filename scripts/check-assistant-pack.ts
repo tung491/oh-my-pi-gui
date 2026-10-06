@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import {
+	ASSISTANT_PACK_REMOVED_ENV,
 	assistantPackEnv,
 	assistantPackFlags,
 	missingAssistantPackFile,
@@ -356,7 +357,9 @@ async function main(): Promise<number> {
 	for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
 	// The sidecar reads only the scratch HOME and the pack: a caller's own omp config location
 	// would add layers (or hide skills) that the shells never pass to a pack session.
-	for (const key of ["BASH_ENV", "ENV", "PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR"]) delete env[key];
+	for (const key of [...ASSISTANT_PACK_REMOVED_ENV, "PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR"]) {
+		delete env[key];
+	}
 	env.HOME = home;
 	Object.assign(env, assistantPackEnv({ language: lang }));
 	const argv = [omp, "--mode", "rpc-ui", "--no-session", ...packFlags];
