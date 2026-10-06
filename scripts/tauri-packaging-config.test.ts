@@ -478,6 +478,21 @@ describe("Windows", () => {
 		expect(Object.keys(electron)).not.toContain("nsis");
 		expect(Object.keys(scripts()).filter(name => name.includes("win"))).toEqual([]);
 	});
+
+	it("the sidecar build and staging scripts name no windows target", () => {
+		expect(Object.keys(SIDECAR_SOURCES).filter(triple => triple.includes("windows"))).toEqual([]);
+		for (const triple of Object.keys(SIDECAR_SOURCES)) expect(stagedSidecarPath(triple)).not.toMatch(/\.exe$/);
+		for (const file of ["scripts/stage-tauri-sidecar.ts", "scripts/build-bundled-omp.ts"]) {
+			const source = fs.readFileSync(path.join(ROOT, file), "utf8");
+			expect(source, file).not.toMatch(/windows|win32|\.exe\b/i);
+		}
+	});
+
+	it("the mac bundle comments name no stats server", () => {
+		for (const file of ["electron-builder.yml", "electron-builder.x64.yml"]) {
+			expect(fs.readFileSync(path.join(ROOT, file), "utf8"), file).not.toMatch(/stats server/i);
+		}
+	});
 });
 
 describe("macOS bundle", () => {

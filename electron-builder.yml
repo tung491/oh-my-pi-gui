@@ -54,7 +54,7 @@ mac:
     NSCameraUsageDescription: Sai ATLAS does not use the camera.
     NSBluetoothAlwaysUsageDescription: Sai ATLAS does not use Bluetooth.
     NSBluetoothPeripheralUsageDescription: Sai ATLAS does not use Bluetooth.
-    # Two origins only: the loopback stats server and GitHub releases over TLS.
+    # Two origins only: the local Ollama server on loopback and GitHub releases over TLS.
     # Declaring that is stricter than the default, so an accidental remote
     # cleartext request cannot start working because some build set
     # NSAllowsArbitraryLoads.
