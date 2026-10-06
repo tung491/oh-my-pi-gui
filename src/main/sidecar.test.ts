@@ -18,6 +18,8 @@ const PACK_TOOLS =
 function packFlags(pack: string): string[] {
 	return [
 		"--no-extensions",
+		"--no-rules",
+		"--no-context-files",
 		"--extension",
 		pack,
 		"--tools",
@@ -32,6 +34,9 @@ function packFlags(pack: string): string[] {
 		"always-ask",
 	];
 }
+
+/** Flags the pack passes itself, so a profile's copy shows up as a second occurrence. */
+const PACK_OWNED_FLAGS = ["--tools", "--config", "--append-system-prompt", "--no-rules", "--no-context-files"];
 
 /** An `assistant-pack/` beside a fake binary in `dir`, holding every listed file except `leaveOut`. */
 async function makePackFixture(dir: string, leaveOut?: string): Promise<string> {
@@ -132,6 +137,8 @@ describe("SidecarManager", () => {
 				"rpc-ui",
 				"--no-auto-resume",
 				"--no-extensions",
+				"--no-rules",
+				"--no-context-files",
 				"--extension",
 				pack,
 				"--tools",
@@ -313,7 +320,18 @@ describe("SidecarManager", () => {
 		const originalHome = process.env.HOME;
 		process.env.HOME = fakeHome;
 		// The extraFlags seam carries what a stored profile cannot express.
-		const smuggled = ["--tools", "edit", "--yolo", "--config", "/x", "-e", "/y", "--hook", "/z"];
+		const smuggled = [
+			"--tools",
+			"edit",
+			"--yolo",
+			"--config",
+			"/x",
+			"-e",
+			"/y",
+			"--hook",
+			"/z",
+			"--no-context-files",
+		];
 		const sidecar = new SidecarManager({ binaryPath, cwd: workspaceCwd, extraFlags: smuggled });
 		try {
 			// Same options as the loader; a variable sidesteps the excess-property
@@ -364,13 +382,13 @@ describe("SidecarManager", () => {
 				"--add-dir",
 				"/data/extra",
 			]) {
-				if (token === "--tools" || token === "--config" || token === "--append-system-prompt") continue;
+				if (PACK_OWNED_FLAGS.includes(token)) continue;
 				expect(launch).not.toContain(token);
 			}
 			// The pack's own flags appear once each; the profile's copies are gone.
-			expect((launch as string[]).filter(token => token === "--tools")).toHaveLength(1);
-			expect((launch as string[]).filter(token => token === "--config")).toHaveLength(1);
-			expect((launch as string[]).filter(token => token === "--append-system-prompt")).toHaveLength(1);
+			for (const flag of PACK_OWNED_FLAGS) {
+				expect((launch as string[]).filter(token => token === flag)).toHaveLength(1);
+			}
 		} finally {
 			process.env.HOME = originalHome;
 			sidecar.dispose();

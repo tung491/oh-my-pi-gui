@@ -1048,6 +1048,8 @@ pub(crate) mod tests {
     fn expected_pack_flags(pack: &Path) -> Vec<String> {
         vec![
             "--no-extensions".to_string(),
+            "--no-rules".to_string(),
+            "--no-context-files".to_string(),
             "--extension".to_string(),
             pack.to_string_lossy().into_owned(),
             "--tools".to_string(),
@@ -1140,7 +1142,7 @@ pub(crate) mod tests {
         assert_eq!(strip(&["--session", "x", "--session-dir", "--session", "--mode=print", "--no-lsp", "positional"]), vec!["--session-dir", "--session", "--no-lsp"]);
         assert_eq!(strip(&["--session", "--session-dir", "/s"]), vec!["--session-dir", "/s"]);
         // Bare flags that change what a session loads or approves.
-        for flag in ["--no-tools", "--no-extensions", "--no-skills", "--auto-approve", "--yolo", "--plan-yolo", "--no-rules", "--chat"] {
+        for flag in ["--no-tools", "--no-extensions", "--no-skills", "--auto-approve", "--yolo", "--plan-yolo", "--no-rules", "--no-context-files", "--chat"] {
             assert_eq!(strip(&[flag, "--no-lsp"]), vec!["--no-lsp"], "{flag}");
             assert_eq!(strip(&[&format!("{flag}=1"), "--no-lsp"]), vec!["--no-lsp"], "{flag}=1");
         }
@@ -1253,6 +1255,8 @@ pub(crate) mod tests {
             "rpc-ui".to_string(),
             "--no-auto-resume".to_string(),
             "--no-extensions".to_string(),
+            "--no-rules".to_string(),
+            "--no-context-files".to_string(),
             "--extension".to_string(),
             pack.to_string_lossy().into_owned(),
             "--tools".to_string(),
@@ -1427,7 +1431,7 @@ process.stdin.resume();"#,
             )
             .unwrap();
         // The extra-flags seam carries what a stored profile cannot express.
-        let smuggled = ["--tools", "edit", "--yolo", "--config", "/x", "-e", "/y", "--hook", "/z"];
+        let smuggled = ["--tools", "edit", "--yolo", "--config", "/x", "-e", "/y", "--hook", "/z", "--no-context-files"];
         let mut options = options(fixture_path(), &workspace);
         options.extra_flags = smuggled.iter().map(|flag| flag.to_string()).collect();
         let (sidecar, mut events) = SidecarManager::new(Arc::downgrade(&ctx), options, fixed_env(&[]));
@@ -1437,16 +1441,18 @@ process.stdin.resume();"#,
         sidecar.dispose().await;
         // Only the profile flags that cannot change what the session loads survive.
         assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &["--no-lsp", "--session-dir", "/data/sessions"]));
+        // Flags the pack passes itself, so a profile's copy shows up as a second occurrence.
+        let pack_owned = ["--tools", "--config", "--append-system-prompt", "--no-rules", "--no-context-files"];
         for token in smuggled.iter().chain(["GUI injected", "--append-system-prompt", "--no-rules", "--add-dir", "/data/extra"].iter()) {
-            if *token == "--tools" || *token == "--config" || *token == "--append-system-prompt" {
+            if pack_owned.contains(token) {
                 continue;
             }
             assert!(!launch.iter().any(|arg| arg == token), "{token} survived");
         }
         // The pack's own flags appear once each; the profile's copies are gone.
-        assert_eq!(launch.iter().filter(|arg| *arg == "--tools").count(), 1);
-        assert_eq!(launch.iter().filter(|arg| *arg == "--config").count(), 1);
-        assert_eq!(launch.iter().filter(|arg| *arg == "--append-system-prompt").count(), 1);
+        for flag in pack_owned {
+            assert_eq!(launch.iter().filter(|arg| *arg == flag).count(), 1, "{flag}");
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

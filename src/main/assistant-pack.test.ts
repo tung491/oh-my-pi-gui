@@ -54,6 +54,8 @@ describe("assistant pack", () => {
 	it("builds the linux pack flags in order", () => {
 		expect(assistantPackFlags("/opt/pack", "linux")).toEqual([
 			"--no-extensions",
+			"--no-rules",
+			"--no-context-files",
 			"--extension",
 			"/opt/pack",
 			"--tools",
@@ -72,6 +74,8 @@ describe("assistant pack", () => {
 	it("builds the macos pack flags without the os tools", () => {
 		const expected = [
 			"--no-extensions",
+			"--no-rules",
+			"--no-context-files",
 			"--extension",
 			"/opt/pack",
 			"--tools",

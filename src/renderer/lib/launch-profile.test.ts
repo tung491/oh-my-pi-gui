@@ -21,6 +21,7 @@ const BARE_PACK_FLAGS = [
 	"--yolo",
 	"--plan-yolo",
 	"--no-rules",
+	"--no-context-files",
 	"--chat",
 ];
 

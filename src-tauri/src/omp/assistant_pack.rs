@@ -72,6 +72,10 @@ pub(crate) fn pack_flags(pack_dir: &Path, os: &str) -> Vec<String> {
     tools.extend_from_slice(OFFICE_TOOLS);
     vec![
         "--no-extensions".to_string(),
+        // The folder's instruction files (rules folders, AGENTS.md, CLAUDE.md
+        // and the like) are written for coding agents, not for the assistant.
+        "--no-rules".to_string(),
+        "--no-context-files".to_string(),
         "--extension".to_string(),
         pack_dir.to_string_lossy().into_owned(),
         "--tools".to_string(),
@@ -177,6 +181,8 @@ mod tests {
         let pack = Path::new("/opt/pack");
         let expected = strings(&[
             "--no-extensions",
+            "--no-rules",
+            "--no-context-files",
             "--extension",
             "/opt/pack",
             "--tools",
@@ -198,6 +204,8 @@ mod tests {
         let pack = Path::new("/opt/pack");
         let expected = strings(&[
             "--no-extensions",
+            "--no-rules",
+            "--no-context-files",
             "--extension",
             "/opt/pack",
             "--tools",

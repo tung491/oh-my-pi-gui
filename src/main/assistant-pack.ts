@@ -75,6 +75,10 @@ export function assistantPackFlags(packDir: string, platform: string): string[] 
 		platform === "linux" ? [...COMMON_TOOLS, ...LINUX_OS_TOOLS, ...OFFICE_TOOLS] : [...COMMON_TOOLS, ...OFFICE_TOOLS];
 	return [
 		"--no-extensions",
+		// The folder's instruction files (rules folders, AGENTS.md, CLAUDE.md
+		// and the like) are written for coding agents, not for the assistant.
+		"--no-rules",
+		"--no-context-files",
 		"--extension",
 		packDir,
 		"--tools",

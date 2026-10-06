@@ -1,14 +1,15 @@
 // Pack load check: starts the sidecar with the shells' assistant-pack spawn flags and env and
 // proves it loaded exactly the pack: the tool list, the four skills, the system prompt, no pack
 // agent, and every config.yml setting read back with the pack's value from the overlay layer.
-// The working folder holds planted `.omp/APPEND_SYSTEM.md` and `.claude/APPEND_SYSTEM.md` files,
-// which must not reach the system prompt.
+// The working folder holds planted `.omp/APPEND_SYSTEM.md` and `.claude/APPEND_SYSTEM.md` files, and
+// it and its parent hold planted instruction files (AGENTS.md, CLAUDE.md, GEMINI.md,
+// .github/copilot-instructions.md); none of them may reach the system prompt.
 //   bun scripts/check-assistant-pack.ts <omp binary> [<pack dir>] [--tools <comma list>] [--lang en|vi]
 // The pack dir defaults to the one the shells resolve for that binary. Prints one row per tool,
 // skill and setting; exits 1 naming every failed check, 2 on bad usage.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import {
 	ASSISTANT_PACK_REMOVED_ENV,
@@ -21,6 +22,8 @@ import {
 const PACK_SKILLS = ["sai-os-helpdesk", "slides-from-report", "spreadsheet-cleanup", "word-report"];
 /** Workspace folders omp searches for an `APPEND_SYSTEM.md` when no append prompt is passed. */
 const APPEND_PROMPT_DIRS = [".omp", ".claude"];
+/** Folder instruction files omp loads as context files unless the session skips them. */
+const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", join(".github", "copilot-instructions.md")];
 const READY_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const KILL_GRACE_MS = 5_000;
@@ -219,6 +222,7 @@ async function check(
 	pack: string,
 	tools: readonly string[],
 	appendMarker: string,
+	instructionMarkers: ReadonlyMap<string, string>,
 ): Promise<string[]> {
 	const failures: string[] = [];
 	await sidecar.data({ type: "negotiate_protocol", protocolVersion: 2 });
@@ -251,6 +255,10 @@ async function check(
 	const leaked = prompt.some(part => part.includes(appendMarker));
 	console.log(`append  workspace APPEND_SYSTEM.md ${leaked ? "reached the system prompt" : "ignored"}`);
 	if (leaked) failures.push("a workspace APPEND_SYSTEM.md reached the system prompt");
+	const instructions = [...instructionMarkers].filter(([marker]) => prompt.some(part => part.includes(marker)));
+	const reached = instructions.map(([, file]) => file).join(", ");
+	console.log(`context  workspace instruction files ${reached ? `reached the system prompt: ${reached}` : "ignored"}`);
+	if (reached) failures.push(`workspace instruction files reached the system prompt: ${reached}`);
 	const promptSkills = promptSkillNames(prompt);
 	if (!sameSet(promptSkills, PACK_SKILLS)) {
 		failures.push(`the system prompt lists skills [${promptSkills.join(", ")}]`);
@@ -353,6 +361,20 @@ async function main(): Promise<number> {
 		mkdirSync(join(cwd, dir));
 		writeFileSync(join(cwd, dir, "APPEND_SYSTEM.md"), `${appendMarker}\n`);
 	}
+	// Nor may the instruction files in the working folder or its parent. Each file gets its own
+	// marker, so a failure names the file that leaked.
+	const instructionMarkers = new Map<string, string>();
+	for (const [folder, label] of [
+		[cwd, "work"],
+		[scratch, "parent"],
+	] as const) {
+		for (const file of INSTRUCTION_FILES) {
+			const marker = `sai-atlas-workspace-instructions-${label}-${file.replace(/\W/g, "-")}-${process.pid}`;
+			mkdirSync(dirname(join(folder, file)), { recursive: true });
+			writeFileSync(join(folder, file), `${marker}\n`);
+			instructionMarkers.set(marker, `${label}/${file}`);
+		}
+	}
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
 	// The sidecar reads only the scratch HOME and the pack: a caller's own omp config location
@@ -368,7 +390,7 @@ async function main(): Promise<number> {
 	let failures: string[];
 	try {
 		await sidecar.ready(READY_TIMEOUT_MS);
-		failures = await check(sidecar, pack, tools, appendMarker);
+		failures = await check(sidecar, pack, tools, appendMarker, instructionMarkers);
 	} catch (error) {
 		const tail = sidecar.stderr.slice(-20).join("\n");
 		failures = [`${error instanceof Error ? error.message : String(error)}${tail ? `\n${tail}` : ""}`];
