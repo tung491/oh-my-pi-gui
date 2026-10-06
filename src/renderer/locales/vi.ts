@@ -1475,6 +1475,8 @@ export const vi: Record<string, string> = {
 	"ollama.settings.refresh": "Làm mới",
 	"ollama.settings.runSetup": "Chạy lại thiết lập",
 	"ollama.settings.useAsDefault": "Đặt làm mặc định",
+	"ollama.settings.cloudRefused":
+		"Mô hình đám mây gửi cuộc trò chuyện của bạn lên mạng. Sai ATLAS chỉ dùng mô hình chạy trên máy tính này.",
 	"ollama.settings.noModels": "Chưa có mô hình cục bộ nào. Tải một mô hình bên dưới.",
 	"providers.cleanup.notice":
 		"Sai ATLAS giờ chạy trên mô hình cục bộ qua Ollama. Các nhà cung cấp khác đã được đăng xuất, và cấu hình mô hình trước đây của bạn đã được lưu vào {path}.",

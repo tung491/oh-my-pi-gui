@@ -25,10 +25,23 @@ import { PullBar } from "../onboarding/PullBar";
 /** Main answers a second concurrent pull with this status: the single download slot is taken. */
 const PULL_BUSY_STATUS = "busy";
 
-/** What `ollama pull` accepts as a tag: no whitespace, no option-looking prefix, bounded length. */
+/**
+ * Ollama cloud models (`gpt-oss:120b-cloud`, `kimi-k2:cloud`, `x-cloud`) run on
+ * Ollama's servers, so a conversation sent to one leaves the computer. A tag is
+ * one when its name or its `:tag` part ends with `-cloud` or is `cloud`.
+ */
+export function isCloudTag(input: string): boolean {
+	const tag = input.trim().toLowerCase();
+	const colon = tag.indexOf(":", tag.lastIndexOf("/") + 1);
+	const parts = colon === -1 ? [tag] : [tag.slice(0, colon), tag.slice(colon + 1)];
+	return parts.some(part => part === "cloud" || part.endsWith("-cloud"));
+}
+
+/** What `ollama pull` accepts as a tag: no whitespace, no option-looking prefix, bounded length, never a cloud model. */
 export function normalizePullTag(input: string): string | null {
 	const tag = input.trim();
 	if (tag.length === 0 || tag.length > 200 || tag.startsWith("-") || /\s/.test(tag)) return null;
+	if (isCloudTag(tag)) return null;
 	return tag;
 }
 
@@ -237,6 +250,7 @@ export function ProvidersWindow() {
 	const pulling = progress !== null && !progress.done && !progress.error;
 	const running = status?.state === "ok";
 	const pullTag = normalizePullTag(tagInput);
+	const cloudRefused = isCloudTag(tagInput);
 	const installed = status?.installedTags ?? [];
 
 	return (
@@ -307,6 +321,7 @@ export function ProvidersWindow() {
 					)}
 					{installed.map(tag => {
 						const isCurrent = current?.provider === "ollama" && current.id === tag;
+						const cloud = isCloudTag(tag);
 						return (
 							<div
 								className="flex items-center gap-3 rounded-lg border border-(--omp-border-muted) px-3 py-2.5"
@@ -319,11 +334,17 @@ export function ProvidersWindow() {
 								) : (
 									<Button
 										data-action="use-as-default"
-										disabled={!sidecarReady || defaultBusy !== null}
+										disabled={cloud || !sidecarReady || defaultBusy !== null}
 										loading={defaultBusy === tag}
 										onClick={() => void makeDefault(tag)}
 										size="sm"
-										title={!sidecarReady ? t("modelPicker.notConnected") : undefined}
+										title={
+											cloud
+												? t("ollama.settings.cloudRefused")
+												: !sidecarReady
+													? t("modelPicker.notConnected")
+													: undefined
+										}
 										variant="secondary"
 									>
 										{t("ollama.settings.useAsDefault")}
@@ -357,6 +378,11 @@ export function ProvidersWindow() {
 							{t("ollama.settings.pull")}
 						</Button>
 					</div>
+					{cloudRefused && (
+						<p className="text-omp-sm text-(--omp-warning)" data-cloud-refused role="alert">
+							{t("ollama.settings.cloudRefused")}
+						</p>
+					)}
 					{pullNotice && (
 						<p className="text-omp-sm text-(--omp-muted)" data-pull-notice role="status">
 							{pullNotice}

@@ -21,7 +21,7 @@ import { useSessionStore } from "../../stores/session";
 import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { WELCOME_COMPLETED_PREF } from "../dialogs/FirstRunOnboardingDialog";
-import { normalizePullTag, ProvidersWindow } from "./ProvidersWindow";
+import { isCloudTag, normalizePullTag, ProvidersWindow } from "./ProvidersWindow";
 
 const { document, window, Event, HTMLElement, Element, Node } = parseHTML("<html><body></body></html>");
 Object.assign(globalThis as Record<string, unknown>, {
@@ -186,7 +186,53 @@ describe("normalizePullTag", () => {
 	});
 });
 
+describe("cloud models", () => {
+	it("refuses Ollama cloud tags", () => {
+		expect(normalizePullTag("gpt-oss:120b-cloud")).toBeNull();
+		expect(normalizePullTag("kimi-k2:cloud")).toBeNull();
+		expect(normalizePullTag("x-cloud")).toBeNull();
+		expect(isCloudTag("gpt-oss:120b-cloud")).toBe(true);
+		expect(isCloudTag("kimi-k2:cloud")).toBe(true);
+		expect(isCloudTag("x-cloud")).toBe(true);
+	});
+
+	it("keeps local tags, including names that merely contain the word", () => {
+		expect(normalizePullTag("hf.co/google/gemma-4-E4B-it-qat-q4_0-gguf")).toBe(
+			"hf.co/google/gemma-4-E4B-it-qat-q4_0-gguf",
+		);
+		expect(normalizePullTag("llama3:8b")).toBe("llama3:8b");
+		expect(isCloudTag("cloudy:7b")).toBe(false);
+		expect(isCloudTag("llama3:8b")).toBe(false);
+	});
+});
+
 describe("ProvidersWindow (Ollama)", () => {
+	it("disables Use as default for an installed cloud model and says why", async () => {
+		ollama.status.mockResolvedValue(ollamaStatus({ installedTags: ["x:cloud", "gemma3:4b"] }));
+		await mountOpen();
+		const cloud = installedRow("x:cloud")?.querySelector(
+			'[data-action="use-as-default"]',
+		) as HTMLButtonElement | null;
+		expect(cloud).not.toBeNull();
+		expect(cloud?.disabled).toBe(true);
+		expect(cloud?.getAttribute("title")).toBe(translate("ollama.settings.cloudRefused"));
+		const local = installedRow("gemma3:4b")?.querySelector(
+			'[data-action="use-as-default"]',
+		) as HTMLButtonElement | null;
+		expect(local?.disabled).toBe(false);
+	});
+
+	it("refuses to pull a cloud tag and sends nothing to Ollama", async () => {
+		await mountOpen();
+		await typeTag("gpt-oss:120b-cloud");
+		await submitPull();
+		expect(ollama.pull).not.toHaveBeenCalled();
+		expect(text()).toContain(translate("ollama.settings.cloudRefused"));
+		expect(translate("ollama.settings.cloudRefused")).toBe(
+			"Cloud models send your conversations online. Sai ATLAS uses only models that run on this computer.",
+		);
+	});
+
 	it("shows the status row, the read-only endpoint and the installed models, with no provider sign-in", async () => {
 		await mountOpen();
 

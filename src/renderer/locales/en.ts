@@ -1595,6 +1595,8 @@ export const en: Record<string, string> = {
 	"ollama.settings.refresh": "Refresh",
 	"ollama.settings.runSetup": "Run setup again",
 	"ollama.settings.useAsDefault": "Use as default",
+	"ollama.settings.cloudRefused":
+		"Cloud models send your conversations online. Sai ATLAS uses only models that run on this computer.",
 	"ollama.settings.noModels": "No local models yet. Pull one below.",
 	"providers.cleanup.notice":
 		"Sai ATLAS now runs on local models through Ollama. Other providers were signed out, and your previous model config was saved to {path}.",
