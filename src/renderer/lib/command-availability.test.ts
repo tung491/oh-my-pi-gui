@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { AvailableCommand } from "../../shared/rpc-types";
-import { REMOVED_COMMANDS, removedCommandName } from "./command-availability";
+import { cloudModelCommand, REMOVED_COMMANDS, removedCommandName } from "./command-availability";
 
 const builtin = (name: string, aliases?: string[]): AvailableCommand => ({
 	name,
@@ -55,4 +55,28 @@ describe("removedCommandName", () => {
 		expect(removedCommandName("/", [])).toBeNull();
 		expect(removedCommandName("", [])).toBeNull();
 	});
+});
+
+describe("cloudModelCommand", () => {
+	it.each([
+		"/model kimi-k2:cloud",
+		"/model x-cloud",
+		"/model:kimi-k2:cloud",
+		"/MODEL  ollama/gpt-oss:120b-cloud ",
+		"/models kimi-k2:cloud",
+	])("refuses a cloud model chosen by %s", message => {
+		expect(cloudModelCommand(message, [])).toBe(true);
+	});
+
+	it("follows an alias the agent advertises for the model command", () => {
+		expect(cloudModelCommand("/m kimi-k2:cloud", [builtin("model", ["m"])])).toBe(true);
+		expect(cloudModelCommand("/m kimi-k2:cloud", [])).toBe(false);
+	});
+
+	it.each(["/model", "/model ", "/model llama3:8b", "/model qwen3:cloudy", "/compact kimi-k2:cloud", "model x-cloud"])(
+		"lets %s through",
+		message => {
+			expect(cloudModelCommand(message, [])).toBe(false);
+		},
+	);
 });

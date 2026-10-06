@@ -14,6 +14,7 @@ import { useSessionStore } from "../stores/session";
 import { useToastStore } from "../stores/toast";
 import { useUiStore } from "../stores/ui";
 import { planComposerSubmit, settleComposerResponse } from "./composer-submit";
+import { translate } from "./i18n";
 
 function success(data: unknown): RpcResponse {
 	return { type: "response", command: "test", success: true, data };
@@ -371,6 +372,36 @@ describe("planComposerSubmit GUI-only routing", () => {
 		expect(submit.kind).toBe("blocked");
 		expect(omp.rpc.prompt).not.toHaveBeenCalled();
 		expect(useToastStore.getState().toasts.some(toast => toast.variant === "warning")).toBe(true);
+	});
+});
+
+describe("planComposerSubmit cloud models", () => {
+	const commands: AvailableCommand[] = [
+		{ name: "model", aliases: ["models"], description: "x", source: "builtin", textModeExecutable: true },
+	];
+
+	function submit(message: string, omp: MockOmp) {
+		return planComposerSubmit({ message, images: [], isStreaming: false, mode: "prompt", commands, rpc: omp.rpc });
+	}
+
+	it.each(["/model kimi-k2:cloud", "/models x-cloud"])(
+		"refuses %s with the cloud refusal and sends nothing",
+		message => {
+			const omp = installMockOmp();
+			expect(submit(message, omp).kind).toBe("blocked");
+			expect(omp.rpc.prompt).not.toHaveBeenCalled();
+			const warnings = useToastStore.getState().toasts.filter(toast => toast.variant === "warning");
+			expect(warnings.map(toast => toast.message)).toEqual([translate("ollama.settings.cloudRefused")]);
+		},
+	);
+
+	it.each(["/model llama3:8b", "/model"])("still sends %s to the agent", async message => {
+		const omp = installMockOmp();
+		const plan = submit(message, omp);
+		if (plan.kind !== "send") throw new Error(`expected send, got ${plan.kind}`);
+		await plan.request();
+		expect(omp.rpc.prompt).toHaveBeenCalledWith(message, []);
+		expect(useToastStore.getState().toasts).toEqual([]);
 	});
 });
 

@@ -387,6 +387,23 @@ describe("InputArea queue shorthand submit", () => {
 		expect(useInputHistoryStore.getState().entries).toEqual([]);
 	});
 
+	it("refuses a cloud model in the queue shorthand (=> /model x-cloud)", async () => {
+		await mount();
+		await act(async () => useSessionStore.setState({ isStreaming: false }));
+		await typeInto(findTextarea(), "=> /model x-cloud");
+		await pressEnter(findTextarea());
+		await flush();
+		await flush();
+
+		expect(prompt).not.toHaveBeenCalled();
+		expect(followUp).not.toHaveBeenCalled();
+		expect(steer).not.toHaveBeenCalled();
+		expect(useComposerStore.getState().draft).toBe("=> /model x-cloud");
+		const warnings = useToastStore.getState().toasts.filter(toast => toast.variant === "warning");
+		expect(warnings.map(toast => toast.message)).toEqual([translate("ollama.settings.cloudRefused")]);
+		expect(useInputHistoryStore.getState().entries).toEqual([]);
+	});
+
 	it("blocks a removed command anywhere in a queued list (-> hello, /collab:start)", async () => {
 		await mount();
 		const draft = "->\n1. hello\n2. /collab:start";

@@ -1,5 +1,6 @@
 import type { SessionKind } from "../../shared/ipc-types";
 import type { AvailableCommand } from "../../shared/rpc-types";
+import { isCloudTag } from "./ollama-cloud";
 
 /**
  * The one availability rule for slash commands, shared by every surface that
@@ -83,31 +84,63 @@ export const REMOVED_COMMANDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Aliases the agent resolves to a removed command that it can run over RPC
- * (its builtin lookup registers aliases next to names). They are listed here
- * so a typed alias stays blocked before the advertised command list arrives.
- * Aliases of terminal-only builtins (`/status`, `/rewind`) are left out: the
- * agent cannot run those over RPC, so the name stays free for other commands.
+ * Builtin aliases the agent resolves itself (its builtin lookup registers
+ * aliases next to names), for the commands the composer refuses. They are
+ * listed here so a typed alias stays refused before the advertised command
+ * list arrives. Aliases of terminal-only builtins (`/status`, `/rewind`) are
+ * left out: the agent cannot run those over RPC, so the name stays free for
+ * other commands.
  */
-const AGENT_ALIASES_OF_REMOVED: Readonly<Record<string, string>> = {
+const AGENT_BUILTIN_ALIASES: Readonly<Record<string, string>> = {
 	plugin: "plugins",
 	worktree: "wt",
+	models: "model",
 };
 
+interface TypedCommand {
+	/** The name as typed, lowercased. */
+	typed: string;
+	/** The command that name runs, after advertised and builtin aliases. */
+	canonical: string;
+	/** Everything after the name's separator, trimmed. */
+	args: string;
+}
+
 /**
- * The removed command a typed slash message would run, or null. Mirrors the
- * agent's own parser: the name is the text after `/` up to the first
- * whitespace or `:` (`/share:x` runs `share`), and an alias runs its
- * canonical command, whether listed above or advertised in `commands`.
+ * Reads a typed slash message the way the agent's own parser does: the name
+ * is the text after `/` up to the first whitespace or `:` (`/share:x` runs
+ * `share` with `x`), and an alias runs its canonical command, whether
+ * advertised in `commands` or listed above.
  */
-export function removedCommandName(message: string, commands: readonly AvailableCommand[]): string | null {
+function parseTypedCommand(message: string, commands: readonly AvailableCommand[]): TypedCommand | null {
 	if (!message.startsWith("/")) return null;
-	const typed = message.slice(1).split(/[\s:]/, 1)[0]?.toLowerCase() ?? "";
+	const body = message.slice(1);
+	const separator = body.search(/[\s:]/);
+	const typed = (separator === -1 ? body : body.slice(0, separator)).toLowerCase();
 	if (!typed) return null;
+	const args = separator === -1 ? "" : body.slice(separator + 1).trim();
 	const advertised = commands.find(command => command.aliases?.some(alias => alias.toLowerCase() === typed))?.name;
-	const canonical = (advertised ?? AGENT_ALIASES_OF_REMOVED[typed] ?? typed).toLowerCase();
-	if (REMOVED_COMMANDS.has(canonical)) return canonical;
-	return REMOVED_COMMANDS.has(typed) ? typed : null;
+	const canonical = (advertised ?? AGENT_BUILTIN_ALIASES[typed] ?? typed).toLowerCase();
+	return { typed, canonical, args };
+}
+
+/** The removed command a typed slash message would run, or null. */
+export function removedCommandName(message: string, commands: readonly AvailableCommand[]): string | null {
+	const command = parseTypedCommand(message, commands);
+	if (!command) return null;
+	if (REMOVED_COMMANDS.has(command.canonical)) return command.canonical;
+	return REMOVED_COMMANDS.has(command.typed) ? command.typed : null;
+}
+
+/**
+ * Whether a typed slash message would switch the session to an Ollama cloud
+ * model (`/model kimi-k2:cloud`, `/models:x-cloud`). Cloud models send the
+ * conversation online, so the composer refuses them as the model picker does.
+ * A bare `/model` only opens the picker and passes.
+ */
+export function cloudModelCommand(message: string, commands: readonly AvailableCommand[]): boolean {
+	const command = parseTypedCommand(message, commands);
+	return command?.canonical === "model" && command.args !== "" && isCloudTag(command.args);
 }
 
 /** Whether `name` can run in a tab of this kind. */
