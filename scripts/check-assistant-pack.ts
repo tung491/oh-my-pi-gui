@@ -7,6 +7,9 @@
 // Local models only: the sidecar talks to a fake local Ollama that also lists cloud models, and the
 // scratch HOME's ~/.env holds online provider keys; only the local model may be listed or selected,
 // through set_model, /model or /switch, and no model request may be sent.
+// A second session runs in a folder whose `.env` points OLLAMA_BASE_URL and OLLAMA_HOST at a DNS
+// name that merely starts with a loopback address. Its traffic goes through a recording proxy that
+// answers as that host would: the session must list no model there and send it nothing.
 //   bun scripts/check-assistant-pack.ts <omp binary> [<pack dir>] [--tools <comma list>] [--lang en|vi]
 // The pack dir defaults to the one the shells resolve for that binary. Prints one row per tool,
 // skill and setting; exits 1 naming every failed check, 2 on bad usage.
@@ -57,6 +60,11 @@ const REFUSED_MODEL_COMMANDS = [
 	"/switch kimi-k2:cloud",
 	"/switch openai/gpt-4",
 ];
+/** A DNS name that only looks like a loopback address; DNS can point it anywhere. */
+const FAKE_LOOPBACK_HOST = "127.0.0.1.attacker.example";
+const FAKE_LOOPBACK_URL = `http://${FAKE_LOOPBACK_HOST}:11434`;
+/** How long the fake-loopback session gets to send its prompt anywhere before it is aborted. */
+const FAKE_LOOPBACK_PROMPT_WAIT_MS = 3_000;
 /** Settings that keep sessions local; the readback must find them pinned by the overlay. */
 const LOCAL_ONLY_SETTINGS = ["modelPolicy.providers", "modelPolicy.localOnly"];
 const READY_TIMEOUT_MS = 60_000;
@@ -270,6 +278,94 @@ function startFakeOllama(): { server: ReturnType<typeof Bun.serve>; modelRequest
 	return { server, modelRequests };
 }
 
+/**
+ * An HTTP proxy standing in for {@link FAKE_LOOPBACK_HOST}: it answers like the fake Ollama and
+ * records every request it is asked to forward there.
+ */
+function startFakeLoopbackProxy(): { server: ReturnType<typeof Bun.serve>; requests: string[] } {
+	const requests: string[] = [];
+	const server = Bun.serve({
+		hostname: "127.0.0.1",
+		port: 0,
+		fetch(request) {
+			const url = new URL(request.url);
+			if (url.hostname !== FAKE_LOOPBACK_HOST) return new Response("not proxied", { status: 502 });
+			requests.push(`${request.method} ${url.pathname}`);
+			if (url.pathname === "/api/tags") return Response.json(FAKE_OLLAMA_TAGS);
+			if (url.pathname === "/api/show") return Response.json({ capabilities: ["completion", "tools"] });
+			if (url.pathname === "/api/version") return Response.json({ version: "0.12.0" });
+			return new Response("not found", { status: 404 });
+		},
+	});
+	return { server, requests };
+}
+
+/** Literal loopback hosts only, as WHATWG URL serializes them. */
+function isLoopbackUrl(value: unknown): boolean {
+	if (typeof value !== "string") return false;
+	let hostname: string;
+	try {
+		hostname = new URL(value).hostname;
+	} catch {
+		return false;
+	}
+	return hostname === "localhost" || hostname === "[::1]" || /^127(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+/**
+ * Runs a session in `cwd`, whose `.env` names {@link FAKE_LOOPBACK_URL} as the Ollama endpoint.
+ * It must list no model away from loopback, and neither discovery nor a prompt may reach that host.
+ */
+async function checkFakeLoopback(argv: string[], env: Record<string, string>, cwd: string): Promise<string[]> {
+	const failures: string[] = [];
+	writeFileSync(join(cwd, ".env"), `OLLAMA_BASE_URL=${FAKE_LOOPBACK_URL}\nOLLAMA_HOST=${FAKE_LOOPBACK_URL}\n`);
+	const proxy = startFakeLoopbackProxy();
+	const sessionEnv = { ...env };
+	// The .env must be what picks the endpoint: omp reads it only for keys the process env lacks.
+	for (const key of ["OLLAMA_BASE_URL", "OLLAMA_HOST", "NO_PROXY", "no_proxy", "HTTPS_PROXY", "https_proxy"]) {
+		delete sessionEnv[key];
+	}
+	sessionEnv.HTTP_PROXY = `http://127.0.0.1:${proxy.server.port}`;
+	sessionEnv.http_proxy = sessionEnv.HTTP_PROXY;
+	const sidecar = new Sidecar(argv, sessionEnv, cwd);
+	try {
+		await sidecar.ready(READY_TIMEOUT_MS);
+		await sidecar.data({ type: "negotiate_protocol", protocolVersion: 2 });
+		const catalog = await sidecar.data<{ models?: unknown[] }>({ type: "get_available_models", forceRefresh: true });
+		for (const model of catalog.models ?? []) {
+			const baseUrl = isPlainObject(model) ? model.baseUrl : undefined;
+			console.log(`dotenv  model ${modelKey(model)} at ${String(baseUrl)}`);
+			if (!isLoopbackUrl(baseUrl)) failures.push(`a .env endpoint listed ${modelKey(model)} at ${String(baseUrl)}`);
+		}
+		try {
+			await sidecar.data({ type: "prompt", message: "Say hello." });
+		} catch {
+			// No model to send it to; the proxy log below decides.
+		}
+		await Bun.sleep(FAKE_LOOPBACK_PROMPT_WAIT_MS);
+		try {
+			await sidecar.data({ type: "abort" });
+		} catch {
+			// Nothing was running.
+		}
+	} catch (error) {
+		const tail = sidecar.stderr.slice(-20).join("\n");
+		failures.push(
+			`fake-loopback session: ${error instanceof Error ? error.message : String(error)}${tail ? `\n${tail}` : ""}`,
+		);
+	} finally {
+		await sidecar.stop();
+		await proxy.server.stop(true);
+	}
+	console.log(
+		`dotenv  ${FAKE_LOOPBACK_HOST} ${proxy.requests.length > 0 ? `reached: ${proxy.requests.join(", ")}` : "never contacted"}`,
+	);
+	if (proxy.requests.length > 0) {
+		failures.push(`requests reached ${FAKE_LOOPBACK_HOST}: ${proxy.requests.join(", ")}`);
+	}
+	return failures;
+}
+
 function modelKey(model: unknown): string {
 	if (!isPlainObject(model)) return "none";
 	return `${String(model.provider)}/${String(model.id)}`;
@@ -478,6 +574,8 @@ async function main(): Promise<number> {
 			instructionMarkers.set(marker, `${label}/${file}`);
 		}
 	}
+	const dotenvCwd = join(scratch, "work-dotenv");
+	mkdirSync(dotenvCwd);
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
 	// The sidecar reads only the scratch HOME and the pack: a caller's own omp config location
@@ -505,6 +603,10 @@ async function main(): Promise<number> {
 	} finally {
 		await sidecar.stop();
 		await ollama.server.stop(true);
+	}
+	try {
+		failures.push(...(await checkFakeLoopback(argv, env, dotenvCwd)));
+	} finally {
 		rmSync(scratch, { recursive: true, force: true });
 	}
 
