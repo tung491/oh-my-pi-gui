@@ -27,7 +27,6 @@ import { HIDDEN_ACCOUNT_COMMANDS } from "../../shared/provider-policy";
 import type { AvailableCommand, CopyTarget, RpcResponse } from "../../shared/rpc-types";
 import { applyModelInfo, hydrateSession, hydrateTabSession } from "../hooks/use-rpc-events";
 import { newSessionNow } from "../hooks/use-session-switch";
-import { openHandoffDialog } from "../stores/fork-handoff";
 import { useModelStore } from "../stores/model";
 import { type SessionStore, useSessionStore } from "../stores/session";
 import { useSettingsStore } from "../stores/settings";
@@ -169,13 +168,9 @@ export interface CommandRegistryContext {
 	openCommandPalette: () => void;
 	openRenameDialog: () => void;
 	openSessionPicker: () => void;
-	openBranchPicker: () => void;
-	openSessionTree: () => void;
 	openSessionInfo: () => void;
-	openHandoffDialog: () => void;
 	openThemePicker: () => void;
 	openAgentHub: (tab?: "definitions" | "hub") => void;
-	openPrCenter: () => void;
 	openHotkeys: () => void;
 	/** Deep-link a center-dock card (todo/plan/agents): expand + flash. */
 	focusDockCard: (id: DockCardId) => void;
@@ -196,7 +191,6 @@ export interface CommandRegistryContext {
 		setInterruptMode: (mode: "immediate" | "wait") => Promise<unknown>;
 		compact: (instructions?: string) => Promise<RpcResponse>;
 		newSession: () => Promise<unknown>;
-		handoff: () => Promise<unknown>;
 		prompt: (message: string) => Promise<unknown>;
 		setPlanMode: (enabled: boolean) => Promise<RpcResponse>;
 		setPrewalk: (enabled: boolean) => Promise<RpcResponse>;
@@ -460,13 +454,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "picker", open: ctx.openRenameDialog },
 	});
 	add({
-		name: "handoff",
-		label: t("cmd.handoff"),
-		description: t("cmd.handoff.desc"),
-		category: "session",
-		affordance: { kind: "picker", open: ctx.openHandoffDialog },
-	});
-	add({
 		name: "export",
 		label: t("cmd.export"),
 		description: t("cmd.export.desc"),
@@ -481,25 +468,11 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		affordance: { kind: "action", run: () => dumpTranscriptToClipboard() },
 	});
 	add({
-		name: "branch",
-		label: t("cmd.branch"),
-		description: t("cmd.branch.desc"),
-		category: "session",
-		affordance: { kind: "picker", open: ctx.openBranchPicker },
-	});
-	add({
 		name: "fork",
 		label: t("cmd.fork"),
 		description: t("cmd.fork.desc"),
 		category: "session",
 		affordance: { kind: "action", run: () => ctx.forkSession() },
-	});
-	add({
-		name: "tree",
-		label: t("cmd.tree"),
-		description: t("cmd.tree.desc"),
-		category: "session",
-		affordance: { kind: "window", open: ctx.openSessionTree },
 	});
 	add({
 		name: "delete",
@@ -816,13 +789,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		category: "workspace",
 		affordance: { kind: "window", open: () => useUiStore.getState().openWorkspaceDirs() },
 	});
-	add({
-		name: "git",
-		label: t("cmd.git"),
-		description: t("cmd.git.desc"),
-		category: "workspace",
-		affordance: { kind: "window", open: () => useUiStore.getState().setPanelTab("diff") },
-	});
 
 	// ═══════════════════════════════════════════════════════════════════
 	// VIEW
@@ -883,13 +849,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		description: t("cmd.hub.desc"),
 		category: "view",
 		affordance: { kind: "window", open: () => ctx.openAgentHub("hub") },
-	});
-	add({
-		name: "prs",
-		label: t("cmd.prCenter"),
-		description: t("cmd.prCenter.desc"),
-		category: "view",
-		affordance: { kind: "window", open: () => ctx.openPrCenter() },
 	});
 
 	// ═══════════════════════════════════════════════════════════════════
@@ -1176,13 +1135,9 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 		openCommandPalette: ui.openCommandPalette,
 		openRenameDialog: ui.openRenameDialog,
 		openSessionPicker: ui.openSessionPicker,
-		openBranchPicker: ui.openBranchPicker,
-		openSessionTree: ui.openSessionTree,
 		openSessionInfo: ui.openSessionInfo,
-		openHandoffDialog,
 		openThemePicker: ui.openThemePicker,
 		openAgentHub: ui.openAgentHub,
-		openPrCenter: ui.openPrCenter,
 		openHotkeys: ui.openHotkeys,
 		focusDockCard: ui.focusDockCard,
 		retryTurn: retryFailedTurn,
@@ -1207,7 +1162,6 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 			newSession: async () => {
 				return newSessionNow();
 			},
-			handoff: () => rpc.handoff(),
 			prompt: message => rpc.prompt(message),
 			setPlanMode: enabled => rpc.setPlanMode(enabled),
 			setPrewalk: enabled => rpc.setPrewalk(enabled),

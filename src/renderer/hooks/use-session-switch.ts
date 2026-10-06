@@ -24,7 +24,6 @@ import type { RpcResponse } from "../../shared/rpc-types";
 import { translate } from "../lib/i18n";
 import { useComposerStore } from "../stores/composer";
 import { useExtensionUiStore } from "../stores/extension-ui";
-import { useForkHandoffStore } from "../stores/fork-handoff";
 import { useMessagesStore } from "../stores/messages";
 import { useModelStore } from "../stores/model";
 import { usePlanApprovalStore } from "../stores/plan-approval";
@@ -51,7 +50,6 @@ export function resetSessionSurface(closeOverlays = true): void {
 	useExtensionUiStore.getState().clearAll();
 	usePlanApprovalStore.getState().clearProposal();
 	if (closeOverlays) {
-		useForkHandoffStore.getState().closeHandoffDialog();
 		useUiStore.getState().closeSessionOverlays();
 	}
 	useSessionStore.setState({

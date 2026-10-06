@@ -33,7 +33,6 @@ import { sessionDisplayTitle } from "../lib/session-title";
 import { beginTabRoute, reconcileTabRoute, resetTabRoute, settleTabRoute } from "../lib/tab-routing";
 import { type ComposerImage, type ComposerStore, useComposerStore } from "./composer";
 import type { ExtensionUiStore } from "./extension-ui";
-import { useForkHandoffStore } from "./fork-handoff";
 import {
 	type PendingPlanProposal,
 	type PlanApprovalStore,
@@ -454,7 +453,6 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		beginTabRoute(state.activeTabId, id);
 		const ui = useUiStore.getState();
 		ui.closeSessionOverlays();
-		useForkHandoffStore.getState().closeHandoffDialog();
 		const split = replaceFocusedSplitTab(state.split, state.activeTabId, id);
 		const outgoingStreaming = useSessionStore.getState().isStreaming;
 		set({
@@ -512,7 +510,6 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		// the foreground role, so its overlays must not linger.
 		const ui = useUiStore.getState();
 		ui.closeSessionOverlays();
-		useForkHandoffStore.getState().closeHandoffDialog();
 		set({
 			activeTabId: id,
 			split,

@@ -2,9 +2,9 @@
  * The close-a-tab rules, shared by the chip's ×, ⌘W and File → Close Tab.
  *
  * A tab whose run is live dies with its close, so it arms the chip's inline
- * confirm first; a worktree-bound tab detours to the cleanup prompt (plan/20)
- * instead of orphaning the checkout; and at the single-tab floor there is no
- * tab left to close, so ⌘W closes the window like every other tabbed app.
+ * confirm first; a worktree-bound tab closes like any other and leaves its
+ * checkout on disk; and at the single-tab floor there is no tab left to close,
+ * so ⌘W closes the window like every other tabbed app.
  */
 
 import { useSessionStore } from "../stores/session";
@@ -28,16 +28,11 @@ export function tabNeedsCloseConfirm(tab: SessionTab, live: LiveTabRuntime): boo
 
 /** What a close request ended up doing. `"window"` = the last tab, so ⌘W closed
  *  its window instead. */
-export type TabCloseOutcome = "closed" | "worktree-prompt" | "armed" | "window" | "nothing";
+export type TabCloseOutcome = "closed" | "armed" | "window" | "nothing";
 
 /** Execute a close the user already committed to (chip ✓, or ⌘W on an armed tab). */
 export function performTabClose(tab: SessionTab): TabCloseOutcome {
-	const ui = useUiStore.getState();
-	ui.cancelCloseTab();
-	if (tab.worktree) {
-		ui.openWorktreeClosePrompt(tab.id);
-		return "worktree-prompt";
-	}
+	useUiStore.getState().cancelCloseTab();
 	void useTabsStore.getState().closeTab(tab.id);
 	return "closed";
 }

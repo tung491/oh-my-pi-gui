@@ -7,8 +7,6 @@ import {
 	Code2,
 	ExternalLink,
 	Folder,
-	GitBranchPlus,
-	GitPullRequest,
 	Keyboard,
 	type LucideIcon,
 	MessageCircle,
@@ -139,7 +137,6 @@ export function Sidebar() {
 		() => ({
 			palette: effectiveShortcut("palette", keymapOverrides, keyboardPlatform),
 			agentHub: effectiveShortcut("agents.hub", keymapOverrides, keyboardPlatform),
-			prCenter: effectiveShortcut("pr.center", keymapOverrides, keyboardPlatform),
 		}),
 		[keymapOverrides, keyboardPlatform],
 	);
@@ -596,13 +593,6 @@ export function Sidebar() {
 			onClick: () => useUiStore.getState().openAgentHub(),
 		},
 		{
-			id: "pull-requests",
-			icon: GitPullRequest,
-			label: t("sidebar.nav.prCenter"),
-			shortcut: navShortcuts.prCenter,
-			onClick: () => useUiStore.getState().openPrCenter(),
-		},
-		{
 			id: "providers",
 			icon: Plug,
 			label: t("ollama.settings.title"),
@@ -1046,15 +1036,6 @@ export function Sidebar() {
 									onSelect: () => {
 										setGroupMenu(null);
 										void openTab({ cwd: groupMenu.group.cwd });
-									},
-								},
-								{
-									id: "group-new-worktree",
-									label: t("sidebar.menu.newWorktreeHere"),
-									icon: GitBranchPlus,
-									onSelect: () => {
-										setGroupMenu(null);
-										useUiStore.getState().openWorktreeDialog({ baseCwd: groupMenu.group.cwd });
 									},
 								},
 								{

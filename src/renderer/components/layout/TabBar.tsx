@@ -12,7 +12,6 @@ import {
 	Check,
 	Columns2,
 	GitBranch,
-	GitBranchPlus,
 	MessageCircle,
 	MessageCirclePlus,
 	MoreHorizontal,
@@ -543,13 +542,12 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
 }
 
 /**
- * New-tab affordance: agent, tool-free chat, and worktree.
+ * New-tab affordance: agent and tool-free chat.
  */
 function NewTabMenu() {
 	const keyboardPlatform = currentKeyboardPlatform();
 	const t = useT();
 	const openTab = useTabsStore(s => s.openTab);
-	const openWorktreeDialog = useUiStore(s => s.openWorktreeDialog);
 	return (
 		<>
 			<IconButton
@@ -568,15 +566,6 @@ function NewTabMenu() {
 				onClick={() => void openTab({ kind: "chat" })}
 				size="sm"
 				title={t("tabs.new.chatHint", { chord: displayShortcut("⇧⌘T", keyboardPlatform) })}
-				variant="ghost"
-			/>
-			<IconButton
-				className="no-drag"
-				icon={<GitBranchPlus size={14} />}
-				label={t("tabs.new.worktree")}
-				onClick={() => openWorktreeDialog()}
-				size="sm"
-				title={t("tabs.new.worktreeHint", { chord: displayShortcut("⌥T", keyboardPlatform) })}
 				variant="ghost"
 			/>
 		</>

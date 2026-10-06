@@ -83,16 +83,6 @@ describe("native rows vs sidecar-advertised duplicates", () => {
 		expect(item.affordance.reason).toBe(translate("palette.tuiOnly"));
 	});
 
-	it("exposes repository changes through the native git row", () => {
-		seedTab("agent");
-		expect(menuItem("git").affordance.kind).toBe("window");
-
-		seedTab("chat");
-		const affordance = menuItem("git").affordance;
-		if (affordance.kind !== "unavailable") throw new Error("git is executable in a chat tab");
-		expect(affordance.reason).toBe(CHAT_REASON);
-	});
-
 	it("drops a sidecar row whose name is a native alias instead of listing a dead duplicate", () => {
 		seedTab("agent");
 		const items = buildCurrentCommandMenu(SIDECAR_COMMANDS);

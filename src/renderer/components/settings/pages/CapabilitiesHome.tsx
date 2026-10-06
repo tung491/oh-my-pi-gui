@@ -10,7 +10,6 @@ import {
 	Command,
 	Database,
 	FolderOpen,
-	GitPullRequest,
 	Keyboard,
 	Network,
 	Plug,
@@ -29,8 +28,6 @@ export type CapabilityTarget =
 	| "updates"
 	| "clear"
 	| "sessionInfo"
-	| "sessionTree"
-	| "handoff"
 	| "export"
 	| "dump"
 	| "fork"
@@ -41,7 +38,6 @@ export type CapabilityTarget =
 	| "omfg"
 	| "queue"
 	| "workspaceDirs"
-	| "prCenter"
 	| "jobs"
 	| "hotkeys"
 	| "theme"
@@ -278,22 +274,11 @@ export function CapabilitiesHome({
 				<CapabilityCard description={t("cmd.import.desc")} icon={<FolderOpen size={16} />} title={t("cmd.session")}>
 					<TargetButton label={t("cmd.clear")} onOpen={onOpenTarget} target="clear" variant="secondary" />
 					<TargetButton label={t("cmd.session")} onOpen={onOpenTarget} target="sessionInfo" />
-					<TargetButton label={t("cmd.tree")} onOpen={onOpenTarget} target="sessionTree" />
-					<TargetButton label={t("cmd.handoff")} onOpen={onOpenTarget} target="handoff" />
 					<TargetButton label={t("cmd.export")} onOpen={onOpenTarget} target="export" />
 					<TargetButton label={t("cmd.dump")} onOpen={onOpenTarget} target="dump" />
 					<TargetButton label={t("cmd.fork")} onOpen={onOpenTarget} target="fork" />
 					<TargetButton label={t("cmd.retry")} onOpen={onOpenTarget} target="retry" />
 					<TargetButton label={t("cmd.resend")} onOpen={onOpenTarget} target="resend" />
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("cmd.prCenter.desc")}
-					icon={<GitPullRequest size={16} />}
-					title={t("cmd.prCenter")}
-				>
-					<TargetButton label={t("cmd.prCenter")} onOpen={onOpenTarget} target="prCenter" variant="secondary" />
-					<TargetButton label={t("cmd.dirs")} onOpen={onOpenTarget} target="workspaceDirs" />
 				</CapabilityCard>
 
 				<CapabilityCard description={t("cmd.jobs.desc")} icon={<BarChart3 size={16} />} title={t("cmd.jobs")}>

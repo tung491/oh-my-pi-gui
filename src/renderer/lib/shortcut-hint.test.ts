@@ -12,7 +12,6 @@ describe("effectiveShortcut", () => {
 
 	it("labels the single-chord navigation actions", () => {
 		expect(effectiveShortcut("agents.hub", {}, "mac")).toBe("⌥A");
-		expect(effectiveShortcut("pr.center", {}, "mac")).toBe("⌥P");
 		expect(effectiveShortcut("model.select", {}, "mac")).toBe("⌥M");
 	});
 

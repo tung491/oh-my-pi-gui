@@ -49,7 +49,6 @@ import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "../..
 import { dumpTranscriptToClipboard } from "../../lib/transcript-copy";
 import { en } from "../../locales/en";
 import { vi } from "../../locales/vi";
-import { openHandoffDialog } from "../../stores/fork-handoff";
 import { useMessagesStore } from "../../stores/messages";
 import { useSessionStore } from "../../stores/session";
 import { focusedSessionRuntime, sessionRuntime, withSessionRuntime } from "../../stores/session-runtime-context";
@@ -721,12 +720,6 @@ export function SettingsWindow() {
 				case "sessionInfo":
 					external(() => useUiStore.getState().openSessionInfo());
 					return;
-				case "sessionTree":
-					external(() => useUiStore.getState().openSessionTree());
-					return;
-				case "handoff":
-					external(() => openHandoffDialog());
-					return;
 				case "export":
 					runAsync(() => exportSessionHtml());
 					return;
@@ -764,9 +757,6 @@ export function SettingsWindow() {
 					return;
 				case "workspaceDirs":
 					external(() => useUiStore.getState().openWorkspaceDirs());
-					return;
-				case "prCenter":
-					external(() => useUiStore.getState().openPrCenter());
 					return;
 				case "jobs":
 					external(() => useUiStore.getState().openJobs());
@@ -1037,7 +1027,6 @@ export function SettingsWindow() {
 												name="defaultPanelTab"
 												onChange={applyPanelTab}
 												options={[
-													{ value: "diff", label: t("settings.gui.panel.diff") },
 													{ value: "files", label: t("settings.gui.panel.files") },
 													{ value: "logs", label: t("settings.gui.panel.logs") },
 												]}

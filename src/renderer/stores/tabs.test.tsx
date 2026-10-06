@@ -30,7 +30,6 @@ import type {
 import { acceptsActiveTabEvents } from "../lib/tab-routing";
 import { useComposerStore } from "./composer";
 import { useExtensionUiStore } from "./extension-ui";
-import { useForkHandoffStore } from "./fork-handoff";
 import { useMessagesStore } from "./messages";
 import { useModelStore } from "./model";
 import { usePlanApprovalStore } from "./plan-approval";
@@ -231,7 +230,6 @@ function resetAll(): void {
 	useExtensionUiStore.getState().clearAll();
 	useUiStore.getState().closeSessionOverlays();
 	useUiStore.getState().closeProviders();
-	useForkHandoffStore.getState().closeHandoffDialog();
 }
 
 afterEach(() => {
@@ -453,14 +451,12 @@ describe("tabs store switch", () => {
 		useUiStore.getState().openSessionInfo();
 		useUiStore.getState().openRenameDialog();
 		useUiStore.getState().openProviders();
-		useForkHandoffStore.getState().openHandoffDialog();
 
 		await useTabsStore.getState().switchTab("t1");
 
 		expect(useUiStore.getState().settingsOpen).toBe(false);
 		expect(useUiStore.getState().sessionInfoOpen).toBe(false);
 		expect(useUiStore.getState().renameDialogOpen).toBe(false);
-		expect(useForkHandoffStore.getState().handoffDialogOpen).toBe(false);
 		expect(useUiStore.getState().providersOpen).toBe(true);
 	});
 

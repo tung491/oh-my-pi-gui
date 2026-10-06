@@ -3,18 +3,21 @@ import type { SessionInfo } from "../../shared/ipc-types";
 import type { SidecarRestartProgress } from "../../shared/rpc-types";
 import { KEYMAP_ACTIONS, type KeymapOverrides, sanitizeOverrides } from "../lib/keymap";
 import { readPrepaintThemeMode, type ThemeMode } from "../lib/theme";
-import { useTabsStore } from "./tabs";
 
 export type { ThemeMode };
 
-export type PanelTab = "diff" | "files" | "logs";
+export type PanelTab = "files" | "logs";
+
+/** Panel tabs older builds could persist, mapped to the tab that replaces them. */
+const RETIRED_PANEL_TABS: Readonly<Record<string, PanelTab>> = { diff: "files" };
 
 /**
  * The workspace panel tab a persisted `defaultPanelTab` preference restores,
  * or null when the stored value names no tab.
  */
 export function panelTabFromPref(value: unknown): PanelTab | null {
-	return value === "diff" || value === "files" || value === "logs" ? value : null;
+	if (value === "files" || value === "logs") return value;
+	return typeof value === "string" && Object.hasOwn(RETIRED_PANEL_TABS, value) ? RETIRED_PANEL_TABS[value] : null;
 }
 /** Center-dock card identifiers: todo/plan/agents render as live cards above the composer. */
 export type DockCardId = "todo" | "plan" | "agents";
@@ -58,20 +61,10 @@ interface UiStore {
 	composerEditorOpen: boolean;
 	composerEditorInitial: string | null;
 	renameDialogOpen: boolean;
-	/** Worktree-create dialog (plan/20): non-null opens it; baseCwd pins the
-	 * repo when invoked from a Sidebar group (default = active session cwd). */
-	worktreeDialog: { baseCwd?: string } | null;
-	/** Close-time cleanup prompt for a worktree-bound tab (plan/20): the tab
-	 * awaiting the user's delete/keep decision before closeTab proceeds. */
-	worktreeClosePrompt: { tabId: string } | null;
 	/** Live tab whose close is armed for confirmation: set by the chip's ×, ⌘W or
 	 * the menu, so all three share one inline confirm (the second commit closes). */
 	armedCloseTab: { tabId: string } | null;
-	/** PR Center fullscreen panel (plan/21). */
-	prCenterOpen: boolean;
 	sessionPickerOpen: boolean;
-	branchPickerOpen: boolean;
-	sessionTreeOpen: boolean;
 	sessionInfoOpen: boolean;
 	/** Session the user tried to open while the attached session was busy
 	 * (streaming/compacting). Non-null shows the SessionSwitchDialog offering
@@ -141,20 +134,10 @@ interface UiStore {
 	closeComposerEditor: () => void;
 	openRenameDialog: () => void;
 	closeRenameDialog: () => void;
-	openWorktreeDialog: (context?: { baseCwd?: string }) => void;
-	closeWorktreeDialog: () => void;
-	openWorktreeClosePrompt: (tabId: string) => void;
-	closeWorktreeClosePrompt: () => void;
 	armCloseTab: (tabId: string) => void;
 	cancelCloseTab: () => void;
-	openPrCenter: () => void;
-	closePrCenter: () => void;
 	openSessionPicker: () => void;
 	closeSessionPicker: () => void;
-	openBranchPicker: () => void;
-	closeBranchPicker: () => void;
-	openSessionTree: () => void;
-	closeSessionTree: () => void;
 	openSessionInfo: () => void;
 	closeSessionInfo: () => void;
 	requestSessionSwitch: (session: SessionInfo) => void;
@@ -188,7 +171,7 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	displayPreferences: {},
 	sidebarVisible: true,
 	panelVisible: false,
-	panelTab: "diff",
+	panelTab: "files",
 	filePreviewPath: null,
 	commandPaletteOpen: false,
 	modelPickerOpen: false,
@@ -207,17 +190,7 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	toolsExpandAll: { expanded: false, seq: 0 },
 	toggleToolsExpandAll: () =>
 		set({ toolsExpandAll: { expanded: !get().toolsExpandAll.expanded, seq: get().toolsExpandAll.seq + 1 } }),
-	setPanelTab: tab => {
-		// Chat tabs are tool-free: only files + logs can exist there, so a
-		// force-open of the diff tab is a no-op.
-		if (tab === "diff") {
-			const activeKind = useTabsStore
-				.getState()
-				.tabs.find(t2 => t2.id === useTabsStore.getState().activeTabId)?.kind;
-			if (activeKind === "chat") return;
-		}
-		set({ panelTab: tab, panelVisible: true });
-	},
+	setPanelTab: tab => set({ panelTab: tab, panelVisible: true }),
 	openFilePreview: path => set({ filePreviewPath: path, panelTab: "files", panelVisible: true }),
 	closeFilePreview: () => set({ filePreviewPath: null }),
 	dockCollapsed: {},
@@ -282,27 +255,12 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	renameDialogOpen: false,
 	openRenameDialog: () => set({ renameDialogOpen: true }),
 	closeRenameDialog: () => set({ renameDialogOpen: false }),
-	worktreeDialog: null,
-	openWorktreeDialog: context => set({ worktreeDialog: context ?? {} }),
-	closeWorktreeDialog: () => set({ worktreeDialog: null }),
-	worktreeClosePrompt: null,
-	openWorktreeClosePrompt: tabId => set({ worktreeClosePrompt: { tabId } }),
-	closeWorktreeClosePrompt: () => set({ worktreeClosePrompt: null }),
 	armedCloseTab: null,
 	armCloseTab: tabId => set({ armedCloseTab: { tabId } }),
 	cancelCloseTab: () => set({ armedCloseTab: null }),
-	prCenterOpen: false,
-	openPrCenter: () => set({ prCenterOpen: true }),
-	closePrCenter: () => set({ prCenterOpen: false }),
 	sessionPickerOpen: false,
 	openSessionPicker: () => set({ sessionPickerOpen: true }),
 	closeSessionPicker: () => set({ sessionPickerOpen: false }),
-	branchPickerOpen: false,
-	openBranchPicker: () => set({ branchPickerOpen: true }),
-	closeBranchPicker: () => set({ branchPickerOpen: false }),
-	sessionTreeOpen: false,
-	openSessionTree: () => set({ sessionTreeOpen: true }),
-	closeSessionTree: () => set({ sessionTreeOpen: false }),
 	sessionInfoOpen: false,
 	openSessionInfo: () => set({ sessionInfoOpen: true }),
 	closeSessionInfo: () => set({ sessionInfoOpen: false }),
@@ -322,14 +280,9 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			composerEditorOpen: false,
 			composerEditorInitial: null,
 			renameDialogOpen: false,
-			worktreeDialog: null,
-			worktreeClosePrompt: null,
 			armedCloseTab: null,
-			prCenterOpen: false,
 			filePreviewPath: null,
 			sessionPickerOpen: false,
-			branchPickerOpen: false,
-			sessionTreeOpen: false,
 			sessionInfoOpen: false,
 			sessionSwitchPrompt: null,
 		}),

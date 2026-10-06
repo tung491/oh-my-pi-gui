@@ -5,7 +5,7 @@
  * retry) is otherwise indistinguishable from a dead UI. Covers the
  * useRpcEvents event wiring (which events arm/clear `awaitingModelSince`) and
  * the PendingModelRow elapsed-time rendering. Rendered with react-dom/client
- * into a linkedom document (same harness as ForkHandoffDialogs.test.tsx).
+ * into a linkedom document (same harness as ThinkingBlock.test.tsx).
  */
 
 import { parseHTML } from "linkedom";

@@ -266,7 +266,6 @@ describe("Sidebar menus and pinned ordering", () => {
 			"Start with what makes OMP different",
 			"Agent Hub",
 			"Ollama",
-			"PR Center",
 			"Open workspace",
 			"Keyboard shortcuts",
 			"Settings",
@@ -481,7 +480,7 @@ describe("Sidebar menus and pinned ordering", () => {
 		expect(groupedAgentRow?.querySelector("span[data-sidebar-session-icon]")).not.toBeNull();
 	});
 
-	it("right-click on a workspace header opens the agent-only 5-item group menu", async () => {
+	it("right-click on a workspace header opens the agent-only 4-item group menu", async () => {
 		installMockOmp(LIST);
 		seedStores();
 		await mount(<Sidebar />);
@@ -493,11 +492,11 @@ describe("Sidebar menus and pinned ordering", () => {
 		const labels = menuItemLabels();
 		expect(labels.some(label => label.includes("New agent session here"))).toBe(true);
 		expect(labels.some(label => label.includes("New chat session here"))).toBe(false);
-		expect(labels.some(label => label.includes("New worktree tab here"))).toBe(true);
+		expect(labels.some(label => label.includes("New worktree tab here"))).toBe(false);
 		expect(labels.some(label => label.includes("Rename"))).toBe(true);
 		expect(labels.some(label => label.includes("Pin to top"))).toBe(true);
 		expect(labels.some(label => label.includes("Delete"))).toBe(true);
-		expect(labels).toHaveLength(5);
+		expect(labels).toHaveLength(4);
 	});
 
 	it("right-click on a session row opens the 6-item session menu", async () => {
@@ -845,7 +844,7 @@ describe("Sidebar VIF rail", () => {
 		const navigation = container.querySelector("[data-sidebar-navigation]");
 		if (!navigation) throw new Error("sidebar navigation missing");
 		const navButtons = navigation.querySelectorAll("button");
-		for (const [index, label] of ["Commands", "Agent Hub", "PR Center", "Ollama"].entries()) {
+		for (const [index, label] of ["Commands", "Agent Hub", "Ollama"].entries()) {
 			expect((navButtons[index]?.textContent ?? "").startsWith(label), `navigation item ${index}: ${label}`).toBe(
 				true,
 			);

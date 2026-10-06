@@ -2,14 +2,12 @@ import { lazy, Suspense, useEffect, useMemo } from "react";
 import type { DeepLinkPayload, MenuAction, MenuActionPayload, RunProgressState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
 import { ToastStack } from "./components/common";
-import { BranchPickerDialog } from "./components/dialogs/BranchPickerDialog";
 import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
 import { CommandPalette } from "./components/dialogs/CommandPalette";
 import { CopySelectorDialog } from "./components/dialogs/CopySelectorDialog";
 import { ExtensionDialog } from "./components/dialogs/ExtensionDialog";
 import { FirstRunOnboardingDialog } from "./components/dialogs/FirstRunOnboardingDialog";
-import { HandoffDialog } from "./components/dialogs/HandoffDialog";
 import { HotkeysDialog } from "./components/dialogs/HotkeysDialog";
 import { JobsDialog } from "./components/dialogs/JobsDialog";
 import { ModelPicker } from "./components/dialogs/ModelPicker";
@@ -17,11 +15,8 @@ import { RenameSessionDialog } from "./components/dialogs/RenameSessionDialog";
 import { SessionInfoDialog } from "./components/dialogs/SessionInfoDialog";
 import { SessionPickerDialog } from "./components/dialogs/SessionPickerDialog";
 import { SessionSwitchDialog } from "./components/dialogs/SessionSwitchDialog";
-import { SessionTreeDialog } from "./components/dialogs/SessionTreeDialog";
 import { ThemePickerDialog } from "./components/dialogs/ThemePickerDialog";
 import { WorkspaceDirsDialog } from "./components/dialogs/WorkspaceDirsDialog";
-import { WorktreeCloseDialog } from "./components/dialogs/WorktreeCloseDialog";
-import { WorktreeDialog } from "./components/dialogs/WorktreeDialog";
 import { PanelContainer } from "./components/layout/PanelContainer";
 import { Sidebar } from "./components/layout/Sidebar";
 import { SidecarBanner } from "./components/layout/SidecarBanner";
@@ -74,7 +69,6 @@ import {
 	resolveThemeSelection,
 } from "./lib/themes";
 import { startVoiceAutoSpeak } from "./lib/voice";
-import { openHandoffDialog } from "./stores/fork-handoff";
 import { useModelStore } from "./stores/model";
 import { useSessionStore } from "./stores/session";
 import { SessionRuntimeProvider } from "./stores/session-runtime-context";
@@ -95,9 +89,6 @@ const SettingsWindow = lazy(() =>
 );
 const AgentHubWindow = lazy(() =>
 	import("./components/panels/AgentHubWindow").then(m => ({ default: m.AgentHubWindow })),
-);
-const PrCenterWindow = lazy(() =>
-	import("./components/panels/PrCenterWindow").then(m => ({ default: m.PrCenterWindow })),
 );
 const ProvidersWindow = lazy(() =>
 	import("./components/settings/ProvidersWindow").then(m => ({ default: m.ProvidersWindow })),
@@ -406,18 +397,10 @@ export function App() {
 				case "tab.newChat":
 					void useTabsStore.getState().openTab({ kind: "chat" });
 					return;
-				case "tab.newWorktree":
-					// ⌥T — new worktree tab (create dialog, plan/20).
-					useUiStore.getState().openWorktreeDialog();
-					return;
 				case "tab.close":
 					// ⌘W — close the active tab, arming the chip's inline confirm
 					// while its run is live (⇧⌘W closes the window from the menu).
 					closeActiveTab();
-					return;
-				case "pr.center":
-					// ⌥P — PR Center panel (plan/21).
-					useUiStore.getState().openPrCenter();
 					return;
 				case "model.select":
 					// ⌥M — model picker (TUI app.model.select).
@@ -453,12 +436,7 @@ export function App() {
 			if (event.repeat || isImeKeyEvent(event)) return;
 			const ui = useUiStore.getState();
 			const overlayOpen =
-				ui.commandPaletteOpen ||
-				ui.modelPickerOpen ||
-				ui.settingsOpen ||
-				ui.sessionPickerOpen ||
-				ui.branchPickerOpen ||
-				ui.hotkeysOpen;
+				ui.commandPaletteOpen || ui.modelPickerOpen || ui.settingsOpen || ui.sessionPickerOpen || ui.hotkeysOpen;
 			if (event.key === "Escape") {
 				// Don't abort when an overlay/dropdown already consumed this Escape to
 				// dismiss itself (its handler ran first + preventDefault).
@@ -551,25 +529,8 @@ export function App() {
 				ui.openModelPicker();
 				return;
 			}
-			if (action === "open-branch-picker") {
-				ui.openBranchPicker();
-				return;
-			}
-			if (action === "open-session-tree") {
-				ui.openSessionTree();
-				return;
-			}
 			if (action === "open-capabilities") {
 				ui.openSettings("capabilities");
-				return;
-			}
-			if (action === "open-git") {
-				const active = useTabsStore.getState().tabs.find(tab => tab.id === useTabsStore.getState().activeTabId);
-				if (active?.kind === "chat") {
-					toast({ variant: "warning", message: t("unavailable.chatSession") });
-					return;
-				}
-				ui.setPanelTab("diff");
 				return;
 			}
 			if (action === "restart-sidecar") {
@@ -604,10 +565,6 @@ export function App() {
 				ui.openProviders();
 				return;
 			}
-			if (action === "open-pr-center") {
-				ui.openPrCenter();
-				return;
-			}
 			// Menu commands below read or mutate the selected sidecar. Ignore the
 			// short selected-vs-routed gap instead of sending them to the old tab.
 			if (!acceptsActiveTabEvents()) return;
@@ -629,10 +586,7 @@ export function App() {
 			}
 			if (
 				useSessionStore.getState().isStreaming &&
-				(action === "new-session" ||
-					action === "open-project" ||
-					action === "handoff" ||
-					action === "switch-project")
+				(action === "new-session" || action === "open-project" || action === "switch-project")
 			) {
 				toast({ variant: "warning", message: t("sessionSwitch.busyBlocked") });
 				return;
@@ -647,8 +601,6 @@ export function App() {
 					await newSessionNow();
 				} else if (action === "export-html") {
 					await exportSessionHtml();
-				} else if (action === "handoff") {
-					openHandoffDialog();
 				}
 			} catch (error) {
 				toast({ variant: "error", title: t("app.actionFailed"), message: String(error) });
@@ -678,24 +630,18 @@ export function App() {
 			<FirstRunOnboardingDialog />
 			<ModelPicker />
 			<RenameSessionDialog />
-			<WorktreeDialog />
-			<WorktreeCloseDialog />
 			<SessionPickerDialog />
 			<SessionSwitchDialog />
-			<BranchPickerDialog />
 			<BtwDialog />
 			<CopySelectorDialog />
 			<JobsDialog />
 			<ChangelogDialog />
 			<WorkspaceDirsDialog />
-			<SessionTreeDialog />
 			<SessionInfoDialog />
-			<HandoffDialog />
 			<Suspense fallback={null}>
 				<SettingsWindow />
 				<ProvidersWindow />
 				<AgentHubWindow open={agentHubOpen} onClose={closeAgentHub} initialTab={agentHubTab} />
-				<PrCenterWindow />
 			</Suspense>
 			<ThemePickerDialog />
 			<HotkeysDialog open={hotkeysOpen} />

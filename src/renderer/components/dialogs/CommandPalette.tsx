@@ -26,7 +26,6 @@ import { isImeKeyEvent } from "../../lib/ime";
 import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { retryLastTurn as retryLastTurnShared } from "../../lib/messages";
 import { writePersisted } from "../../lib/persisted-storage";
-import { openHandoffDialog } from "../../stores/fork-handoff";
 import { useModelStore } from "../../stores/model";
 import { useSessionStore } from "../../stores/session";
 import { useSettingsStore } from "../../stores/settings";
@@ -147,12 +146,9 @@ export function CommandPalette() {
 	const openProviders = useUiStore(state => state.openProviders);
 	const openRenameDialog = useUiStore(state => state.openRenameDialog);
 	const openSessionPicker = useUiStore(state => state.openSessionPicker);
-	const openBranchPicker = useUiStore(state => state.openBranchPicker);
-	const openSessionTree = useUiStore(state => state.openSessionTree);
 	const openSessionInfo = useUiStore(state => state.openSessionInfo);
 	const openThemePicker = useUiStore(state => state.openThemePicker);
 	const openAgentHub = useUiStore(state => state.openAgentHub);
-	const openPrCenter = useUiStore(state => state.openPrCenter);
 	const openHotkeys = useUiStore(state => state.openHotkeys);
 	const focusDockCard = useUiStore(state => state.focusDockCard);
 
@@ -314,15 +310,11 @@ export function CommandPalette() {
 				openProviders,
 				openRenameDialog,
 				openSessionPicker,
-				openBranchPicker,
-				openSessionTree,
 				openSessionInfo,
-				openHandoffDialog,
 				forkSession: forkSessionFromGui,
 				hydrateSession: () => (tabId ? hydrateTabSession(tabId) : hydrateSession()),
 				openThemePicker,
 				openAgentHub,
-				openPrCenter,
 				openHotkeys,
 				focusDockCard,
 				openCommandPalette: () => {},
@@ -337,7 +329,6 @@ export function CommandPalette() {
 					setInterruptMode: mode => tabRpc.setInterruptMode(mode),
 					compact: instructions => tabRpc.compact(instructions),
 					newSession: newSessionNow,
-					handoff: () => tabRpc.handoff(),
 					prompt: message => tabRpc.prompt(message),
 					setPlanMode: enabled => tabRpc.setPlanMode(enabled),
 					setPrewalk: enabled => tabRpc.setPrewalk(enabled),
@@ -365,14 +356,11 @@ export function CommandPalette() {
 			openProviders,
 			openRenameDialog,
 			openSessionPicker,
-			openBranchPicker,
-			openSessionTree,
 			openSessionInfo,
 			retryLastTurn,
 			retryTurn,
 			focusDockCard,
 			openAgentHub,
-			openPrCenter,
 			openHotkeys,
 			openThemePicker,
 			tabRpc.setPrewalk,
@@ -384,7 +372,6 @@ export function CommandPalette() {
 			tabRpc.setFastMode,
 			tabRpc.prompt,
 			tabRpc.setAutoRetry,
-			tabRpc.handoff,
 			tabRpc.setModel,
 			tabRpc.setAutoCompaction,
 			tabRpc.exportHtml,

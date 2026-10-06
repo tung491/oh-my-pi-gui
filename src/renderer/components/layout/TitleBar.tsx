@@ -6,7 +6,6 @@ import {
 	Database,
 	FolderOpen,
 	Gauge,
-	GitBranch,
 	Info,
 	MoreHorizontal,
 	PanelLeft,
@@ -63,8 +62,6 @@ export function TitleBar() {
 	const togglePanel = useUiStore(s => s.togglePanel);
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
-	const openBranchPicker = useUiStore(s => s.openBranchPicker);
-	const openSessionTree = useUiStore(s => s.openSessionTree);
 	const { sessions } = useSessionList("local");
 	const projectName = !isChat && cwd ? basename(cwd) : t("titlebar.openProject");
 
@@ -190,27 +187,6 @@ export function TitleBar() {
 	const metricIcon = "text-(--omp-accent)";
 
 	const actionMenuItems: ContextMenuItem[] = [
-		{
-			id: "branch",
-			label: t("cmd.branch"),
-			description: t("cmd.branch.desc"),
-			icon: GitBranch,
-			onSelect: () => {
-				setActionsMenu(null);
-				openBranchPicker();
-			},
-		},
-		{
-			id: "tree",
-			label: t("cmd.tree"),
-			description: t("cmd.tree.desc"),
-			disabled: isChat,
-			icon: GitBranch,
-			onSelect: () => {
-				setActionsMenu(null);
-				openSessionTree();
-			},
-		},
 		{
 			id: "session-info",
 			label: t("cmd.session"),

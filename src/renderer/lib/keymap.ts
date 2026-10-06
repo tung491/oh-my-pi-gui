@@ -256,7 +256,6 @@ export const KEYMAP_ACTIONS = [
 		hotkeyGroup: "generation",
 	},
 	{ id: "retry", labelKey: "hotkeys.row.retry", defaults: ["⌥R"], overlaySafe: false, hotkeyGroup: "generation" },
-	{ id: "pr.center", labelKey: "hotkeys.row.prCenter", defaults: ["⌥P"], overlaySafe: false, hotkeyGroup: "session" },
 	{ id: "dequeue", labelKey: "hotkeys.row.dequeue", defaults: ["⌥↑"], overlaySafe: false, hotkeyGroup: "generation" },
 	{
 		id: "tools.expand",
@@ -293,13 +292,6 @@ export const KEYMAP_ACTIONS = [
 		id: "tab.newChat",
 		labelKey: "hotkeys.row.tabNewChat",
 		defaults: ["⇧⌘T"],
-		overlaySafe: false,
-		hotkeyGroup: "session",
-	},
-	{
-		id: "tab.newWorktree",
-		labelKey: "hotkeys.row.tabNewWorktree",
-		defaults: ["⌥T"],
 		overlaySafe: false,
 		hotkeyGroup: "session",
 	},
