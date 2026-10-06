@@ -20,6 +20,7 @@ import {
 	SettingsConnectionNotice,
 	SettingsWindow,
 } from "./SettingsWindow";
+import { isSettingVisible } from "./settings-schema-utils";
 import { buildSettingsNavGroups, isAgentSchemaTab } from "./settings-window-model";
 
 function entry(partial: Partial<SettingEntry> & { path: string }): SettingEntry {
@@ -228,8 +229,20 @@ describe("GUI settings visibility", () => {
 		const autosave = entry({ path: "plan.autosaveDir", condition: "planAutosaveEnabled", tab: "tasks" });
 		expect(isSettingVisibleInGui(vim, { "tui.vimMode": false })).toBe(false);
 		expect(isSettingVisibleInGui(vim, { "tui.vimMode": true })).toBe(true);
-		expect(isSettingVisibleInGui(autosave, { "plan.enabled": true, "plan.autosave": false })).toBe(false);
-		expect(isSettingVisibleInGui(autosave, { "plan.enabled": true, "plan.autosave": true })).toBe(true);
+		expect(isSettingVisible(autosave, { "plan.enabled": true, "plan.autosave": false })).toBe(false);
+		expect(isSettingVisible(autosave, { "plan.enabled": true, "plan.autosave": true })).toBe(true);
+	});
+
+	it("never offers plan mode settings, which the assistant has no surface for", () => {
+		const values = { "plan.enabled": true, "plan.autosave": true };
+		for (const plan of [
+			entry({ path: "plan.enabled", tab: "tasks" }),
+			entry({ path: "plan.defaultOnStartup", condition: "planModeEnabled", tab: "tasks" }),
+			entry({ path: "plan.autosave", condition: "planModeEnabled", tab: "tasks" }),
+			entry({ path: "plan.autosaveDir", condition: "planAutosaveEnabled", tab: "tasks" }),
+		]) {
+			expect(isSettingVisibleInGui(plan, values)).toBe(false);
+		}
 	});
 
 	it("renders fixed ordered arrays as choices instead of an arbitrary text field", () => {

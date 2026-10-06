@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -55,6 +55,9 @@ function column(sheet: ExcelJS.Worksheet, index: number): ExcelJS.Cell[] {
 const FORMULA_SENTENCE =
 	"This file has formulas without saved results. Open it in your spreadsheet app, save it, then try again.";
 const SAVE_AS_SENTENCE = "Save this file as .xlsx in your spreadsheet app, then try again.";
+const TOO_LARGE_SENTENCE = "This file is too large for me to clean. The limit is 20 MB.";
+const TOO_MANY_CELLS_SENTENCE = "This spreadsheet has too many cells for me to clean.";
+const STOPPED_SENTENCE = "I stopped before the file was made.";
 
 describe("cleanWorkbook", () => {
 	it("trims whitespace and drops empty and exact duplicate rows", async () => {
@@ -257,6 +260,39 @@ describe("cleanWorkbook", () => {
 		await expect(cleanWorkbook(path, { lang: "en", sheet: "Nope" })).rejects.toThrow(
 			"This file has no sheet with that name.",
 		);
+	});
+});
+
+describe("cleanWorkbook limits", () => {
+	it.each(["big.xlsx", "big.csv"])("refuses a workbook over the byte cap (%s)", async name => {
+		const path = join(tmp, name);
+		writeFileSync(path, "");
+		truncateSync(path, 20 * 1024 * 1024 + 1);
+		await expect(cleanWorkbook(path, { lang: "en" })).rejects.toThrow(TOO_LARGE_SENTENCE);
+	});
+
+	it("refuses a sheet with too many cells", async () => {
+		const path = await writeXlsx("sparse.xlsx", [["Name"]], sheet => {
+			sheet.getCell("XFD1048576").value = 1;
+		});
+		await expect(cleanWorkbook(path, { lang: "en" })).rejects.toThrow(TOO_MANY_CELLS_SENTENCE);
+	});
+
+	it("stops between sheets when the signal is aborted", async () => {
+		const workbook = new ExcelJS.Workbook();
+		workbook.addWorksheet("One").addRows([["A"], ["1"]]);
+		workbook.addWorksheet("Two").addRows([["B"], ["2"]]);
+		const path = join(tmp, "two.xlsx");
+		await workbook.xlsx.writeFile(path);
+
+		const before = new AbortController();
+		before.abort();
+		await expect(cleanWorkbook(path, { lang: "en", signal: before.signal })).rejects.toThrow(STOPPED_SENTENCE);
+
+		const during = new AbortController();
+		const run = cleanWorkbook(path, { lang: "en", signal: during.signal });
+		during.abort();
+		await expect(run).rejects.toThrow(STOPPED_SENTENCE);
 	});
 });
 

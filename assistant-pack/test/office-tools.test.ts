@@ -1,4 +1,13 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import ExcelJS from "exceljs";
@@ -170,6 +179,47 @@ describe("argument checks", () => {
 		expect(result.isError).toBe(true);
 		expect(text(result)).toMatch(/^[A-Z][^{}\n]*\.$/);
 		expect(walk(home)).toEqual([]);
+	});
+});
+
+describe("limits and safety", () => {
+	it("refuses oversized markdown with a plain sentence", async () => {
+		for (const name of ["office_report", "office_slides"]) {
+			const markdown = `# Big\n\n${"word ".repeat(220_000)}`;
+			const result = await tool(name).execute("t1", { markdown });
+			expect(result.isError).toBe(true);
+			expect(text(result)).toBe("The text is too long for one file. Split it into smaller parts.");
+		}
+		expect(walk(home)).toEqual([]);
+	});
+
+	it("stops without saving when the signal is aborted", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const report = await tool("office_report").execute("t1", { markdown: fixture("notes-en.md") }, controller.signal);
+		expect(report.isError).toBe(true);
+		expect(text(report)).toBe("I stopped before the file was made.");
+		const input = await spreadsheet("data.xlsx", [["Name"], ["Ann"]]);
+		const cleaned = await tool("office_clean").execute("t2", { file: input }, controller.signal);
+		expect(cleaned.isError).toBe(true);
+		expect(text(cleaned)).toBe("I stopped before the file was made.");
+		expect(walk(home)).toEqual(["data.xlsx"]);
+	});
+
+	it("refuses an output folder that is a symlink out of Documents", async () => {
+		const elsewhere = mkdtempSync(join(tmpdir(), "sai-atlas-elsewhere-"));
+		try {
+			mkdirSync(join(home, "Documents"));
+			symlinkSync(elsewhere, outDir);
+			const result = await tool("office_report").execute("t1", { markdown: fixture("notes-en.md") });
+			expect(result.isError).toBe(true);
+			expect(text(result)).toBe(
+				"The Sai ATLAS folder in Documents leads to another place, so I did not save the file.",
+			);
+			expect(readdirSync(elsewhere)).toEqual([]);
+		} finally {
+			rmSync(elsewhere, { recursive: true, force: true });
+		}
 	});
 });
 

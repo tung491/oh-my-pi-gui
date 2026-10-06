@@ -340,8 +340,9 @@ async function main(): Promise<number> {
 	mkdirSync(cwd);
 	const env: Record<string, string> = {};
 	for (const [key, value] of Object.entries(process.env)) if (value !== undefined) env[key] = value;
-	delete env.BASH_ENV;
-	delete env.ENV;
+	// The sidecar reads only the scratch HOME and the pack: a caller's own omp config location
+	// would add layers (or hide skills) that the shells never pass to a pack session.
+	for (const key of ["BASH_ENV", "ENV", "PI_CONFIG_FILES", "PI_CONFIG_DIR", "PI_CODING_AGENT_DIR"]) delete env[key];
 	env.HOME = home;
 	env.SAI_ATLAS_LANG = lang;
 	const argv = [

@@ -1,7 +1,7 @@
 // Where office files go, how they are named, and what counts as inside a folder.
 import { execFileSync } from "node:child_process";
-import { closeSync, openSync, realpathSync, writeSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { closeSync, mkdirSync, openSync, realpathSync, unlinkSync, writeSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export type OfficeKind = "docx" | "xlsx" | "pptx";
 
@@ -14,6 +14,11 @@ export interface OfficeResult {
 
 /** A failure whose message is a fixed plain sentence, safe to show the person. */
 export class PlainError extends Error {}
+
+/** Throws the plain "stopped" sentence once the tool call was cancelled. */
+export function throwIfStopped(signal: AbortSignal | undefined): void {
+	if (signal?.aborted) throw new PlainError("I stopped before the file was made.");
+}
 
 export interface DocumentsEnv {
 	platform: NodeJS.Platform;
@@ -54,10 +59,18 @@ export function documentsDir(env: DocumentsEnv): string {
 	return join(printed, OUTPUT_FOLDER);
 }
 
+/** The longest prefix of whole code points that fits in `maxBytes` UTF-8 bytes. */
 function truncateToBytes(text: string, maxBytes: number): string {
-	let out = text;
-	while (Buffer.byteLength(out) > maxBytes) out = Array.from(out).slice(0, -1).join("");
-	return out;
+	if (Buffer.byteLength(text) <= maxBytes) return text;
+	const points = Array.from(text);
+	let bytes = 0;
+	let end = 0;
+	for (; end < points.length; end++) {
+		const size = Buffer.byteLength(points[end]);
+		if (bytes + size > maxBytes) break;
+		bytes += size;
+	}
+	return points.slice(0, end).join("");
 }
 
 /** A file name without path separators, reserved characters or control characters. */
@@ -83,13 +96,41 @@ export function writeUnique(dir: string, base: string, ext: OfficeKind, bytes: U
 			throw error;
 		}
 		try {
-			writeSync(fd, bytes);
-		} finally {
+			writeAll(fd, bytes);
+		} catch (error) {
+			// A half-written file would keep the name and look like a finished document.
 			closeSync(fd);
+			unlinkSync(path);
+			throw error;
 		}
+		closeSync(fd);
 		return path;
 	}
 	throw new PlainError("There are too many files with this name in the Sai ATLAS folder.");
+}
+
+/** Writes every byte, or throws: a short write that makes no progress counts as a failure. */
+function writeAll(fd: number, bytes: Uint8Array): void {
+	let offset = 0;
+	while (offset < bytes.byteLength) {
+		const written = writeSync(fd, bytes, offset, bytes.byteLength - offset);
+		if (written <= 0) throw new Error("the file system accepted no more bytes");
+		offset += written;
+	}
+}
+
+/**
+ * Creates Documents > Sai ATLAS and returns it. The folder must really sit inside
+ * Documents: a Sai ATLAS folder that is a link to another place is refused, so files
+ * never land outside the folder the person was told about.
+ */
+export function ensureOutputDir(env: DocumentsEnv): string {
+	const dir = documentsDir(env);
+	mkdirSync(dir, { recursive: true });
+	if (!isInsideDir(dir, dirname(dir))) {
+		throw new PlainError("The Sai ATLAS folder in Documents leads to another place, so I did not save the file.");
+	}
+	return dir;
 }
 
 export function resultLine(result: OfficeResult): string {

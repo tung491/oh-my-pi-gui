@@ -38,7 +38,17 @@ const EXPECTED_CONFIG = {
 		enableClaudeUser: false,
 		enableClaudeProject: false,
 		enableCodexUser: false,
+		customDirectories: [],
+		includeSkills: [],
+		ignoredSkills: [],
 	},
+	commands: {
+		enableClaudeUser: false,
+		enableClaudeProject: false,
+		enableOpencodeUser: false,
+		enableOpencodeProject: false,
+	},
+	plan: { enabled: false, defaultOnStartup: false },
 	mcp: { enableProjectConfig: false },
 	task: { disabledAgents: ["task", "sonic", "scout", "reviewer", "security-reviewer"] },
 	tools: {
@@ -87,6 +97,12 @@ describe("skills", () => {
 		for (const toolName of ["diagnose", "os_setting", "open_item"]) expect(text).toContain(toolName);
 		expect(text.toLowerCase()).not.toContain("bash");
 		expect(text.toLowerCase()).not.toContain("task");
+	});
+
+	it("sai-os-helpdesk writes each support note under a new dated name", () => {
+		const text = read("skills/sai-os-helpdesk/SKILL.md");
+		expect(text).toContain("support-note-YYYY-MM-DD-HHMM.md");
+		expect(text).not.toContain("`support-note.md`");
 	});
 });
 

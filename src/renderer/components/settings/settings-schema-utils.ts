@@ -65,8 +65,19 @@ const TERMINAL_DISPLAY_SETTINGS = new Set([
 	"statusLine.segmentOptions",
 ]);
 
+/**
+ * Agent settings for features the assistant does not offer. Plan mode has no
+ * surface here (hydration turns it off), so none of its settings are shown.
+ */
+const UNOFFERED_AGENT_SETTING_PREFIXES = ["plan."];
+
 export function isSettingSupportedInGui(entry: { path?: string; tuiOnly?: boolean }): boolean {
-	return entry.tuiOnly !== true && !TERMINAL_DISPLAY_SETTINGS.has(entry.path ?? "");
+	const path = entry.path ?? "";
+	return (
+		entry.tuiOnly !== true &&
+		!TERMINAL_DISPLAY_SETTINGS.has(path) &&
+		!UNOFFERED_AGENT_SETTING_PREFIXES.some(prefix => path.startsWith(prefix))
+	);
 }
 
 export function isSettingVisibleInGui(entry: SettingEntry, values: Record<string, unknown>): boolean {

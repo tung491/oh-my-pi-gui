@@ -2,7 +2,7 @@
 // own Bun runtime, and the whole pack loaded by omp through the spawn flags. CI has no sidecar
 // and sets SKIP_COMPILED=1; anywhere else a missing sidecar fails the suite loudly.
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,6 +104,42 @@ describe.skipIf(process.env.SKIP_COMPILED === "1")("the pack in the compiled sid
 			for (const tool of TOOLS) expect(stdout).toMatch(new RegExp(`^tool\\s+${tool}$`, "m"));
 			for (const skill of SKILLS) expect(stdout).toMatch(new RegExp(`^skill\\s+${skill}$`, "m"));
 			expect(stdout).toMatch(/^setting\s+bash\.direnv = "off"\s+\[.*overlay.*\]$/m);
+			for (const path of [
+				"plan.enabled",
+				"plan.defaultOnStartup",
+				"commands.enableClaudeUser",
+				"commands.enableClaudeProject",
+				"commands.enableOpencodeUser",
+				"commands.enableOpencodeProject",
+			]) {
+				expect(stdout).toMatch(
+					new RegExp(`^setting\\s+${path.replaceAll(".", "\\.")} = false\\s+\\[.*overlay.*\\]$`, "m"),
+				);
+			}
+			for (const path of ["skills.customDirectories", "skills.includeSkills", "skills.ignoredSkills"]) {
+				expect(stdout).toMatch(
+					new RegExp(`^setting\\s+${path.replaceAll(".", "\\.")} = \\[\\]\\s+\\[.*overlay.*\\]$`, "m"),
+				);
+			}
+			expect(stdout).toContain("PACK LOAD CHECK: PASS");
+		},
+		TIMEOUT_MS,
+	);
+
+	it(
+		"ignores the caller's own omp config location",
+		() => {
+			const agentDir = join(home, "caller-agent");
+			mkdirSync(agentDir);
+			writeFileSync(join(agentDir, "config.yml"), "skills:\n  ignoredSkills: [word-report]\n");
+			const run = spawnSync("bun", [CHECK, OMP_BIN, PACK], {
+				cwd: ROOT,
+				env: { ...process.env, HOME: home, PI_CODING_AGENT_DIR: agentDir },
+				encoding: "utf8",
+				timeout: TIMEOUT_MS,
+			});
+			expect(`${run.stdout}${run.stderr}`).toContain("PACK LOAD CHECK: PASS");
+			expect(run.status).toBe(0);
 		},
 		TIMEOUT_MS,
 	);
