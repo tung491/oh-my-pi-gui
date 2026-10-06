@@ -6,8 +6,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RpcResponse } from "../../shared/rpc-types";
-import { useSettingsStore } from "./settings";
+import type { RpcCommand, RpcResponse } from "../../shared/rpc-types";
+import { createSettingsStore, useSettingsStore } from "./settings";
 
 const getSettings = vi.fn<(paths?: string[]) => Promise<RpcResponse>>();
 
@@ -91,5 +91,45 @@ describe("settings store display sync", () => {
 		await firstSync;
 
 		expect(useSettingsStore.getState().titleState).toBe(false);
+	});
+});
+
+describe("settings store approval mode", () => {
+	it("offers no way to write the approval mode", () => {
+		const approvalActions = Object.entries(useSettingsStore.getState())
+			.filter(([key, value]) => typeof value === "function" && /approval/i.test(key))
+			.map(([key]) => key);
+		expect(approvalActions).toEqual(["syncApproval"]);
+	});
+
+	it("reads the approval mode without migrating the stored preference into the user's config", async () => {
+		const commands: RpcCommand[] = [];
+		const command = async (request: RpcCommand): Promise<RpcResponse> => {
+			commands.push(request);
+			return {
+				type: "response",
+				command: request.type,
+				success: true,
+				data: {
+					values: { "tools.approvalMode": "always-ask" },
+					provenance: { "tools.approvalMode": { layers: [] } },
+				},
+			} as RpcResponse;
+		};
+		const prefsGet = vi.fn(async () => "yolo");
+		const prefsSet = vi.fn(async () => {});
+		const bridge = ompGlobal.window.omp as unknown as Record<string, unknown>;
+		bridge.prefs = { get: prefsGet, set: prefsSet };
+		try {
+			const store = createSettingsStore(command);
+			await store.getState().syncApproval();
+			expect(store.getState().approvalMode).toBe("always-ask");
+			expect(commands.map(entry => entry.type)).toEqual(["get_settings"]);
+			expect(commands.some(entry => entry.type === "set_setting")).toBe(false);
+			expect(prefsGet).not.toHaveBeenCalled();
+			expect(prefsSet).not.toHaveBeenCalled();
+		} finally {
+			delete bridge.prefs;
+		}
 	});
 });

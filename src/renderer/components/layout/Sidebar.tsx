@@ -252,7 +252,7 @@ export function Sidebar() {
 			toast({ variant: "warning", message: t("sidebar.parallelCap") });
 			return;
 		}
-		touchSession(session.path, session.kind === "chat" ? undefined : session.cwd);
+		touchSession(session.path);
 	};
 
 	const startRename = (session: SessionInfo) => {

@@ -1,8 +1,6 @@
 import { createStore } from "zustand/vanilla";
-import type { RpcSessionState, SettingProvenance } from "../../shared/rpc-types";
-import { translate } from "../lib/i18n";
+import type { RpcSessionState } from "../../shared/rpc-types";
 import { activeTabCommand, createScopedStoreHook, type TabCommand } from "./session-runtime-context";
-import { toast } from "./toast";
 
 export type ApprovalMode = "always-ask" | "write" | "yolo";
 const APPROVAL_MODES = new Set<string>(["always-ask", "write", "yolo"]);
@@ -42,7 +40,6 @@ export interface SettingsStore {
 	/** Agent `emojiAutocomplete` setting: `:name:`/emoticon completion and expansion in the composer. */
 	emojiAutocomplete: boolean;
 	setFromState: (state: RpcSessionState) => void;
-	setApprovalMode: (mode: ApprovalMode) => Promise<void>;
 	/** Re-read the live display settings via get_settings. */
 	syncDisplaySettings: () => Promise<void>;
 	/** Re-read the live tools.approvalMode into the store (config_update / TUI edits). */
@@ -84,34 +81,22 @@ const initialState = {
 	emojiAutocomplete: true,
 };
 
-/** Read the live tools.approvalMode config setting into the store. */
+/**
+ * Read the live tools.approvalMode into the store (shown read-only in the tray
+ * and the composer). It is never written from here: every session runs with
+ * the approval mode its launch pins, and `set_setting` would write the user's
+ * global omp config.
+ */
 async function syncApprovalMode(
 	set: (partial: Partial<SettingsStore>) => void,
 	command: TabCommand,
 	isCurrent: () => boolean,
 ): Promise<void> {
 	try {
-		let res = await command({ type: "get_settings", paths: ["tools.approvalMode"] });
+		const res = await command({ type: "get_settings", paths: ["tools.approvalMode"] });
 		if (!isCurrent() || !res.success) return;
-		const provenance = (res.data as { provenance?: Record<string, SettingProvenance> } | undefined)?.provenance?.[
-			"tools.approvalMode"
-		];
-		// Only migrate when the core proves that no global, project, or runtime override exists.
-		if (provenance?.layers.length === 0) {
-			const pref = await window.omp.prefs.get("approvalMode");
-			if (!isCurrent()) return;
-			if (typeof pref === "string" && APPROVAL_MODES.has(pref)) {
-				const migrated = await command({ type: "set_setting", path: "tools.approvalMode", value: pref });
-				if (!migrated.success) return;
-				await window.omp.prefs.set("approvalMode", null);
-				res = await command({ type: "get_settings", paths: ["tools.approvalMode"] });
-			}
-		}
-		if (!isCurrent()) return;
-		if (res.success) {
-			const value = (res.data as { values?: Record<string, unknown> } | undefined)?.values?.["tools.approvalMode"];
-			if (typeof value === "string" && APPROVAL_MODES.has(value)) set({ approvalMode: value as ApprovalMode });
-		}
+		const value = (res.data as { values?: Record<string, unknown> } | undefined)?.values?.["tools.approvalMode"];
+		if (typeof value === "string" && APPROVAL_MODES.has(value)) set({ approvalMode: value as ApprovalMode });
 	} catch {
 		// Settings unreadable - keep the current value.
 	}
@@ -207,21 +192,6 @@ export const createSettingsStore = (command: TabCommand = activeTabCommand) => {
 				});
 				void syncApproval();
 				void syncDisplay();
-			},
-			setApprovalMode: async mode => {
-				const version = ++approvalSyncVersion;
-				try {
-					const res = await command({ type: "set_setting", path: "tools.approvalMode", value: mode });
-					if (version !== approvalSyncVersion) return;
-					if (!res.success) throw new Error(res.error);
-					const data = res.data as { value?: unknown; provenance?: SettingProvenance } | undefined;
-					if (data?.provenance && typeof data.value === "string" && APPROVAL_MODES.has(data.value))
-						set({ approvalMode: data.value as ApprovalMode });
-					else await syncApproval();
-				} catch (error) {
-					if (version === approvalSyncVersion)
-						toast({ variant: "error", title: translate("settings.saveFailed"), message: String(error) });
-				}
 			},
 			syncDisplaySettings: syncDisplay,
 			syncApproval,

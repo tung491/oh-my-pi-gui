@@ -71,12 +71,56 @@ const TERMINAL_DISPLAY_SETTINGS = new Set([
  */
 const UNOFFERED_AGENT_SETTING_PREFIXES = ["plan."];
 
+/**
+ * Dotted keys the assistant pack's `config.yml` pins for every session
+ * (`assistant-pack/config.yml`, passed with `--config`), plus
+ * `tools.approvalMode`, which the launch pins with `--approval-mode`. A
+ * Settings row writes the user's global layer, which these pins outrank, so
+ * the row could never take effect; none is shown. A key also covers the keys
+ * below it (`tools.approval` covers `tools.approval.write`).
+ */
+export const PACK_PINNED_SETTING_KEYS: readonly string[] = [
+	"temperature",
+	"autoResume",
+	"shellPath",
+	"bash.patterns",
+	"bash.allowCompoundCommands",
+	"bash.direnv",
+	"fetch.enabled",
+	"extensions",
+	"skills.enablePiUser",
+	"skills.enablePiProject",
+	"skills.enableAgentsUser",
+	"skills.enableAgentsProject",
+	"skills.enableClaudeUser",
+	"skills.enableClaudeProject",
+	"skills.enableCodexUser",
+	"skills.customDirectories",
+	"skills.includeSkills",
+	"skills.ignoredSkills",
+	"commands.enableClaudeUser",
+	"commands.enableClaudeProject",
+	"commands.enableOpencodeUser",
+	"commands.enableOpencodeProject",
+	"plan.enabled",
+	"plan.defaultOnStartup",
+	"mcp.enableProjectConfig",
+	"task.disabledAgents",
+	"tools.approval",
+	"tools.approvalMode",
+];
+
+function isPackPinned(path: string): boolean {
+	return PACK_PINNED_SETTING_KEYS.some(key => path === key || path.startsWith(`${key}.`));
+}
+
 export function isSettingSupportedInGui(entry: { path?: string; tuiOnly?: boolean }): boolean {
 	const path = entry.path ?? "";
 	return (
 		entry.tuiOnly !== true &&
 		!TERMINAL_DISPLAY_SETTINGS.has(path) &&
-		!UNOFFERED_AGENT_SETTING_PREFIXES.some(prefix => path.startsWith(prefix))
+		!UNOFFERED_AGENT_SETTING_PREFIXES.some(prefix => path.startsWith(prefix)) &&
+		!isPackPinned(path)
 	);
 }
 
