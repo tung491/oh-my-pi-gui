@@ -40,17 +40,16 @@ pub(crate) fn quick_entry_bounds(work_area: &Rect, size: Size) -> Rect {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub(crate) enum QuickEntryTarget {
-    Chat,
     Work,
     Workspace { cwd: String },
 }
 
 /// A well-formed target, rebuilt so no extra field from the sender survives.
+/// Older builds and saved prefs still carry a "chat" target; it opens Work.
 pub(crate) fn parse_target(value: Option<&Value>) -> Option<QuickEntryTarget> {
     let record = value.filter(|value| value.is_object())?;
     match record.get("kind").and_then(Value::as_str) {
-        Some("chat") => Some(QuickEntryTarget::Chat),
-        Some("work") => Some(QuickEntryTarget::Work),
+        Some("chat" | "work") => Some(QuickEntryTarget::Work),
         Some("workspace") => match record.get("cwd").and_then(Value::as_str) {
             Some(cwd) if !cwd.is_empty() => Some(QuickEntryTarget::Workspace { cwd: cwd.to_string() }),
             _ => None,
@@ -119,9 +118,9 @@ pub(crate) fn validate_submit(payload: Option<&Value>, offered_cwds: &HashSet<St
 /// The remembered target, unless it is malformed or names a workspace no longer offered.
 pub(crate) fn resolve_initial_target(saved: Option<&Value>, offered_cwds: &HashSet<String>) -> QuickEntryTarget {
     match parse_target(saved) {
-        Some(QuickEntryTarget::Workspace { cwd }) if !offered_cwds.contains(&cwd) => QuickEntryTarget::Chat,
+        Some(QuickEntryTarget::Workspace { cwd }) if !offered_cwds.contains(&cwd) => QuickEntryTarget::Work,
         Some(target) => target,
-        None => QuickEntryTarget::Chat,
+        None => QuickEntryTarget::Work,
     }
 }
 
@@ -283,7 +282,7 @@ mod tests {
     #[test]
     fn forwards_trimmed_text_with_a_rebuilt_target() {
         let payload = json!({ "text": "  hello \n", "target": { "kind": "chat", "extra": 1 } });
-        assert_eq!(validate_submit(Some(&payload), &offered(), is_directory), ok("hello", QuickEntryTarget::Chat));
+        assert_eq!(validate_submit(Some(&payload), &offered(), is_directory), ok("hello", QuickEntryTarget::Work));
         let workspace = json!({ "text": "x", "target": { "kind": "workspace", "cwd": "/work/app" } });
         assert_eq!(
             validate_submit(Some(&workspace), &offered(), is_directory),
@@ -293,7 +292,7 @@ mod tests {
 
     #[test]
     fn refuses_empty_and_whitespace_only_text() {
-        let empty = json!({ "text": "", "target": { "kind": "chat" } });
+        let empty = json!({ "text": "", "target": { "kind": "work" } });
         assert_eq!(validate_submit(Some(&empty), &offered(), is_directory), SubmitValidation::Refused(QuickEntryFailure::Invalid));
         let blank = json!({ "text": " \n\t ", "target": { "kind": "work" } });
         assert_eq!(validate_submit(Some(&blank), &offered(), is_directory), SubmitValidation::Refused(QuickEntryFailure::Invalid));
@@ -302,15 +301,15 @@ mod tests {
     #[test]
     fn refuses_text_over_the_limit() {
         let text = "a".repeat(QUICK_ENTRY_MAX_CHARS + 1);
-        let over = json!({ "text": text, "target": { "kind": "chat" } });
+        let over = json!({ "text": text, "target": { "kind": "work" } });
         assert_eq!(validate_submit(Some(&over), &offered(), is_directory), SubmitValidation::Refused(QuickEntryFailure::Invalid));
-        let at_limit = json!({ "text": &text[1..], "target": { "kind": "chat" } });
+        let at_limit = json!({ "text": &text[1..], "target": { "kind": "work" } });
         assert!(matches!(validate_submit(Some(&at_limit), &offered(), is_directory), SubmitValidation::Ok { .. }));
     }
 
     #[test]
     fn refuses_malformed_payloads_and_unknown_target_kinds() {
-        for payload in [Value::Null, json!("hi"), json!({ "text": 1, "target": { "kind": "chat" } }), json!({ "text": "hi" })] {
+        for payload in [Value::Null, json!("hi"), json!({ "text": 1, "target": { "kind": "work" } }), json!({ "text": "hi" })] {
             assert_eq!(validate_submit(Some(&payload), &offered(), is_directory), SubmitValidation::Refused(QuickEntryFailure::Invalid));
         }
         assert_eq!(validate_submit(None, &offered(), is_directory), SubmitValidation::Refused(QuickEntryFailure::Invalid));
@@ -340,8 +339,8 @@ mod tests {
     }
 
     #[test]
-    fn keeps_a_saved_chat_work_or_still_offered_workspace() {
-        assert_eq!(resolve_initial_target(Some(&json!({ "kind": "chat" })), &one_offered()), QuickEntryTarget::Chat);
+    fn reads_a_saved_chat_target_as_work_and_keeps_work_or_a_still_offered_workspace() {
+        assert_eq!(resolve_initial_target(Some(&json!({ "kind": "chat" })), &one_offered()), QuickEntryTarget::Work);
         assert_eq!(resolve_initial_target(Some(&json!({ "kind": "work" })), &one_offered()), QuickEntryTarget::Work);
         assert_eq!(
             resolve_initial_target(Some(&json!({ "kind": "workspace", "cwd": "/work/app" })), &one_offered()),
@@ -350,11 +349,11 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_chat_for_a_stale_workspace_or_garbage() {
-        assert_eq!(resolve_initial_target(Some(&json!({ "kind": "workspace", "cwd": "/old" })), &one_offered()), QuickEntryTarget::Chat);
-        assert_eq!(resolve_initial_target(None, &one_offered()), QuickEntryTarget::Chat);
+    fn falls_back_to_work_for_a_stale_workspace_or_garbage() {
+        assert_eq!(resolve_initial_target(Some(&json!({ "kind": "workspace", "cwd": "/old" })), &one_offered()), QuickEntryTarget::Work);
+        assert_eq!(resolve_initial_target(None, &one_offered()), QuickEntryTarget::Work);
         for saved in [Value::Null, json!("work"), json!({ "kind": 3 })] {
-            assert_eq!(resolve_initial_target(Some(&saved), &one_offered()), QuickEntryTarget::Chat);
+            assert_eq!(resolve_initial_target(Some(&saved), &one_offered()), QuickEntryTarget::Work);
         }
     }
 
@@ -409,7 +408,7 @@ mod tests {
     }
 
     fn prompt(id: &str) -> QuickEntryPrompt {
-        QuickEntryPrompt { id: id.into(), text: format!("text {id}"), target: QuickEntryTarget::Chat }
+        QuickEntryPrompt { id: id.into(), text: format!("text {id}"), target: QuickEntryTarget::Work }
     }
 
     fn ids(prompts: &[QuickEntryPrompt]) -> Vec<&str> {
@@ -509,7 +508,7 @@ mod tests {
         let returned = QuickEntryReturned { prompt: prompt("a"), reason: QuickEntryFailure::TabCap };
         assert_eq!(
             serde_json::to_value(&returned).unwrap(),
-            json!({ "id": "a", "text": "text a", "target": { "kind": "chat" }, "reason": "tab-cap" })
+            json!({ "id": "a", "text": "text a", "target": { "kind": "work" }, "reason": "tab-cap" })
         );
     }
 }

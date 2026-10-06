@@ -67,7 +67,7 @@ describe("submit validation", () => {
 		expect(validateSubmit({ text: "  hello \n", target: { kind: "chat", extra: 1 } }, offered, isDirectory)).toEqual({
 			ok: true,
 			text: "hello",
-			target: { kind: "chat" },
+			target: { kind: "work" },
 		});
 		expect(
 			validateSubmit({ text: "x", target: { kind: "workspace", cwd: "/work/app" } }, offered, isDirectory),
@@ -75,7 +75,7 @@ describe("submit validation", () => {
 	});
 
 	it("refuses empty and whitespace-only text", () => {
-		expect(validateSubmit({ text: "", target: { kind: "chat" } }, offered, isDirectory)).toEqual({
+		expect(validateSubmit({ text: "", target: { kind: "work" } }, offered, isDirectory)).toEqual({
 			ok: false,
 			reason: "invalid",
 		});
@@ -87,15 +87,15 @@ describe("submit validation", () => {
 
 	it("refuses text over the limit", () => {
 		const text = "a".repeat(QUICK_ENTRY_MAX_CHARS + 1);
-		expect(validateSubmit({ text, target: { kind: "chat" } }, offered, isDirectory)).toEqual({
+		expect(validateSubmit({ text, target: { kind: "work" } }, offered, isDirectory)).toEqual({
 			ok: false,
 			reason: "invalid",
 		});
-		expect(validateSubmit({ text: text.slice(1), target: { kind: "chat" } }, offered, isDirectory).ok).toBe(true);
+		expect(validateSubmit({ text: text.slice(1), target: { kind: "work" } }, offered, isDirectory).ok).toBe(true);
 	});
 
 	it("refuses malformed payloads and unknown target kinds", () => {
-		for (const payload of [null, "hi", { text: 1, target: { kind: "chat" } }, { text: "hi" }]) {
+		for (const payload of [null, "hi", { text: 1, target: { kind: "work" } }, { text: "hi" }]) {
 			expect(validateSubmit(payload, offered, isDirectory)).toEqual({ ok: false, reason: "invalid" });
 		}
 		expect(validateSubmit({ text: "hi", target: { kind: "shell" } }, offered, isDirectory)).toEqual({
@@ -125,8 +125,8 @@ describe("submit validation", () => {
 describe("initial target", () => {
 	const offered = new Set(["/work/app"]);
 
-	it("keeps a saved chat, Work, or still-offered workspace", () => {
-		expect(resolveInitialTarget({ kind: "chat" }, offered)).toEqual({ kind: "chat" });
+	it("reads a saved chat target as Work and keeps Work or a still-offered workspace", () => {
+		expect(resolveInitialTarget({ kind: "chat" }, offered)).toEqual({ kind: "work" });
 		expect(resolveInitialTarget({ kind: "work" }, offered)).toEqual({ kind: "work" });
 		expect(resolveInitialTarget({ kind: "workspace", cwd: "/work/app" }, offered)).toEqual({
 			kind: "workspace",
@@ -134,10 +134,10 @@ describe("initial target", () => {
 		});
 	});
 
-	it("falls back to chat for a stale workspace or garbage", () => {
-		expect(resolveInitialTarget({ kind: "workspace", cwd: "/old" }, offered)).toEqual({ kind: "chat" });
+	it("falls back to Work for a stale workspace or garbage", () => {
+		expect(resolveInitialTarget({ kind: "workspace", cwd: "/old" }, offered)).toEqual({ kind: "work" });
 		for (const saved of [undefined, null, "work", { kind: 3 }]) {
-			expect(resolveInitialTarget(saved, offered)).toEqual({ kind: "chat" });
+			expect(resolveInitialTarget(saved, offered)).toEqual({ kind: "work" });
 		}
 	});
 });
@@ -182,7 +182,7 @@ describe("macOS menu chord guard", () => {
 });
 
 describe("prompt queue", () => {
-	const prompt = (id: string): QuickEntryPrompt => ({ id, text: `text ${id}`, target: { kind: "chat" } });
+	const prompt = (id: string): QuickEntryPrompt => ({ id, text: `text ${id}`, target: { kind: "work" } });
 	const empty: QuickEntryQueue = new Map();
 
 	it("leases on claim without deleting, and hands each prompt out once", () => {

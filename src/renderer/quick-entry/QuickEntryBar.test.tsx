@@ -254,13 +254,6 @@ describe("QuickEntryBar", () => {
 		expect(bar.submit).toHaveBeenCalledWith({ text: "run the tests", target: { kind: "work" } });
 	});
 
-	it("turns a stored chat target into the Work task target", async () => {
-		await mount(baseState({ target: { kind: "chat" } }));
-		await type("plan my week");
-		await keyDown(textarea(), "Enter");
-		expect(bar.submit).toHaveBeenCalledWith({ text: "plan my week", target: { kind: "work" } });
-	});
-
 	it("keeps the target of a draft kept across summons", async () => {
 		await mount();
 		const select = document.querySelector("select") as unknown as TestElement;
@@ -302,7 +295,7 @@ describe("QuickEntryBar", () => {
 		const restored = {
 			id: "r2",
 			text: "came back",
-			target: { kind: "chat" } as const,
+			target: { kind: "work" } as const,
 			reason: "tab-failed" as const,
 		};
 		await bar.push(baseState({ restored: [restored], showId: 2 }));

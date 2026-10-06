@@ -532,7 +532,7 @@ mod tests {
         let missing = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "hi", "target": { "kind": "workspace", "cwd": "/etc" } })]).await.unwrap();
         assert_eq!(missing, json!({ "ok": false, "reason": "workspace-missing" }));
         *fakes.tabs.at_cap.lock().unwrap() = true;
-        let capped = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "hi", "target": { "kind": "chat" } })]).await.unwrap();
+        let capped = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "hi", "target": { "kind": "work" } })]).await.unwrap();
         assert_eq!(capped, json!({ "ok": false, "reason": "tab-cap" }));
         // The bar's channels are not for chat windows and vice versa.
         assert!(dispatch_for_test(&ctx, Caller::main(WindowId(1)), "quick-entry:submit", vec![]).await.is_err());
@@ -542,7 +542,7 @@ mod tests {
     #[tokio::test]
     async fn submit_without_a_window_spawns_one() {
         let Harness { ctx, desktop, .. } = harness(Platform::Linux);
-        let result = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "hi", "target": { "kind": "chat" } })]).await.unwrap();
+        let result = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "hi", "target": { "kind": "work" } })]).await.unwrap();
         assert_eq!(result, json!({ "ok": true }));
         let id = desktop.main_window().unwrap();
         assert_eq!(desktop.quick_entry.claim(id).len(), 1);
@@ -573,7 +573,7 @@ mod tests {
         assert_eq!(desktop.quick_entry.restored().len(), 1);
         let state = desktop.quick_entry.bar_state(&ctx);
         assert_eq!(state.restored.len(), 1);
-        assert_eq!(state.target, QuickEntryTarget::Chat);
+        assert_eq!(state.target, QuickEntryTarget::Work);
     }
 
     #[tokio::test]

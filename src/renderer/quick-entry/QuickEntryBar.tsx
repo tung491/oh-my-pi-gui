@@ -44,14 +44,6 @@ interface RestoreEntry {
 	fromMain: boolean;
 }
 
-/**
- * Every prompt starts a task. A chat target, still stored by older builds or
- * kept on a restored prompt, becomes the default Work target.
- */
-function taskTarget(target: QuickEntryTarget): QuickEntryTarget {
-	return target.kind === "chat" ? { kind: "work" } : target;
-}
-
 export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 	const t = useT();
 	const { lang, setLang } = useLang();
@@ -88,7 +80,7 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 				setSwappedOut(list => list.filter(item => item.id !== entry.id));
 			}
 			setDraft(entry.text);
-			setTarget(taskTarget(entry.target));
+			setTarget(entry.target);
 			setError(entry.reason);
 			setFocusTick(tick => tick + 1);
 		},
@@ -103,7 +95,7 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 			seenShowId.current = state.showId;
 			applyScheme();
 			// A kept draft keeps the target it was written for.
-			if (draftRef.current.trim() === "") setTarget(taskTarget(state.target));
+			if (draftRef.current.trim() === "") setTarget(state.target);
 			setError(null);
 			setFocusTick(tick => tick + 1);
 		}

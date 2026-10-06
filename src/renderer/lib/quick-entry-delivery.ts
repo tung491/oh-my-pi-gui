@@ -21,14 +21,12 @@ export const QUICK_ENTRY_HANDOFF_CEILING_MS = 60_000;
 
 /**
  * The openTab arguments each target already uses elsewhere (Work, workspace).
- * Every prompt opens a task tab: a chat target, which older builds still
- * send, opens a Work task like the sidebar's New task button.
+ * Every prompt opens a task tab; Work opens like the sidebar's New task button.
  */
 export function quickEntryTabArgs(
 	target: QuickEntryTarget,
 ): { kind: "agent"; work: true } | { kind: "agent"; cwd: string } {
 	switch (target.kind) {
-		case "chat":
 		case "work":
 			return { kind: "agent", work: true };
 		case "workspace":

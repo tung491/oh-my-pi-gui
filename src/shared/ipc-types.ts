@@ -339,7 +339,7 @@ export type DeepLinkPayload =
 // ============================================================================
 
 /** Where a quick-entry message starts. */
-export type QuickEntryTarget = { kind: "chat" } | { kind: "work" } | { kind: "workspace"; cwd: string };
+export type QuickEntryTarget = { kind: "work" } | { kind: "workspace"; cwd: string };
 
 export interface QuickEntryWorkspace {
 	cwd: string;

@@ -33,7 +33,7 @@ let quickEntry: QuickEntryStub;
 let spawn: Mock<() => Promise<IpcSpawnTabResult | null>>;
 let list: Mock<() => Promise<IpcTabInfo[]>>;
 
-const prompt = (id: string, target: QuickEntryPrompt["target"] = { kind: "chat" }): QuickEntryPrompt => ({
+const prompt = (id: string, target: QuickEntryPrompt["target"] = { kind: "work" }): QuickEntryPrompt => ({
 	id,
 	text: `text ${id}`,
 	target,
@@ -90,8 +90,7 @@ afterEach(() => {
 });
 
 describe("quick-entry tab arguments", () => {
-	it("opens a task tab for every target, a stored chat target included", () => {
-		expect(quickEntryTabArgs({ kind: "chat" })).toEqual({ kind: "agent", work: true });
+	it("opens a task tab for every target", () => {
 		expect(quickEntryTabArgs({ kind: "work" })).toEqual({ kind: "agent", work: true });
 		expect(quickEntryTabArgs({ kind: "workspace", cwd: "/w" })).toEqual({ kind: "agent", cwd: "/w" });
 	});

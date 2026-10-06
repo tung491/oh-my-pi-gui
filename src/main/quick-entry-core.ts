@@ -26,11 +26,14 @@ export function quickEntryBounds(workArea: Rect, size: { width: number; height: 
 	};
 }
 
-/** A well-formed target, rebuilt so no extra field from the sender survives. */
+/**
+ * A well-formed target, rebuilt so no extra field from the sender survives.
+ * Older builds and saved prefs still carry a "chat" target; it opens Work.
+ */
 export function parseTarget(value: unknown): QuickEntryTarget | null {
 	if (typeof value !== "object" || value === null) return null;
 	const { kind, cwd } = value as { kind?: unknown; cwd?: unknown };
-	if (kind === "chat" || kind === "work") return { kind };
+	if (kind === "chat" || kind === "work") return { kind: "work" };
 	if (kind === "workspace" && typeof cwd === "string" && cwd.length > 0) return { kind, cwd };
 	return null;
 }
@@ -66,7 +69,7 @@ export function validateSubmit(
 /** The remembered target, unless it is malformed or names a workspace no longer offered. */
 export function resolveInitialTarget(saved: unknown, offeredCwds: ReadonlySet<string>): QuickEntryTarget {
 	const target = parseTarget(saved);
-	if (!target || (target.kind === "workspace" && !offeredCwds.has(target.cwd))) return { kind: "chat" };
+	if (!target || (target.kind === "workspace" && !offeredCwds.has(target.cwd))) return { kind: "work" };
 	return target;
 }
 
