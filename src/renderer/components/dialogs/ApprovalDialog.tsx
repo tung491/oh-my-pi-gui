@@ -129,8 +129,8 @@ export interface WriteLocation {
  * writes (`expandPath` in `tools/path-utils.ts`): a stray leading `:`, an `@`
  * before `/` or `~`, `~` for the home folder, and relative paths against the
  * session folder. Any other shape omp rewrites (URLs, hashline wrappers,
- * Unicode spaces, Windows forms) returns null, as does a path that needs a
- * folder the renderer does not know.
+ * Unicode spaces, Windows forms) returns null, as does an absolute path with a
+ * `..` segment or a path that needs a folder the renderer does not know.
  */
 function resolveLikeAgent(raw: string, where: WriteLocation): string | null {
 	let path = /^:(?=[/~]|\.\.?\/)/.test(raw) ? raw.slice(1) : raw;
@@ -147,6 +147,10 @@ function resolveLikeAgent(raw: string, where: WriteLocation): string | null {
 		// `~` alone, `~/x`, and `~x` (joined under the home folder, as omp does).
 		path = path === "~" ? where.homeDir : `${where.homeDir}/${path.slice(path.startsWith("~/") ? 2 : 1)}`;
 	}
+	// omp hands an absolute path to the system unchanged, which resolves each
+	// `..` after following symlinks, so a lexical reading could name another
+	// folder. Relative paths are resolved lexically by omp too.
+	if (path.startsWith("/") && path.split("/").includes("..")) return null;
 	if (!path.startsWith("/")) {
 		if (!where.cwd.startsWith("/")) return null;
 		path = `${where.cwd}/${path}`;

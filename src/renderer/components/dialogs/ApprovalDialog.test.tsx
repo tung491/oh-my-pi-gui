@@ -109,10 +109,24 @@ describe("resolveWritePath", () => {
 	const where = { cwd: "/home/u/Documents", homeDir: "/home/u" };
 	const details = (path: string, content = "x") => `Path: ${path}\nContent:\n${content}`;
 
-	it("resolves an absolute path with dot segments", () => {
-		expect(resolveWritePath(details("/home/u/Documents/Sai ATLAS/../../.config/x.desktop"), where)).toBe(
-			"/home/u/.config/x.desktop",
+	it("resolves an absolute path with single-dot segments", () => {
+		expect(resolveWritePath(details("/home/u/Documents/./Sai ATLAS//notes.md"), where)).toBe(
+			"/home/u/Documents/Sai ATLAS/notes.md",
 		);
+	});
+
+	it("refuses an absolute path with a parent segment, which the system resolves through symlinks", () => {
+		expect(resolveWritePath(details("/home/u/Documents/Sai ATLAS/link/../notes.md"), where)).toBeNull();
+		expect(resolveWritePath(details("/home/u/Documents/Sai ATLAS/../../.config/x.desktop"), where)).toBeNull();
+		expect(resolveWritePath(details("/.."), where)).toBeNull();
+		expect(resolveWritePath(details("~/link/../notes.md"), where)).toBeNull();
+		expect(resolveWritePath(details("@/tmp/link/../notes.md"), where)).toBeNull();
+		expect(resolveWritePath(details(":/tmp/link/../notes.md"), where)).toBeNull();
+	});
+
+	it("keeps names that only contain two dots", () => {
+		expect(resolveWritePath(details("/home/u/notes..md"), where)).toBe("/home/u/notes..md");
+		expect(resolveWritePath(details("/home/u/..notes/x.md"), where)).toBe("/home/u/..notes/x.md");
 	});
 
 	it("resolves a relative path against the session folder", () => {
@@ -176,9 +190,9 @@ describe("ApprovalDialog sentence", () => {
 		],
 		[
 			"a file save, with the resolved path",
-			"Allow tool: write\nPath: /home/u/Documents/Sai ATLAS/../../.config/autostart/x.desktop\nContent:\n[Desktop Entry]",
-			"Save a file to /home/u/.config/autostart/x.desktop?",
-			"Lưu tệp vào /home/u/.config/autostart/x.desktop?",
+			"Allow tool: write\nPath: /home/u/Documents/./Sai ATLAS//notes.md\nContent:\nx",
+			"Save a file to /home/u/Documents/Sai ATLAS/notes.md?",
+			"Lưu tệp vào /home/u/Documents/Sai ATLAS/notes.md?",
 		],
 		[
 			"a Word report",
@@ -235,6 +249,7 @@ describe("ApprovalDialog sentence", () => {
 		["a newline", "/home/u/Documents/Sai ATLAS/notes.md\n../../../../.config/autostart/x.desktop"],
 		["a second Content line", "/home/u/Documents/Sai ATLAS/notes.md\nContent:\n../../.config/autostart/x.desktop"],
 		["a cut-short name", `/home/u/Documents/Sai ATLAS/${"a".repeat(1972)}[…40ch elided…]`],
+		["a parent segment in an absolute path", "/home/u/Documents/Sai ATLAS/link/../notes.md"],
 	])("warns about a write path with %s and opens the full request", async (_label, path) => {
 		const title = `Allow tool: write\nPath: ${path}\nContent:\n[Desktop Entry]`;
 		setLanguage("en");
