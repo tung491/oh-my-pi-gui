@@ -1,0 +1,281 @@
+From 7bd65cc4d16b400c5134d9b16a3da746a147acf2 Mon Sep 17 00:00:00 2001
+From: Tung Son Do <dosontung007@gmail.com>
+Date: Tue, 6 Oct 2026 23:40:05 +0900
+Subject: [PATCH] feat(mcp): add mcp.enabled to start no MCP server in a
+ session
+
+With mcp.enabled set to false a session discovers and connects no MCP
+server from any source: neither the user's mcp.json nor a project or
+third-party config. It creates no MCP manager, so plugin reloads and
+mcp_action have nothing to rediscover, and the mcp_test, mcp_add and
+mcp_reauth probes and /mcp test, resources and prompts refuse instead
+of spawning the server. Until now only project config could be turned
+off; a --tools allowlist alone leaves MCP discovery on. The setting
+defaults to true and takes effect when a session starts.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ docs/mcp-config.md                            |   1 +
+ docs/mcp-runtime-lifecycle.md                 |   2 +-
+ packages/coding-agent/src/mcp/settings.ts     |  16 +++
+ .../src/modes/rpc/rpc-mcp-extra.ts            |   4 +
+ packages/coding-agent/src/sdk.ts              |   6 +-
+ .../src/slash-commands/helpers/mcp.ts         |   2 +
+ .../test/sdk-mcp-enabled-setting.test.ts      | 120 ++++++++++++++++++
+ 7 files changed, 148 insertions(+), 3 deletions(-)
+ create mode 100644 packages/coding-agent/test/sdk-mcp-enabled-setting.test.ts
+
+diff --git a/docs/mcp-config.md b/docs/mcp-config.md
+index c719510c14..1e314931e5 100644
+--- a/docs/mcp-config.md
++++ b/docs/mcp-config.md
+@@ -511,6 +511,7 @@ Within OMP native config, project `.omp/mcp.json` precedes `.omp/.mcp.json`, the
+ - keep names and endpoint definitions unique across tools when possible
+ - use the user `disabledServers` list when a third-party config keeps reintroducing an unwanted server
+ - set `mcp.enableProjectConfig: false` to exclude every project-level source before deduplication, allowing a same-named user entry to survive
++- set `mcp.enabled: false` to start no MCP server from any source, user or project; the session never connects one and refuses connection tests
+ 
+ ## Troubleshooting
+ 
+diff --git a/docs/mcp-runtime-lifecycle.md b/docs/mcp-runtime-lifecycle.md
+index 3a3995aa4f..b088656a89 100644
+--- a/docs/mcp-runtime-lifecycle.md
++++ b/docs/mcp-runtime-lifecycle.md
+@@ -32,7 +32,7 @@ Both paths:
+ - log per-server load/connect errors,
+ - store the manager in `toolSession.mcpManager` and the session result.
+ 
+-If `enableMCP` is false or the session restricts tool names, MCP discovery and manager inheritance are skipped entirely. ACP sessions disable on-disk discovery because their MCP definitions come from the ACP client.
++If `enableMCP` is false, the `mcp.enabled` setting is off, or the session restricts tool names, MCP discovery and manager inheritance are skipped entirely. With `mcp.enabled` off, `mcp_test`, `mcp_add` and `mcp_reauth` probes and `/mcp test|resources|prompts` refuse instead of starting a server. The setting takes effect when a session starts. ACP sessions disable on-disk discovery because their MCP definitions come from the ACP client.
+ 
+ ### Config discovery and filtering
+ 
+diff --git a/packages/coding-agent/src/mcp/settings.ts b/packages/coding-agent/src/mcp/settings.ts
+index 60f4399fc1..fab585eccf 100644
+--- a/packages/coding-agent/src/mcp/settings.ts
++++ b/packages/coding-agent/src/mcp/settings.ts
+@@ -6,6 +6,22 @@ import { setMcpRenderMarkdownResults } from "@oh-my-pi/pi-tui/tools/mcp";
+ import { effect, register } from "../config/registry";
+ 
+ // MCP
++export const cfgMcpEnabled = register({
++	id: "mcp.enabled",
++	restartRequired: true,
++	type: "boolean",
++	default: true,
++	ui: {
++		tab: "tools",
++		group: "Discovery & MCP",
++		label: "MCP Servers",
++		description: "Discover and connect MCP servers; when off, a session starts none from any config",
++	},
++});
++
++/** Message for every attempt to start an MCP server while `mcp.enabled` is off. */
++export const MCP_DISABLED_MESSAGE = "MCP is turned off for this session (mcp.enabled: false).";
++
+ export const cfgMcpEnableProjectConfig = register({
+ 	id: "mcp.enableProjectConfig",
+ 	type: "boolean",
+diff --git a/packages/coding-agent/src/modes/rpc/rpc-mcp-extra.ts b/packages/coding-agent/src/modes/rpc/rpc-mcp-extra.ts
+index 3cdf8d30f4..5ed0e3934c 100644
+--- a/packages/coding-agent/src/modes/rpc/rpc-mcp-extra.ts
++++ b/packages/coding-agent/src/modes/rpc/rpc-mcp-extra.ts
+@@ -36,6 +36,7 @@ import {
+ } from "../../mcp";
+ import { connectToServer, disconnectServer, listTools } from "../../mcp/client";
+ import { validateServerConfig } from "../../mcp/config";
++import { cfgMcpEnabled, MCP_DISABLED_MESSAGE } from "../../mcp/settings";
+ import { addMCPServer, readMCPConfigFile, updateMCPServer } from "../../mcp/config-writer";
+ import { lookupMcpOAuthCredentialForServer, removeManagedMcpOAuthCredential } from "../../mcp/oauth-credentials";
+ import { MCPOAuthFlow, type MCPStoredOAuthCredential, mcpOAuthCredentialId } from "../../mcp/oauth-flow";
+@@ -258,6 +259,8 @@ export async function applyRpcMcpTest(
+ 	if ((name === undefined) === (input === undefined)) {
+ 		return { ok: false, error: "Provide exactly one of `name` (configured server) or `config` (inline definition)." };
+ 	}
++	// A probe starts the server, which a session with MCP turned off never does.
++	if (!cfgMcpEnabled.get(session.settings)) return { ok: false, error: MCP_DISABLED_MESSAGE };
+ 	const cwd = session.sessionManager.getCwd();
+ 	let serverConfig: MCPServerConfig;
+ 	let probeName: string;
+@@ -463,6 +466,7 @@ async function testRpcMcpConnection(
+ 	config: MCPServerConfig,
+ 	options?: { oauth?: boolean },
+ ): Promise<void> {
++	if (!cfgMcpEnabled.get(session.settings)) throw new Error(MCP_DISABLED_MESSAGE);
+ 	const testName = `test_${Date.now()}`;
+ 	const manager = MCPManager.instance();
+ 	let resolvedConfig: MCPServerConfig;
+diff --git a/packages/coding-agent/src/sdk.ts b/packages/coding-agent/src/sdk.ts
+index e5710b8bbb..3d252e156f 100644
+--- a/packages/coding-agent/src/sdk.ts
++++ b/packages/coding-agent/src/sdk.ts
+@@ -348,6 +348,7 @@ import { cfgGoalEnabled } from "./goals/settings";
+ import { cfgImagesBlockImages, cfgStartupQuiet, cfgTuiReactions, cfgTuiRenderMermaid } from "./modes/settings";
+ import { cfgLspEnabled, cfgLspLazy, cfgLspShared } from "./lsp/settings";
+ import {
++	cfgMcpEnabled,
+ 	cfgMcpEnableProjectConfig,
+ 	cfgMcpNotificationDebounceMs,
+ 	cfgMcpNotifications,
+@@ -2382,8 +2383,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+ 			evalActive: activeToolNames.has("eval"),
+ 		});
+ 
+-		// Restricted sessions cannot inherit or discover MCP capabilities.
+-		const enableMCP = !restrictToolNames && (options.enableMCP ?? true);
++		// Restricted sessions, and sessions whose settings turn MCP off, cannot
++		// inherit or discover MCP capabilities.
++		const enableMCP = !restrictToolNames && (options.enableMCP ?? true) && cfgMcpEnabled.get(settings);
+ 		let mcpManager: MCPManager | undefined = enableMCP ? options.mcpManager : undefined;
+ 		toolSession.mcpManager = mcpManager;
+ 		toolSession.enableMCP = enableMCP;
+diff --git a/packages/coding-agent/src/slash-commands/helpers/mcp.ts b/packages/coding-agent/src/slash-commands/helpers/mcp.ts
+index de732839d7..00ac4d4761 100644
+--- a/packages/coding-agent/src/slash-commands/helpers/mcp.ts
++++ b/packages/coding-agent/src/slash-commands/helpers/mcp.ts
+@@ -10,6 +10,7 @@ import {
+ 	updateMCPServer,
+ } from "../../mcp/config-writer";
+ import { MCPManager } from "../../mcp/manager";
++import { cfgMcpEnabled, MCP_DISABLED_MESSAGE } from "../../mcp/settings";
+ import { getSmitheryApiKey } from "../../mcp/smithery-auth";
+ import { searchSmitheryRegistry } from "../../mcp/smithery-registry";
+ import type { MCPServerConfig, MCPServerConnection } from "../../mcp/types";
+@@ -202,6 +203,7 @@ async function withPreparedMcpConnection<T>(
+ 	config: MCPServerConfig,
+ 	fn: (connection: MCPServerConnection) => Promise<T>,
+ ): Promise<T> {
++	if (!cfgMcpEnabled.get(runtime.session.settings)) throw new Error(MCP_DISABLED_MESSAGE);
+ 	let connection: MCPServerConnection | undefined;
+ 	try {
+ 		const manager = new MCPManager(runtime.cwd);
+diff --git a/packages/coding-agent/test/sdk-mcp-enabled-setting.test.ts b/packages/coding-agent/test/sdk-mcp-enabled-setting.test.ts
+new file mode 100644
+index 0000000000..f18997c4be
+--- /dev/null
++++ b/packages/coding-agent/test/sdk-mcp-enabled-setting.test.ts
+@@ -0,0 +1,120 @@
++import { afterEach, beforeEach, describe, expect, it } from "bun:test";
++import * as fs from "node:fs";
++import * as os from "node:os";
++import * as path from "node:path";
++import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
++import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
++import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
++import { MCPManager } from "@oh-my-pi/pi-coding-agent/mcp/manager";
++import { MCP_DISABLED_MESSAGE } from "@oh-my-pi/pi-coding-agent/mcp/settings";
++import { applyRpcMcpTest } from "@oh-my-pi/pi-coding-agent/modes/rpc/rpc-mcp-extra";
++import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
++import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
++import type { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
++import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
++import { __resetDirsFromEnvForTests, removeSyncWithRetries, setAgentDir, Snowflake } from "@oh-my-pi/pi-utils";
++import { createInMemoryAuthStorage } from "./helpers/agent-session-setup";
++
++/** How long a session gets to start a configured server before the marker is read. */
++const START_WAIT_MS = 1_500;
++
++function restoreEnv(key: string, value: string | undefined): void {
++	if (value === undefined) delete process.env[key];
++	else process.env[key] = value;
++}
++
++/**
++ * A stdio MCP server in the user's mcp.json and in the project's .mcp.json. It never answers;
++ * it appends its config label to `marker` when it starts.
++ */
++function plantServers(root: string, agentDir: string, cwd: string): string {
++	const marker = path.join(root, "started");
++	const server = path.join(root, "server.sh");
++	fs.writeFileSync(server, `#!/bin/sh\necho "$1" >>${JSON.stringify(marker)}\nexec cat >/dev/null\n`, {
++		mode: 0o755,
++	});
++	const config = (label: string) =>
++		JSON.stringify({ mcpServers: { [`tripwire-${label}`]: { type: "stdio", command: server, args: [label] } } });
++	fs.writeFileSync(path.join(agentDir, "mcp.json"), config("user"));
++	fs.writeFileSync(path.join(cwd, ".mcp.json"), config("project"));
++	return marker;
++}
++
++function starts(marker: string): string[] {
++	if (!fs.existsSync(marker)) return [];
++	return fs.readFileSync(marker, "utf8").split("\n").filter(Boolean).sort();
++}
++
++describe("mcp.enabled", () => {
++	let root: string;
++	let cwd: string;
++	let marker: string;
++	let authStorage: AuthStorage;
++	let session: AgentSession | undefined;
++	const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
++
++	beforeEach(() => {
++		root = path.join(os.tmpdir(), `pi-mcp-enabled-${Snowflake.next()}`);
++		const agentDir = path.join(root, "agent");
++		cwd = path.join(root, "project");
++		fs.mkdirSync(agentDir, { recursive: true });
++		fs.mkdirSync(cwd, { recursive: true });
++		setAgentDir(agentDir);
++		marker = plantServers(root, agentDir, cwd);
++		authStorage = createInMemoryAuthStorage();
++		MCPManager.resetForTests();
++	});
++
++	afterEach(async () => {
++		try {
++			await session?.dispose();
++			session = undefined;
++			await MCPManager.instance()?.disconnectAll();
++			MCPManager.resetForTests();
++			authStorage.close();
++		} finally {
++			restoreEnv("PI_CODING_AGENT_DIR", originalAgentDir);
++			__resetDirsFromEnvForTests();
++			removeSyncWithRetries(root);
++		}
++	});
++
++	async function startSession(overrides: Record<string, unknown>): Promise<AgentSession> {
++		const { session: created } = await createAgentSession({
++			cwd,
++			agentDir: path.join(root, "agent"),
++			modelRegistry: new ModelRegistry(authStorage, path.join(root, "models.yml")),
++			sessionManager: SessionManager.inMemory(cwd),
++			settings: Settings.isolated(overrides),
++			model: getBundledModel("openai", "gpt-4o-mini"),
++			disableExtensionDiscovery: true,
++			promptTemplates: [],
++			slashCommands: [],
++			enableLsp: false,
++			toolNames: ["read"],
++			skipPythonPreflight: true,
++		});
++		session = created;
++		return created;
++	}
++
++	it("starts the user's and the project's servers by default", async () => {
++		await startSession({ "mcp.startupTimeoutMs": 1 });
++		await Bun.sleep(START_WAIT_MS);
++		expect(starts(marker)).toEqual(["project", "user"]);
++	});
++
++	it("starts no server from any config when off, even with project config allowed", async () => {
++		const created = await startSession({ "mcp.enabled": false, "mcp.enableProjectConfig": true });
++		await Bun.sleep(START_WAIT_MS);
++		expect(starts(marker)).toEqual([]);
++		expect(MCPManager.instance()).toBeUndefined();
++
++		const byName = await applyRpcMcpTest(created, "tripwire-user", undefined);
++		expect(byName).toEqual({ ok: false, error: MCP_DISABLED_MESSAGE });
++		const inline = await applyRpcMcpTest(created, undefined, { transport: "stdio", command: "/bin/true" });
++		expect(inline).toEqual({ ok: false, error: MCP_DISABLED_MESSAGE });
++		await Bun.sleep(START_WAIT_MS);
++		expect(starts(marker)).toEqual([]);
++	});
++});
+-- 
+2.53.0
+
