@@ -81,6 +81,7 @@ export const en: Record<string, string> = {
 
 	// InputArea
 	"input.placeholder.connecting": "Connecting to Sai ATLAS…",
+	"input.placeholder.unavailable": "Sai ATLAS can't start right now. See the message above.",
 	"input.placeholder.streaming": "Add guidance while Sai ATLAS is working…",
 	"input.placeholder.idle": "Ask Sai ATLAS to build, explain, or fix something…",
 	"input.placeholder.chat": "Ask anything — no tools, just conversation…",

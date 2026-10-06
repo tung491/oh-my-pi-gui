@@ -72,6 +72,7 @@ export const vi: Record<string, string> = {
 	"tabs.switchFailed": "Không thể chuyển thẻ",
 	"tabs.confirmClose": "Đóng thẻ? Tác vụ đang chạy sẽ bị hủy",
 	"input.placeholder.connecting": "Đang kết nối với Sai ATLAS…",
+	"input.placeholder.unavailable": "Sai ATLAS chưa thể khởi động. Xem thông báo ở trên.",
 	"input.placeholder.streaming": "Thêm chỉ dẫn trong khi Sai ATLAS đang xử lý…",
 	"input.placeholder.idle": "Yêu cầu Sai ATLAS xây dựng, giải thích hoặc sửa lỗi thứ gì đó…",
 	"input.placeholder.chat": "Hỏi bất cứ điều gì — không dùng công cụ, chỉ trò chuyện…",

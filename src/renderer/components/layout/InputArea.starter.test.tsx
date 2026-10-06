@@ -1,13 +1,16 @@
 /**
  * A starter card sends its skill prompt through the composer's send pipeline
  * without the composer's own draft: the typed text and pasted images stay in
- * the composer, and the prompt carries no image.
+ * the composer, and the prompt carries no image. The composer's placeholder
+ * says why it cannot send while the agent is not ready.
  */
 import { parseHTML } from "linkedom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
+import type { SidecarStatus } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
+import { en } from "../../locales/en";
 import { useComposerStore } from "../../stores/composer";
 import { useMessagesStore } from "../../stores/messages";
 import { useModelStore } from "../../stores/model";
@@ -61,7 +64,7 @@ async function flush(): Promise<void> {
 	});
 }
 
-async function mount(status: "starting" | "ready"): Promise<void> {
+async function mount(status: SidecarStatus): Promise<void> {
 	prompt = vi.fn(async () => ok());
 	bash = vi.fn(async () => ok({ output: "", exitCode: 0 }));
 	evalCode = vi.fn(async () => ok({ output: "" }));
@@ -175,5 +178,19 @@ describe("InputArea starter card send", () => {
 		expect(prompt).toHaveBeenCalledTimes(1);
 		expect(prompt.mock.calls[0]?.[0]).toBe("/skill:sai-os-helpdesk I need help with my computer.");
 		expect(useComposerStore.getState().draft).toBe("");
+	});
+});
+
+describe("InputArea placeholder", () => {
+	const placeholder = () => document.querySelector("textarea")?.getAttribute("placeholder");
+
+	it("says it is connecting while the agent starts", async () => {
+		await mount("starting");
+		expect(placeholder()).toBe(en["input.placeholder.connecting"]);
+	});
+
+	it("points at the refusal instead of connecting when the agent cannot start", async () => {
+		await mount("error");
+		expect(placeholder()).toBe(en["input.placeholder.unavailable"]);
 	});
 });

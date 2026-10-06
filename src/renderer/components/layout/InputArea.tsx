@@ -978,13 +978,15 @@ export function InputArea() {
 								onPaste={handlePaste}
 								rows={2}
 								placeholder={
-									status !== "ready"
-										? t("input.placeholder.connecting")
-										: isStreaming
-											? t("input.placeholder.streaming")
-											: isChat
-												? t("input.placeholder.chat")
-												: t("input.placeholder.idle")
+									status === "error"
+										? t("input.placeholder.unavailable")
+										: status !== "ready"
+											? t("input.placeholder.connecting")
+											: isStreaming
+												? t("input.placeholder.streaming")
+												: isChat
+													? t("input.placeholder.chat")
+													: t("input.placeholder.idle")
 								}
 								className="max-h-[40vh] min-h-[44px] w-full resize-none bg-transparent text-omp-xl leading-[1.5] text-[var(--omp-text)] outline-none placeholder:text-[var(--omp-dim)]"
 							/>
