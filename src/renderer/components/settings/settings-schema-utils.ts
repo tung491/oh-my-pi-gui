@@ -82,6 +82,8 @@ const UNOFFERED_AGENT_SETTING_PREFIXES = ["plan."];
 export const PACK_PINNED_SETTING_KEYS: readonly string[] = [
 	"temperature",
 	"autoResume",
+	"modelPolicy",
+	"memory.backend",
 	"shellPath",
 	"bash.patterns",
 	"bash.allowCompoundCommands",
