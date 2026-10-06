@@ -245,7 +245,7 @@ bun run build
 scripts/virtual-display.sh run -- bun scripts/capture-showcase.ts
 ```
 
-The capture script renders the real Electron GUI with a fresh temporary HOME and profile and a scripted stand-in for the agent, so **no live model, credentials or personal files are used**. It plays three office tasks (a Word report, a spreadsheet clean-up and a slide deck) and writes the shots to `docs/screenshots/en/` and `docs/screenshots/vi/`. The conversations are demonstration data, not real model output.
+The capture script renders the real Electron GUI with a fresh temporary HOME and profile and a scripted stand-in for the agent, so **no live model, credentials or personal files are used**. It plays three office tasks (a Word report, a spreadsheet clean-up and a slide deck) and writes the shots to the `en` and `vi` folders under `docs/screenshots`. The conversations are demonstration data, not real model output.
 
 Optional environment variables: `SHOWCASE_THEME=light` captures the VIF Light theme instead of the default dark theme, `SHOWCASE_OUT=<dir>` writes to `<dir>/en` and `<dir>/vi` instead of `docs/screenshots`, and `SHOWCASE_ONBOARDING=1` also captures the first-run welcome screen as `00-onboarding.png`. On Linux the script passes the display variables (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) through to Electron.
 

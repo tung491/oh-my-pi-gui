@@ -1,5 +1,3 @@
-import { createTwoFilesPatch, FILE_HEADERS_ONLY } from "diff";
-import type { AgentTypeStats, AggregatedStats, TimeSeriesPoint } from "../../stats/src/shared-types";
 import type {
 	AgentMessage,
 	AvailableCommand,
@@ -7,308 +5,216 @@ import type {
 	ContextUsage,
 	MessagesPage,
 	ModelInfo,
-	ModelRoleCandidate,
-	ModelRoleMetadata,
-	ModelRoleMetadataResult,
-	ModelRolesResult,
 	PlanModeState,
 	ProvidersResult,
 	RpcActiveToolsResult,
-	RpcAgentDefinitionsResult,
-	RpcCollabState,
 	RpcCommand,
 	RpcContextReportResult,
 	RpcGetQueueResult,
-	RpcGitChanges,
-	RpcGitDiff,
-	RpcGitStatus,
-	RpcGoalState,
 	RpcGuiThemesResult,
-	RpcHooksResult,
-	RpcJobsResult,
-	RpcLiveState,
-	RpcLoopModeState,
-	RpcMarketplacesResult,
-	RpcMcpServersResult,
-	RpcMemoryReport,
-	RpcPluginsResult,
-	RpcPromptTemplatesResult,
-	RpcSecurityDashboardResult,
 	RpcSessionState,
-	RpcSessionTreeResult,
-	RpcSkillsResult,
-	RpcSshHostsResult,
 	RpcThemesResult,
-	RpcVibeModeState,
 	RpcWorkspaceDirectoriesResult,
 	SessionStats,
 	SettingsSchemaResult,
-	SubagentSnapshot,
-	UsageResult,
 } from "../src/shared/rpc-types";
 
 export const showcaseTimestamp = Date.UTC(2026, 8, 21, 10, 30);
-const dayMs = 86_400_000;
-const preferencesPath = "src/components/Preferences.tsx";
-const testsPath = "tests/Preferences.test.tsx";
 
-const preferencesBefore = `interface PreferencesLabels {
-  title: string;
-  highContrast: string;
-  reduceMotion: string;
-}
+/** The three office jobs the screenshots show, in README order. */
+export const SHOWCASE_SCENARIOS = ["report", "spreadsheet", "slides"] as const;
+export type ShowcaseScenario = (typeof SHOWCASE_SCENARIOS)[number];
 
-export function Preferences({ labels }: { labels: PreferencesLabels }) {
-  return (
-    <div>
-      <h2>{labels.title}</h2>
-      <input type="checkbox" name="highContrast" aria-label={labels.highContrast} />
-      <input type="checkbox" name="reduceMotion" aria-label={labels.reduceMotion} />
-    </div>
-  );
-}
-`;
-const testsBefore = `import { expect, test } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
-import { Preferences } from "../src/components/Preferences";
-
-const labels = { title: "aurora-web", highContrast: "highContrast", reduceMotion: "reduceMotion" };
-const html = () => renderToStaticMarkup(<Preferences labels={labels} />);
-
-test("Preferences/native-checkbox", () => {
-  expect(html().match(/type="checkbox"/g)).toHaveLength(2);
-});
-`;
-export const projectFiles: Record<string, string> = {
-	[preferencesPath]: `interface PreferencesLabels {
-  title: string;
-  highContrast: string;
-  reduceMotion: string;
-}
-
-export function Preferences({ labels }: { labels: PreferencesLabels }) {
-  return (
-    <section aria-labelledby="preferences-title">
-      <h2 id="preferences-title">{labels.title}</h2>
-      <label htmlFor="contrast">{labels.highContrast}</label>
-      <input id="contrast" type="checkbox" name="highContrast" />
-      <label htmlFor="motion">{labels.reduceMotion}</label>
-      <input id="motion" type="checkbox" name="reduceMotion" />
-    </section>
-  );
-}
-`,
-	[testsPath]: `${testsBefore}
-test("Preferences/aria-labelledby", () => {
-  expect(html()).toContain('aria-labelledby="preferences-title"');
-  expect(html()).toContain('<h2 id="preferences-title">aurora-web</h2>');
-});
-
-test("Preferences/label-for", () => {
-  expect(html()).toContain('<label for="contrast">highContrast</label>');
-  expect(html()).toContain('<input id="contrast"');
-  expect(html()).toContain('<label for="motion">reduceMotion</label>');
-  expect(html()).toContain('<input id="motion"');
-});
-`,
+/** Screenshot file name (without extension) of each scenario. */
+export const SHOWCASE_SHOTS: Record<ShowcaseScenario, string> = {
+	report: "01-word-report",
+	spreadsheet: "02-spreadsheet-cleanup",
+	slides: "03-slides",
 };
 
-export const projectDiffs: Record<string, RpcGitDiff> = Object.fromEntries(
-	Object.entries({ [preferencesPath]: preferencesBefore, [testsPath]: testsBefore }).map(([path, before]) => [
-		path,
-		{
-			path,
-			diff: createTwoFilesPatch(`a/${path}`, `b/${path}`, before, projectFiles[path], undefined, undefined, {
-				context: 2,
-				headerOptions: FILE_HEADERS_ONLY,
-			}),
-			kind: "text",
-			truncated: false,
-		} satisfies RpcGitDiff,
-	]),
-);
+export function isShowcaseScenario(value: unknown): value is ShowcaseScenario {
+	return typeof value === "string" && (SHOWCASE_SCENARIOS as readonly string[]).includes(value);
+}
+
+type Locale = "en" | "vi";
+type Text = (en: string, vi: string) => string;
+
+/**
+ * The demo home is `/home/demo`, the one home the capture's privacy check accepts.
+ * The office tools save every new file under Documents > Sai ATLAS.
+ */
+const OUTPUT_DIR = "/home/demo/Documents/Sai ATLAS";
+
+/** Past tasks listed in the sidebar, one per office job plus a computer-help task. */
+export function showcaseSessionTitles(locale: Locale): string[] {
+	return locale === "vi"
+		? [
+				"Báo cáo doanh số tháng 9",
+				"Dọn danh sách khách hàng",
+				"Trình chiếu cho cuộc họp nhóm",
+				"Máy in không in được",
+			]
+		: [
+				"September sales report",
+				"Clean up the customer list",
+				"Slides for the team meeting",
+				"The printer will not print",
+			];
+}
+
+interface Scene {
+	name: string;
+	request: string;
+	tool: "office_report" | "office_clean" | "office_slides";
+	intent: string;
+	args: Record<string, unknown>;
+	file: string;
+	kind: "docx" | "xlsx" | "pptx";
+	check: string;
+	summary: string;
+}
+
+function reportMarkdown(text: Text): string {
+	return text(
+		"# September sales report\n\n## Summary\n\nRevenue reached 1.2 billion VND, 8% more than in August.\n\n## By branch\n\n| Branch | Revenue (million VND) | Change |\n|---|---|---|\n| Hanoi | 520 | +14% |\n| Da Nang | 310 | +5% |\n| Ho Chi Minh City | 370 | +3% |\n\n## Highlights\n\n- Hanoi grew fastest after the new opening hours.\n- Two new business customers signed yearly contracts.\n\n## Next month\n\n- Repeat the Hanoi opening hours in Da Nang.\n- Follow up with the two new customers in the first week.",
+		"# Báo cáo doanh số tháng 9\n\n## Tóm tắt\n\nDoanh thu đạt 1,2 tỷ đồng, tăng 8% so với tháng 8.\n\n## Theo chi nhánh\n\n| Chi nhánh | Doanh thu (triệu đồng) | Thay đổi |\n|---|---|---|\n| Hà Nội | 520 | +14% |\n| Đà Nẵng | 310 | +5% |\n| TP. Hồ Chí Minh | 370 | +3% |\n\n## Điểm nổi bật\n\n- Hà Nội tăng nhanh nhất nhờ giờ mở cửa mới.\n- Hai khách hàng doanh nghiệp mới đã ký hợp đồng theo năm.\n\n## Tháng tới\n\n- Áp dụng giờ mở cửa của Hà Nội cho Đà Nẵng.\n- Liên hệ lại hai khách hàng mới trong tuần đầu tiên.",
+	);
+}
+
+function scene(scenario: ShowcaseScenario, text: Text): Scene {
+	switch (scenario) {
+		case "report": {
+			const title = text("September sales report", "Báo cáo doanh số tháng 9");
+			return {
+				name: title,
+				request: text(
+					"Write a one-page report on our September sales for the team meeting. Revenue was 1.2 billion VND, 8% more than August. Hanoi 520 million (+14%), Da Nang 310 (+5%), Ho Chi Minh City 370 (+3%). Two new business customers signed yearly contracts.",
+					"Viết giúp tôi báo cáo một trang về doanh số tháng 9 cho cuộc họp nhóm. Doanh thu 1,2 tỷ đồng, tăng 8% so với tháng 8. Hà Nội 520 triệu (+14%), Đà Nẵng 310 (+5%), TP. Hồ Chí Minh 370 (+3%). Hai khách hàng doanh nghiệp mới đã ký hợp đồng theo năm.",
+				),
+				tool: "office_report",
+				intent: text("Writing the September sales report", "Đang viết báo cáo doanh số tháng 9"),
+				args: { title, markdown: reportMarkdown(text) },
+				file: `${OUTPUT_DIR}/${title}.docx`,
+				kind: "docx",
+				check: "4 headings, 1 table, 4 list items",
+				summary: text(
+					"Your report is ready: **September sales report.docx**. It has a short summary, a table by branch, the highlights and two steps for next month. Open it from the card above.",
+					"Báo cáo đã xong: **Báo cáo doanh số tháng 9.docx**. Báo cáo có phần tóm tắt, bảng theo chi nhánh, các điểm nổi bật và hai việc cho tháng tới. Mở tệp từ thẻ ở trên.",
+				),
+			};
+		}
+		case "spreadsheet": {
+			const source = text("customers", "khach-hang");
+			return {
+				name: text("Clean up the customer list", "Dọn danh sách khách hàng"),
+				request: text(
+					"Please tidy up my customer list and add a totals row.\n\nUser: /home/demo/Documents/customers.xlsx",
+					"Dọn giúp tôi danh sách khách hàng và thêm dòng tổng.\n\nUser: /home/demo/Documents/khach-hang.xlsx",
+				),
+				tool: "office_clean",
+				intent: text("Cleaning the customer list", "Đang dọn danh sách khách hàng"),
+				args: { file: `/home/demo/Documents/${source}.xlsx`, totals: true },
+				file: `${OUTPUT_DIR}/${source} (cleaned).xlsx`,
+				kind: "xlsx",
+				check: "1 sheet, 236 rows kept, 12 empty rows removed, 5 duplicate rows removed, 31 cells trimmed, 18 numbers converted, totals row added",
+				summary: text(
+					"Done. The cleaned copy is **customers (cleaned).xlsx**: I removed 12 empty and 5 repeated rows, trimmed extra spaces in 31 cells, turned 18 numbers stored as text into real numbers and added a totals row. Your original file is unchanged.",
+					"Xong rồi. Bản đã dọn là **khach-hang (cleaned).xlsx**: tôi đã bỏ 12 dòng trống và 5 dòng lặp, xóa khoảng trắng thừa ở 31 ô, chuyển 18 số đang lưu dạng chữ thành số thật và thêm dòng tổng. Tệp gốc của bạn vẫn giữ nguyên.",
+				),
+			};
+		}
+		case "slides": {
+			const title = text("September sales", "Doanh số tháng 9");
+			return {
+				name: text("Slides for the team meeting", "Trình chiếu cho cuộc họp nhóm"),
+				request: text(
+					"Make slides from the September sales report for tomorrow's team meeting.",
+					"Làm trang trình chiếu từ báo cáo doanh số tháng 9 cho cuộc họp nhóm ngày mai.",
+				),
+				tool: "office_slides",
+				intent: text("Making the slides", "Đang làm trang trình chiếu"),
+				args: { title, markdown: reportMarkdown(text) },
+				file: `${OUTPUT_DIR}/${title}.pptx`,
+				kind: "pptx",
+				check: "6 slides (1 title slide, 1 big number, 1 table, 3 bullet slides)",
+				summary: text(
+					"Your deck is ready: **September sales.pptx**, six slides with the headline number, the branch table and the next steps. Open it from the card above.",
+					"Bộ trình chiếu đã xong: **Doanh số tháng 9.pptx**, gồm sáu trang với con số chính, bảng theo chi nhánh và các việc tiếp theo. Mở tệp từ thẻ ở trên.",
+				),
+			};
+		}
+	}
+}
 
 export function createShowcaseData(
-	locale: "en" | "vi",
+	locale: Locale,
 	cwd: string,
-): { replies: Record<string, unknown>; stats: Record<string, unknown> } {
-	const text = (en: string, vi: string): string => (locale === "vi" ? vi : en);
-	const demo = text("Demo", "Minh họa");
-	const notice = text(
-		"Synthetic demo data · no external requests",
-		"Dữ liệu minh họa tổng hợp · không có yêu cầu bên ngoài",
-	);
-	const sessionId = `showcase-aurora-web-${locale}`;
-	const sessionName = text("Build accessible settings", "Xây dựng trang cài đặt trợ năng");
-	const rateCard = { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 };
+	scenario: ShowcaseScenario,
+): { replies: Partial<Record<RpcCommand["type"], unknown>> } {
+	const text: Text = (en, vi) => (locale === "vi" ? vi : en);
+	const job = scene(scenario, text);
+	const sessionId = `showcase-${scenario}-${locale}`;
+	const contextWindow = 128_000;
+	const tokensPerSecond = 24;
 	const model: ModelInfo = {
-		provider: "anthropic",
-		id: "claude-sonnet-4-5",
-		name: `Claude Sonnet 4.5 · ${demo}`,
-		description: text(
-			"Demo coding model · illustrative prices and limits",
-			"Mô hình lập trình minh họa · giá và giới hạn chỉ mang tính minh họa",
-		),
-		contextWindow: 200_000,
-		maxTokens: 16_384,
-		cost: rateCard,
-		tps: 72,
+		provider: "ollama",
+		id: "gemma4:e4b",
+		name: "Gemma 4 E4B",
+		description: text("Runs on this computer", "Chạy trên máy tính này"),
+		contextWindow,
+		maxTokens: 8_192,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		tps: tokensPerSecond,
 		isRecommended: true,
 	};
-	const models: ModelInfo[] = [
-		model,
-		{
-			provider: "anthropic",
-			id: "claude-opus-4-5",
-			name: `Claude Opus 4.5 · ${demo}`,
-			description: text("Demo deep-reasoning model · not connected", "Mô hình suy luận sâu minh họa · chưa kết nối"),
-			contextWindow: 200_000,
-			maxTokens: 16_384,
-			cost: rateCard,
-			tps: 48,
-		},
-		{
-			provider: "openai",
-			id: "gpt-5.2",
-			name: `GPT-5.2 · ${demo}`,
-			description: text("Demo general-purpose model · not connected", "Mô hình đa năng minh họa · chưa kết nối"),
-			contextWindow: 200_000,
-			maxTokens: 16_384,
-			cost: rateCard,
-			tps: 94,
-		},
-		{
-			provider: "openai",
-			id: "gpt-5.2-codex",
-			name: `GPT-5.2 Codex · ${demo}`,
-			description: text(
-				"Demo code-review model · not connected",
-				"Mô hình đánh giá mã nguồn minh họa · chưa kết nối",
-			),
-			contextWindow: 200_000,
-			maxTokens: 16_384,
-			cost: rateCard,
-			tps: 88,
-		},
-		{
-			provider: "google",
-			id: "gemini-3-pro-preview",
-			name: `Gemini 3 Pro · ${demo}`,
-			description: text("Demo planning model · not connected", "Mô hình lập kế hoạch minh họa · chưa kết nối"),
-			contextWindow: 1_000_000,
-			maxTokens: 16_384,
-			cost: rateCard,
-			tps: 105,
-		},
-		{
-			provider: "google",
-			id: "gemini-3-flash-preview",
-			name: `Gemini 3 Flash · ${demo}`,
-			description: text(
-				"Demo fast-exploration model · not connected",
-				"Mô hình khám phá nhanh minh họa · chưa kết nối",
-			),
-			contextWindow: 1_000_000,
-			maxTokens: 16_384,
-			cost: rateCard,
-			tps: 152,
-		},
-	];
 	const availableModels: AvailableModelsResult = {
-		models,
+		models: [model],
 		discoveryStates: [],
 		refreshPending: false,
 		generation: 1,
 	};
+	// A local Ollama needs no sign-in, so it reports unauthenticated with its models.
 	const providers: ProvidersResult = {
 		...availableModels,
 		providers: [
-			{ id: "anthropic", name: `Anthropic · ${demo}` },
-			{ id: "openai", name: `OpenAI · ${demo}` },
-			{ id: "google", name: `Google · ${demo}` },
-		].map(provider => ({
-			...provider,
-			authenticated: false,
-			loginAvailable: false,
-			disabled: false,
-			modelCount: 2,
-			account: text("Example catalog · no account connected", "Danh mục mẫu · chưa kết nối tài khoản"),
-		})),
+			{
+				id: "ollama",
+				name: "Ollama",
+				authenticated: false,
+				loginAvailable: false,
+				disabled: false,
+				modelCount: 1,
+			},
+		],
 	};
 
-	const summary = text(
-		"## Accessible settings, ready\n\n- Added a named settings region and visible labels.\n- Kept native checkboxes for keyboard navigation.\n- Added coverage for labels and heading associations in `Preferences.test.tsx`.\n\n**Demo test result:** 3/3 passed. Synthetic data; no external requests.",
-		"## Trang cài đặt trợ năng đã sẵn sàng\n\n- Đã thêm vùng cài đặt có tên và nhãn hiển thị rõ ràng.\n- Giữ nguyên các hộp kiểm gốc để điều hướng bằng bàn phím.\n- Bổ sung kiểm thử cho nhãn và liên kết tiêu đề trong `Preferences.test.tsx`.\n\n**Kết quả kiểm thử minh họa:** 3/3 vượt qua. Dữ liệu tổng hợp; không có yêu cầu ra ngoài.",
-	);
-	const editIntent = text("Add accessible labels and regression coverage", "Thêm nhãn trợ năng và kiểm thử hồi quy");
+	const callId = `showcase-${scenario}-call`;
 	const messages: AgentMessage[] = [
 		{
 			role: "user",
 			entryId: "showcase-user",
 			timestamp: showcaseTimestamp - 70_000,
-			content: [
-				{
-					type: "text",
-					text: text(
-						"In the aurora-web demo project, make the preferences page accessible: add visible labels, preserve keyboard navigation, and cover the changes with tests.",
-						"Trong dự án minh họa aurora-web, hãy làm cho trang tùy chọn có khả năng trợ năng: thêm nhãn hiển thị, bảo toàn điều hướng bằng bàn phím và bổ sung kiểm thử cho các thay đổi.",
-					),
-				},
-			],
+			content: [{ type: "text", text: job.request }],
 		},
 		{
 			role: "assistant",
-			entryId: "showcase-edit",
+			entryId: "showcase-call",
 			timestamp: showcaseTimestamp - 60_000,
 			provider: model.provider,
 			model: model.id,
 			stopReason: "toolUse",
-			duration: 5_800,
-			ttft: 380,
-			content: [
-				{
-					type: "thinking",
-					thinking: text(
-						"I’ll keep the native controls, associate each visible label with its input, and name the settings region. The demo checks will cover these semantics without contacting a provider.",
-						"Tôi sẽ giữ nguyên các điều khiển gốc, liên kết từng nhãn hiển thị với ô nhập tương ứng và đặt tên cho vùng cài đặt. Các kiểm tra minh họa sẽ bao quát các ngữ nghĩa này mà không cần gọi đến nhà cung cấp.",
-					),
-				},
-				{
-					type: "toolCall",
-					id: "showcase-edit-preferences",
-					name: "edit",
-					intent: editIntent,
-					arguments: {
-						edits: [preferencesPath, testsPath].map(path => ({
-							path,
-							op: "update",
-							diff: projectDiffs[path].diff,
-						})),
-					},
-				},
-			],
+			duration: 9_400,
+			ttft: 620,
+			content: [{ type: "toolCall", id: callId, name: job.tool, intent: job.intent, arguments: job.args }],
 		},
 		{
 			role: "toolResult",
-			entryId: "showcase-edit-result",
-			timestamp: showcaseTimestamp - 53_000,
-			toolCallId: "showcase-edit-preferences",
-			toolName: "edit",
+			entryId: "showcase-result",
+			timestamp: showcaseTimestamp - 52_000,
+			toolCallId: callId,
+			toolName: job.tool,
 			isError: false,
-			content: [
-				{
-					type: "text",
-					text: text("Demo: updated two synthetic files.", "Minh họa: đã cập nhật hai tệp tổng hợp."),
-				},
-			],
-			details: {
-				perFileResults: [preferencesPath, testsPath].map(path => ({
-					path,
-					diff: projectDiffs[path].diff,
-					op: "update",
-					firstChangedLine: path === preferencesPath ? 9 : 12,
-				})),
-			},
+			content: [{ type: "text", text: JSON.stringify({ file: job.file, kind: job.kind, check: job.check }) }],
 		},
 		{
 			role: "assistant",
@@ -317,18 +223,17 @@ export function createShowcaseData(
 			provider: model.provider,
 			model: model.id,
 			stopReason: "stop",
-			duration: 4_200,
-			ttft: 340,
-			content: [{ type: "text", text: summary }],
+			duration: 3_900,
+			ttft: 540,
+			content: [{ type: "text", text: job.summary }],
 		},
 	];
-	const contextUsage: ContextUsage = { tokens: 18_400, contextWindow: 200_000, percent: 9.2 };
-	const collab: RpcCollabState = { role: null, readOnly: false, participants: [] };
+	const contextUsage: ContextUsage = { tokens: 6_200, contextWindow, percent: 4.8 };
 	const state: RpcSessionState = {
 		model,
-		thinkingLevel: "high",
-		thinkingConfigured: "high",
-		availableThinkingLevels: ["low", "medium", "high"],
+		thinkingLevel: "off",
+		thinkingConfigured: "off",
+		availableThinkingLevels: ["off"],
 		isStreaming: false,
 		isCompacting: false,
 		steeringMode: "all",
@@ -337,10 +242,10 @@ export function createShowcaseData(
 		sessionFile: null,
 		cwd,
 		sessionId,
-		sessionName,
+		sessionName: job.name,
 		fastModeEnabled: false,
 		fastModeActive: false,
-		tokensPerSecond: 72,
+		tokensPerSecond,
 		autoCompactionEnabled: true,
 		autoRetryEnabled: true,
 		messageCount: messages.length,
@@ -352,7 +257,7 @@ export function createShowcaseData(
 		planModeEnabled: false,
 		prewalkArmed: false,
 		agentsPaused: false,
-		collab,
+		collab: { role: null, readOnly: false, participants: [] },
 	};
 	const sessionStats: SessionStats = {
 		sessionId,
@@ -361,9 +266,9 @@ export function createShowcaseData(
 		toolCalls: 1,
 		toolResults: 1,
 		totalMessages: messages.length,
-		tokens: { input: 6_600, output: 1_200, reasoning: 320, cacheRead: 14_400, cacheWrite: 2_400, total: 24_600 },
-		premiumRequests: 2,
-		cost: 0.05112,
+		tokens: { input: 4_100, output: 1_300, reasoning: 0, cacheRead: 800, cacheWrite: 0, total: 6_200 },
+		premiumRequests: 0,
+		cost: 0,
 		contextUsage,
 	};
 	const contextReport: RpcContextReportResult = {
@@ -373,431 +278,33 @@ export function createShowcaseData(
 			contextWindow: contextUsage.contextWindow,
 			anchored: true,
 			usedTokens: contextUsage.tokens,
-			systemPromptTokens: 2_100,
-			systemToolsTokens: 4_600,
-			systemContextTokens: 900,
-			skillsTokens: 400,
-			messagesTokens: 10_400,
+			systemPromptTokens: 1_400,
+			systemToolsTokens: 2_300,
+			systemContextTokens: 0,
+			skillsTokens: 300,
+			messagesTokens: 2_200,
 		},
 	};
-	const usage: UsageResult = {
-		reports: [
-			{
-				provider: `Anthropic · ${demo}`,
-				fetchedAt: showcaseTimestamp,
-				notes: [notice],
-				limits: [
-					{
-						id: "demo-session",
-						label: text("Session allowance (example)", "Hạn mức phiên (minh họa)"),
-						usedFraction: 0.32,
-						remainingFraction: 0.68,
-						resetsAt: showcaseTimestamp + 2 * 3_600_000,
-						status: "ok",
-					},
-					{
-						id: "demo-week",
-						label: text("Weekly allowance (example)", "Hạn mức hàng tuần (minh họa)"),
-						usedFraction: 0.18,
-						remainingFraction: 0.82,
-						resetsAt: showcaseTimestamp + 4 * dayMs,
-						status: "ok",
-					},
-				],
-			},
-			{
-				provider: `OpenAI · ${demo}`,
-				fetchedAt: showcaseTimestamp,
-				notes: [notice],
-				limits: [
-					{
-						id: "demo-requests",
-						label: text("Request allowance (example)", "Hạn mức yêu cầu (minh họa)"),
-						used: 42,
-						limit: 200,
-						usedFraction: 0.21,
-						unit: text("requests", "yêu cầu"),
-						status: "ok",
-					},
-				],
-			},
-		],
-		session: {
-			input: sessionStats.tokens.input,
-			output: sessionStats.tokens.output,
-			cacheRead: sessionStats.tokens.cacheRead,
-			cacheWrite: sessionStats.tokens.cacheWrite,
-			totalTokens: sessionStats.tokens.total,
-			orchestrationTokens: 0,
-			premiumRequests: sessionStats.premiumRequests,
-			cost: sessionStats.cost,
-		},
-	};
-
-	const candidates: ModelRoleCandidate[] = models.map(candidate => ({
-		provider: candidate.provider,
-		id: candidate.id,
-		name: candidate.name ?? candidate.id,
-		kind: "chat",
-	}));
-	const roleMetadata: ModelRoleMetadata[] = [
-		{
-			id: "default",
-			name: text("Default", "Mặc định"),
-			tag: text("DEFAULT", "MẶC ĐỊNH"),
-			color: "success",
-			section: "chat",
-		},
-		{ id: "smol", name: text("Fast", "Nhanh"), tag: text("FAST", "NHANH"), color: "warning", section: "chat" },
-		{
-			id: "slow",
-			name: text("Thinking", "Suy nghĩ"),
-			tag: text("THINK", "SUY NGHĨ"),
-			color: "accent",
-			section: "chat",
-		},
-		{
-			id: "plan",
-			name: text("Architect", "Kiến trúc"),
-			tag: text("PLAN", "KẾ HOẠCH"),
-			color: "muted",
-			section: "chat",
-		},
-		{ id: "task", name: text("Subtask", "Tác vụ con"), tag: text("TASK", "TÁC VỤ"), color: "muted", section: "chat" },
-		{
-			id: "advisor",
-			name: text("Advisor", "Cố vấn"),
-			tag: text("REVIEW", "ĐÁNH GIÁ"),
-			color: "accent",
-			section: "chat",
-		},
-	];
-	const assignments: Record<string, string> = {
-		default: "anthropic/claude-sonnet-4-5",
-		smol: "google/gemini-3-flash-preview",
-		slow: "anthropic/claude-opus-4-5",
-		plan: "google/gemini-3-pro-preview",
-		task: "openai/gpt-5.2-codex",
-		advisor: "openai/gpt-5.2",
-	};
-	const modelRoles: ModelRolesResult = {
-		roles: roleMetadata.map(role => ({ ...role, model: assignments[role.id], source: notice, candidates })),
-	};
-
-	const agentRows = [
-		{
-			agent: "scout",
-			status: "completed",
-			role: "smol",
-			tokens: 9_200,
-			cost: 0.012,
-			durationMs: 28_000,
-			toolCount: 4,
-			task: text("Demo · map the existing form patterns", "Minh họa · khảo sát các mẫu biểu mẫu hiện có"),
-			note: text(
-				"Found reusable labels and native controls",
-				"Đã tìm thấy nhãn có thể tái sử dụng và điều khiển gốc",
-			),
-		},
-		{
-			agent: "task",
-			status: "running",
-			role: "task",
-			tokens: 6_800,
-			cost: 0.018,
-			durationMs: 38_000,
-			toolCount: 3,
-			task: text("Demo · check the narrow-screen layout", "Minh họa · kiểm tra bố cục màn hình hẹp"),
-			note: text("Checking spacing at 320 px · 2/3 checks", "Đang kiểm tra khoảng cách ở 320 px · 2/3 kiểm tra"),
-		},
-		{
-			agent: "reviewer",
-			status: "parked",
-			role: "advisor",
-			tokens: 4_300,
-			cost: 0.0098,
-			durationMs: 19_000,
-			toolCount: 2,
-			task: text("Demo · review keyboard and label semantics", "Minh họa · đánh giá ngữ nghĩa bàn phím và nhãn"),
-			note: text("Review complete · parked for follow-up", "Đã đánh giá xong · tạm dừng chờ tiếp tục"),
-		},
-	];
-	const subagents: SubagentSnapshot[] = agentRows.map((row, index) => {
-		const id = `showcase-${row.agent}`;
-		return {
-			id,
-			index: index + 1,
-			agent: row.agent,
-			agentSource: "bundled",
-			kind: "sub",
-			status: row.status,
-			live: row.status === "running",
-			lastUpdate: showcaseTimestamp,
-			task: row.task,
-			assignment: row.task,
-			description: row.task,
-			progress: {
-				id,
-				index,
-				agent: row.agent,
-				agentSource: "bundled",
-				status: row.status === "running" ? "running" : "completed",
-				task: row.task,
-				assignment: row.task,
-				description: row.note,
-				lastIntent: row.note,
-				recentTools: [{ tool: "read", args: preferencesPath, endMs: showcaseTimestamp - 2_000 }],
-				recentOutput: [row.note, notice],
-				toolCount: row.toolCount,
-				requests: 2,
-				tokens: row.tokens,
-				contextTokens: row.tokens,
-				contextWindow: 200_000,
-				cost: row.cost,
-				durationMs: row.durationMs,
-				modelRole: row.role,
-				resolvedModel: assignments[row.role],
-			},
-		};
-	});
-	const agentDefinitions: RpcAgentDefinitionsResult = {
-		agents: agentRows.map(row => ({
-			name: row.agent,
-			description: `${row.task} · ${notice}`,
-			source: "bundled",
-			model: [`@${row.role}`],
-			thinkingLevel: "medium",
-			effectiveThinkingLevel: "medium",
-			tools: row.agent === "task" ? ["read", "edit", "bash"] : ["read", "grep", "find"],
-			spawns: [],
-			blocking: false,
-			defaultPatterns: [`@${row.role}`],
-			defaultResolved: assignments[row.role],
-			effectivePatterns: [`@${row.role}`],
-			effectiveResolved: assignments[row.role],
-		})),
-	};
-
-	const schema: SettingsSchemaResult = {
-		tabs: [
-			{ id: "context", label: text("Context", "Ngữ cảnh"), groups: [] },
-			{ id: "model", label: text("Models", "Mô hình"), groups: [] },
-			{ id: "providers", label: text("Providers", "Nhà cung cấp"), groups: [] },
-			{ id: "tasks", label: text("Tasks", "Tác vụ"), groups: [] },
-			{ id: "files", label: text("Files", "Tệp"), groups: [] },
-			{ id: "shell", label: text("Shell", "Dòng lệnh"), groups: [] },
-			{ id: "tools", label: text("Tools", "Công cụ"), groups: [] },
-			{ id: "memory", label: text("Memory", "Bộ nhớ"), groups: [] },
-			{ id: "interaction", label: text("Interaction", "Tương tác"), groups: [] },
-		],
-		entries: [
-			{
-				path: "compaction.enabled",
-				type: "boolean",
-				tab: "context",
-				value: true,
-				default: true,
-				label: text("Automatic compaction", "Tự động nén"),
-				description: text(
-					"Demo: preserve room for the next task by summarizing older context.",
-					"Minh họa: giữ chỗ cho tác vụ tiếp theo bằng cách tóm tắt ngữ cảnh cũ hơn.",
-				),
-			},
-			{
-				path: "compaction.thresholdPercent",
-				type: "number",
-				tab: "context",
-				value: 80,
-				default: 80,
-				label: text("Context threshold (%)", "Ngưỡng ngữ cảnh (%)"),
-				description: text(
-					"Demo: compact when context reaches this percentage.",
-					"Minh họa: nén khi ngữ cảnh đạt đến tỷ lệ phần trăm này.",
-				),
-			},
-			{
-				path: "compaction.reserveTokens",
-				type: "number",
-				tab: "context",
-				value: 16_384,
-				default: 16_384,
-				label: text("Reserved output tokens", "Token đầu ra dự lưu"),
-				description: text(
-					"Demo: keep a response budget available after compaction.",
-					"Minh họa: duy trì ngân sách phản hồi khả dụng sau khi nén.",
-				),
-			},
-			{
-				path: "hideThinkingBlock",
-				type: "boolean",
-				tab: "model",
-				value: false,
-				default: false,
-				label: text("Hide reasoning blocks", "Ẩn khối suy luận"),
-				description: text(
-					"Demo: keep reasoning visible alongside the answer.",
-					"Minh họa: giữ hiển thị phần suy luận bên cạnh câu trả lời.",
-				),
-			},
-			{
-				path: "task.showResolvedModelBadge",
-				type: "boolean",
-				tab: "tasks",
-				value: true,
-				default: true,
-				label: text("Show agent models", "Hiển thị mô hình của agent"),
-				description: text(
-					"Demo: identify the model assigned to each delegated task.",
-					"Minh họa: xác định mô hình được chỉ định cho từng tác vụ được ủy quyền.",
-				),
-			},
-			{
-				path: "bash.enabled",
-				type: "boolean",
-				tab: "shell",
-				value: true,
-				default: true,
-				label: text("Shell tool", "Công cụ dòng lệnh"),
-				description: text(
-					"Demo capability only; no commands are executed.",
-					"Chỉ là khả năng minh họa; không có lệnh nào được thực thi.",
-				),
-			},
-			{
-				path: "tools.approvalMode",
-				type: "enum",
-				tab: "tools",
-				value: "always-ask",
-				default: "always-ask",
-				label: text("Tool approvals", "Phê duyệt công cụ"),
-				description: text(
-					"Demo: request confirmation before a tool changes the workspace.",
-					"Minh họa: yêu cầu xác nhận trước khi một công cụ thay đổi không gian làm việc.",
-				),
-				options: [
-					{ value: "always-ask", label: text("Always ask", "Luôn hỏi") },
-					{ value: "write", label: text("Ask before writes", "Hỏi trước khi ghi") },
-					{ value: "yolo", label: text("Do not ask", "Không hỏi") },
-				],
-			},
-			{
-				path: "memory.backend",
-				type: "enum",
-				tab: "memory",
-				value: "off",
-				default: "off",
-				options: [{ value: "off", label: text("Off", "Tắt") }],
-				label: text("Persistent memory", "Bộ nhớ bền vững"),
-				description: text(
-					"Disabled in the demo; no personal history is loaded.",
-					"Đã tắt trong bản minh họa; không có lịch sử cá nhân nào được tải.",
-				),
-			},
-			{
-				path: "display.showTokenUsage",
-				type: "boolean",
-				tab: "interaction",
-				value: true,
-				default: false,
-				label: text("Show token usage", "Hiển thị lượng dùng token"),
-				description: text(
-					"Demo: display synthetic usage figures for the session.",
-					"Minh họa: hiển thị số liệu sử dụng tổng hợp cho phiên làm việc.",
-				),
-			},
-		],
-	};
+	const schema: SettingsSchemaResult = { tabs: [], entries: [] };
 	const values: Record<string, unknown> = {
-		...Object.fromEntries(schema.entries.map(entry => [entry.path, entry.value])),
 		"theme.dark": "dark",
 		"theme.light": "light",
 		"theme.mode": "dark",
-		"security.enabled": false,
 		"speech.enabled": false,
 		"stt.enabled": false,
 		"display.collapseCompacted": true,
-		"terminal.showProgress": true,
 		proseOnlyThinking: true,
 		omitThinking: false,
 	};
-	const skills: RpcSkillsResult = {
-		skills: [
-			{
-				name: text("Accessibility review", "Đánh giá trợ năng"),
-				slug: "accessibility",
-				description: text(
-					"Demo skill: inspect labels, focus order, and native controls.",
-					"Kỹ năng minh họa: kiểm tra nhãn, thứ tự lấy tiêu điểm và các điều khiển gốc.",
-				),
-			},
-			{
-				name: text("React testing", "Kiểm thử React"),
-				slug: "react-testing",
-				description: text(
-					"Demo skill: protect component behavior with focused regression tests.",
-					"Kỹ năng minh họa: bảo vệ hành vi thành phần bằng các kiểm thử hồi quy tập trung.",
-				),
-			},
-		].map(skill => ({
-			name: skill.name,
-			description: skill.description,
-			source: "native:project",
-			provider: "native",
-			providerName: text("Demo project", "Dự án minh họa"),
-			level: "project",
-			location: `${cwd}/.showcase/skills/${skill.slug}/SKILL.md`,
-			enabled: true,
-			managed: false,
-			hidden: false,
-		})),
-	};
-	const mcpServers: RpcMcpServersResult = {
-		servers: [
-			{
-				name: text("Design references · demo", "Tài liệu thiết kế tham khảo · minh họa"),
-				transport: "http",
-				url: "https://design.example.invalid/mcp",
-			},
-			{
-				name: text("Project documentation · demo", "Tài liệu dự án · minh họa"),
-				transport: "http",
-				url: "https://docs.example.invalid/mcp",
-			},
-		].map(server => ({
-			...server,
-			transport: "http",
-			scope: "project",
-			status: "disconnected",
-			toolCount: 0,
-			enabled: false,
-			authed: false,
-			authState: "none",
-			lastError: notice,
-		})),
-	};
-	const gitChanges: RpcGitChanges = {
-		isRepo: true,
-		root: cwd,
-		base: "HEAD",
-		truncated: false,
-		files: [
-			{ path: preferencesPath, status: "M" },
-			{ path: testsPath, status: "M" },
-		],
-	};
 	const commands: AvailableCommand[] = [
-		{ name: "settings", description: text("Open demo settings", "Mở cài đặt minh họa") },
-		{ name: "models", description: text("Browse the demo model catalog", "Duyệt danh mục mô hình minh họa") },
-		{
-			name: "context",
-			description: text("Inspect synthetic context usage", "Kiểm tra lượng dùng ngữ cảnh tổng hợp"),
-		},
-		{ name: "stats", description: text("Open synthetic activity statistics", "Mở thống kê hoạt động tổng hợp") },
-		{
-			name: "providers",
-			description: text("Inspect disconnected demo providers", "Xem các nhà cung cấp minh họa chưa kết nối"),
-		},
+		{ name: "settings", description: text("Open settings", "Mở cài đặt") },
+		{ name: "models", description: text("Choose a model", "Chọn mô hình") },
 	].map(command => ({ ...command, source: "builtin", textModeExecutable: false }));
+	const tool = (name: string, en: string, vi: string) => ({
+		name,
+		source: "extension" as const,
+		description: text(en, vi),
+	});
 
 	const replies = {
 		get_state: state,
@@ -807,157 +314,27 @@ export function createShowcaseData(
 		get_available_models: availableModels,
 		get_providers: providers,
 		get_login_providers: { providers: [] },
-		get_model_roles: modelRoles,
-		get_model_role_metadata: { roles: roleMetadata } satisfies ModelRoleMetadataResult,
-		get_subagents: { subagents },
-		get_subagent_messages: { messages: [], nextByte: 0 },
-		get_agent_definitions: agentDefinitions,
 		get_session_stats: sessionStats,
 		get_context_report: contextReport,
-		get_usage: usage,
-		get_git_status: {
-			isRepo: true,
-			branch: "demo/accessible-settings",
-			staged: 0,
-			unstaged: 2,
-			untracked: 0,
-		} satisfies RpcGitStatus,
-		get_git_changes: gitChanges,
-		get_git_diff: projectDiffs[preferencesPath],
 		get_settings: { values, advisorEnabled: false, advisorActive: false },
 		get_settings_schema: schema,
-		get_skills: skills,
-		get_mcp_servers: mcpServers,
 		get_queue: { steering: [], followUp: [] } satisfies RpcGetQueueResult,
-		get_goal: { enabled: false, status: "none" } satisfies RpcGoalState,
-		get_loop_mode: { enabled: false, state: "off" } satisfies RpcLoopModeState,
-		get_vibe_mode: { enabled: false } satisfies RpcVibeModeState,
 		get_plan_mode: { enabled: false } satisfies PlanModeState,
-		get_plugins: { plugins: [] } satisfies RpcPluginsResult,
-		get_hooks: { hooks: [] } satisfies RpcHooksResult,
 		get_themes: { themes: [] } satisfies RpcThemesResult,
 		get_gui_themes: { themes: [] } satisfies RpcGuiThemesResult,
-		get_collab_state: collab,
-		get_marketplaces: { marketplaces: [] } satisfies RpcMarketplacesResult,
-		get_prompt_templates: { templates: [] } satisfies RpcPromptTemplatesResult,
-		get_jobs: { jobs: [] } satisfies RpcJobsResult,
 		get_directories: { directories: [{ path: cwd, primary: true }] } satisfies RpcWorkspaceDirectoriesResult,
 		get_active_tools: {
 			tools: [
-				{
-					name: "read",
-					source: "builtin",
-					description: text("Demo: inspect synthetic project files", "Minh họa: kiểm tra các tệp dự án tổng hợp"),
-				},
-				{
-					name: "edit",
-					source: "builtin",
-					description: text("Demo: preview a two-file change", "Minh họa: xem trước thay đổi trên hai tệp"),
-				},
-				{
-					name: "task",
-					source: "builtin",
-					description: text("Demo: display delegated work", "Minh họa: hiển thị công việc được ủy quyền"),
-				},
+				tool("office_report", "Write a Word report", "Viết báo cáo Word"),
+				tool("office_clean", "Clean up a spreadsheet", "Dọn dẹp bảng tính"),
+				tool("office_slides", "Make PowerPoint slides", "Làm trang trình chiếu PowerPoint"),
 			],
 		} satisfies RpcActiveToolsResult,
 		get_available_commands: { commands },
-		get_live_state: {
-			active: false,
-			phase: "connecting",
-			muted: false,
-			inputLevel: 0,
-			outputLevel: 0,
-		} satisfies RpcLiveState,
-		get_memory_report: {
-			backend: "off",
-			entryCount: 0,
-			status: { active: false, writable: false, searchable: false, message: notice },
-		} satisfies RpcMemoryReport,
-		get_security_dashboard: {
-			enabled: false,
-			modelReady: false,
-			repositoryRoot: cwd,
-			scans: [],
-			operations: [],
-		} satisfies RpcSecurityDashboardResult,
-		get_ssh_hosts: { hosts: [], warnings: [], openSshAvailable: false } satisfies RpcSshHostsResult,
 		list_foreign_sessions: { sessions: [] },
-		get_session_tree: { tree: [], activeLeafId: null } satisfies RpcSessionTreeResult,
 		get_copy_targets: { targets: [] },
-		get_last_assistant_text: { text: summary },
+		get_last_assistant_text: { text: job.summary },
 		get_force_tool: { tool: null },
-		set_subagent_subscription: {},
-		set_host_tools: {},
-		set_host_uri_schemes: {},
 	} satisfies Partial<Record<RpcCommand["type"], unknown>>;
-
-	// The renderer prints agentType verbatim, so localize this display column.
-	const byAgentType: Array<Omit<AgentTypeStats, "agentType"> & { agentType: string }> = [
-		{ agentType: text("Main · demo", "Chính · minh họa"), requests: 290 },
-		{ agentType: text("Subagents · demo", "Agent phụ · minh họa"), requests: 174 },
-		{ agentType: text("Advisor · demo", "Cố vấn · minh họa"), requests: 44 },
-	].map(row => ({
-		agentType: row.agentType,
-		totalRequests: row.requests,
-		totalInputTokens: row.requests * 1_500,
-		totalOutputTokens: row.requests * 800,
-		totalCacheReadTokens: row.requests * 7_000,
-		totalCacheWriteTokens: row.requests * 700,
-		totalCost: row.requests * 0.02,
-	}));
-	const dailyRequests = [48, 62, 57, 84, 73, 96, 88];
-	const dailyErrors = [0, 1, 0, 1, 0, 0, 1];
-	const firstDay = Date.UTC(2026, 8, 15);
-	const timeSeries: TimeSeriesPoint[] = dailyRequests.map((requests, index) => ({
-		timestamp: firstDay + index * dayMs,
-		requests,
-		errors: dailyErrors[index],
-		tokens: requests * 10_000,
-		cost: requests * 0.02,
-	}));
-	const totalRequests = dailyRequests.reduce((sum, requests) => sum + requests, 0);
-	// Overview top lists; the model requests add up to the agent-type totals above.
-	const byModel = [
-		{ model: "claude-sonnet-4-5", provider: "anthropic", totalRequests: 290 },
-		{ model: "gemini-3-flash-preview", provider: "google", totalRequests: 110 },
-		{ model: "gpt-5.2-codex", provider: "openai", totalRequests: 64 },
-		{ model: "gpt-5.2", provider: "openai", totalRequests: 44 },
-	];
-	const byTool = [
-		{ tool: "read", calls: 412 },
-		{ tool: "edit", calls: 168 },
-		{ tool: "bash", calls: 121 },
-		{ tool: "grep", calls: 96 },
-		{ tool: "find", calls: 38 },
-	];
-	const failedRequests = dailyErrors.reduce((sum, errors) => sum + errors, 0);
-	const overall: AggregatedStats = {
-		totalRequests,
-		successfulRequests: totalRequests - failedRequests,
-		failedRequests,
-		errorRate: failedRequests / totalRequests,
-		totalInputTokens: totalRequests * 1_500,
-		totalOutputTokens: totalRequests * 800,
-		totalCacheReadTokens: totalRequests * 7_000,
-		totalCacheWriteTokens: totalRequests * 700,
-		cacheRate: 7_000 / (1_500 + 7_000 + 700),
-		cacheSavings: 0.64,
-		totalCost: totalRequests * 0.02,
-		unpricedRequests: 0,
-		totalPremiumRequests: totalRequests,
-		avgDuration: 11_100,
-		avgTtft: 420,
-		avgTokensPerSecond: 72,
-		firstTimestamp: firstDay,
-		lastTimestamp: showcaseTimestamp,
-	};
-	return {
-		replies,
-		stats: {
-			"/api/stats/overview": { overall, byAgentType, timeSeries, source: notice },
-			"/api/stats/model-dashboard": { byModel },
-			"/api/stats/tools": { byTool },
-		},
-	};
+	return { replies };
 }

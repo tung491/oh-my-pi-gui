@@ -245,7 +245,7 @@ bun run build
 scripts/virtual-display.sh run -- bun scripts/capture-showcase.ts
 ```
 
-Script chụp ảnh chạy GUI Electron thật với HOME và hồ sơ tạm mới, cùng một agent giả lập theo kịch bản, nên **không dùng mô hình thật, thông tin đăng nhập hay tệp cá nhân nào**. Nó chạy ba việc văn phòng (báo cáo Word, dọn dẹp bảng tính và bộ trình chiếu) và ghi ảnh vào `docs/screenshots/en/` và `docs/screenshots/vi/`. Các cuộc trò chuyện là dữ liệu minh họa, không phải kết quả thật của mô hình.
+Script chụp ảnh chạy GUI Electron thật với HOME và hồ sơ tạm mới, cùng một agent giả lập theo kịch bản, nên **không dùng mô hình thật, thông tin đăng nhập hay tệp cá nhân nào**. Nó chạy ba việc văn phòng (báo cáo Word, dọn dẹp bảng tính và bộ trình chiếu) và ghi ảnh vào hai thư mục `en` và `vi` trong `docs/screenshots`. Các cuộc trò chuyện là dữ liệu minh họa, không phải kết quả thật của mô hình.
 
 Biến môi trường tùy chọn: `SHOWCASE_THEME=light` chụp với giao diện VIF Light thay vì giao diện tối mặc định, `SHOWCASE_OUT=<dir>` ghi vào `<dir>/en` và `<dir>/vi` thay vì `docs/screenshots`, và `SHOWCASE_ONBOARDING=1` chụp thêm màn hình chào mừng lần đầu thành `00-onboarding.png`. Trên Linux, script chuyển các biến màn hình (`DISPLAY`, `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, `XAUTHORITY`) cho Electron.
 

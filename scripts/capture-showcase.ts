@@ -1,10 +1,16 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { _electron as electron, expect, type Page } from "@playwright/test";
+import { _electron as electron, expect } from "@playwright/test";
 import { en } from "../src/renderer/locales/en";
 import { vi } from "../src/renderer/locales/vi";
-import { projectFiles, showcaseTimestamp } from "./showcase-data";
+import {
+	SHOWCASE_SCENARIOS,
+	SHOWCASE_SHOTS,
+	type ShowcaseScenario,
+	showcaseSessionTitles,
+	showcaseTimestamp,
+} from "./showcase-data";
 
 const root = path.resolve(import.meta.dir, "..");
 const realHome = os.homedir();
@@ -19,11 +25,14 @@ const displayEnv = Object.fromEntries(
 	),
 );
 
-async function captureLocale(language: "en" | "vi"): Promise<void> {
+type Locale = "en" | "vi";
+
+/** One app launch on a fresh temporary home: the stand-in agent replays one office task. */
+async function captureScene(language: Locale, scenario: ShowcaseScenario, onboarding: boolean): Promise<void> {
 	const t = language === "vi" ? vi : en;
 	const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "omp-showcase-"));
 	const home = path.join(temporary, "home");
-	const project = path.join(home, "projects", "aurora-web");
+	const project = path.join(home, "Documents");
 	const agent = path.join(home, ".omp", "agent");
 	const desktop = path.join(temporary, "desktop");
 	const output = path.join(outRoot, language);
@@ -35,31 +44,11 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 		`#!/usr/bin/env bun\nimport ${JSON.stringify(path.join(root, "scripts", "showcase-fixture.ts"))};\n`,
 	);
 	await fs.chmod(fixture, 0o700);
-	for (const [filename, contents] of Object.entries(projectFiles)) {
-		await Bun.write(path.join(project, filename), contents);
-	}
-	await Bun.write(
-		path.join(project, "package.json"),
-		JSON.stringify({ name: "aurora-web", private: true, scripts: { test: "bun test" } }, null, 2),
-	);
-	const titles =
-		language === "vi"
-			? [
-					"Xây dựng trang cài đặt trợ năng",
-					"Tối ưu hóa tương tác tìm kiếm",
-					"Kiểm tra độ tương phản chủ đề",
-					"Lập kế hoạch thư viện thành phần",
-				]
-			: [
-					"Build accessible settings",
-					"Refine search interactions",
-					"Review theme contrast",
-					"Plan a component library",
-				];
+	const titles = showcaseSessionTitles(language);
 	for (const [index, title] of titles.entries()) {
 		const entries = [
 			{ type: "title", title },
-			{ type: "session", id: `showcase-${index}`, timestamp: "2026-09-22T08:00:00.000Z", cwd: project },
+			{ type: "session", id: `showcase-${index}`, timestamp: "2026-09-21T08:00:00.000Z", cwd: project },
 			{ type: "message", id: `user-${index}`, message: { role: "user", content: title } },
 			{
 				type: "message",
@@ -68,7 +57,7 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 			},
 		];
 		await Bun.write(
-			path.join(agent, "sessions", "aurora-web", `showcase-${index}.jsonl`),
+			path.join(agent, "sessions", "documents", `showcase-${index}.jsonl`),
 			`${entries.map(entry => JSON.stringify(entry)).join("\n")}\n`,
 		);
 	}
@@ -94,6 +83,7 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 			OMP_BUNDLED_OMP: fixture,
 			OMP_SHOWCASE_PROJECT: project,
 			OMP_SHOWCASE_LANG: language,
+			OMP_SHOWCASE_SCENARIO: scenario,
 			PI_NOTIFICATIONS: "off",
 			...displayEnv,
 		},
@@ -114,20 +104,6 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 		page.setDefaultTimeout(15_000);
 		await page.setViewportSize({ width: 1440, height: 960 });
 		await expect(page.locator("textarea").first()).toBeVisible();
-		// The fixture has no Ollama model, so the welcome screen opens on the first ready frame.
-		const welcome = page.getByRole("dialog");
-		const skipWelcome = welcome.getByRole("button", { name: t["welcome.skip"], exact: true });
-		await expect(skipWelcome).toBeVisible();
-		if (captureOnboarding) {
-			// Wait for the Ollama probe and the machine facts so the shot shows no skeletons.
-			await expect(welcome.locator('.omp-ollama-row:not([data-state="loading"])')).toBeVisible();
-			await expect(welcome.locator('.omp-welcome-facts:not([data-state="loading"])')).toBeVisible();
-			await shot("00-onboarding");
-		}
-		await skipWelcome.click();
-		await expect(welcome).toBeHidden();
-		await expect(page.getByTitle(t["input.model"], { exact: true })).toBeEnabled();
-		await expect(page.getByText(titles[0], { exact: true }).first()).toBeVisible();
 
 		async function shot(name: string): Promise<void> {
 			await page.mouse.move(1430, 950);
@@ -138,21 +114,6 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 				}),
 			);
 			await page.evaluate(() => document.fonts.ready);
-			for (const canvas of await page.locator("canvas:visible").all()) {
-				let previous = "";
-				let stable = 0;
-				await expect
-					.poll(
-						async () => {
-							const current = (await canvas.screenshot()).toString("base64");
-							stable = current === previous ? stable + 1 : 0;
-							previous = current;
-							return stable;
-						},
-						{ timeout: 10_000, intervals: [120] },
-					)
-					.toBeGreaterThanOrEqual(3);
-			}
 			const text = await page.locator("body").innerText();
 			if (privateText.some(value => text.includes(value)) || /\/(?:Users|home)\/(?!demo\b)[^\s/]+/.test(text)) {
 				throw new Error(`Privacy check failed for ${language}/${name}`);
@@ -161,96 +122,30 @@ async function captureLocale(language: "en" | "vi"): Promise<void> {
 			await page.screenshot({ path: path.join(output, `${name}.png`), animations: "disabled" });
 			console.log(`Captured ${language}/${name}`);
 		}
-		async function nav(key: string): Promise<void> {
-			const expand = page.getByRole("button", { name: t["sidebar.navigation.expand"], exact: true });
-			if (await expand.isVisible()) await expand.click();
-			await page.getByRole("button", { name: t[key], exact: true }).first().click();
+
+		if (onboarding) {
+			// The welcome screen is reopened by hand: the stand-in reports a local model,
+			// so the startup gate leaves it closed.
+			await page.getByRole("button", { name: t["ollama.settings.title"], exact: true }).first().click();
+			await page.getByRole("button", { name: t["ollama.settings.runSetup"], exact: true }).click();
+			const welcome = page.getByRole("dialog");
+			// Wait for the Ollama probe and the machine facts so the shot shows no skeletons.
+			await expect(welcome.locator('.omp-ollama-row:not([data-state="loading"])')).toBeVisible();
+			await expect(welcome.locator('.omp-welcome-facts:not([data-state="loading"])')).toBeVisible();
+			await shot("00-onboarding");
+			return;
 		}
-		async function close(): Promise<void> {
-			await page.keyboard.press("Escape");
-			await expect(page.getByRole("dialog")).toHaveCount(0);
-		}
 
-		await shot("01-conversation");
-		await nav("titlebar.workspace");
-		await page.getByRole("button", { name: t["panel.tabs.diff"], exact: true }).click();
-		const inspector = page.locator(".omp-inspector");
-		await inspector.getByRole("button", { name: "M src/components/Preferences.tsx", exact: true }).click();
-		await expect(inspector).toContainText('aria-labelledby="preferences-title"');
-		const separator = await inspector.getByRole("separator").boundingBox();
-		if (!separator) throw new Error("Workspace resize handle is missing");
-		await page.mouse.move(separator.x + 2, separator.y + 100);
-		await page.mouse.down();
-		await page.mouse.move(840, separator.y + 100, { steps: 8 });
-		await page.mouse.up();
-		await shot("02-workspace");
-		await page.getByRole("button", { name: t["panel.close"], exact: true }).click();
-
-		await page.getByTitle(t["input.model"], { exact: true }).click();
-		await expect(page.getByPlaceholder(t["modelPicker.placeholder"])).toBeVisible();
-		await shot("03-models");
-		await close();
-
-		await nav("titlebar.providers");
-		await expect(page.getByRole("dialog")).toContainText("Anthropic");
-		await shot("04-providers");
-		await close();
-
-		await nav("titlebar.commands");
-		await page.getByPlaceholder(t["palette.search"]).fill(t["cmd.modelRoles"]);
-		await page.keyboard.press("Enter");
-		await expect(page.getByRole("dialog")).toContainText(t["modelRoles.title"]);
-		await shot("05-model-roles");
-		await close();
-
-		await nav("sidebar.nav.agentHub");
-		await page.getByRole("tab", { name: new RegExp(`^${t["agentHub.tabs.hub"]}`) }).click();
-		await expect(page.getByRole("dialog")).toContainText("scout");
-		await shot("06-agent-hub");
-		await close();
-
-		await nav("titlebar.stats");
-		await page.getByRole("button", { name: "7d", exact: true }).click();
-		await expect(page.getByRole("dialog").locator("canvas").first()).toBeVisible();
-		await shot("07-statistics");
-		await close();
-
-		await page.getByRole("button", { name: new RegExp(`^${t["contextUsage.open"].split("{percent}")[0]}`) }).click();
-		await expect(page.getByRole("group", { name: t["contextUsage.title"], exact: true })).toBeVisible();
-		await shot("08-context");
-		await close();
-
-		await nav("titlebar.commands");
-		await expect(page.getByPlaceholder(t["palette.search"])).toBeVisible();
-		await shot("09-commands");
-		await close();
-
-		await nav("titlebar.settings");
-		await expect(page.getByRole("dialog")).toBeVisible();
-		await page.getByRole("dialog").getByRole("button", { name: t["settings.nav.experience"], exact: true }).click();
-		await shot("10-settings");
-		await close();
-
-		await nav("titlebar.usage");
-		await expect(page.getByRole("dialog")).toContainText("Anthropic");
-		await shot("12-usage");
-		await close();
-
-		await captureSplit(page, t);
-		await shot("11-split");
+		await expect(page.getByTitle(t["input.model"], { exact: true })).toBeEnabled();
+		await expect(page.locator("[data-office-file]").first()).toBeVisible();
+		await shot(SHOWCASE_SHOTS[scenario]);
 	} finally {
 		await app.close();
 		await fs.rm(temporary, { recursive: true, force: true });
 	}
 }
 
-async function captureSplit(page: Page, t: Record<string, string>): Promise<void> {
-	await page.keyboard.press("Meta+t");
-	await expect(page.getByRole("tab")).toHaveCount(2);
-	await expect(page.getByRole("tab").last()).toHaveAttribute("aria-selected", "true");
-	await page.getByRole("tab").first().click({ button: "right" });
-	await page.getByText(t["tabs.menu.splitRight"], { exact: true }).click();
-	await expect(page.locator("textarea")).toHaveCount(2);
+for (const language of ["en", "vi"] as const) {
+	for (const scenario of SHOWCASE_SCENARIOS) await captureScene(language, scenario, false);
+	if (captureOnboarding) await captureScene(language, "report", true);
 }
-
-for (const language of ["en", "vi"] as const) await captureLocale(language);
