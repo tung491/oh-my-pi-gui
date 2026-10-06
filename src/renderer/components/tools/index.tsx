@@ -16,6 +16,7 @@ import { GrepRenderer } from "./GrepRenderer";
 import { ImageRenderer } from "./ImageRenderer";
 import { MemoryRenderer } from "./MemoryRenderer";
 import { OfficeFileRenderer } from "./OfficeFileRenderer";
+import { OFFICE_TOOL_KINDS } from "./office-tools";
 import { ReadRenderer } from "./ReadRenderer";
 import { ResolveRenderer } from "./ResolveRenderer";
 import { TaskRenderer } from "./TaskRenderer";
@@ -116,9 +117,13 @@ const REGISTRY: Record<string, ComponentType<ToolRendererProps>> = {
 	reject: (props: ToolRendererProps) => <ResolveRenderer {...props} operation="reject" />,
 	// Each office tool makes one kind of file; the wrapper pins it so a result
 	// naming another kind falls back to the generic view.
-	office_report: (props: ToolRendererProps) => <OfficeFileRenderer {...props} kind="docx" />,
-	office_slides: (props: ToolRendererProps) => <OfficeFileRenderer {...props} kind="pptx" />,
-	office_clean: (props: ToolRendererProps) => <OfficeFileRenderer {...props} kind="xlsx" />,
+	office_report: (props: ToolRendererProps) => (
+		<OfficeFileRenderer {...props} kind={OFFICE_TOOL_KINDS.office_report} />
+	),
+	office_slides: (props: ToolRendererProps) => (
+		<OfficeFileRenderer {...props} kind={OFFICE_TOOL_KINDS.office_slides} />
+	),
+	office_clean: (props: ToolRendererProps) => <OfficeFileRenderer {...props} kind={OFFICE_TOOL_KINDS.office_clean} />,
 };
 
 export function getToolRenderer(name: string): ComponentType<ToolRendererProps> {

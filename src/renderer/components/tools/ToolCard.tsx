@@ -7,6 +7,7 @@ import { useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
 import { GenericRenderer } from "./GenericRenderer";
 import { getToolRenderer, getToolSummary } from "./index";
+import { isOfficeTool } from "./office-tools";
 
 export interface ToolRendererProps {
 	args: Record<string, unknown>;
@@ -41,12 +42,15 @@ export function ToolCard({ toolCallId, toolName, args, runningIndicator = "spinn
 	const t = useT();
 	const entry = useToolsStore(s => s.activeTools.get(toolCallId));
 	const expandAll = useUiStore(s => s.toolsExpandAll);
-	const [expanded, setExpanded] = useState(expandAll.expanded);
+	// An office job's card holds the Open button for its finished file, so it
+	// is open from the start and collapse-all leaves it open.
+	const openByDefault = isOfficeTool(toolName);
+	const [expanded, setExpanded] = useState(expandAll.expanded || openByDefault);
 
 	// ⌃O expand/collapse-all: every card snaps to the latest shared target.
 	useEffect(() => {
-		setExpanded(expandAll.expanded);
-	}, [expandAll]);
+		setExpanded(expandAll.expanded || openByDefault);
+	}, [expandAll, openByDefault]);
 
 	const entryStatus = entry?.status ?? "running";
 	// "pending" (args still streaming) is a live sub-state: spinner, not a check.

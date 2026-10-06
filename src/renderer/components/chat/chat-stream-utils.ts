@@ -12,6 +12,7 @@ import type { QueueLane } from "../../stores/queue";
 import type { TodoSnapshot } from "../../stores/todo";
 import { type ToolEntry, toolEntryKey } from "../../stores/tools";
 import type { TranscriptDetail } from "../../stores/ui";
+import { isOfficeTool } from "../tools/office-tools";
 import { isCompletionMessage, launchCompletionFailureCount } from "./completion-events";
 
 interface ProcessMeta {
@@ -419,6 +420,18 @@ export function buildHistoryRows(
 
 		const hasToolCall = message.content.some(block => block.type === "toolCall");
 		const hasImage = message.content.some(block => block.type === "image");
+		const officeCalls = message.content.filter(block => block.type === "toolCall" && isOfficeTool(block.name));
+		if (hasToolCall && !hasImage && officeCalls.length > 0) {
+			// An office job's card is how the user opens the finished file: the
+			// rest of the message joins the steps group, the office calls follow
+			// it as their own row, and the next steps start a new group.
+			const rest = message.content.filter(block => !officeCalls.includes(block));
+			const restMessage: AgentMessage = { ...message, content: rest };
+			if (isVisibleTranscriptMessage(restMessage)) processMessages.push(restMessage);
+			flushProcess();
+			rows.push({ kind: "message", message: { ...message, content: officeCalls } });
+			continue;
+		}
 		if (hasToolCall && !hasImage) {
 			// Text accompanying a tool call is intermediate narration. Keep every
 			// narrated phase in the same disclosure until the API delivers the final

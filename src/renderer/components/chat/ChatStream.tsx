@@ -28,6 +28,7 @@ import { type TodoSnapshot, useTodoStore } from "../../stores/todo";
 import { type ToolEntry, toolEntryKey, useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
 import { SaiAtlasLogo } from "../common";
+import { isOfficeTool } from "../tools/office-tools";
 import { ReadGroupCard } from "../tools/ReadGroupCard";
 import { ToolCard } from "../tools/ToolCard";
 import { ConversationNavigator } from "./ConversationNavigator";
@@ -851,22 +852,35 @@ export function StreamingRows({
 		);
 	}
 
+	// Office jobs stay out of the compact steps group: their card is how the
+	// finished file opens, as in finalized history (buildHistoryRows).
+	const officeCards = allCards.filter(card => isOfficeTool(card.name));
+	const stepCards = allCards.filter(card => !isOfficeTool(card.name));
+	const hasSteps = hasThinking || stepCards.length > 0;
+	const cardsOf = (cards: typeof allCards) =>
+		cards.map(card => (
+			<ToolCard key={card.id} toolCallId={card.id} toolName={card.name} args={card.args} runningIndicator="dot" />
+		));
+
 	return (
 		<div className={cx("omp-streaming-turn group flex px-6", turnClass)}>
 			<div className="omp-transcript-content min-w-0">
-				{hasProcess ? (
+				{hasSteps ? (
 					<ExecutionGroup
 						expanded={expanded}
 						live
 						onExpandedChange={onExpandedChange}
-						stepCount={toolCalls.length + liveTools.length + (hasThinking ? 1 : 0)}
-						toolCallIds={allCards.map(card => card.id)}
+						stepCount={stepCards.length + (hasThinking ? 1 : 0)}
+						toolCallIds={stepCards.map(card => card.id)}
 					>
 						<div className="omp-process-group omp-process-group--live">
 							{hasThinking ? <ThinkingBlock live /> : null}
-							{toolCalls.length + liveTools.length > 0 ? <div>{toolCards}</div> : null}
+							{stepCards.length > 0 ? <div>{cardsOf(stepCards)}</div> : null}
 						</div>
 					</ExecutionGroup>
+				) : null}
+				{officeCards.length > 0 ? (
+					<div className={hasSteps ? "mt-1" : undefined}>{cardsOf(officeCards)}</div>
 				) : null}
 				<div className={hasProcess ? "mt-1" : undefined}>
 					<StreamingText />

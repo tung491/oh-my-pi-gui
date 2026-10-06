@@ -3,9 +3,8 @@ import { resultText, sanitizeToolText } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { toast } from "../../stores/toast";
 import { GenericRenderer } from "./GenericRenderer";
+import type { OfficeKind } from "./office-tools";
 import type { ToolRendererProps } from "./ToolCard";
-
-export type OfficeKind = "docx" | "pptx" | "xlsx";
 
 /** The folder the office tools write into (Documents > Sai ATLAS). */
 const OUTPUT_FOLDER_NAME = "Sai ATLAS";
