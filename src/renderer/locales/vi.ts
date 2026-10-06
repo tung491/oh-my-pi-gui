@@ -937,6 +937,8 @@ export const vi: Record<string, string> = {
 	"tools.read.reading": "Đang đọc…",
 	"tools.read.empty": "Không có nội dung",
 	"tools.path.openFailed": "Không thể mở tệp",
+	"tools.office.open": "Mở",
+	"tools.office.showInFolder": "Mở thư mục",
 	"tools.write.lines": "{count} dòng{plural}",
 	"tools.write.overwritten": "Đã ghi đè tệp hiện có (không có diff)",
 	"tools.grep.searching": "đang tìm kiếm…",

@@ -1027,6 +1027,8 @@ export const en: Record<string, string> = {
 	"tools.read.reading": "Reading…",
 	"tools.read.empty": "No content",
 	"tools.path.openFailed": "Could not open file",
+	"tools.office.open": "Open",
+	"tools.office.showInFolder": "Show in folder",
 	"tools.write.lines": "{count} line{plural}",
 	"tools.write.overwritten": "Overwrote existing file (diff unavailable)",
 	"tools.grep.searching": "searching…",

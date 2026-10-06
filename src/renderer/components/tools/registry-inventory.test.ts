@@ -23,7 +23,19 @@ const REMOVED_TOOL_NAMES = [
 ] as const;
 
 /** Tools that keep a dedicated card: the session's own tools and the ones old transcripts carry most. */
-const KEPT_TOOL_NAMES = ["read", "glob", "write", "ask", "bash", "find", "task", "wait"] as const;
+const KEPT_TOOL_NAMES = [
+	"read",
+	"glob",
+	"write",
+	"ask",
+	"bash",
+	"find",
+	"task",
+	"wait",
+	"office_report",
+	"office_slides",
+	"office_clean",
+] as const;
 
 describe("tool renderer inventory", () => {
 	it.each(REMOVED_TOOL_NAMES)("renders %s through the generic view", name => {
