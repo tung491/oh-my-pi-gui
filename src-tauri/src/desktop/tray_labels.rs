@@ -25,9 +25,7 @@ pub(crate) enum TrayApprovalMode {
 }
 
 impl TrayApprovalMode {
-    pub(crate) const ALL: [TrayApprovalMode; 3] = [TrayApprovalMode::Yolo, TrayApprovalMode::Write, TrayApprovalMode::AlwaysAsk];
-
-    /// The wire spelling (`MenuActionPayload.approvalMode`).
+    /// The wire spelling (`TrayState.approvalMode`).
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             TrayApprovalMode::AlwaysAsk => "always-ask",
@@ -67,11 +65,7 @@ pub(crate) enum TrayLabelKey {
     ShowHide,
     Quit,
     NewSession,
-    OpenProject,
-    Handoff,
-    UsageStats,
     Workspaces,
-    AddWorkspace,
     QuickStart,
     QuickConfig,
     FastMode,
@@ -96,11 +90,7 @@ pub(crate) fn t(lang: MainLanguage, key: TrayLabelKey) -> &'static str {
         TrayLabelKey::ShowHide => ("Hiện / Ẩn", "Show / Hide"),
         TrayLabelKey::Quit => ("Thoát", "Quit"),
         TrayLabelKey::NewSession => ("Phiên mới", "New Session"),
-        TrayLabelKey::OpenProject => ("Mở dự án…", "Open Project…"),
-        TrayLabelKey::Handoff => ("Bàn giao (Handoff)", "Handoff"),
-        TrayLabelKey::UsageStats => ("Thống kê sử dụng…", "Usage Stats…"),
         TrayLabelKey::Workspaces => ("Chuyển không gian làm việc", "Switch Workspace"),
-        TrayLabelKey::AddWorkspace => ("Thêm không gian làm việc…", "Add Workspace…"),
         TrayLabelKey::QuickStart => ("Khởi động nhanh", "Quick Start"),
         TrayLabelKey::QuickConfig => ("Cấu hình nhanh", "Quick Config"),
         TrayLabelKey::FastMode => ("Chế độ nhanh", "Fast Mode"),
@@ -253,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_each_approval_mode_to_one_label_shared_by_the_header_and_the_radios() {
+    fn maps_each_approval_mode_to_the_label_the_header_shows() {
         assert_eq!(approval_label(MainLanguage::En, TrayApprovalMode::Yolo), "Full access");
         assert_eq!(approval_label(MainLanguage::En, TrayApprovalMode::Write), "Auto-edit");
         assert_eq!(approval_label(MainLanguage::En, TrayApprovalMode::AlwaysAsk), "Ask every time");
@@ -326,6 +316,47 @@ mod tests {
         assert_eq!(aggregate_tray_status(&windows(&[TrayStatus::Idle, TrayStatus::Error])), TrayStatus::Error);
         assert_eq!(aggregate_tray_status(&windows(&[TrayStatus::Waiting, TrayStatus::Streaming])), TrayStatus::Streaming);
         assert_eq!(aggregate_tray_status(&windows(&[TrayStatus::Idle, TrayStatus::Waiting])), TrayStatus::Waiting);
+    }
+
+    /// The renderer action behind every clickable tray item, submenus included.
+    fn tray_actions(state: Option<&TrayState>) -> Vec<String> {
+        use crate::desktop::windows::MenuItemModel;
+        fn walk(items: &[MenuItemModel], out: &mut Vec<String>) {
+            for item in items {
+                match item {
+                    MenuItemModel::Item { id, .. } | MenuItemModel::Check { id, .. } => {
+                        if let Some(rest) = id.strip_prefix("tray:") {
+                            out.push(rest.split(':').next().unwrap_or(rest).to_string());
+                        }
+                    }
+                    MenuItemModel::Submenu { items, .. } => walk(items, out),
+                    MenuItemModel::Separator | MenuItemModel::Predefined(_) => {}
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&crate::desktop::tray::build_tray_menu(state, MainLanguage::En), &mut out);
+        out
+    }
+
+    #[test]
+    fn tray_offers_no_developer_actions() {
+        let actions = [tray_actions(Some(&sample_state())), tray_actions(None)].concat();
+        assert!(actions.contains(&"new-session".to_string()));
+        for removed in ["open-usage", "open-project", "handoff"] {
+            assert!(!actions.contains(&removed.to_string()), "{removed} is still in the tray");
+        }
+    }
+
+    #[test]
+    fn tray_offers_no_approval_choice() {
+        let actions = [tray_actions(Some(&sample_state())), tray_actions(None)].concat();
+        assert!(!actions.contains(&"set-approval".to_string()));
+        let menu = crate::desktop::tray::build_tray_menu(Some(&sample_state()), MainLanguage::En);
+        let read_only = menu.iter().any(|item| {
+            matches!(item, crate::desktop::windows::MenuItemModel::Item { label, enabled: false, .. } if label == "Fast Mode: — · Tool Approval: Auto-edit")
+        });
+        assert!(read_only, "the read-only approval label is missing");
     }
 
     #[test]

@@ -38,5 +38,9 @@
   {
     "ts": "src/main/app-icons.test.ts",
     "rust": "src-tauri/src/desktop/app_icons.rs"
+  },
+  {
+    "ts": "src/main/menu.test.ts",
+    "rust": "src-tauri/src/desktop/menu.rs"
   }
 ]

@@ -50,13 +50,9 @@ pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuIte
         ));
     }
     let mut file = vec![
-        // No accelerator: ⌘⇧O is owned by the global window toggle.
-        action(i18n, MainTextKey::MenuOpenProject, "open-project"),
-        MenuItemModel::Separator,
         action(i18n, MainTextKey::MenuNewSession, "new-session").with_accelerator(native_accelerator("session.new")),
         // No accelerator: ⌘T/⇧⌘T live in the renderer keymap so users can remap them.
         action(i18n, MainTextKey::MenuNewTab, "new-tab"),
-        action(i18n, MainTextKey::MenuNewChatTab, "new-chat-tab"),
         MenuItemModel::item(ID_NEW_WINDOW, i18n.t(MainTextKey::MenuNewWindow)).with_accelerator(native_accelerator("window.new")),
     ];
     if !darwin {
@@ -81,8 +77,6 @@ pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuIte
         i18n.t(MainTextKey::MenuView),
         vec![
             action(i18n, MainTextKey::MenuCommandCenter, "open-command-center"),
-            action(i18n, MainTextKey::MenuContextReport, "open-context-report"),
-            action(i18n, MainTextKey::MenuStats, "open-stats"),
             action(i18n, MainTextKey::MenuJobs, "open-jobs"),
             action(i18n, MainTextKey::MenuHotkeys, "open-hotkeys"),
             MenuItemModel::Separator,
@@ -107,35 +101,19 @@ pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuIte
     bar.push(MenuItemModel::submenu(
         i18n.t(MainTextKey::MenuSession),
         vec![
-            action(i18n, MainTextKey::MenuImportSession, "open-import"),
-            action(i18n, MainTextKey::MenuBranchPicker, "open-branch-picker"),
-            action(i18n, MainTextKey::MenuSessionTree, "open-session-tree"),
-            MenuItemModel::Separator,
             action(i18n, MainTextKey::MenuSessionInfo, "open-session-info"),
-            action(i18n, MainTextKey::MenuShareSession, "open-share-session"),
             action(i18n, MainTextKey::MenuExportHtml, "export-html").with_accelerator(native_accelerator("session.exportHtml")),
-            action(i18n, MainTextKey::MenuHandoff, "handoff"),
         ],
     ));
     bar.push(MenuItemModel::submenu(
         i18n.t(MainTextKey::MenuTools),
         vec![
             action(i18n, MainTextKey::MenuAgentHub, "open-agent-hub"),
-            action(i18n, MainTextKey::MenuModes, "open-modes"),
             action(i18n, MainTextKey::MenuProviders, "open-providers"),
-            action(i18n, MainTextKey::MenuModelRoles, "open-model-roles"),
             action(i18n, MainTextKey::MenuModelPicker, "open-model-picker"),
             action(i18n, MainTextKey::MenuCapabilities, "open-capabilities"),
-            action(i18n, MainTextKey::MenuUsage, "open-usage"),
             MenuItemModel::Separator,
-            action(i18n, MainTextKey::MenuExtensions, "open-extensions"),
-            action(i18n, MainTextKey::MenuInventory, "open-inventory"),
-            action(i18n, MainTextKey::MenuPrCenter, "open-pr-center"),
-            action(i18n, MainTextKey::MenuWorkspaceDirs, "open-workspace-dirs"),
-            action(i18n, MainTextKey::MenuWorkspaceChanges, "open-git"),
             action(i18n, MainTextKey::MenuRestartCore, "restart-sidecar"),
-            MenuItemModel::Separator,
-            action(i18n, MainTextKey::MenuDebugConsole, "open-debug"),
         ],
     ));
     let mut help = Vec::new();
@@ -319,7 +297,6 @@ mod tests {
         assert_eq!(labels(&linux), vec!["File", "Edit", "View", "Window", "Session", "Tools", "Help"]);
         assert!(find_item(&linux, ID_CHECK_FOR_UPDATES).is_some());
         assert!(matches!(find_item(&linux, "menu:action:new-session"), Some(MenuItemModel::Item { accelerator: Some(a), .. }) if a == "CmdOrCtrl+N"));
-        assert!(matches!(find_item(&linux, "menu:action:open-project"), Some(MenuItemModel::Item { accelerator: None, .. })));
         assert!(matches!(find_item(&linux, "menu:action:new-tab"), Some(MenuItemModel::Item { accelerator: None, .. })));
         assert!(matches!(find_item(&linux, ID_CLOSE_WINDOW), Some(MenuItemModel::Item { accelerator: Some(a), .. }) if a == "CmdOrCtrl+Shift+W"));
         assert_eq!(i18n.language(), MainLanguage::En);
@@ -327,8 +304,74 @@ mod tests {
         let vi = build_app_menu(&i18n, Platform::Darwin);
         assert_eq!(labels(&vi)[0], crate::product::PRODUCT_NAME);
         assert_eq!(labels(&vi)[1], "Tệp");
-        assert_eq!(action_of("menu:action:open-git"), Some("open-git"));
+        assert_eq!(action_of("menu:action:open-jobs"), Some("open-jobs"));
         assert_eq!(action_of(ID_NEW_WINDOW), None);
+    }
+
+    fn menu_actions(items: &[MenuItemModel], out: &mut std::collections::BTreeSet<String>) {
+        for item in items {
+            match item {
+                MenuItemModel::Item { id, .. } => {
+                    if let Some(action) = action_of(id) {
+                        out.insert(action.to_string());
+                    }
+                }
+                MenuItemModel::Submenu { items, .. } => menu_actions(items, out),
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn app_menu_offers_no_developer_actions_and_keeps_the_everyday_actions() {
+        const EVERYDAY: [&str; 16] = [
+            "close-tab",
+            "export-html",
+            "new-session",
+            "new-tab",
+            "open-agent-hub",
+            "open-capabilities",
+            "open-command-center",
+            "open-hotkeys",
+            "open-jobs",
+            "open-model-picker",
+            "open-providers",
+            "open-session-info",
+            "open-settings",
+            "restart-sidecar",
+            "toggle-panel",
+            "toggle-sidebar",
+        ];
+        const DEVELOPER: [&str; 18] = [
+            "new-chat-tab",
+            "open-branch-picker",
+            "open-context-report",
+            "open-debug",
+            "open-extensions",
+            "open-git",
+            "open-import",
+            "open-inventory",
+            "open-model-roles",
+            "open-modes",
+            "open-pr-center",
+            "open-project",
+            "open-session-tree",
+            "open-share-session",
+            "open-stats",
+            "open-usage",
+            "open-workspace-dirs",
+            "handoff",
+        ];
+        let dir = tempfile::tempdir().unwrap();
+        let i18n = MainI18n::new(JsonStore::open(dir.path().join("prefs.json")), None);
+        for platform in [Platform::Linux, Platform::Darwin] {
+            let mut actions = std::collections::BTreeSet::new();
+            menu_actions(&build_app_menu(&i18n, platform), &mut actions);
+            for removed in DEVELOPER {
+                assert!(!actions.contains(removed), "{platform:?}: {removed} is still in the menu");
+            }
+            assert_eq!(actions, EVERYDAY.iter().map(|a| a.to_string()).collect(), "{platform:?}");
+        }
     }
 
     #[test]

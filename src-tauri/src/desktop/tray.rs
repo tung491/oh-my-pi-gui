@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use serde_json::{json, Value};
 
 use super::app_icons::{tray_icon_bitmap, tray_mark};
-use super::tray_labels::{aggregate_tray_status, approval_label, format_tokens, menu_signature, t, tray_tooltip, TrayApprovalMode, TrayLabelKey, TrayState};
+use super::tray_labels::{aggregate_tray_status, approval_label, format_tokens, menu_signature, t, tray_tooltip, TrayLabelKey, TrayState};
 use super::windows::MenuItemModel;
 use super::{lock, Desktop, Platform};
 use crate::ctx::AppCtx;
@@ -17,17 +17,13 @@ use crate::i18n::MainLanguage;
 use crate::ports::WindowId;
 use crate::runtime_log;
 
-const ID_USAGE: &str = "tray:open-usage";
-const ID_ADD_WORKSPACE: &str = "tray:open-project";
 const ID_NEW_SESSION: &str = "tray:new-session";
-const ID_HANDOFF: &str = "tray:handoff";
 const ID_TOGGLE_FAST: &str = "tray:toggle-fast";
 const ID_CYCLE_THINKING: &str = "tray:cycle-thinking";
 const ID_TOGGLE_LANGUAGE: &str = "tray:toggle-language";
 const ID_SHOW_HIDE: &str = "tray:show-hide";
 const ID_QUIT: &str = "tray:quit";
 const PREFIX_SWITCH: &str = "tray:switch-project:";
-const PREFIX_APPROVAL: &str = "tray:set-approval:";
 
 /// Per-window snapshots and what the installed menu renders.
 #[derive(Default)]
@@ -61,10 +57,8 @@ pub(crate) fn build_tray_menu(state: Option<&TrayState>, fallback: MainLanguage)
         }
         items.push(MenuItemModel::Separator);
     }
-    items.push(MenuItemModel::item(ID_USAGE, t(lang, TrayLabelKey::UsageStats)));
-    items.push(MenuItemModel::Separator);
-
-    let mut workspaces: Vec<MenuItemModel> = state
+    // Workspace jumping, when the renderer reports more than nothing.
+    let workspaces: Vec<MenuItemModel> = state
         .map(|state| {
             state
                 .workspaces
@@ -79,36 +73,16 @@ pub(crate) fn build_tray_menu(state: Option<&TrayState>, fallback: MainLanguage)
         })
         .unwrap_or_default();
     if !workspaces.is_empty() {
-        workspaces.push(MenuItemModel::Separator);
+        items.push(MenuItemModel::submenu(t(lang, TrayLabelKey::Workspaces), workspaces));
     }
-    workspaces.push(MenuItemModel::item(ID_ADD_WORKSPACE, t(lang, TrayLabelKey::AddWorkspace)));
-    items.push(MenuItemModel::submenu(t(lang, TrayLabelKey::Workspaces), workspaces));
 
-    items.push(MenuItemModel::submenu(
-        t(lang, TrayLabelKey::QuickStart),
-        vec![
-            MenuItemModel::item(ID_NEW_SESSION, t(lang, TrayLabelKey::NewSession)),
-            MenuItemModel::item(ID_ADD_WORKSPACE, t(lang, TrayLabelKey::OpenProject)),
-            MenuItemModel::item(ID_HANDOFF, t(lang, TrayLabelKey::Handoff)),
-        ],
-    ));
+    items.push(MenuItemModel::submenu(t(lang, TrayLabelKey::QuickStart), vec![MenuItemModel::item(ID_NEW_SESSION, t(lang, TrayLabelKey::NewSession))]));
+    // The approval mode is read-only here: every session runs the pack's always-ask policy.
     items.push(MenuItemModel::submenu(
         t(lang, TrayLabelKey::QuickConfig),
         vec![
             MenuItemModel::Check { id: ID_TOGGLE_FAST.into(), label: t(lang, TrayLabelKey::FastMode).into(), checked: state.map(|s| s.fast_mode).unwrap_or(false), enabled: true },
             MenuItemModel::item(ID_CYCLE_THINKING, format!("{}: {}", t(lang, TrayLabelKey::Thinking), state.map(|s| s.thinking_level.as_str()).unwrap_or("off"))),
-            MenuItemModel::submenu(
-                t(lang, TrayLabelKey::Approval),
-                TrayApprovalMode::ALL
-                    .into_iter()
-                    .map(|mode| MenuItemModel::Check {
-                        id: format!("{PREFIX_APPROVAL}{}", mode.as_str()),
-                        label: approval_label(lang, mode).into(),
-                        checked: state.map(|s| s.approval_mode == mode).unwrap_or(false),
-                        enabled: true,
-                    })
-                    .collect(),
-            ),
             MenuItemModel::item(ID_TOGGLE_LANGUAGE, format!("{}: {}", t(lang, TrayLabelKey::Language), if lang == MainLanguage::Vi { "Tiếng Việt" } else { "English" })),
         ],
     ));
@@ -202,15 +176,8 @@ impl TrayController {
             desktop.send_menu_action(ctx, "switch-project", Some(json!({ "cwd": cwd })), true);
             return;
         }
-        if let Some(mode) = id.strip_prefix(PREFIX_APPROVAL) {
-            desktop.send_menu_action(ctx, "set-approval", Some(json!({ "approvalMode": mode })), true);
-            return;
-        }
         match id {
-            ID_USAGE => desktop.send_menu_action(ctx, "open-usage", None, true),
-            ID_ADD_WORKSPACE => desktop.send_menu_action(ctx, "open-project", None, true),
             ID_NEW_SESSION => desktop.send_menu_action(ctx, "new-session", None, true),
-            ID_HANDOFF => desktop.send_menu_action(ctx, "handoff", None, true),
             ID_TOGGLE_FAST => desktop.send_menu_action(ctx, "toggle-fast", None, true),
             ID_CYCLE_THINKING => desktop.send_menu_action(ctx, "cycle-thinking", None, true),
             ID_TOGGLE_LANGUAGE => desktop.send_menu_action(ctx, "toggle-language", None, true),
@@ -348,13 +315,13 @@ mod tests {
         let sink = attach_recording_sink(&ctx, id);
         backend.log.clear();
         desktop.on_menu_id(&ctx, &format!("{PREFIX_SWITCH}/w/beta"));
-        desktop.on_menu_id(&ctx, &format!("{PREFIX_APPROVAL}yolo"));
-        desktop.on_menu_id(&ctx, ID_USAGE);
+        desktop.on_menu_id(&ctx, ID_TOGGLE_FAST);
+        desktop.on_menu_id(&ctx, ID_NEW_SESSION);
         assert!(backend.log.calls().contains(&format!("focus({id})")));
         let sent: Vec<Envelope> = sink.sent();
         assert_eq!(sent[0].payload, json!({ "action": "switch-project", "cwd": "/w/beta" }));
-        assert_eq!(sent[1].payload, json!({ "action": "set-approval", "approvalMode": "yolo" }));
-        assert_eq!(sent[2].payload, json!({ "action": "open-usage" }));
+        assert_eq!(sent[1].payload, json!({ "action": "toggle-fast" }));
+        assert_eq!(sent[2].payload, json!({ "action": "new-session" }));
         desktop.on_menu_id(&ctx, ID_SHOW_HIDE);
         assert!(!backend.is_visible(id));
         desktop.on_menu_id(&ctx, ID_SHOW_HIDE);
