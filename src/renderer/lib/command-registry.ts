@@ -40,7 +40,6 @@ import { copyText } from "./format";
 import { translate } from "./i18n";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "./messages";
 import { copyTodosToClipboard, dumpTranscriptToClipboard, exportTodos, importTodosFromFile } from "./transcript-copy";
-import { addWorkspaceDirectory, moveSessionTo, pickWorkspaceDirectory } from "./workspace-dirs";
 
 /**
  * `action` and `prompt` carry `argUsage` when the command needs user text
@@ -341,14 +340,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		category: "session",
 		shortcut: "⌘T",
 		affordance: { kind: "action", run: () => useTabsStore.getState().openTab() },
-	});
-	add({
-		name: "new-chat-tab",
-		label: t("cmd.newChatTab"),
-		description: t("cmd.newChatTab.desc"),
-		category: "session",
-		shortcut: "⇧⌘T",
-		affordance: { kind: "action", run: () => useTabsStore.getState().openTab({ kind: "chat" }) },
 	});
 	add({
 		name: "clear",
@@ -672,60 +663,6 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 		category: "providers",
 		aliases: ["setup"],
 		affordance: { kind: "window", open: ctx.openProviders },
-	});
-
-	// ═══════════════════════════════════════════════════════════════════
-	// WORKSPACE
-	// ═══════════════════════════════════════════════════════════════════
-	// /dirs and /remove-dir open the workspace-directories dialog (it lists the
-	// roots and confirms removals inline); /add-dir and /move go straight to
-	// the native directory picker + RPC, with the same client-side busy guard
-	// as /new and /clear (the server also refuses with the "busy" code).
-	const workspaceMutationBusy = (): boolean => {
-		const { isStreaming, isCompacting } = useSessionStore.getState();
-		if (isStreaming || isCompacting) {
-			toast({ variant: "warning", message: t("sessionSwitch.busyBlocked") });
-			return true;
-		}
-		return false;
-	};
-	const pickAndAdd = async (): Promise<void> => {
-		if (workspaceMutationBusy()) return;
-		const path = await pickWorkspaceDirectory();
-		if (path) await addWorkspaceDirectory(path);
-	};
-	const pickAndMove = async (): Promise<void> => {
-		if (workspaceMutationBusy()) return;
-		const path = await pickWorkspaceDirectory();
-		if (path) await moveSessionTo(path);
-	};
-	add({
-		name: "move",
-		label: t("cmd.move"),
-		description: t("cmd.move.desc"),
-		category: "workspace",
-		affordance: { kind: "picker", open: () => void pickAndMove() },
-	});
-	add({
-		name: "add-dir",
-		label: t("cmd.addDir"),
-		description: t("cmd.addDir.desc"),
-		category: "workspace",
-		affordance: { kind: "picker", open: () => void pickAndAdd() },
-	});
-	add({
-		name: "remove-dir",
-		label: t("cmd.removeDir"),
-		description: t("cmd.removeDir.desc"),
-		category: "workspace",
-		affordance: { kind: "window", open: () => useUiStore.getState().openWorkspaceDirs() },
-	});
-	add({
-		name: "dirs",
-		label: t("cmd.dirs"),
-		description: t("cmd.dirs.desc"),
-		category: "workspace",
-		affordance: { kind: "window", open: () => useUiStore.getState().openWorkspaceDirs() },
 	});
 
 	// ═══════════════════════════════════════════════════════════════════

@@ -19,13 +19,16 @@ import { reportRuntimeError } from "./runtime-errors";
 /** How long a new tab may take to become ready before its prompt is left in its composer. */
 export const QUICK_ENTRY_HANDOFF_CEILING_MS = 60_000;
 
-/** The openTab arguments each target already uses elsewhere (new chat, Work, workspace). */
+/**
+ * The openTab arguments each target already uses elsewhere (Work, workspace).
+ * Every prompt opens a task tab: a chat target, which older builds still
+ * send, opens a Work task like the sidebar's New task button.
+ */
 export function quickEntryTabArgs(
 	target: QuickEntryTarget,
-): { kind: "chat" } | { kind: "agent"; work: true } | { kind: "agent"; cwd: string } {
+): { kind: "agent"; work: true } | { kind: "agent"; cwd: string } {
 	switch (target.kind) {
 		case "chat":
-			return { kind: "chat" };
 		case "work":
 			return { kind: "agent", work: true };
 		case "workspace":

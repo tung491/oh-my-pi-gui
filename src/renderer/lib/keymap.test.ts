@@ -309,7 +309,6 @@ describe("non-macOS keyboard", () => {
 	it("gives every ⌘-only default a Ctrl twin elsewhere", () => {
 		const linux = (id: string) => platformDefaults(KEYMAP_ACTIONS.find(action => action.id === id)!, "linux");
 		expect(linux("tab.new")).toEqual(["⌃T", "⌘T"]);
-		expect(linux("tab.newChat")).toEqual(["⇧⌃T", "⇧⌘T"]);
 		expect(linux("tab.close")).toEqual(["⌃W", "⌘W"]);
 		expect(linux("palette")).toEqual(["⌃K", "⌘K"]);
 		expect(linux("model.cycleForward")).toEqual(["⌃P"]);
@@ -343,7 +342,6 @@ describe("non-macOS keyboard", () => {
 	it("dispatches the Ctrl twins off macOS and leaves macOS dispatch alone", () => {
 		const linux = compileKeymap(KEYMAP_ACTIONS, {}, "linux");
 		expect(linux.get("⌃T")).toBe("tab.new");
-		expect(linux.get("⇧⌃T")).toBe("tab.newChat");
 		expect(linux.get("⌃W")).toBe("tab.close");
 		expect(linux.get("⌘T")).toBe("tab.new");
 		const mac = compileKeymap(KEYMAP_ACTIONS, {});

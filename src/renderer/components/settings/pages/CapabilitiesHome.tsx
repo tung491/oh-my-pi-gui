@@ -37,7 +37,6 @@ export type CapabilityTarget =
 	| "tan"
 	| "omfg"
 	| "queue"
-	| "workspaceDirs"
 	| "jobs"
 	| "hotkeys"
 	| "theme"

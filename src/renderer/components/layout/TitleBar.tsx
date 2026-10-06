@@ -1,10 +1,8 @@
 import {
-	ChevronRight,
 	CircleGauge,
 	Clock3,
 	Coins,
 	Database,
-	FolderOpen,
 	Gauge,
 	Info,
 	MoreHorizontal,
@@ -16,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SessionStats } from "../../../shared/rpc-types";
 import { useSessionList } from "../../hooks/use-session-list";
 import { contextUsageView } from "../../lib/context-usage";
-import { basename, cx, formatCost, formatDuration, formatPercent, formatTokens } from "../../lib/format";
+import { cx, formatCost, formatDuration, formatPercent, formatTokens } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
 import { onEscape } from "../../lib/keymap";
@@ -24,13 +22,11 @@ import { useTabRpc } from "../../lib/tab-rpc";
 import { useMessagesStore } from "../../stores/messages";
 import { type SessionStore, useSessionStore } from "../../stores/session";
 import { sessionRuntimeStore, useRuntimeTabId } from "../../stores/session-runtime-context";
-import { useActiveTabKind } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
 import { Badge, type BadgeVariant, Button, IconButton } from "../common";
 import { ContextMenu, type ContextMenuAnchor, type ContextMenuItem } from "../common/ContextMenu";
-import { WorkspaceDialog } from "../dialogs/WorkspaceDialog";
 import { sessionCacheHitPercent, sessionExecutionDurationMs } from "./session-metrics";
 
 /**
@@ -43,13 +39,11 @@ export function TitleBar() {
 	const tabId = useRuntimeTabId();
 	const sessionId = useSessionStore(s => s.sessionId);
 	const sessionName = useSessionStore(s => s.sessionName);
-	const cwd = useSessionStore(s => s.cwd);
 	const status = useSessionStore(s => s.status);
 	const isStreaming = useSessionStore(s => s.isStreaming);
 	const isCompacting = useSessionStore(s => s.isCompacting);
 	const statsPulse = useSessionStore(s => s.statsPulse);
 	const contextUsage = useSessionStore(s => s.contextUsage);
-	const isChat = useActiveTabKind() === "chat";
 
 	const planModeEnabled = useSessionStore(s => s.planModeEnabled);
 	const awaitingModelSince = useSessionStore(s => s.awaitingModelSince);
@@ -63,10 +57,8 @@ export function TitleBar() {
 	const openCommandPalette = useUiStore(s => s.openCommandPalette);
 	const openSessionInfo = useUiStore(s => s.openSessionInfo);
 	const { sessions } = useSessionList("local");
-	const projectName = !isChat && cwd ? basename(cwd) : t("titlebar.openProject");
 
 	const [editingName, setEditingName] = useState(false);
-	const [workspaceOpen, setWorkspaceOpen] = useState(false);
 	const [actionsMenu, setActionsMenu] = useState<ContextMenuAnchor | null>(null);
 	const [draft, setDraft] = useState("");
 	const [stats, setStats] = useState<SessionStats | null>(null);
@@ -219,17 +211,6 @@ export function TitleBar() {
 			/>
 
 			<div className="omp-titlebar-identity no-drag flex min-w-0 items-center gap-1.5 overflow-hidden">
-				<button
-					className="omp-pressable flex min-w-0 max-w-48 items-center gap-2 truncate rounded-lg px-2 py-1.5 text-omp-lg font-medium text-(--omp-text-secondary) hover:bg-[var(--omp-selected-bg)] hover:text-[var(--omp-text)] disabled:cursor-not-allowed disabled:text-[var(--omp-dim)]"
-					disabled={isStreaming}
-					onClick={() => setWorkspaceOpen(true)}
-					title={isStreaming ? t("titlebar.abortHint") : t("titlebar.openProject")}
-					type="button"
-				>
-					<FolderOpen className="shrink-0" size={15} />
-					<span className="truncate">{projectName}</span>
-				</button>
-				<ChevronRight size={14} className="text-[var(--omp-dim)]" />
 				{editingName ? (
 					<input
 						ref={nameInputRef}
@@ -349,7 +330,6 @@ export function TitleBar() {
 					items={actionMenuItems}
 				/>
 			)}
-			<WorkspaceDialog open={workspaceOpen} onClose={() => setWorkspaceOpen(false)} />
 		</header>
 	);
 }

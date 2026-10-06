@@ -16,7 +16,6 @@ import { SessionInfoDialog } from "./components/dialogs/SessionInfoDialog";
 import { SessionPickerDialog } from "./components/dialogs/SessionPickerDialog";
 import { SessionSwitchDialog } from "./components/dialogs/SessionSwitchDialog";
 import { ThemePickerDialog } from "./components/dialogs/ThemePickerDialog";
-import { WorkspaceDirsDialog } from "./components/dialogs/WorkspaceDirsDialog";
 import { PanelContainer } from "./components/layout/PanelContainer";
 import { Sidebar } from "./components/layout/Sidebar";
 import { SidecarBanner } from "./components/layout/SidecarBanner";
@@ -394,9 +393,6 @@ export function App() {
 					// ⌘T — new agent tab (type chosen at creation, immutable).
 					void useTabsStore.getState().openTab();
 					return;
-				case "tab.newChat":
-					void useTabsStore.getState().openTab({ kind: "chat" });
-					return;
 				case "tab.close":
 					// ⌘W — close the active tab, arming the chip's inline confirm
 					// while its run is live (⇧⌘W closes the window from the menu).
@@ -515,10 +511,6 @@ export function App() {
 				void useTabsStore.getState().openTab();
 				return;
 			}
-			if (action === "new-chat-tab") {
-				void useTabsStore.getState().openTab({ kind: "chat" });
-				return;
-			}
 			// Window-only surfaces do not require a live sidecar. Keep these actions
 			// usable while the agent is starting, asleep, or recovering.
 			if (action === "open-settings") {
@@ -551,10 +543,6 @@ export function App() {
 			}
 			if (action === "open-session-info") {
 				ui.openSessionInfo();
-				return;
-			}
-			if (action === "open-workspace-dirs") {
-				ui.openWorkspaceDirs();
 				return;
 			}
 			if (action === "open-agent-hub") {
@@ -636,7 +624,6 @@ export function App() {
 			<CopySelectorDialog />
 			<JobsDialog />
 			<ChangelogDialog />
-			<WorkspaceDirsDialog />
 			<SessionInfoDialog />
 			<Suspense fallback={null}>
 				<SettingsWindow />

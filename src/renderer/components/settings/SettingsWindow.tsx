@@ -755,9 +755,6 @@ export function SettingsWindow() {
 				case "queue":
 					prefill("-> ");
 					return;
-				case "workspaceDirs":
-					external(() => useUiStore.getState().openWorkspaceDirs());
-					return;
 				case "jobs":
 					external(() => useUiStore.getState().openJobs());
 					return;

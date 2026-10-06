@@ -1,6 +1,6 @@
 /**
- * The quick-entry bar's page. Type, pick Chat or an Agent workspace, press
- * Enter (or Send): main queues the prompt for a new tab in the main window and hides the
+ * The quick-entry bar's page. Type, pick a workspace, press Enter (or Send):
+ * main queues the prompt for a new task tab in the main window and hides the
  * bar. A prompt that never reached a tab comes back here on the next summon.
  * Plain text only: the page has no markdown or HTML sink.
  */
@@ -15,7 +15,6 @@ import type {
 } from "../../shared/ipc-types";
 import { Button } from "../components/common/Button";
 import { TextArea } from "../components/common/Input";
-import { SegmentedControl } from "../components/common/SegmentedControl";
 import { installContextMenuGuard } from "../lib/context-menu-guard";
 import { basename } from "../lib/format";
 import { useLang, useT } from "../lib/i18n";
@@ -45,12 +44,20 @@ interface RestoreEntry {
 	fromMain: boolean;
 }
 
+/**
+ * Every prompt starts a task. A chat target, still stored by older builds or
+ * kept on a restored prompt, becomes the default Work target.
+ */
+function taskTarget(target: QuickEntryTarget): QuickEntryTarget {
+	return target.kind === "chat" ? { kind: "work" } : target;
+}
+
 export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 	const t = useT();
 	const { lang, setLang } = useLang();
 	const [state, setState] = useState<QuickEntryBarState | null>(null);
 	const [draft, setDraft] = useState("");
-	const [target, setTarget] = useState<QuickEntryTarget>({ kind: "chat" });
+	const [target, setTarget] = useState<QuickEntryTarget>({ kind: "work" });
 	const [error, setError] = useState<QuickEntryFailure | null>(null);
 	const [busy, setBusy] = useState(false);
 	/** Drafts the user swapped out for a restored message; only this page holds them. */
@@ -81,7 +88,7 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 				setSwappedOut(list => list.filter(item => item.id !== entry.id));
 			}
 			setDraft(entry.text);
-			setTarget(entry.target);
+			setTarget(taskTarget(entry.target));
 			setError(entry.reason);
 			setFocusTick(tick => tick + 1);
 		},
@@ -96,7 +103,7 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 			seenShowId.current = state.showId;
 			applyScheme();
 			// A kept draft keeps the target it was written for.
-			if (draftRef.current.trim() === "") setTarget(state.target);
+			if (draftRef.current.trim() === "") setTarget(taskTarget(state.target));
 			setError(null);
 			setFocusTick(tick => tick + 1);
 		}
@@ -176,40 +183,25 @@ export function QuickEntryBar({ api }: { api: QuickEntryBarApi }) {
 				value={draft}
 			/>
 			<div className="flex min-w-0 items-center gap-2">
-				<SegmentedControl
-					ariaLabel={t("quickEntry.target.aria")}
-					onChange={value =>
-						setTarget(current =>
-							value === "chat" ? { kind: "chat" } : current.kind === "chat" ? { kind: "work" } : current,
+				<select
+					aria-label={t("quickEntry.workspace.aria")}
+					className="min-w-0 max-w-56 truncate rounded-md border border-(--omp-border) bg-(--omp-input-bg) px-2 py-1 text-omp-md text-(--omp-text)"
+					onChange={event =>
+						setTarget(
+							event.target.value === WORK_VALUE
+								? { kind: "work" }
+								: { kind: "workspace", cwd: event.target.value },
 						)
 					}
-					options={[
-						{ value: "chat", label: t("quickEntry.target.chat") },
-						{ value: "agent", label: t("quickEntry.target.agent") },
-					]}
-					value={target.kind === "chat" ? "chat" : "agent"}
-				/>
-				{target.kind !== "chat" && (
-					<select
-						aria-label={t("quickEntry.workspace.aria")}
-						className="min-w-0 max-w-56 truncate rounded-md border border-(--omp-border) bg-(--omp-input-bg) px-2 py-1 text-omp-md text-(--omp-text)"
-						onChange={event =>
-							setTarget(
-								event.target.value === WORK_VALUE
-									? { kind: "work" }
-									: { kind: "workspace", cwd: event.target.value },
-							)
-						}
-						value={target.kind === "workspace" ? target.cwd : WORK_VALUE}
-					>
-						<option value={WORK_VALUE}>{t("sidebar.mode.work")}</option>
-						{listed.map(workspace => (
-							<option key={workspace.cwd} title={workspace.cwd} value={workspace.cwd}>
-								{workspace.name}
-							</option>
-						))}
-					</select>
-				)}
+					value={target.kind === "workspace" ? target.cwd : WORK_VALUE}
+				>
+					<option value={WORK_VALUE}>{t("sidebar.mode.work")}</option>
+					{listed.map(workspace => (
+						<option key={workspace.cwd} title={workspace.cwd} value={workspace.cwd}>
+							{workspace.name}
+						</option>
+					))}
+				</select>
 				{restoreList.length > 0 && (
 					<button
 						className="shrink-0 rounded-md px-2 py-1 text-omp-md text-(--omp-accent) hover:bg-(--omp-accent-dim)"

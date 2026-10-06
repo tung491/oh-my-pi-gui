@@ -1,19 +1,12 @@
 import {
-	Bot,
 	BriefcaseBusiness,
 	ChevronDown,
 	ChevronRight,
 	ChevronUp,
-	Code2,
 	ExternalLink,
-	Folder,
-	Keyboard,
 	type LucideIcon,
 	MessageCircle,
-	MessageSquarePlus,
-	MoreHorizontal,
 	Palette,
-	PanelRight,
 	Pencil,
 	Pin,
 	PinOff,
@@ -22,9 +15,6 @@ import {
 	RefreshCw,
 	Search,
 	Settings,
-	Sparkles,
-	SquarePen,
-	SquareTerminal,
 	Trash2,
 } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,7 +22,7 @@ import type { SessionInfo } from "../../../shared/ipc-types";
 import { useAwaitingConfirmation } from "../../hooks/use-awaiting-confirmation";
 import { useSessionList } from "../../hooks/use-session-list";
 import { dropSessionNow } from "../../hooks/use-session-switch";
-import { basename, cx } from "../../lib/format";
+import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
 import { currentKeyboardPlatform, onEscape } from "../../lib/keymap";
@@ -45,11 +35,10 @@ import { useSidebarPrefs } from "../../stores/sidebar-prefs";
 import { useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
-import { Button, IconButton, Kbd, SaiAtlasLogo, SegmentedControl } from "../common";
+import { Button, IconButton, Kbd, SaiAtlasLogo } from "../common";
 import { ConfirmDialog } from "../common/ConfirmDialog";
 import { anchorFromEvent, ContextMenu, type ContextMenuAnchor } from "../common/ContextMenu";
 import { LangSwitcher } from "../common/LangSwitcher";
-import { WorkspaceDialog } from "../dialogs/WorkspaceDialog";
 
 const STATUS_COLOR: Record<SessionInfo["status"], string> = {
 	complete: "var(--omp-success)",
@@ -86,17 +75,6 @@ const STATUS_LABEL_KEY: Record<SessionInfo["status"], string> = {
 	unknown: "sidebar.status.unknown",
 };
 
-interface WorkspaceGroup {
-	cwd: string;
-	name: string;
-	sessions: SessionInfo[];
-}
-
-/** A delete the row or context menu queued, awaiting the confirmation dialog. */
-type PendingDelete = { kind: "session"; session: SessionInfo } | { kind: "group"; group: WorkspaceGroup };
-
-type SidebarMode = "code" | "work";
-
 interface SidebarNavItem {
 	id: string;
 	icon: LucideIcon;
@@ -121,28 +99,22 @@ function SidebarRowTitle({ className, title }: { className?: string; title: stri
 }
 
 /**
- * Left rail with two agent-capable lanes plus global tool-free chats. Code
- * groups project sessions by workspace; Work uses one GUI-owned default
- * workspace with no folder picker. The main action creates an agent, while the
- * adjacent quick-chat action creates a chat.
+ * Left rail with one task lane: every session, whatever folder it ran in, in
+ * one list with pinned tasks first and the rest by last activity. The main
+ * action starts a task in the GUI-owned default workspace.
  */
 export function Sidebar() {
 	const tabRpc = useTabRpc();
 	const t = useT();
 	const keymapOverrides = useUiStore(state => state.keymapOverrides);
 	const keyboardPlatform = currentKeyboardPlatform();
-	// Hints only for the three destinations the rail design marks; each shows
-	// every chord that actually fires the action, overrides included.
-	const navShortcuts = useMemo(
-		() => ({
-			palette: effectiveShortcut("palette", keymapOverrides, keyboardPlatform),
-			agentHub: effectiveShortcut("agents.hub", keymapOverrides, keyboardPlatform),
-		}),
+	// The command palette is the one destination the rail marks with a hint; it
+	// shows every chord that actually fires it, overrides included.
+	const paletteShortcut = useMemo(
+		() => effectiveShortcut("palette", keymapOverrides, keyboardPlatform),
 		[keymapOverrides, keyboardPlatform],
 	);
-	const [mode, setMode] = useState<SidebarMode>("code");
 	const [navigationExpanded, setNavigationExpanded] = useState(true);
-	const [defaultWorkspace, setDefaultWorkspace] = useState<string | null>(null);
 	const switchPendingTo = useSessionStore(s => s.switchPending?.toId ?? null);
 	// Resizable left rail (mirrors PanelContainer's right-rail drag, but the
 	// handle sits on the right edge and dragging right grows the sidebar).
@@ -182,36 +154,23 @@ export function Sidebar() {
 		void window.omp.prefs.set("sidebarWidth", sidebarWidthRef.current).catch(() => {});
 	}, []);
 	const [deleting, setDeleting] = useState(false);
-	const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 	// Deleting a session hard-deletes its transcript file, so the row and menu
 	// clicks only queue it: the dialog names the target and states the
 	// consequence before anything is removed.
-	const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+	const [pendingDelete, setPendingDelete] = useState<SessionInfo | null>(null);
 	const [renamingSessionPath, setRenamingSessionPath] = useState<string | null>(null);
-	const [workspaceOpen, setWorkspaceOpen] = useState(false);
 	const [renameDraft, setRenameDraft] = useState("");
-	// Workspace group context menu, session row context menu.
-	const [groupMenu, setGroupMenu] = useState<{ anchor: ContextMenuAnchor; group: WorkspaceGroup } | null>(null);
 	const [sessionMenu, setSessionMenu] = useState<{ anchor: ContextMenuAnchor; session: SessionInfo } | null>(null);
-	// Workspace display alias rename (group header inline input).
-	const [renamingGroupCwd, setRenamingGroupCwd] = useState<string | null>(null);
-	const [groupRenameDraft, setGroupRenameDraft] = useState("");
-	const groupRenameRef = useRef<HTMLInputElement>(null);
 	const openTab = useTabsStore(s => s.openTab);
 	const tabs = useTabsStore(s => s.tabs);
 	const activeTabId = useTabsStore(s => s.activeTabId);
 	const activeTab = tabs.find(tab => tab.id === activeTabId);
-	const activeTabKind = activeTab?.kind;
-	const pinnedGroups = useSidebarPrefs(s => s.pinnedGroups);
 	const pinnedSessions = useSidebarPrefs(s => s.pinnedSessions);
-	const groupAliases = useSidebarPrefs(s => s.groupAliases);
-	const workspaceLastUsed = useSidebarPrefs(s => s.workspaceLastUsed);
 	const sessionLastUsed = useSidebarPrefs(s => s.sessionLastUsed);
 	const touchSession = useSidebarPrefs(s => s.touchSession);
 	const renameRef = useRef<HTMLInputElement>(null);
 	const { sessions, isLoading, error: listError, refresh, deleteSession, renameSession } = useSessionList("global");
 	const sessionId = useSessionStore(s => s.sessionId);
-	const cwd = useSessionStore(s => s.cwd);
 	const isStreaming = useSessionStore(s => s.isStreaming);
 	const isCompacting = useSessionStore(s => s.isCompacting);
 	// Sidebar signal-light state for the ATTACHED session: a blocking
@@ -241,99 +200,24 @@ export function Sidebar() {
 			? t("sidebar.footer.status", { version: guiVersion, status: t(footerSignal.labelKey) })
 			: null;
 
-	useEffect(() => {
-		void window.omp.sidecar
-			.defaultWorkspace()
-			.then(workspace => {
-				setDefaultWorkspace(workspace);
-				const tabState = useTabsStore.getState();
-				const activeKind = tabState.tabs.find(tab => tab.id === tabState.activeTabId)?.kind;
-				if (activeKind !== "chat" && useSessionStore.getState().cwd === workspace) setMode("work");
-			})
-			.catch(() => {});
-	}, []);
-
-	// Opening a session from the global search keeps the lane label honest.
-	useEffect(() => {
-		if (!defaultWorkspace || !cwd) return;
-		setMode(activeTabKind === "chat" ? "code" : cwd === defaultWorkspace ? "work" : "code");
-	}, [activeTabKind, cwd, defaultWorkspace]);
-
 	const recencyForSession = useCallback(
 		(session: SessionInfo) => sessionLastUsed[session.path] ?? modifiedAt(session),
 		[sessionLastUsed],
 	);
-	const agentSessions = useMemo(() => sessions.filter(session => session.kind !== "chat"), [sessions]);
-	const codeSessions = useMemo(
-		() => agentSessions.filter(session => !defaultWorkspace || session.cwd !== defaultWorkspace),
-		[agentSessions, defaultWorkspace],
-	);
-	const workSessions = useMemo(
+	// One lane: every session either former lane listed, pinned first, then by
+	// last activity.
+	const taskSessions = useMemo(
 		() =>
-			agentSessions
-				.filter(session => defaultWorkspace !== null && session.cwd === defaultWorkspace)
-				.toSorted((a, b) => {
-					const aPinned = pinnedSessions.includes(a.path) ? 0 : 1;
-					const bPinned = pinnedSessions.includes(b.path) ? 0 : 1;
-					if (aPinned !== bPinned) return aPinned - bPinned;
-					return recencyForSession(b) - recencyForSession(a);
-				}),
-		[agentSessions, defaultWorkspace, pinnedSessions, recencyForSession],
-	);
-	const chatSessions = useMemo(
-		() =>
-			sessions
-				.filter(session => session.kind === "chat")
-				.toSorted((a, b) => {
-					const aPinned = pinnedSessions.includes(a.path) ? 0 : 1;
-					const bPinned = pinnedSessions.includes(b.path) ? 0 : 1;
-					if (aPinned !== bPinned) return aPinned - bPinned;
-					return recencyForSession(b) - recencyForSession(a);
-				}),
-		[sessions, pinnedSessions, recencyForSession],
-	);
-
-	// Code sessions stay grouped by project. Pins remain a priority partition,
-	// with MRU inside it.
-	const groups = useMemo<WorkspaceGroup[]>(() => {
-		const byCwd = new Map<string, SessionInfo[]>();
-		for (const session of codeSessions) {
-			const list = byCwd.get(session.cwd) ?? [];
-			list.push(session);
-			byCwd.set(session.cwd, list);
-		}
-		const result: WorkspaceGroup[] = [...byCwd.entries()].map(([groupCwd, groupSessions]) => ({
-			cwd: groupCwd,
-			name: groupAliases[groupCwd] ?? (basename(groupCwd) || groupCwd),
-			sessions: [...groupSessions].sort((a, b) => {
+			sessions.toSorted((a, b) => {
 				const aPinned = pinnedSessions.includes(a.path) ? 0 : 1;
 				const bPinned = pinnedSessions.includes(b.path) ? 0 : 1;
 				if (aPinned !== bPinned) return aPinned - bPinned;
 				return recencyForSession(b) - recencyForSession(a);
 			}),
-		}));
-		result.sort((a, b) => {
-			const aPinned = pinnedGroups.includes(a.cwd) ? 0 : 1;
-			const bPinned = pinnedGroups.includes(b.cwd) ? 0 : 1;
-			if (aPinned !== bPinned) return aPinned - bPinned;
-			const aRecency = Math.max(workspaceLastUsed[a.cwd] ?? 0, ...a.sessions.map(recencyForSession));
-			const bRecency = Math.max(workspaceLastUsed[b.cwd] ?? 0, ...b.sessions.map(recencyForSession));
-			return bRecency - aRecency;
-		});
-		return result;
-	}, [codeSessions, groupAliases, pinnedGroups, pinnedSessions, recencyForSession, workspaceLastUsed]);
-	const totalCount = mode === "work" ? workSessions.length : codeSessions.length + chatSessions.length;
-	const visibleGroups = mode === "code" ? groups : [];
-	const chatsCollapsed = collapsed.__chats__ ?? false;
+		[sessions, pinnedSessions, recencyForSession],
+	);
+	const totalCount = taskSessions.length;
 
-	const isCollapsed = (groupCwd: string) => {
-		if (groupCwd in collapsed) return collapsed[groupCwd];
-		// Default: current workspace expanded, others collapsed (Codex-style).
-		return groupCwd !== cwd;
-	};
-	const toggleGroup = (groupCwd: string) => {
-		setCollapsed(prev => ({ ...prev, [groupCwd]: !isCollapsed(groupCwd) }));
-	};
 	const tabForSession = (session: SessionInfo) =>
 		tabs.find(tab => tab.sessionId === session.id) ?? (session.id === sessionId ? activeTab : undefined);
 	const sessionTabSignal = (session: SessionInfo) => {
@@ -353,11 +237,7 @@ export function Sidebar() {
 		void openTab({ cwd: session.cwd, sessionPath: session.path, kind: session.kind ?? "agent" });
 	};
 	const startNew = () => {
-		if (mode === "work") {
-			void openTab({ kind: "agent", work: true });
-			return;
-		}
-		setWorkspaceOpen(true);
+		void openTab({ kind: "agent", work: true });
 	};
 
 	// Explicit parallel action: open this session in a NEW window with its own
@@ -408,29 +288,7 @@ export function Sidebar() {
 		}
 	};
 
-	const confirmDeleteGroup = async (group: WorkspaceGroup) => {
-		if (group.sessions.some(isSessionBusy)) {
-			toast({ variant: "warning", message: t("sidebar.deleteGroupStreaming") });
-			setPendingDelete(null);
-			return;
-		}
-		setDeleting(true);
-		try {
-			// Delete every session file in this workspace, then dismiss the group.
-			for (const session of group.sessions) {
-				// eslint-disable-next-line no-await-in-loop -- sequential, keep FS load bounded
-				if (session.id === sessionId) await dropSessionNow();
-				else await deleteSession(session.path);
-			}
-			setPendingDelete(null);
-		} catch (error) {
-			toast({ variant: "error", title: t("sidebar.deleteFailed"), message: String(error) });
-		} finally {
-			setDeleting(false);
-		}
-	};
-
-	const renderSessionRow = (session: SessionInfo, nested = false) => {
+	const renderSessionRow = (session: SessionInfo) => {
 		const active = session.id === sessionId;
 		const tabSignal = sessionTabSignal(session);
 		const waiting = active && awaitingConfirmation;
@@ -471,7 +329,7 @@ export function Sidebar() {
 				data-session-kind={session.kind ?? "agent"}
 				className={cx(
 					"omp-sidebar-session-row omp-color-fade group flex h-8 cursor-pointer items-center rounded-md border border-transparent pr-2",
-					nested ? "pl-9" : "pl-2",
+					"pl-2",
 					active
 						? "bg-(--omp-sidebar-item-active) font-semibold shadow-[inset_3px_0_0_0_var(--omp-sidebar-accent)]"
 						: "hover:border-(--omp-sidebar-border) hover:bg-(--omp-sidebar-item-hover)",
@@ -492,8 +350,6 @@ export function Sidebar() {
 							size={14}
 							className="mr-2 shrink-0 text-(--omp-sidebar-muted)"
 						/>
-					) : nested ? (
-						<span aria-hidden="true" data-sidebar-session-icon className="mr-2 w-3.5 shrink-0" />
 					) : null}
 					{pinnedSessions.includes(session.path) && (
 						<Pin
@@ -560,7 +416,7 @@ export function Sidebar() {
 						{!signalActive ? (
 							<button
 								className="omp-sidebar-action flex h-5 w-5 shrink-0 items-center justify-center rounded text-(--omp-sidebar-muted) hover:bg-[var(--omp-tool-error-bg)] hover:text-(--omp-sidebar-error)"
-								onClick={() => setPendingDelete({ kind: "session", session })}
+								onClick={() => setPendingDelete(session)}
 								title={t("sidebar.delete")}
 								type="button"
 								aria-label={t("sidebar.delete")}
@@ -581,16 +437,9 @@ export function Sidebar() {
 			id: "commands",
 			icon: Search,
 			label: t("titlebar.commands"),
-			shortcut: navShortcuts.palette,
-			title: t("titlebar.commandsHint", { shortcut: navShortcuts.palette }),
+			shortcut: paletteShortcut,
+			title: t("titlebar.commandsHint", { shortcut: paletteShortcut }),
 			onClick: () => useUiStore.getState().openCommandPalette(),
-		},
-		{
-			id: "agents",
-			icon: Bot,
-			label: t("sidebar.nav.agentHub"),
-			shortcut: navShortcuts.agentHub,
-			onClick: () => useUiStore.getState().openAgentHub(),
 		},
 		{
 			id: "providers",
@@ -600,25 +449,6 @@ export function Sidebar() {
 		},
 	];
 	const secondaryNavItems: SidebarNavItem[] = [
-		{
-			id: "capabilities",
-			icon: Sparkles,
-			label: t("settings.capabilities.title"),
-			title: t("settings.capabilities.description"),
-			onClick: () => useUiStore.getState().openSettings("capabilities"),
-		},
-		{
-			id: "workspace",
-			icon: PanelRight,
-			label: t("titlebar.workspace"),
-			onClick: () => useUiStore.getState().togglePanel(),
-		},
-		{
-			id: "hotkeys",
-			icon: Keyboard,
-			label: t("titlebar.hotkeys"),
-			onClick: () => useUiStore.getState().openHotkeys(),
-		},
 		{
 			id: "settings",
 			icon: Settings,
@@ -673,54 +503,17 @@ export function Sidebar() {
 					/>
 				</div>
 
-				<div className="px-3 pt-3">
-					{/* Code is project-bound; Work is a full agent in the GUI-owned workspace. */}
-					<SegmentedControl
-						tone="onDark"
-						ariaLabel={t("sidebar.mode.aria")}
-						value={mode}
-						onChange={setMode}
-						className="w-full"
-						options={[
-							{
-								value: "code",
-								label: t("sidebar.mode.code"),
-								title: t("sidebar.mode.codeDescription"),
-								icon: <Code2 size={14} />,
-							},
-							{
-								value: "work",
-								label: t("sidebar.mode.work"),
-								title: t("sidebar.mode.workDescription"),
-								icon: <BriefcaseBusiness size={14} />,
-							},
-						]}
-					/>
-				</div>
-
-				<div className="flex items-center gap-2 px-3 pb-2 pt-2.5">
+				<div className="flex items-center gap-2 px-3 pb-2 pt-3">
 					<Button
 						variant="primary"
 						size="sm"
 						data-sidebar-new-agent
 						onClick={startNew}
-						icon={mode === "code" ? <SquarePen size={14} /> : <BriefcaseBusiness size={14} />}
+						icon={<BriefcaseBusiness size={14} />}
 						className="min-w-0 flex-1"
 					>
-						<span className="min-w-0 truncate">
-							{mode === "code" ? t("sidebar.newCode") : t("sidebar.newWork")}
-						</span>
+						<span className="min-w-0 truncate">{t("sidebar.newWork")}</span>
 					</Button>
-					{mode === "code" && (
-						<IconButton
-							variant="onDark"
-							size="md"
-							data-sidebar-new-chat
-							label={t("sidebar.quickChat")}
-							icon={<MessageSquarePlus size={16} />}
-							onClick={() => void openTab({ kind: "chat" })}
-						/>
-					)}
 				</div>
 
 				<div className="px-2 pb-2" data-sidebar-navigation>
@@ -781,193 +574,15 @@ export function Sidebar() {
 					)}
 					{!isLoading && !listError && totalCount === 0 && (
 						<div className="mx-1 mt-2 flex flex-col items-center rounded-xl border border-dashed border-(--omp-sidebar-border) px-4 py-6 text-center">
-							{mode === "code" ? (
-								<Code2 size={20} className="mb-2 text-(--omp-sidebar-muted)" />
-							) : (
-								<BriefcaseBusiness size={20} className="mb-2 text-(--omp-sidebar-muted)" />
-							)}
-							<div className="text-omp-lg font-medium text-(--omp-sidebar-muted)">
-								{mode === "code" ? t("sidebar.emptyCode") : t("sidebar.emptyWork")}
-							</div>
+							<BriefcaseBusiness size={20} className="mb-2 text-(--omp-sidebar-muted)" />
+							<div className="text-omp-lg font-medium text-(--omp-sidebar-muted)">{t("sidebar.emptyWork")}</div>
 						</div>
 					)}
-					{mode === "work" && workSessions.length > 0 && (
-						<div className="space-y-px" data-work-section>
-							{workSessions.map(session => renderSessionRow(session))}
+					{taskSessions.length > 0 && (
+						<div className="space-y-px" data-session-list>
+							{taskSessions.map(session => renderSessionRow(session))}
 						</div>
 					)}
-					{mode === "code" && chatSessions.length > 0 && (
-						<div className="mb-1" data-chat-section>
-							<button
-								type="button"
-								onClick={() => setCollapsed(prev => ({ ...prev, __chats__: !chatsCollapsed }))}
-								aria-expanded={!chatsCollapsed}
-								className="flex h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 text-left text-omp-md font-normal text-(--omp-sidebar-muted) hover:text-(--omp-sidebar-text)"
-							>
-								{chatsCollapsed ? (
-									<ChevronRight size={12} className="shrink-0" />
-								) : (
-									<ChevronDown size={12} className="shrink-0" />
-								)}
-								<MessageCircle size={14} className="shrink-0" />
-								<span className="min-w-0 flex-1 truncate">{t("sidebar.chats")}</span>
-								<span className="shrink-0 font-mono text-omp-xs tabular-nums font-normal">
-									{chatSessions.length}
-								</span>
-							</button>
-							<div
-								className="omp-sidebar-group"
-								data-session-group="__chats__"
-								data-state={chatsCollapsed ? "collapsed" : "expanded"}
-								aria-hidden={chatsCollapsed}
-								inert={chatsCollapsed}
-							>
-								<div className="omp-sidebar-group-content">
-									<div className="space-y-px">{chatSessions.map(session => renderSessionRow(session))}</div>
-								</div>
-							</div>
-						</div>
-					)}
-					{visibleGroups.map(group => {
-						const groupCollapsed = isCollapsed(group.cwd);
-						const isCurrent = group.cwd === cwd;
-						const groupActionsOpen = renamingGroupCwd === group.cwd;
-						return (
-							<div key={group.cwd} className="mb-0.5">
-								<div
-									data-workspace-group={group.cwd}
-									data-actions-open={groupActionsOpen}
-									onContextMenu={event => setGroupMenu({ anchor: anchorFromEvent(event), group })}
-									className={cx(
-										"omp-sidebar-workspace-row omp-color-fade group flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 pr-8 text-left text-omp-md font-normal",
-										isCurrent
-											? "text-(--omp-sidebar-text)"
-											: "text-(--omp-sidebar-muted) hover:text-(--omp-sidebar-text)",
-									)}
-								>
-									{renamingGroupCwd === group.cwd ? (
-										<>
-											<button
-												type="button"
-												onClick={() => toggleGroup(group.cwd)}
-												aria-expanded={!groupCollapsed}
-												aria-label={group.name}
-												className="flex h-4 w-4 shrink-0 items-center justify-center rounded hover:bg-(--omp-sidebar-item-hover)"
-											>
-												{groupCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-											</button>
-											<Folder
-												aria-hidden="true"
-												data-sidebar-workspace-icon
-												size={14}
-												className="shrink-0"
-											/>
-											{pinnedGroups.includes(group.cwd) && (
-												<Pin
-													size={10}
-													className="shrink-0 text-(--omp-sidebar-accent)"
-													aria-label={t("sidebar.pinned")}
-												/>
-											)}
-											<input
-												ref={groupRenameRef}
-												value={groupRenameDraft}
-												onChange={event => setGroupRenameDraft(event.target.value)}
-												onBlur={() => {
-													useSidebarPrefs.getState().setGroupAlias(group.cwd, groupRenameDraft);
-													setRenamingGroupCwd(null);
-												}}
-												onKeyDown={event => {
-													if (isImeKeyEvent(event)) return;
-													if (event.key === "Enter") {
-														useSidebarPrefs.getState().setGroupAlias(group.cwd, groupRenameDraft);
-														setRenamingGroupCwd(null);
-													}
-													onEscape(event, () => setRenamingGroupCwd(null));
-												}}
-												className="min-w-0 flex-1 rounded border border-[var(--omp-input-focus-border)] bg-[var(--omp-input-bg)] px-1 py-0 text-omp-md font-normal text-[var(--omp-text)] outline-none"
-											/>
-											<span className="shrink-0 font-mono text-omp-xs font-normal tabular-nums text-(--omp-sidebar-muted)">
-												{group.sessions.length}
-											</span>
-										</>
-									) : (
-										<button
-											type="button"
-											onClick={() => toggleGroup(group.cwd)}
-											aria-expanded={!groupCollapsed}
-											className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-										>
-											{groupCollapsed ? (
-												<ChevronRight size={12} className="shrink-0" />
-											) : (
-												<ChevronDown size={12} className="shrink-0" />
-											)}
-											<Folder
-												aria-hidden="true"
-												data-sidebar-workspace-icon
-												size={14}
-												className="shrink-0"
-											/>
-											{pinnedGroups.includes(group.cwd) && (
-												<Pin
-													size={10}
-													className="shrink-0 text-(--omp-sidebar-accent)"
-													aria-label={t("sidebar.pinned")}
-												/>
-											)}
-											<SidebarRowTitle className="text-left" title={group.name} />
-											<span className="shrink-0 font-mono text-omp-xs font-normal tabular-nums text-(--omp-sidebar-muted)">
-												{group.sessions.length}
-											</span>
-										</button>
-									)}
-									<span
-										className="omp-sidebar-workspace-actions flex shrink-0 items-center justify-end gap-0.5"
-										onClick={event => event.stopPropagation()}
-									>
-										<button
-											type="button"
-											title={t("sidebar.menu.newAgentHere")}
-											aria-label={t("sidebar.menu.newAgentHere")}
-											className="omp-sidebar-action flex h-4 w-4 shrink-0 items-center justify-center rounded text-(--omp-sidebar-muted) hover:bg-(--omp-sidebar-item-hover) hover:text-(--omp-sidebar-text)"
-											onClick={event => {
-												event.stopPropagation();
-												void openTab({ cwd: group.cwd });
-											}}
-										>
-											<Plus size={12} strokeWidth={2.5} />
-										</button>
-										<button
-											type="button"
-											title={t("sidebar.groupMenu")}
-											aria-label={t("sidebar.groupMenu")}
-											className="omp-sidebar-action flex h-4 w-4 shrink-0 items-center justify-center rounded text-(--omp-sidebar-muted) hover:bg-(--omp-sidebar-item-hover) hover:text-(--omp-sidebar-text)"
-											onClick={event => {
-												event.stopPropagation();
-												const rect = event.currentTarget.getBoundingClientRect();
-												setGroupMenu({ anchor: { x: rect.left, y: rect.bottom + 4 }, group });
-											}}
-										>
-											<MoreHorizontal size={11} />
-										</button>
-									</span>
-								</div>
-								{/* Collapsed groups render nothing: a long-lived install with
-								    hundreds of sessions must not build the full DOM per
-								    debounced refresh just to hide it. */}
-								{!groupCollapsed && (
-									<div className="omp-sidebar-group" data-session-group={group.cwd} data-state="expanded">
-										<div className="omp-sidebar-group-content">
-											<div className="space-y-px">
-												{group.sessions.map(session => renderSessionRow(session, true))}
-											</div>
-										</div>
-									</div>
-								)}
-							</div>
-						);
-					})}
 				</div>
 
 				{/* Status of the active tab plus theme, language, and settings. The dot
@@ -1017,66 +632,6 @@ export function Sidebar() {
 					className="absolute inset-y-0 right-0 z-10 w-1 translate-x-1/2 cursor-col-resize transition-colors hover:bg-(--omp-sidebar-accent)/40 active:bg-(--omp-sidebar-accent) max-[1000px]:hidden"
 				/>
 			</aside>
-			<WorkspaceDialog open={workspaceOpen} onClose={() => setWorkspaceOpen(false)} intent="new-session" />
-
-			{/* Workspace group menu: new sessions, rename (alias), pin, delete. */}
-			{groupMenu &&
-				(() => {
-					const groupHasBusySession = groupMenu.group.sessions.some(isSessionBusy);
-					return (
-						<ContextMenu
-							x={groupMenu.anchor.x}
-							y={groupMenu.anchor.y}
-							onClose={() => setGroupMenu(null)}
-							items={[
-								{
-									id: "group-new-agent",
-									label: t("sidebar.menu.newAgentHere"),
-									icon: SquareTerminal,
-									onSelect: () => {
-										setGroupMenu(null);
-										void openTab({ cwd: groupMenu.group.cwd });
-									},
-								},
-								{
-									id: "group-rename",
-									label: t("sidebar.menu.rename"),
-									icon: Pencil,
-									onSelect: () => {
-										setGroupRenameDraft(groupMenu.group.name);
-										setRenamingGroupCwd(groupMenu.group.cwd);
-										setGroupMenu(null);
-										requestAnimationFrame(() => groupRenameRef.current?.select());
-									},
-								},
-								{
-									id: "group-pin",
-									label: pinnedGroups.includes(groupMenu.group.cwd)
-										? t("sidebar.menu.unpin")
-										: t("sidebar.menu.pin"),
-									icon: pinnedGroups.includes(groupMenu.group.cwd) ? PinOff : Pin,
-									onSelect: () => {
-										useSidebarPrefs.getState().toggleGroupPin(groupMenu.group.cwd);
-										setGroupMenu(null);
-									},
-								},
-								{
-									id: "group-delete",
-									label: t("common.delete"),
-									icon: Trash2,
-									danger: true,
-									disabled: groupHasBusySession,
-									disabledReason: t("sidebar.deleteGroupStreaming"),
-									onSelect: () => {
-										setPendingDelete({ kind: "group", group: groupMenu.group });
-										setGroupMenu(null);
-									},
-								},
-							]}
-						/>
-					);
-				})()}
-
 			{/* Session row menu: open variants, per-task rename, pin, and delete. */}
 			{sessionMenu &&
 				(() => {
@@ -1154,7 +709,7 @@ export function Sidebar() {
 									disabled: targetBusy,
 									disabledReason: t("sidebar.menu.taskRunning"),
 									onSelect: () => {
-										setPendingDelete({ kind: "session", session: sessionMenu.session });
+										setPendingDelete(sessionMenu.session);
 										setSessionMenu(null);
 									},
 								},
@@ -1165,24 +720,15 @@ export function Sidebar() {
 
 			<ConfirmDialog
 				open={pendingDelete !== null}
-				title={pendingDelete?.kind === "group" ? t("sidebar.deleteGroupConfirm") : t("sidebar.deleteConfirm")}
+				title={t("sidebar.deleteConfirm")}
 				message={
-					pendingDelete?.kind === "group"
-						? t("sidebar.deleteGroupMessage", {
-								name: pendingDelete.group.name,
-								count: pendingDelete.group.sessions.length,
-							})
-						: pendingDelete?.kind === "session"
-							? t("sidebar.deleteMessage", {
-									name: sessionDisplayTitle(pendingDelete.session, t("sidebar.untitled")),
-								})
-							: ""
+					pendingDelete
+						? t("sidebar.deleteMessage", { name: sessionDisplayTitle(pendingDelete, t("sidebar.untitled")) })
+						: ""
 				}
-				warning={pendingDelete?.kind === "group" ? t("sidebar.deleteGroupWarning") : undefined}
 				busy={deleting}
 				onConfirm={() => {
-					if (pendingDelete?.kind === "group") void confirmDeleteGroup(pendingDelete.group);
-					else if (pendingDelete) void confirmDeleteSession(pendingDelete.session);
+					if (pendingDelete) void confirmDeleteSession(pendingDelete);
 				}}
 				onCancel={() => setPendingDelete(null)}
 			/>

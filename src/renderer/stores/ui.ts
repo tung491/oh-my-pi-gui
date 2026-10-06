@@ -56,7 +56,6 @@ interface UiStore {
 	copySelectorOpen: boolean;
 	changelogOpen: boolean;
 	jobsOpen: boolean;
-	workspaceDirsOpen: boolean;
 	btwRequest: string | null;
 	composerEditorOpen: boolean;
 	composerEditorInitial: string | null;
@@ -126,8 +125,6 @@ interface UiStore {
 	closeChangelog: () => void;
 	openJobs: () => void;
 	closeJobs: () => void;
-	openWorkspaceDirs: () => void;
-	closeWorkspaceDirs: () => void;
 	openBtw: (question: string) => void;
 	closeBtw: () => void;
 	openComposerEditor: (initial: string) => void;
@@ -242,9 +239,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	jobsOpen: false,
 	openJobs: () => set({ jobsOpen: true }),
 	closeJobs: () => set({ jobsOpen: false }),
-	workspaceDirsOpen: false,
-	openWorkspaceDirs: () => set({ workspaceDirsOpen: true }),
-	closeWorkspaceDirs: () => set({ workspaceDirsOpen: false }),
 	btwRequest: null,
 	openBtw: question => set({ btwRequest: question }),
 	closeBtw: () => set({ btwRequest: null }),
@@ -275,7 +269,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			agentHubOpen: false,
 			copySelectorOpen: false,
 			jobsOpen: false,
-			workspaceDirsOpen: false,
 			btwRequest: null,
 			composerEditorOpen: false,
 			composerEditorInitial: null,

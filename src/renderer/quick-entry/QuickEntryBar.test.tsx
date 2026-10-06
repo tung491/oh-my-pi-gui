@@ -80,7 +80,7 @@ function barStub(): BarStub {
 
 const baseState = (overrides: Partial<QuickEntryBarState> = {}): QuickEntryBarState => ({
 	language: "en",
-	target: { kind: "chat" },
+	target: { kind: "work" },
 	workspaces: [
 		{ cwd: "/code/alpha", name: "alpha" },
 		{ cwd: "/code/beta", name: "beta" },
@@ -172,7 +172,7 @@ describe("QuickEntryBar", () => {
 
 		expect(preventDefault).toHaveBeenCalled();
 		expect(bar.submit).toHaveBeenCalledTimes(1);
-		expect(bar.submit).toHaveBeenCalledWith({ text: "hello there", target: { kind: "chat" } });
+		expect(bar.submit).toHaveBeenCalledWith({ text: "hello there", target: { kind: "work" } });
 		expect(textarea().value).toBe("");
 	});
 
@@ -184,7 +184,7 @@ describe("QuickEntryBar", () => {
 		});
 
 		expect(bar.submit).toHaveBeenCalledTimes(1);
-		expect(bar.submit).toHaveBeenCalledWith({ text: "from the button", target: { kind: "chat" } });
+		expect(bar.submit).toHaveBeenCalledWith({ text: "from the button", target: { kind: "work" } });
 		expect(textarea().value).toBe("");
 	});
 
@@ -241,12 +241,9 @@ describe("QuickEntryBar", () => {
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe(en["tabs.parallelCap"]);
 	});
 
-	it("reveals the workspace picker with Work first when Agent is picked", async () => {
+	it("offers no chat target and lists Work first in the workspace picker", async () => {
 		await mount();
-		expect(document.querySelector("select")).toBeNull();
-		await act(async () => {
-			button(en["quickEntry.target.agent"]).dispatchEvent(new Event("click", { bubbles: true }));
-		});
+		expect(() => button(en["quickEntry.target.chat"])).toThrow();
 
 		const options = Array.from(document.querySelectorAll("select option")) as unknown as TestElement[];
 		expect(options.map(option => option.textContent)).toEqual([en["sidebar.mode.work"], "alpha", "beta"]);
@@ -257,15 +254,26 @@ describe("QuickEntryBar", () => {
 		expect(bar.submit).toHaveBeenCalledWith({ text: "run the tests", target: { kind: "work" } });
 	});
 
+	it("turns a stored chat target into the Work task target", async () => {
+		await mount(baseState({ target: { kind: "chat" } }));
+		await type("plan my week");
+		await keyDown(textarea(), "Enter");
+		expect(bar.submit).toHaveBeenCalledWith({ text: "plan my week", target: { kind: "work" } });
+	});
+
 	it("keeps the target of a draft kept across summons", async () => {
 		await mount();
-		await act(async () => {
-			button(en["quickEntry.target.agent"]).dispatchEvent(new Event("click", { bubbles: true }));
-		});
+		const select = document.querySelector("select") as unknown as TestElement;
+		await act(async () =>
+			reactProps<{ onChange(event: object): void }>(select).onChange({ target: { value: "/code/alpha" } }),
+		);
 		await type("half written");
 		await bar.push(baseState({ showId: 2 }));
 		await keyDown(textarea(), "Enter");
-		expect(bar.submit).toHaveBeenCalledWith({ text: "half written", target: { kind: "work" } });
+		expect(bar.submit).toHaveBeenCalledWith({
+			text: "half written",
+			target: { kind: "workspace", cwd: "/code/alpha" },
+		});
 	});
 
 	it("fills an empty draft with a restored message and consumes it once", async () => {
@@ -316,6 +324,6 @@ describe("QuickEntryBar", () => {
 		await mount(baseState({ language: "vi" }));
 
 		expect(textarea().getAttribute("placeholder")).toBe(viLocale["quickEntry.placeholder"]);
-		expect(button(viLocale["quickEntry.target.chat"])).toBeDefined();
+		expect(document.querySelector("select")?.getAttribute("aria-label")).toBe(viLocale["quickEntry.workspace.aria"]);
 	});
 });
