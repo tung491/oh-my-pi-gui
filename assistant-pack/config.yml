@@ -23,6 +23,7 @@ skills:
   enableCodexUser: false
   customDirectories: []
   includeSkills: []
+  ignoredSkills: []
 # Prompt commands from Claude or OpenCode folders stay out of pack sessions.
 commands:
   enableClaudeUser: false

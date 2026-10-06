@@ -116,7 +116,7 @@ describe.skipIf(process.env.SKIP_COMPILED === "1")("the pack in the compiled sid
 					new RegExp(`^setting\\s+${path.replaceAll(".", "\\.")} = false\\s+\\[.*overlay.*\\]$`, "m"),
 				);
 			}
-			for (const path of ["skills.customDirectories", "skills.includeSkills"]) {
+			for (const path of ["skills.customDirectories", "skills.includeSkills", "skills.ignoredSkills"]) {
 				expect(stdout).toMatch(
 					new RegExp(`^setting\\s+${path.replaceAll(".", "\\.")} = \\[\\]\\s+\\[.*overlay.*\\]$`, "m"),
 				);

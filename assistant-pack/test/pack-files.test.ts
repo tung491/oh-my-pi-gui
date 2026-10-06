@@ -40,6 +40,7 @@ const EXPECTED_CONFIG = {
 		enableCodexUser: false,
 		customDirectories: [],
 		includeSkills: [],
+		ignoredSkills: [],
 	},
 	commands: {
 		enableClaudeUser: false,
