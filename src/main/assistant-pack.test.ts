@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -122,6 +122,29 @@ describe("assistant pack", () => {
 		expect(resolveAssistantPackDir(fixture)).toBe(join(root, "e2e", "assistant-pack"));
 		const empty = tempRoot();
 		expect(resolveAssistantPackDir(fixture, [empty])).toBe(join(root, "e2e", "assistant-pack"));
+	});
+
+	it("resolves the pack from the search roots when the sidecar runs from source", () => {
+		const root = tempRoot();
+		writePack(join(root, "resources", "assistant-pack"), PACK_FILES);
+		const appPath = join(root, "out", "main");
+		mkdirSync(appPath, { recursive: true });
+		// The main process's cwd holds a pack-shaped folder, as the repo root holds the pack source.
+		const cwd = tempRoot();
+		writePack(join(cwd, "assistant-pack"), PACK_FILES);
+		const previous = process.cwd();
+		process.chdir(cwd);
+		try {
+			// A source sidecar has no binary path: nothing sits beside it, so the search roots decide.
+			expect(resolveAssistantPackDir("", [appPath])).toBe(join(root, "resources", "assistant-pack"));
+			// The result is always absolute: omp would resolve a relative flag path against the session cwd.
+			const unfound = resolveAssistantPackDir("", ["nowhere"]);
+			expect(isAbsolute(unfound)).toBe(true);
+			expect(unfound).toBe(resolve(cwd, "nowhere", "resources", "assistant-pack"));
+			expect(resolveAssistantPackDir(join("bin", "omp"))).toBe(resolve(cwd, "bin", "assistant-pack"));
+		} finally {
+			process.chdir(previous);
+		}
 	});
 
 	it("builds the pack env with the session language", () => {

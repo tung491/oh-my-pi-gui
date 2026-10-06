@@ -6,7 +6,7 @@
  * (`scripts/check-assistant-pack.ts`) loads this module as well as the main process.
  */
 import { existsSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /** Every file `scripts/build-assistant-pack.ts` writes, checked before each spawn. */
 export const ASSISTANT_PACK_FILES: readonly string[] = [
@@ -47,14 +47,17 @@ function isDirectory(path: string): boolean {
  * whose sidecar links into another checkout keeps its own pack). Otherwise the
  * first `resources/assistant-pack` found walking up from each search root,
  * which covers the e2e fixture sidecar and the source sidecar in a dev tree.
- * When nothing is found, the beside-binary path, so the missing-file message
- * names where the pack belongs.
+ * A source sidecar (`OMP_SIDECAR=source`) has an empty binary path and nothing
+ * beside it. When nothing is found, the beside-binary path (or, for a source
+ * sidecar, the first search root's `resources/assistant-pack`), so the
+ * missing-file message names where the pack belongs. The result is always
+ * absolute: omp resolves a relative flag path against the session cwd.
  */
 export function resolveAssistantPackDir(binaryPath: string, searchFrom: readonly string[] = []): string {
-	const beside = join(dirname(binaryPath), PACK_DIR_NAME);
-	if (isDirectory(beside)) return beside;
-	for (const start of searchFrom) {
-		let dir = start;
+	const beside = binaryPath ? resolve(dirname(binaryPath), PACK_DIR_NAME) : null;
+	if (beside && isDirectory(beside)) return beside;
+	for (const root of searchFrom) {
+		let dir = resolve(root);
 		for (let level = 0; level < SEARCH_DEPTH; level++) {
 			const candidate = join(dir, "resources", PACK_DIR_NAME);
 			if (isDirectory(candidate)) return candidate;
@@ -63,7 +66,7 @@ export function resolveAssistantPackDir(binaryPath: string, searchFrom: readonly
 			dir = parent;
 		}
 	}
-	return beside;
+	return beside ?? resolve(searchFrom[0] ?? "", "resources", PACK_DIR_NAME);
 }
 
 /** The spawn flags that load the pack; Linux adds the SAI OS tools, every other platform gets the office set only. */

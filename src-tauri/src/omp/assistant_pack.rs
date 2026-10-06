@@ -33,15 +33,19 @@ const OFFICE_TOOLS: &[&str] = &["office_report", "office_slides", "office_clean"
 /// that exists (the binary is never resolved through a symlink, so a worktree
 /// whose sidecar links into another checkout keeps its own pack). Otherwise
 /// the first `resources/assistant-pack` found walking up from each search
-/// root, which covers the e2e fixture sidecar in dev and e2e builds. When
-/// nothing is found, the beside-binary path, so the missing-file message
-/// names where the pack belongs.
+/// root, which covers the e2e fixture sidecar in dev and e2e builds. An empty
+/// binary path (the TS shell's source sidecar) has nothing beside it. When
+/// nothing is found, the beside-binary path (or, for an empty binary path, the
+/// first search root's `resources/assistant-pack`), so the missing-file
+/// message names where the pack belongs. The result is always absolute: omp
+/// resolves a relative flag path against the session cwd.
 pub(crate) fn resolve_pack_dir(binary: &Path, search_from: &[PathBuf]) -> PathBuf {
-    let beside = binary.parent().unwrap_or(Path::new("")).join(PACK_DIR_NAME);
-    if beside.is_dir() {
-        return beside;
+    let beside = (!binary.as_os_str().is_empty()).then(|| absolute(binary.parent().unwrap_or(Path::new("")).join(PACK_DIR_NAME)));
+    if let Some(beside) = beside.as_ref().filter(|beside| beside.is_dir()) {
+        return beside.clone();
     }
-    for start in search_from {
+    for root in search_from {
+        let start = absolute(root.clone());
         for dir in start.ancestors().take(SEARCH_DEPTH) {
             let candidate = dir.join("resources").join(PACK_DIR_NAME);
             if candidate.is_dir() {
@@ -49,7 +53,13 @@ pub(crate) fn resolve_pack_dir(binary: &Path, search_from: &[PathBuf]) -> PathBu
             }
         }
     }
-    beside
+    beside.unwrap_or_else(|| absolute(search_from.first().cloned().unwrap_or_default().join("resources").join(PACK_DIR_NAME)))
+}
+
+/// `path` made absolute against the process cwd, without following symlinks
+/// (a worktree's sidecar links into another checkout but keeps its own pack).
+fn absolute(path: PathBuf) -> PathBuf {
+    std::path::absolute(&path).unwrap_or(path)
 }
 
 /// The spawn flags that load the pack. `os` is `std::env::consts::OS`: Linux
@@ -212,6 +222,25 @@ mod tests {
         assert_eq!(resolve_pack_dir(&fixture, &[]), root.path().join("e2e").join("assistant-pack"));
         let empty = tempfile::tempdir().unwrap();
         assert_eq!(resolve_pack_dir(&fixture, &[empty.path().to_path_buf()]), root.path().join("e2e").join("assistant-pack"));
+    }
+
+    #[test]
+    fn resolves_the_pack_from_the_search_roots_when_the_sidecar_runs_from_source() {
+        let root = tempfile::tempdir().unwrap();
+        write_pack(&root.path().join("resources").join("assistant-pack"), PACK_FILES);
+        let app_path = root.path().join("out").join("main");
+        std::fs::create_dir_all(&app_path).unwrap();
+
+        // A source sidecar has no binary path: nothing sits beside it, so the search roots decide.
+        assert_eq!(resolve_pack_dir(Path::new(""), &[app_path]), root.path().join("resources").join("assistant-pack"));
+        // The result is always absolute: omp would resolve a relative flag path against the session cwd.
+        let cwd = std::env::current_dir().unwrap();
+        let unfound = resolve_pack_dir(Path::new(""), &[PathBuf::from("nowhere")]);
+        // (cargo runs tests from src-tauri, so the walk up may find the checkout's own pack.)
+        assert!(unfound.is_absolute(), "{}", unfound.display());
+        assert!(cwd.join("nowhere").starts_with(unfound.parent().unwrap().parent().unwrap()), "{}", unfound.display());
+        assert!(unfound.ends_with(Path::new("resources").join("assistant-pack")), "{}", unfound.display());
+        assert_eq!(resolve_pack_dir(&Path::new("bin").join("omp"), &[]), cwd.join("bin").join("assistant-pack"));
     }
 
     #[test]
