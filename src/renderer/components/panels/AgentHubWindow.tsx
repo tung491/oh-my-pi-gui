@@ -659,7 +659,7 @@ const HubRow = memo(function HubRow({
  * 查看消息 slide-over: covers the hub tab body with the agent's transcript
  * (get_subagent_messages byte pagination inside SubagentTranscript). Escape
  * closes the drawer, not the whole hub modal — window-capture runs before the
- * Modal's document-capture handler (PluginDetailDrawer pattern).
+ * Modal's document-capture handler.
  */
 function AgentTranscriptDrawer({ agent, onClose }: { agent: SubagentSnapshot; onClose: () => void }) {
 	const t = useT();

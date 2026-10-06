@@ -296,7 +296,7 @@ export function buildCommandMenu(ctx: CommandRegistryContext): CommandMenuItem[]
 	// ═══════════════════════════════════════════════════════════════════
 	// /new and /clear replace the session server-side and would silently abort
 	// an in-flight run — block while busy, same guard as the menu/deep-link
-	// paths and the WorkspaceDialog actions.
+	// paths.
 	const newSessionGuarded = (): Promise<unknown> | undefined => {
 		const { isStreaming, isCompacting } = useSessionStore.getState();
 		if (isStreaming || isCompacting) {
