@@ -25,4 +25,5 @@ const port: IpcPort = {
 const isQuickEntry = process.argv.includes("--omp-quick-entry");
 
 if (isQuickEntry) contextBridge.exposeInMainWorld("ompQuickEntry", createQuickEntryApi(port, process.platform));
-else contextBridge.exposeInMainWorld("omp", createOmpApi(port, process.platform));
+// A sandboxed preload still sees the process env; the sidecar inherits the same HOME.
+else contextBridge.exposeInMainWorld("omp", createOmpApi(port, process.platform, process.env.HOME ?? ""));

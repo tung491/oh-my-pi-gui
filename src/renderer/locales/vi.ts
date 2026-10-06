@@ -540,6 +540,8 @@ export const vi: Record<string, string> = {
 	"approval.details": "Chi tiết",
 	"approval.sentence.generic": "Sai ATLAS muốn {action}. Cho phép không?",
 	"approval.sentence.write": "Lưu tệp vào {path}?",
+	"approval.sentence.writeUnclear":
+		"Sai ATLAS muốn lưu một tệp, nhưng tên tệp bất thường và có thể che giấu nơi tệp thực sự được lưu. Hãy đọc toàn bộ yêu cầu bên dưới trước khi cho phép.",
 	"approval.action.officeReport": "tạo báo cáo Word",
 	"approval.action.officeSlides": "tạo bộ slide",
 	"approval.action.officeClean": "tạo bản sao đã dọn dẹp của bảng tính",

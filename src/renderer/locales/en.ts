@@ -587,6 +587,8 @@ export const en: Record<string, string> = {
 	"approval.details": "Details",
 	"approval.sentence.generic": "Sai ATLAS wants to {action}. Allow it?",
 	"approval.sentence.write": "Save a file to {path}?",
+	"approval.sentence.writeUnclear":
+		"Sai ATLAS wants to save a file, but its name is unusual and could hide where it really goes. Read the full request below before you approve.",
 	"approval.action.officeReport": "make a Word report",
 	"approval.action.officeSlides": "make a slide deck",
 	"approval.action.officeClean": "make a cleaned copy of a spreadsheet",

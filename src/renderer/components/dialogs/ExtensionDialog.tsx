@@ -19,6 +19,7 @@ import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { MarkdownRenderer } from "../../lib/markdown";
 import { useExtensionUiStore } from "../../stores/extension-ui";
+import { useSessionStore } from "../../stores/session";
 import { toast } from "../../stores/toast";
 import { Button, Input, Modal } from "../common";
 import { ApprovalDialog, isApprovalRequest } from "./ApprovalDialog";
@@ -484,6 +485,7 @@ function OpenUrlDialog({
 
 function ActiveDialog({ request, remaining }: { request: ExtensionUIRequest; remaining: number | null }) {
 	const removeRequest = useExtensionUiStore(state => state.removeRequest);
+	const cwd = useSessionStore(state => state.cwd);
 
 	const respond = (
 		response:
@@ -500,7 +502,7 @@ function ActiveDialog({ request, remaining }: { request: ExtensionUIRequest; rem
 	switch (request.method) {
 		case "select":
 			return isApprovalRequest(request) ? (
-				<ApprovalDialog onRespond={respond} request={request} />
+				<ApprovalDialog cwd={cwd} homeDir={window.omp.homeDir} onRespond={respond} request={request} />
 			) : (
 				<SelectDialog
 					onCancel={cancel}
