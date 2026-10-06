@@ -838,6 +838,13 @@ export interface IpcSessionOpenNewWindowPayload {
 	cwd?: string;
 }
 
+/**
+ * `true` once the session shows in a window (a new one, or its live owner
+ * focused); `false` at the pool cap; `{ refusal: "kind-mismatch" }` for a
+ * chat-stamped session file, which an assistant session cannot resume.
+ */
+export type IpcSessionOpenNewWindowResult = boolean | { refusal: "kind-mismatch" };
+
 // ============================================================================
 // Session Tab Types (in-window parallel sessions, one sidecar per tab)
 // ============================================================================
@@ -1278,9 +1285,10 @@ export interface OmpApi {
 		 * Open a session (or a fresh project window) in a new parallel window.
 		 * False at the cap. When `sessionPath` is already attached to a tab,
 		 * the owner window is focused instead of spawning (F-OWN) and the
-		 * call resolves true — the session is foregrounded either way.
+		 * call resolves true — the session is foregrounded either way. A
+		 * chat-stamped session is refused with `{ refusal: "kind-mismatch" }`.
 		 */
-		openInNewWindow(payload: IpcSessionOpenNewWindowPayload): Promise<boolean>;
+		openInNewWindow(payload: IpcSessionOpenNewWindowPayload): Promise<IpcSessionOpenNewWindowResult>;
 		/** One-shot: the session this window was opened to display, if any. */
 		consumePendingOpen(): Promise<string | null>;
 	};

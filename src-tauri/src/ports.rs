@@ -174,6 +174,14 @@ pub struct SidecarRestartProgress {
     pub max_attempts: u32,
 }
 
+/// A sidecar start the app refused on purpose; the renderer shows its own copy for it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SidecarRefusal {
+    /// The session file is stamped `chat`, which an assistant session cannot resume.
+    #[serde(rename = "kind-mismatch")]
+    KindMismatch,
+}
+
 /// `SidecarStatusPayload` / `IpcSidecarStatusPayload`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -184,6 +192,8 @@ pub struct SidecarStatusPayload {
     pub cwd: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restart: Option<SidecarRestartProgress>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refusal: Option<SidecarRefusal>,
 }
 
 /// `IpcTabWorktree`.

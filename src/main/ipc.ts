@@ -67,6 +67,7 @@ import { registerProviderCleanupIpc } from "./provider-cleanup";
 import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
 import type { SessionIndex } from "./session-index";
+import { openSessionInNewWindow } from "./session-new-window";
 import { resolveEditorCommand } from "./shell-env";
 import type { SidecarManager } from "./sidecar";
 import type { SidecarPool } from "./sidecar-pool";
@@ -630,21 +631,20 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// The session switch is done by the NEW window's renderer on boot (it pulls
 	// pendingSessionPath and runs switch_session + hydrate itself), which avoids
 	// racing the renderer's boot hydration and surfaces failures in that window.
-	ipcMain.handle(IPC_COMMANDS.SESSION_OPEN_NEW_WINDOW, async (event, payload: IpcSessionOpenNewWindowPayload) => {
-		const sessionPath = typeof payload?.sessionPath === "string" ? payload.sessionPath : undefined;
-		if (sessionPath) {
-			const owner = deps.sidecarPool.sessionOwner(sessionPath);
-			if (owner && deps.windowManager.focusWindowById(owner.winId)) return true;
-		}
-		if (deps.sidecarPool.atCap) return false;
-		const callerCwd = cwdFor(deps, event) ?? deps.initialCwd();
-		const cwd = typeof payload?.cwd === "string" && payload.cwd.length > 0 ? payload.cwd : callerCwd;
-		// The new window's sidecar must spawn with the target file's kind, or the
-		// boot-time switch_session hits the agent-side kind guard and the pool
-		// entry would lie about its kind (I1).
-		const kind = sessionPath ? await sessionIndex.kindFor(sessionPath) : undefined;
-		return deps.spawnWindow(cwd, sessionPath, kind) !== null;
-	});
+	// A chat-stamped session file is refused with { refusal: "kind-mismatch" }:
+	// an assistant session cannot resume it. Decision logic: session-new-window.ts.
+	ipcMain.handle(IPC_COMMANDS.SESSION_OPEN_NEW_WINDOW, (event, payload: IpcSessionOpenNewWindowPayload) =>
+		openSessionInNewWindow(
+			{
+				sidecarPool: deps.sidecarPool,
+				sessionIndex,
+				focusWindow: winId => deps.windowManager.focusWindowById(winId),
+				spawnWindow: (cwd, sessionPath) => deps.spawnWindow(cwd, sessionPath) !== null,
+				callerCwd: () => cwdFor(deps, event) ?? deps.initialCwd(),
+			},
+			payload,
+		),
+	);
 
 	// Fresh window pulls the session it was opened to display (one-shot). The
 	// renderer performs the actual switch_session + hydrate on boot, which

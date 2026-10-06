@@ -196,6 +196,43 @@ describe("SidecarManager", () => {
 		}
 	});
 
+	it("refuses to resume a chat-stamped session without spawning", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-chat-"));
+		const spawnedPath = path.join(tempDir, "spawned");
+		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
+		await fs.writeFile(
+			binaryPath,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs";\nfs.writeFileSync(${JSON.stringify(spawnedPath)}, "1");\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+		);
+		await fs.chmod(binaryPath, 0o755);
+		await makePackFixture(tempDir);
+		const sessionPath = path.join(tempDir, "old-chat.jsonl");
+		await fs.writeFile(
+			sessionPath,
+			`{"title":"Old chat"}\n${JSON.stringify({ type: "session", id: "c", kind: "chat" })}\n`,
+		);
+
+		const statuses: SidecarStatusPayload[] = [];
+		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir });
+		sidecar.on("status", payload => statuses.push(payload));
+		try {
+			// A restored tab resumes its file this way the first time it is shown.
+			sidecar.restart(undefined, sessionPath);
+			expect(statuses).toHaveLength(1);
+			expect(statuses[0]).toMatchObject({ status: "error", refusal: "kind-mismatch" });
+			expect(sidecar.status).toBe("error");
+			// Asking again for the same file stays refused.
+			sidecar.restart(undefined, sessionPath);
+			expect(statuses.map(payload => payload.refusal)).toEqual(["kind-mismatch", "kind-mismatch"]);
+			await delay(500);
+			await expect(fs.stat(spawnedPath)).rejects.toThrow();
+			expect(statuses).toHaveLength(2);
+		} finally {
+			sidecar.dispose();
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	it("forces a freshly created tab to bypass the CLI auto-resume setting", async () => {
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-fresh-"));
 		const logPath = path.join(tempDir, "argv.json");

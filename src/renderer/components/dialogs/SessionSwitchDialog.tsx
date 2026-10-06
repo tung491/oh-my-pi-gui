@@ -42,8 +42,12 @@ export function SessionSwitchDialog() {
 		if (!session) return;
 		setBusy("new-window");
 		try {
-			const ok = await window.omp.sessions.openInNewWindow({ sessionPath: session.path, cwd: session.cwd });
-			if (!ok) {
+			const result = await window.omp.sessions.openInNewWindow({ sessionPath: session.path, cwd: session.cwd });
+			if (typeof result === "object") {
+				toast({ variant: "error", message: t("sidebar.kindMismatch") });
+				return;
+			}
+			if (!result) {
 				toast({ variant: "warning", message: t("sidebar.parallelCap") });
 				return;
 			}

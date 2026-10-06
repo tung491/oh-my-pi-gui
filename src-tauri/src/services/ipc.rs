@@ -10,7 +10,7 @@ use serde_json::{json, Value};
 
 use crate::bridge::{IpcError, Reply};
 use crate::ctx::AppCtx;
-use crate::ports::{Caller, SessionScope};
+use crate::ports::{Caller, SessionKind, SessionScope};
 
 use super::fs as workspace_fs;
 
@@ -161,7 +161,9 @@ pub fn sessions_search(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> R
 
 /// `session:open-new-window`: open a session (or a fresh project window) in a
 /// new parallel window with its own sidecar; focuses the owner window instead
-/// of double-attaching when the session is already open. `ipc.ts:633-647`.
+/// of double-attaching when the session is already open, and refuses a
+/// chat-stamped session with `{ "refusal": "kind-mismatch" }`, since an
+/// assistant session cannot resume it. `session-new-window.ts`.
 pub fn session_open_new_window(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
     let payload = args.into_iter().next().unwrap_or(Value::Null);
     let session_path = payload.get("sessionPath").and_then(Value::as_str).map(str::to_string);
@@ -175,6 +177,9 @@ pub fn session_open_new_window(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Valu
                     return Ok(Value::Bool(true));
                 }
             }
+            if ctx.services.session_kind_for(session_path).await == SessionKind::Chat {
+                return Ok(json!({ "refusal": "kind-mismatch" }));
+            }
         }
         if ctx.tabs.at_cap() {
             return Ok(Value::Bool(false));
@@ -183,11 +188,8 @@ pub fn session_open_new_window(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Valu
             let home = dirs::home_dir();
             crate::paths::initial_cwd(&[home.as_deref().and_then(|path| path.to_str())])
         });
-        let kind = match &session_path {
-            Some(path) => Some(ctx.services.session_kind_for(path).await),
-            None => None,
-        };
-        Ok(Value::Bool(ctx.desktop.spawn_window(cwd, session_path, kind).is_some()))
+        // The new window always runs an assistant session, so no kind is passed on.
+        Ok(Value::Bool(ctx.desktop.spawn_window(cwd, session_path, None).is_some()))
     }))
 }
 
@@ -536,7 +538,7 @@ pub fn editor_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>
 #[cfg(test)]
 mod tests {
     use crate::bridge::{self, Registry};
-    use crate::ports::{Caller, WindowId};
+    use crate::ports::{Caller, IpcSessionOwner, SessionKind, WindowId, WindowRecord};
     use crate::testing::{self, Fakes};
     use serde_json::json;
 
@@ -601,6 +603,68 @@ mod tests {
             .unwrap();
         let path = bridge::dispatch_for_test(&ctx, caller, "runtime:log-path", vec![]).await.unwrap();
         assert!(path.as_str().is_some_and(|path| !path.is_empty()));
+    }
+
+    /// `session:open-new-window` over the fakes: `owner` holds the file, the file has `kind`.
+    fn new_window_fakes(kind: SessionKind, owner: Option<WindowId>, at_cap: bool) -> Fakes {
+        let fakes = Fakes::default();
+        fakes.services.kinds.lock().unwrap().insert("/s/session.jsonl".into(), kind);
+        if let Some(win_id) = owner {
+            fakes.desktop.add_record(WindowRecord { id: win_id, cwd: "/owner".into(), pending_session_path: None });
+            fakes.tabs.owners.lock().unwrap().insert("/s/session.jsonl".into(), IpcSessionOwner { tab_id: "t1".into(), win_id });
+        }
+        *fakes.tabs.at_cap.lock().unwrap() = at_cap;
+        fakes.tabs.cwds.lock().unwrap().insert(WindowId(1), "/caller".into());
+        fakes
+    }
+
+    async fn open_new_window(fakes: &Fakes, payload: serde_json::Value) -> serde_json::Value {
+        let ctx = testing::fake_ctx_with(fakes, registry());
+        bridge::dispatch_for_test(&ctx, Caller::main(WindowId(1)), "session:open-new-window", vec![payload]).await.unwrap()
+    }
+
+    fn spawned_windows(fakes: &Fakes) -> Vec<String> {
+        fakes.desktop.log.calls().into_iter().filter(|call| call.starts_with("spawn_window(")).collect()
+    }
+
+    #[tokio::test]
+    async fn focuses_the_live_owner_before_the_kind_check() {
+        let fakes = new_window_fakes(SessionKind::Chat, Some(WindowId(7)), false);
+        assert_eq!(open_new_window(&fakes, json!({ "sessionPath": "/s/session.jsonl" })).await, json!(true));
+        assert_eq!(*fakes.desktop.focused.lock().unwrap(), Some(WindowId(7)));
+        assert!(!fakes.services.log.calls().iter().any(|call| call.starts_with("session_kind_for(")));
+        assert!(spawned_windows(&fakes).is_empty());
+    }
+
+    #[tokio::test]
+    async fn refuses_a_chat_stamped_session_with_kind_mismatch_and_opens_no_window() {
+        let fakes = new_window_fakes(SessionKind::Chat, None, false);
+        let payload = json!({ "sessionPath": "/s/session.jsonl", "cwd": "/work" });
+        assert_eq!(open_new_window(&fakes, payload).await, json!({ "refusal": "kind-mismatch" }));
+        assert!(spawned_windows(&fakes).is_empty());
+        // The refusal wins over the cap: the user learns why, not that the app is full.
+        let capped = new_window_fakes(SessionKind::Chat, None, true);
+        assert_eq!(open_new_window(&capped, json!({ "sessionPath": "/s/session.jsonl" })).await, json!({ "refusal": "kind-mismatch" }));
+    }
+
+    #[tokio::test]
+    async fn opens_an_agent_session_in_a_new_window_without_a_session_kind() {
+        let fakes = new_window_fakes(SessionKind::Agent, None, false);
+        let payload = json!({ "sessionPath": "/s/session.jsonl", "cwd": "/work" });
+        assert_eq!(open_new_window(&fakes, payload).await, json!(true));
+        // No cwd in the payload: the caller's.
+        assert_eq!(open_new_window(&fakes, json!({})).await, json!(true));
+        assert_eq!(
+            spawned_windows(&fakes),
+            [r#"spawn_window(Some("/work"), Some("/s/session.jsonl"), None)"#, r#"spawn_window(Some("/caller"), None, None)"#]
+        );
+    }
+
+    #[tokio::test]
+    async fn returns_false_at_the_pool_cap() {
+        let fakes = new_window_fakes(SessionKind::Agent, None, true);
+        assert_eq!(open_new_window(&fakes, json!({ "sessionPath": "/s/session.jsonl" })).await, json!(false));
+        assert!(spawned_windows(&fakes).is_empty());
     }
 
     #[tokio::test]

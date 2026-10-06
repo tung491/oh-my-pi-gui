@@ -28,6 +28,7 @@ import type {
 import { TurnStatusRow } from "../components/chat/ChatStream";
 import { formatClock } from "../lib/format";
 import { I18nProvider } from "../lib/i18n";
+import { en } from "../locales/en";
 import { type MessagesStore, useMessagesStore } from "../stores/messages";
 import { type ModelStore, useModelStore } from "../stores/model";
 import { type SessionStore, useSessionStore } from "../stores/session";
@@ -39,6 +40,7 @@ import { useTabsStore } from "../stores/tabs";
 import { useToastStore } from "../stores/toast";
 import { useTodoStore } from "../stores/todo";
 import { useToolsStore } from "../stores/tools";
+import { useUiStore } from "../stores/ui";
 import { hydrateSession, useRpcEvents } from "./use-rpc-events";
 
 const { document, window, Event, HTMLElement, Node } = parseHTML("<html><body></body></html>");
@@ -1357,6 +1359,24 @@ describe("useRpcEvents tab-scoped routing guards", () => {
 		// …and the live pane's stores are untouched by the dead tab's frames.
 		expect(sessionRuntimeStore<MessagesStore>("t-live", "messages")?.getState().messages).toHaveLength(0);
 		expect(sessionRuntimeStore<SessionStore>("t-live", "session")?.getState().isStreaming).toBe(false);
+	});
+
+	it("shows the start-a-new-task refusal when a tab's old chat session is refused", async () => {
+		const { emitTabStatus } = installTabRoutedMockOmp();
+		seedTwoTabs();
+		await mount(<RpcEventsProbe />);
+		try {
+			await act(async () => {
+				emitTabStatus(
+					{ status: "error", cwd: "/alpha", message: "chat-stamped session", refusal: "kind-mismatch" },
+					"t-live",
+				);
+			});
+			// The refusal code is shown as the app's own copy, not the technical reason.
+			expect(useUiStore.getState().sidecarError).toBe(en["sidebar.kindMismatch"]);
+		} finally {
+			useUiStore.getState().clearSidecarError();
+		}
 	});
 
 	it("ignores a closed tab's late 'starting' status instead of resetting the focused pane", async () => {

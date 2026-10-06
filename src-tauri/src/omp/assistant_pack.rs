@@ -99,6 +99,33 @@ pub(crate) fn pack_env(language: &str) -> Vec<(&'static str, String)> {
     vec![("SAI_ATLAS_LANG", language.to_string())]
 }
 
+/// Bytes read from the head of a session file to find the header line, as the session index does.
+const SESSION_HEAD_BYTES: u64 = 32 * 1024;
+/// Bytes read for the header line itself, as the session index does.
+const SESSION_HEADER_BYTES: u64 = 4096;
+
+/// Whether a session file is stamped `chat` (header `kind`, the second line;
+/// the first is the title slot). omp resumes such a file restricted to its
+/// stamped tools, without the pack's, so no pack session may start on it. A
+/// file that cannot be read or parsed counts as not chat, as the session index
+/// degrades.
+pub(crate) fn is_chat_stamped_session(session_path: &Path) -> bool {
+    use std::io::{Read, Seek, SeekFrom};
+    let read_stamp = || -> Option<bool> {
+        let mut file = std::fs::File::open(session_path).ok()?;
+        let mut head = Vec::new();
+        (&mut file).take(SESSION_HEAD_BYTES).read_to_end(&mut head).ok()?;
+        let newline = head.iter().position(|byte| *byte == b'\n')?;
+        file.seek(SeekFrom::Start(newline as u64 + 1)).ok()?;
+        let mut header = Vec::new();
+        file.take(SESSION_HEADER_BYTES).read_to_end(&mut header).ok()?;
+        let line = header.split(|byte| *byte == b'\n').next().unwrap_or(&[]);
+        let parsed: serde_json::Value = serde_json::from_slice(line).ok()?;
+        Some(parsed.get("kind").and_then(serde_json::Value::as_str) == Some("chat"))
+    };
+    read_stamp().unwrap_or(false)
+}
+
 /// The first listed pack file that is missing, or `None` when the pack is complete.
 pub(crate) fn missing_pack_file(pack_dir: &Path) -> Option<&'static str> {
     ASSISTANT_PACK_FILES.iter().copied().find(|file| !pack_dir.join(file).exists())
@@ -274,6 +301,28 @@ mod tests {
             assert!(dev.contains(left), "{dev}");
             assert!(dev.contains("bun run build:pack"), "{dev}");
         }
+    }
+
+    #[test]
+    fn reads_the_chat_stamp_from_the_session_header() {
+        let dir = tempfile::tempdir().unwrap();
+        let session = |name: &str, text: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        // Line 1 is the title slot, line 2 the header.
+        let title_slot = format!("{:<255}\n", r#"{"title":"Notes"}"#);
+        let chat = session("chat.jsonl", &format!("{title_slot}{}\n{{}}\n", r#"{"type":"session","id":"c","kind":"chat"}"#));
+        let agent = session("agent.jsonl", &format!("{title_slot}{}\n{{}}\n", r#"{"type":"session","id":"a"}"#));
+        assert!(is_chat_stamped_session(&chat));
+        assert!(!is_chat_stamped_session(&agent));
+        // A file that cannot be read or parsed is not refused, as the session index degrades.
+        assert!(!is_chat_stamped_session(&dir.path().join("missing.jsonl")));
+        assert!(!is_chat_stamped_session(&session("empty.jsonl", "")));
+        assert!(!is_chat_stamped_session(&session("one-line.jsonl", r#"{"kind":"chat"}"#)));
+        assert!(!is_chat_stamped_session(&session("broken.jsonl", &format!("{title_slot}{}\n", r#"{"kind":"chat""#))));
+        assert!(!is_chat_stamped_session(dir.path()));
     }
 
     #[test]

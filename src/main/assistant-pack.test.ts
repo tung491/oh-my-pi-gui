@@ -7,6 +7,7 @@ import {
 	ASSISTANT_PACK_FILES,
 	assistantPackEnv,
 	assistantPackFlags,
+	isChatStampedSession,
 	missingAssistantPackFile,
 	missingAssistantPackMessage,
 	resolveAssistantPackDir,
@@ -173,6 +174,30 @@ describe("assistant pack", () => {
 			expect(dev).toContain(left);
 			expect(dev).toContain("bun run build:pack");
 		}
+	});
+
+	it("reads the chat stamp from the session header", () => {
+		const dir = tempRoot();
+		const session = (name: string, text: string): string => {
+			const path = join(dir, name);
+			writeFileSync(path, text);
+			return path;
+		};
+		// Line 1 is the title slot, line 2 the header.
+		const titleSlot = `${JSON.stringify({ title: "Notes" }).padEnd(255)}\n`;
+		const chat = session(
+			"chat.jsonl",
+			`${titleSlot}${JSON.stringify({ type: "session", id: "c", kind: "chat" })}\n{}\n`,
+		);
+		const agent = session("agent.jsonl", `${titleSlot}${JSON.stringify({ type: "session", id: "a" })}\n{}\n`);
+		expect(isChatStampedSession(chat)).toBe(true);
+		expect(isChatStampedSession(agent)).toBe(false);
+		// A file that cannot be read or parsed is not refused, as the session index degrades.
+		expect(isChatStampedSession(join(dir, "missing.jsonl"))).toBe(false);
+		expect(isChatStampedSession(session("empty.jsonl", ""))).toBe(false);
+		expect(isChatStampedSession(session("one-line.jsonl", '{"kind":"chat"}'))).toBe(false);
+		expect(isChatStampedSession(session("broken.jsonl", `${titleSlot}{"kind":"chat"\n`))).toBe(false);
+		expect(isChatStampedSession(dir)).toBe(false);
 	});
 
 	it("ships the tool list the pack check expects", () => {

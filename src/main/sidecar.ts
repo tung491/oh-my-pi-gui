@@ -35,6 +35,7 @@ import {
 	type AssistantPackLanguage,
 	assistantPackEnv,
 	assistantPackFlags,
+	isChatStampedSession,
 	missingAssistantPackFile,
 	missingAssistantPackMessage,
 	resolveAssistantPackDir,
@@ -289,6 +290,17 @@ export class SidecarManager extends EventEmitter {
 			return;
 		}
 		this.#packDir = packDir;
+		// A chat-stamped file resumes without the pack's tools and fails startup:
+		// refuse it, so the tab tells the user to start a new task instead.
+		if (this.#resumeSessionPath && isChatStampedSession(this.#resumeSessionPath)) {
+			this.#setStatus(
+				"error",
+				`The session file is stamped chat: ${this.#resumeSessionPath}`,
+				undefined,
+				"kind-mismatch",
+			);
+			return;
+		}
 		this.#setStatus("starting");
 		const resolveProxyEnv = this.#options.proxyEnv;
 		const resolveShellEnv = this.#options.shellEnv;
@@ -593,9 +605,16 @@ export class SidecarManager extends EventEmitter {
 		}, delay);
 	}
 
-	#setStatus(status: SidecarStatus, message?: string, restart?: SidecarRestartProgress): void {
+	#setStatus(
+		status: SidecarStatus,
+		message?: string,
+		restart?: SidecarRestartProgress,
+		refusal?: SidecarStatusPayload["refusal"],
+	): void {
 		this.#status = status;
-		this.emit("status", { status, message, cwd: this.#options.cwd, restart });
+		const payload: SidecarStatusPayload = { status, message, cwd: this.#options.cwd, restart };
+		if (refusal) payload.refusal = refusal;
+		this.emit("status", payload);
 	}
 
 	#cleanup(): void {

@@ -243,8 +243,12 @@ export function Sidebar() {
 	// Explicit parallel action: open this session in a NEW window with its own
 	// sidecar, leaving the current window's running session untouched.
 	const openSessionInNewWindow = async (session: SessionInfo) => {
-		const ok = await window.omp.sessions.openInNewWindow({ sessionPath: session.path, cwd: session.cwd });
-		if (!ok) {
+		const result = await window.omp.sessions.openInNewWindow({ sessionPath: session.path, cwd: session.cwd });
+		if (typeof result === "object") {
+			toast({ variant: "error", message: t("sidebar.kindMismatch") });
+			return;
+		}
+		if (!result) {
 			toast({ variant: "warning", message: t("sidebar.parallelCap") });
 			return;
 		}

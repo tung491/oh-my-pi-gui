@@ -218,7 +218,7 @@ impl FakeSidecar {
     pub fn set_status(&self, status: SidecarStatus) {
         *lock(&self.status) = status;
         let cwd = lock(&self.cwd).clone();
-        self.emit(SidecarEvent::Status(SidecarStatusPayload { status, message: None, cwd, restart: None }));
+        self.emit(SidecarEvent::Status(SidecarStatusPayload { status, message: None, cwd, restart: None, refusal: None }));
     }
 }
 

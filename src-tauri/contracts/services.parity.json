@@ -26,5 +26,9 @@
   {
     "ts": "src/main/open-path-target.test.ts",
     "rust": "src-tauri/src/services/open_path_target.rs"
+  },
+  {
+    "ts": "src/main/session-new-window.test.ts",
+    "rust": "src-tauri/src/services/ipc.rs"
   }
 ]

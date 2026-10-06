@@ -125,7 +125,12 @@ export async function routeToSessionOwner(owner: IpcSessionOwner, sessionPath: s
 		await tabsStore.switchTab(owner.tabId);
 		return true;
 	}
-	return window.omp.sessions.openInNewWindow({ sessionPath });
+	const result = await window.omp.sessions.openInNewWindow({ sessionPath });
+	if (typeof result === "object") {
+		toast({ variant: "error", message: translate("sidebar.kindMismatch") });
+		return false;
+	}
+	return result;
 }
 
 /**

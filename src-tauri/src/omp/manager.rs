@@ -25,7 +25,8 @@ use super::rpc_bridge::{attach_ndjson_parser, supports_rpc_protocol_v2};
 use super::rpc_client::RpcClient;
 use crate::bridge::spawn_task;
 use crate::ports::{
-    CtxRef, EventBatcher, SessionKind, SidecarError, SidecarEvent, SidecarEvents, SidecarHandle, SidecarOptions, SidecarRestartProgress, SidecarStatus, SidecarStatusPayload,
+    CtxRef, EventBatcher, SessionKind, SidecarError, SidecarEvent, SidecarEvents, SidecarHandle, SidecarOptions, SidecarRefusal, SidecarRestartProgress, SidecarStatus,
+    SidecarStatusPayload,
 };
 use crate::product::PRODUCT_NAME;
 
@@ -442,12 +443,16 @@ impl Inner {
     }
 
     fn set_status(&self, status: SidecarStatus, message: Option<String>, restart: Option<SidecarRestartProgress>) {
+        self.set_status_with_refusal(status, message, restart, None);
+    }
+
+    fn set_status_with_refusal(&self, status: SidecarStatus, message: Option<String>, restart: Option<SidecarRestartProgress>, refusal: Option<SidecarRefusal>) {
         let cwd = {
             let mut state = lock(&self.state);
             state.status = status;
             state.options.cwd.clone()
         };
-        self.emit(SidecarEvent::Status(SidecarStatusPayload { status, message, cwd, restart }));
+        self.emit(SidecarEvent::Status(SidecarStatusPayload { status, message, cwd, restart, refusal }));
     }
 
     /// Continuation guard: false once the cycle that captured `generation` was torn down or replaced.
@@ -477,7 +482,18 @@ impl Inner {
             self.set_status(SidecarStatus::Error, Some(assistant_pack::missing_pack_message(file, packaged)), None);
             return;
         }
-        lock(&self.state).pack_dir = pack_dir;
+        let resume = {
+            let mut state = lock(&self.state);
+            state.pack_dir = pack_dir;
+            state.resume_session_path.clone()
+        };
+        // A chat-stamped file resumes without the pack's tools and fails startup:
+        // refuse it, so the tab tells the user to start a new task instead.
+        if let Some(session) = resume.filter(|session| assistant_pack::is_chat_stamped_session(Path::new(session))) {
+            let message = format!("The session file is stamped chat: {session}");
+            self.set_status_with_refusal(SidecarStatus::Error, Some(message), None, Some(SidecarRefusal::KindMismatch));
+            return;
+        }
         self.set_status(SidecarStatus::Starting, None, None);
         // Env resolution takes up to 4 s. A restart()/start() landing inside that
         // window supersedes this pending spawn, so spawning here would orphan the
@@ -1252,6 +1268,44 @@ pub(crate) mod tests {
         ];
         assert_eq!(launch, expected);
         assert!(!launch.iter().any(|arg| arg == "--chat"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn refuses_to_resume_a_chat_stamped_session_without_spawning() {
+        let dir = tempfile::tempdir().unwrap();
+        let spawned = dir.path().join("spawned");
+        let script = write_script(
+            dir.path(),
+            &format!(
+                r#"import * as fs from "node:fs";
+fs.writeFileSync({spawned:?}, "1");
+process.stdout.write(JSON.stringify({{ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }}) + "\n");
+process.stdin.resume();"#,
+                spawned = spawned.to_string_lossy()
+            ),
+        );
+        let session_path = dir.path().join("old-chat.jsonl");
+        std::fs::write(&session_path, "{\"title\":\"Old chat\"}\n{\"type\":\"session\",\"id\":\"c\",\"kind\":\"chat\"}\n").unwrap();
+        let (sidecar, mut events) = manager(options(script, dir.path()));
+        // A restored tab resumes its file this way the first time it is shown.
+        sidecar.restart(None, Some(&session_path.to_string_lossy()));
+        let first = events.try_recv().expect("a status right away");
+        assert_eq!(sidecar.status(), SidecarStatus::Error);
+        // Asking again for the same file stays refused.
+        sidecar.restart(None, Some(&session_path.to_string_lossy()));
+        let second = events.try_recv().expect("a second status right away");
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let later: Vec<SidecarEvent> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+        let has_rpc = sidecar.has_rpc_client();
+        sidecar.dispose().await;
+        for event in [first, second] {
+            let SidecarEvent::Status(payload) = event else { panic!("expected a status") };
+            assert_eq!(payload.status, SidecarStatus::Error);
+            assert_eq!(payload.refusal, Some(SidecarRefusal::KindMismatch));
+        }
+        assert!(later.iter().all(|event| !matches!(event, SidecarEvent::Status(_))));
+        assert!(!has_rpc);
+        assert!(!spawned.exists());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

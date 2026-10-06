@@ -5,7 +5,7 @@
  * Imports only `node:path` and `node:fs`: the Bun pack check script
  * (`scripts/check-assistant-pack.ts`) loads this module as well as the main process.
  */
-import { existsSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 /** Every file `scripts/build-assistant-pack.ts` writes, checked before each spawn. */
@@ -102,6 +102,38 @@ export const ASSISTANT_PACK_REMOVED_ENV: readonly string[] = ["BASH_ENV", "ENV",
 /** The env keys the pack's tools read, set last at spawn. */
 export function assistantPackEnv(options: { language: AssistantPackLanguage }): Record<string, string> {
 	return { SAI_ATLAS_LANG: options.language };
+}
+
+/** Bytes read from the head of a session file to find the header line, as the session index does. */
+const SESSION_HEAD_BYTES = 32 * 1024;
+/** Bytes read for the header line itself, as the session index does. */
+const SESSION_HEADER_BYTES = 4096;
+
+/**
+ * Whether a session file is stamped `chat` (header `kind`, the second line;
+ * the first is the title slot). omp resumes such a file restricted to its
+ * stamped tools, without the pack's, so no pack session may start on it. A
+ * file that cannot be read or parsed counts as not chat, as the session index
+ * degrades.
+ */
+export function isChatStampedSession(sessionPath: string): boolean {
+	let fd: number | undefined;
+	try {
+		fd = openSync(sessionPath, "r");
+		const head = Buffer.alloc(SESSION_HEAD_BYTES);
+		const headLength = readSync(fd, head, 0, head.length, 0);
+		const newline = head.subarray(0, headLength).indexOf(0x0a);
+		if (newline === -1) return false;
+		const header = Buffer.alloc(SESSION_HEADER_BYTES);
+		const headerLength = readSync(fd, header, 0, header.length, newline + 1);
+		const line = header.subarray(0, headerLength).toString("utf8").split("\n")[0];
+		const parsed: unknown = JSON.parse(line);
+		return typeof parsed === "object" && parsed !== null && (parsed as { kind?: unknown }).kind === "chat";
+	} catch {
+		return false;
+	} finally {
+		if (fd !== undefined) closeSync(fd);
+	}
 }
 
 /** The first listed pack file that is missing, or `null` when the pack is complete. */
