@@ -333,6 +333,9 @@ export function InputArea() {
 		return () => window.removeEventListener("omp:insert-mention", onInsertMention);
 	}, [setText, runtimeTabId]);
 
+	// The send pipeline is built further down; starter cards reach it through
+	// `omp:fill-composer` with `submit`, so they send exactly as the Send button does.
+	const sendRef = useRef<((text?: string) => void) | null>(null);
 	useEffect(() => {
 		const fillComposer = (event: Event) => {
 			const detail = (
@@ -341,10 +344,15 @@ export function InputArea() {
 					images?: ImageContent[];
 					prepend?: boolean;
 					clearPastes?: boolean;
+					submit?: boolean;
 					tabId?: string;
 				}>
 			).detail;
 			if ((detail?.tabId ?? useTabsStore.getState().activeTabId) !== runtimeTabId) return;
+			if (detail?.submit) {
+				if (detail.text) sendRef.current?.(detail.text);
+				return;
+			}
 			const next = detail?.text;
 			const restoredImages = detail?.images ?? [];
 			if (!next && restoredImages.length === 0) return;
@@ -509,6 +517,7 @@ export function InputArea() {
 		setMenu,
 		setSending,
 	});
+	sendRef.current = send;
 
 	// A quick-entry prompt arrives in a fresh tab's draft and goes out once the
 	// tab is ready, through the same pipeline as Enter.
