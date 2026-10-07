@@ -806,8 +806,6 @@ export const vi: Record<string, string> = {
 	"hotkeys.row.newline": "Dòng mới",
 	"hotkeys.row.followUpSend": "Gửi dưới dạng follow-up (xếp hàng chờ lượt hiện tại kết thúc)",
 	"hotkeys.row.queueShorthand": "Viết tắt hàng đợi — một tin nhắn cho mỗi mục trong danh sách",
-	"hotkeys.row.bashMode": "Chế độ Shell (tiền tố !)",
-	"hotkeys.row.pythonMode": "Chế độ Python (tiền tố $)",
 	"hotkeys.row.mention": "Đề cập tệp / URL nội bộ",
 	"hotkeys.row.commands": "Tự động điền lệnh gạch chéo",
 	"hotkeys.row.history": "Tìm kiếm lịch sử lời nhắc",

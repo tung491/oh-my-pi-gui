@@ -897,8 +897,6 @@ export const en: Record<string, string> = {
 	"hotkeys.row.newline": "New line",
 	"hotkeys.row.followUpSend": "Send as follow-up (queue behind yield)",
 	"hotkeys.row.queueShorthand": "Queue shorthand — one message per list item",
-	"hotkeys.row.bashMode": "Shell mode (! prefix)",
-	"hotkeys.row.pythonMode": "Python mode ($ prefix)",
 	"hotkeys.row.mention": "Mention files / internal URLs",
 	"hotkeys.row.commands": "Slash command completion",
 	"hotkeys.row.history": "Search prompt history",

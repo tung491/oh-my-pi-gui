@@ -86,8 +86,6 @@ function hotkeyGroups(platform: KeyboardPlatform, withQuickEntry: boolean): Hotk
 				{ keys: "⇧Enter", labelKey: "hotkeys.row.newline" },
 				{ keys: "⌃Enter", labelKey: "hotkeys.row.followUpSend" },
 				{ keys: "-> / =>", labelKey: "hotkeys.row.queueShorthand" },
-				{ keys: "!", labelKey: "hotkeys.row.bashMode" },
-				{ keys: "$", labelKey: "hotkeys.row.pythonMode" },
 				{ keys: "@", labelKey: "hotkeys.row.mention" },
 				{ keys: "/", labelKey: "hotkeys.row.commands" },
 				{ keys: "↑ / ↓", labelKey: "hotkeys.row.historyNav" },
