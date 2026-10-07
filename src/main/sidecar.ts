@@ -376,6 +376,9 @@ export class SidecarManager extends EventEmitter {
 		console.log(`[sidecar] spawning ${sourceCli ? "source" : "bundled"} omp (${args.length} args, cwd: ${cwd})`);
 
 		const env: NodeJS.ProcessEnv = {
+			// The window sent as `num_ctx` (capped at the model's trained context);
+			// a user-set value, inherited or from the login shell, wins.
+			OLLAMA_CONTEXT_LENGTH: "131072",
 			...process.env,
 			// Login-shell PATH first so the GUI proxy pref (and inherited
 			// proxy env) keeps precedence over rc-file proxy exports.

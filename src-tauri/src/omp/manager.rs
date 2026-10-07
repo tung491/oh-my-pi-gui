@@ -602,6 +602,11 @@ impl Inner {
             // Ollama's native api carries `num_ctx`; over the OpenAI-compatible one
             // the server keeps its default context, below the agent's first request.
             command.env("PI_OLLAMA_API", "ollama-chat");
+            // The window sent as `num_ctx` (capped at the model's trained context);
+            // a user-set value, inherited or from the login shell, wins.
+            if std::env::var_os("OLLAMA_CONTEXT_LENGTH").is_none() && !env.contains_key("OLLAMA_CONTEXT_LENGTH") {
+                command.env("OLLAMA_CONTEXT_LENGTH", "131072");
+            }
             // No startup file may ride along into the pack tools' system programs,
             // no profile or role override may redirect omp away from the pack's
             // settings, and no online provider credential may reach the session.
