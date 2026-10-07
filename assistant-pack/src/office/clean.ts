@@ -26,7 +26,7 @@ export interface CleanOptions {
 	totals?: boolean;
 	/** Decimal mark of numbers stored as text; follows `lang` when absent. */
 	decimal?: Decimal;
-	/** Session language (`SAI_ATLAS_LANG`): `vi` reads decimal commas and names the sheets in Vietnamese. */
+	/** Session language (`SAI_ATLAS_LANG`): `vi` reads decimal commas and writes the sheet names and check in Vietnamese. */
 	lang: string;
 	/** Runs LibreOffice for .xls and .ods input. */
 	convert?: RunFile;
@@ -535,23 +535,63 @@ function writeChanges(workbook: ExcelJS.Workbook, reports: readonly SheetReport[
 	sheet.getColumn(4).width = 40;
 }
 
-function summary(reports: readonly SheetReport[], rowsKept: number): string {
+interface Totals {
+	sheets: number;
+	rowsKept: number;
+	emptyRows: number;
+	duplicateRows: number;
+	trimmed: number;
+	numbers: number;
+	formulas: number;
+	merges: number;
+	textColumns: string[];
+	totals: boolean;
+}
+
+/** The check line, in the session language; Vietnamese has no plural. */
+const SUMMARY: Record<"en" | "vi", (totals: Totals) => string[]> = {
+	en: t => [
+		countOf(t.sheets, "sheet"),
+		`${countOf(t.rowsKept, "row")} kept`,
+		`${countOf(t.emptyRows, "empty row")} removed`,
+		`${countOf(t.duplicateRows, "duplicate row")} removed`,
+		`${countOf(t.trimmed, "cell")} trimmed`,
+		`${countOf(t.numbers, "number")} converted`,
+		...(t.formulas > 0 ? [`${countOf(t.formulas, "formula")} replaced by values`] : []),
+		...(t.merges > 0 ? [`${countOf(t.merges, "merged range")} unmerged`] : []),
+		...(t.textColumns.length > 0 ? [`kept as text: ${t.textColumns.join(", ")}`] : []),
+		...(t.totals ? ["totals row added"] : []),
+	],
+	vi: t => [
+		`${t.sheets} trang tính`,
+		`giữ ${t.rowsKept} dòng`,
+		`xóa ${t.emptyRows} dòng trống`,
+		`xóa ${t.duplicateRows} dòng trùng lặp`,
+		`bỏ khoảng trắng thừa ở ${t.trimmed} ô`,
+		`chuyển ${t.numbers} giá trị thành số`,
+		...(t.formulas > 0 ? [`thay ${t.formulas} công thức bằng giá trị`] : []),
+		...(t.merges > 0 ? [`tách ${t.merges} vùng ô gộp`] : []),
+		...(t.textColumns.length > 0 ? [`giữ dạng chữ: ${t.textColumns.join(", ")}`] : []),
+		...(t.totals ? ["đã thêm dòng tổng"] : []),
+	],
+};
+
+function summary(reports: readonly SheetReport[], rowsKept: number, lang: string): string {
 	const sum = (key: "trimmed" | "emptyRows" | "duplicateRows" | "numbers" | "percents" | "formulas" | "merges") =>
 		reports.reduce((total, report) => total + report[key], 0);
-	const parts = [
-		countOf(reports.length, "sheet"),
-		`${countOf(rowsKept, "row")} kept`,
-		`${countOf(sum("emptyRows"), "empty row")} removed`,
-		`${countOf(sum("duplicateRows"), "duplicate row")} removed`,
-		`${countOf(sum("trimmed"), "cell")} trimmed`,
-		`${countOf(sum("numbers") + sum("percents"), "number")} converted`,
-	];
-	if (sum("formulas") > 0) parts.push(`${countOf(sum("formulas"), "formula")} replaced by values`);
-	if (sum("merges") > 0) parts.push(`${countOf(sum("merges"), "merged range")} unmerged`);
-	const textColumns = reports.flatMap(report => report.textColumns);
-	if (textColumns.length > 0) parts.push(`kept as text: ${textColumns.join(", ")}`);
-	if (reports.some(report => report.totals)) parts.push("totals row added");
-	return parts.join(", ");
+	const totals: Totals = {
+		sheets: reports.length,
+		rowsKept,
+		emptyRows: sum("emptyRows"),
+		duplicateRows: sum("duplicateRows"),
+		trimmed: sum("trimmed"),
+		numbers: sum("numbers") + sum("percents"),
+		formulas: sum("formulas"),
+		merges: sum("merges"),
+		textColumns: reports.flatMap(report => report.textColumns),
+		totals: reports.some(report => report.totals),
+	};
+	return SUMMARY[lang === "vi" ? "vi" : "en"](totals).join(", ");
 }
 
 /** Builds a tidy copy of the spreadsheet at `inPath`; the input file is never written. */
@@ -598,5 +638,5 @@ export async function cleanWorkbook(inPath: string, options: CleanOptions): Prom
 	writeChanges(out, reports, labels);
 	if (options.totals) out.calcProperties.fullCalcOnLoad = true;
 	const bytes = new Uint8Array(await out.xlsx.writeBuffer());
-	return { bytes, check: summary(reports, rowsKept) };
+	return { bytes, check: summary(reports, rowsKept, options.lang) };
 }

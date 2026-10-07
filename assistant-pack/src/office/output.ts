@@ -73,11 +73,14 @@ function truncateToBytes(text: string, maxBytes: number): string {
 	return points.slice(0, end).join("");
 }
 
-/** A file name without path separators, reserved characters or control characters. */
-export function safeBaseName(name: string): string {
+/**
+ * A file name without path separators, reserved characters or control characters;
+ * `fallback` when nothing is left.
+ */
+export function safeBaseName(name: string, fallback = DEFAULT_BASE_NAME): string {
 	const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "").trim();
 	const capped = truncateToBytes(cleaned, MAX_BASE_NAME_BYTES).trim();
-	return capped || DEFAULT_BASE_NAME;
+	return capped || fallback;
 }
 
 /**

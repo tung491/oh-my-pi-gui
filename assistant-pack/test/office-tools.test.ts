@@ -107,6 +107,36 @@ describe("office_report", () => {
 	});
 });
 
+describe("names and checks in the app language", () => {
+	it("names untitled files in Vietnamese and keeps the name valid on every file system", async () => {
+		const vi = { lang: "vi" };
+		const report = okJson(await tool("office_report", vi).execute("t1", { markdown: "Ghi chú họp." }));
+		expect(report.file).toBe(join(outDir, "Báo cáo.docx"));
+		expect(report.check).toBe("0 đề mục, 0 bảng, 0 mục danh sách");
+		const slides = okJson(
+			await tool("office_slides", vi).execute("t2", { markdown: "## Mục tiêu\n\n- Tăng doanh số" }),
+		);
+		expect(slides.file).toBe(join(outDir, "Bài trình chiếu.pptx"));
+		expect(slides.check).toBe("2 trang chiếu (1 trang tiêu đề, 1 trang gạch đầu dòng)");
+		const reserved = okJson(await tool("office_report", vi).execute("t3", { markdown: "Ghi chú.", name: "???" }));
+		expect(reserved.file).toBe(join(outDir, "Tài liệu.docx"));
+		for (const file of [report.file, slides.file, reserved.file]) {
+			expect(relative(outDir, file)).not.toMatch(/[\\/:*?"<>|]/);
+			expect(file).toBe(file.normalize("NFC"));
+		}
+	});
+
+	it("falls back to English names for an unknown language", async () => {
+		const report = okJson(await tool("office_report", { lang: "fr" }).execute("t1", { markdown: "Notes." }));
+		expect(report.file).toBe(join(outDir, "Report.docx"));
+		expect(report.check).toBe("0 headings, 0 tables, 0 list items");
+		const reserved = okJson(
+			await tool("office_report", { lang: "" }).execute("t2", { markdown: "Notes.", name: "???" }),
+		);
+		expect(reserved.file).toBe(join(outDir, "Document.docx"));
+	});
+});
+
 describe("office_slides", () => {
 	it("saves a deck named after the given title", async () => {
 		const result = await tool("office_slides").execute("t1", {
@@ -135,7 +165,8 @@ describe("office_clean", () => {
 		const result = await tool("office_clean", { lang: "vi" }).execute("t1", { file: input });
 		const json = okJson(result);
 		expect(json.kind).toBe("xlsx");
-		expect(json.file).toBe(join(outDir, "Sales list (cleaned).xlsx"));
+		expect(json.file).toBe(join(outDir, "Sales list (đã làm sạch).xlsx"));
+		expect(json.check).toMatch(/^1 trang tính, giữ 2 dòng, /);
 		expect(readFileSync(input).equals(before)).toBe(true);
 		const cleaned = new ExcelJS.Workbook();
 		await cleaned.xlsx.readFile(json.file);
@@ -145,6 +176,14 @@ describe("office_clean", () => {
 	it("expands ~/ in the path", async () => {
 		await spreadsheet("list.xlsx", [["A"], ["1"]]);
 		const result = await tool("office_clean").execute("t1", { file: "~/list.xlsx", totals: true, decimal: "dot" });
+		const json = okJson(result);
+		expect(json.file).toBe(join(outDir, "list (cleaned).xlsx"));
+		expect(json.check).toMatch(/^1 sheet, 2 rows kept, /);
+	});
+
+	it("names the copy in English for an unknown language", async () => {
+		await spreadsheet("list.xlsx", [["A"], ["1"]]);
+		const result = await tool("office_clean", { lang: "fr" }).execute("t1", { file: "~/list.xlsx" });
 		expect(okJson(result).file).toBe(join(outDir, "list (cleaned).xlsx"));
 	});
 

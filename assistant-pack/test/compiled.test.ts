@@ -33,9 +33,13 @@ const SKILLS = ["sai-os-helpdesk", "slides-from-report", "spreadsheet-cleanup", 
 
 let home: string;
 
-function callTool(name: string, params: unknown): { status: number | null; result: Record<string, unknown> } {
+function callTool(
+	name: string,
+	params: unknown,
+	lang = "en",
+): { status: number | null; result: Record<string, unknown> } {
 	const run = spawnSync(OMP_BIN, [CALL_TOOL, PACK, name, JSON.stringify(params)], {
-		env: { BUN_BE_BUN: "1", PATH: "/usr/bin:/bin", HOME: home, SAI_ATLAS_LANG: "en" },
+		env: { BUN_BE_BUN: "1", PATH: "/usr/bin:/bin", HOME: home, SAI_ATLAS_LANG: lang },
 		encoding: "utf8",
 		timeout: TIMEOUT_MS,
 	});
@@ -88,6 +92,24 @@ describe.skipIf(process.env.SKIP_COMPILED === "1")("the pack in the compiled sid
 			const { result } = callTool("office_clean", { file: input });
 			expect(result.isError).not.toBe(true);
 			expect(savedFiles()).toContain("messy (cleaned).xlsx");
+		},
+		TIMEOUT_MS,
+	);
+
+	it(
+		"office_clean names the copy and writes the check in Vietnamese when SAI_ATLAS_LANG is vi",
+		async () => {
+			const workbook = new ExcelJS.Workbook();
+			workbook.addWorksheet("Data").addRows([
+				["Tên", "Số tiền"],
+				[" An ", "1.500"],
+			]);
+			const input = join(home, "doanh-so.xlsx");
+			await workbook.xlsx.writeFile(input);
+			const { result } = callTool("office_clean", { file: input }, "vi");
+			expect(result.isError).not.toBe(true);
+			expect(savedFiles()).toContain("doanh-so (đã làm sạch).xlsx");
+			expect(JSON.stringify(result)).toContain("1 trang tính, giữ 2 dòng");
 		},
 		TIMEOUT_MS,
 	);

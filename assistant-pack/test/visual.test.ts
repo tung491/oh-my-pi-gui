@@ -55,7 +55,7 @@ describe.skipIf(process.env.CI_VISUAL !== "1")("office files in LibreOffice", ()
 	it.each(["notes-en.md", "notes-vi.md"])(
 		"converts the Word report of %s to PDF",
 		async name => {
-			const report = await buildReport({ markdown: fixture(name), fallbackTitle: "Report" });
+			const report = await buildReport({ markdown: fixture(name), fallbackTitle: "Report", lang: "en" });
 			const file = join(work, `${basename(name, ".md")}.docx`);
 			writeFileSync(file, report.bytes);
 			expectPdf(file);
@@ -66,7 +66,7 @@ describe.skipIf(process.env.CI_VISUAL !== "1")("office files in LibreOffice", ()
 	it(
 		"converts the slide deck to PDF",
 		async () => {
-			const deck = await buildSlides({ markdown: fixture("report-shapes.md"), fallbackTitle: "Slides" });
+			const deck = await buildSlides({ markdown: fixture("report-shapes.md"), fallbackTitle: "Slides", lang: "en" });
 			const file = join(work, "report-shapes.pptx");
 			writeFileSync(file, deck.bytes);
 			expectPdf(file);

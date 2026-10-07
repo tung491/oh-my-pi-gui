@@ -30,7 +30,7 @@ export interface OfficeEnv {
 	home: string;
 	platform: NodeJS.Platform;
 	runXdgUserDir: () => string;
-	/** `SAI_ATLAS_LANG`: picks the decimal mark and sheet names of a clean-up. */
+	/** `SAI_ATLAS_LANG`: picks the decimal mark, the checks and the default file names; English unless `vi`. */
 	lang: string;
 	/** Runs LibreOffice for .xls and .ods input; the real `execFile` when absent. */
 	convert?: RunFile;
@@ -84,6 +84,16 @@ const CLEAN_PARAMS: JsonSchema = {
 	required: ["file"],
 	additionalProperties: false,
 };
+
+/** File names the tools choose themselves; all valid on Linux, macOS and Windows. */
+const NAMES = {
+	en: { report: "Report", slides: "Slides", document: "Document", cleaned: "(cleaned)" },
+	vi: { report: "Báo cáo", slides: "Bài trình chiếu", document: "Tài liệu", cleaned: "(đã làm sạch)" },
+} as const;
+
+function namesFor(lang: string): (typeof NAMES)[keyof typeof NAMES] {
+	return lang === "vi" ? NAMES.vi : NAMES.en;
+}
 
 const PATH_PREFIX = /^(\/|~\/|\.\/|\.\.\/)/;
 const PATH_SUFFIX = /\.(md|txt|docx|pdf)$/i;
@@ -170,11 +180,11 @@ function documentTool(env: OfficeEnv, kind: "docx" | "pptx"): PackTool {
 				if (Buffer.byteLength(markdown) > MAX_MARKDOWN_BYTES) {
 					throw new ArgumentError("The text is too long for one file. Split it into smaller parts.");
 				}
-				const fallbackTitle = name?.trim() || (report ? "Report" : "Slides");
-				const built = report
-					? await buildReport({ markdown, title, fallbackTitle })
-					: await buildSlides({ markdown, title, fallbackTitle });
-				return save(env, safeBaseName(name ?? built.title), kind, built.bytes, built.check, signal);
+				const names = namesFor(env.lang);
+				const fallbackTitle = name?.trim() || (report ? names.report : names.slides);
+				const input = { markdown, title, fallbackTitle, lang: env.lang };
+				const built = report ? await buildReport(input) : await buildSlides(input);
+				return save(env, safeBaseName(name ?? built.title, names.document), kind, built.bytes, built.check, signal);
 			}),
 	};
 }
@@ -219,7 +229,8 @@ function cleanTool(env: OfficeEnv): PackTool {
 					convert: env.convert,
 					signal,
 				});
-				const base = `${safeBaseName(basename(inPath, extname(inPath)))} (cleaned)`;
+				const names = namesFor(env.lang);
+				const base = `${safeBaseName(basename(inPath, extname(inPath)), names.document)} ${names.cleaned}`;
 				return save(env, base, "xlsx", cleaned.bytes, cleaned.check, signal);
 			}),
 	};
