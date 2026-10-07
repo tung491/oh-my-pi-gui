@@ -28,8 +28,8 @@ const FIXTURES: Record<string, Expected> = {
 	},
 };
 
-async function build(name: string, title?: string) {
-	const report = await buildReport({ markdown: fixture(name), title, fallbackTitle: "Report" });
+async function build(name: string, title?: string, lang = "en") {
+	const report = await buildReport({ markdown: fixture(name), title, fallbackTitle: "Report", lang });
 	const document = await zipEntry(report.bytes, "word/document.xml");
 	const styles = await zipEntry(report.bytes, "word/styles.xml");
 	return { report, document, styles };
@@ -96,6 +96,16 @@ describe.each(Object.entries(FIXTURES))("buildReport(%s)", (name, expected) => {
 });
 
 describe("buildReport details", () => {
+	it("writes its check in Vietnamese without plural endings when the language is vi", async () => {
+		const { report } = await build("notes-vi.md", undefined, "vi");
+		expect(report.check).toBe("3 đề mục, 1 bảng, 6 mục danh sách");
+	});
+
+	it("writes its check in English for an unknown language", async () => {
+		const { report } = await build("notes-vi.md", undefined, "fr");
+		expect(report.check).toBe("3 headings, 1 table, 6 list items");
+	});
+
 	it("keeps Vietnamese text intact", async () => {
 		const { document } = await build("notes-vi.md");
 		expect(document).toContain("Đà Nẵng");

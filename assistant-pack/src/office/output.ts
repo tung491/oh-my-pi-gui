@@ -12,12 +12,52 @@ export interface OfficeResult {
 	check: string;
 }
 
-/** A failure whose message is a fixed plain sentence, safe to show the person. */
-export class PlainError extends Error {}
+/** A sentence written for the person, in each app language. */
+export interface PlainText {
+	en: string;
+	vi: string;
+}
+
+/** The text in the session language (`SAI_ATLAS_LANG`): Vietnamese for `vi`, else English. */
+export function inLanguage(text: PlainText, lang: string): string {
+	return lang === "vi" ? text.vi : text.en;
+}
+
+/**
+ * A failure whose message is a fixed plain sentence, safe to show the person. `message` is
+ * the English sentence; a plain string is the same sentence in every language.
+ */
+export class PlainError extends Error {
+	readonly #text: PlainText;
+
+	constructor(text: string | PlainText) {
+		const both = typeof text === "string" ? { en: text, vi: text } : text;
+		super(both.en);
+		this.#text = both;
+	}
+
+	/** The sentence in the session language (`SAI_ATLAS_LANG`): Vietnamese for `vi`, else English. */
+	inLanguage(lang: string): string {
+		return inLanguage(this.#text, lang);
+	}
+}
+
+const STOPPED: PlainText = {
+	en: "I stopped before the file was made.",
+	vi: "Tôi đã dừng trước khi tạo xong tệp.",
+};
+const TOO_MANY_NAMESAKES: PlainText = {
+	en: "There are too many files with this name in the Sai ATLAS folder.",
+	vi: "Thư mục Sai ATLAS đã có quá nhiều tệp trùng tên này.",
+};
+const FOLDER_ELSEWHERE: PlainText = {
+	en: "The Sai ATLAS folder in Documents leads to another place, so I did not save the file.",
+	vi: "Thư mục Sai ATLAS trong Documents dẫn đến một nơi khác, nên tôi không lưu tệp.",
+};
 
 /** Throws the plain "stopped" sentence once the tool call was cancelled. */
 export function throwIfStopped(signal: AbortSignal | undefined): void {
-	if (signal?.aborted) throw new PlainError("I stopped before the file was made.");
+	if (signal?.aborted) throw new PlainError(STOPPED);
 }
 
 export interface DocumentsEnv {
@@ -73,11 +113,14 @@ function truncateToBytes(text: string, maxBytes: number): string {
 	return points.slice(0, end).join("");
 }
 
-/** A file name without path separators, reserved characters or control characters. */
-export function safeBaseName(name: string): string {
+/**
+ * A file name without path separators, reserved characters or control characters;
+ * `fallback` when nothing is left.
+ */
+export function safeBaseName(name: string, fallback = DEFAULT_BASE_NAME): string {
 	const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "").trim();
 	const capped = truncateToBytes(cleaned, MAX_BASE_NAME_BYTES).trim();
-	return capped || DEFAULT_BASE_NAME;
+	return capped || fallback;
 }
 
 /**
@@ -106,7 +149,7 @@ export function writeUnique(dir: string, base: string, ext: OfficeKind, bytes: U
 		closeSync(fd);
 		return path;
 	}
-	throw new PlainError("There are too many files with this name in the Sai ATLAS folder.");
+	throw new PlainError(TOO_MANY_NAMESAKES);
 }
 
 /** Writes every byte, or throws: a short write that makes no progress counts as a failure. */
@@ -128,7 +171,7 @@ export function ensureOutputDir(env: DocumentsEnv): string {
 	const dir = documentsDir(env);
 	mkdirSync(dir, { recursive: true });
 	if (!isInsideDir(dir, dirname(dir))) {
-		throw new PlainError("The Sai ATLAS folder in Documents leads to another place, so I did not save the file.");
+		throw new PlainError(FOLDER_ELSEWHERE);
 	}
 	return dir;
 }

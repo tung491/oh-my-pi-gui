@@ -282,7 +282,8 @@ describe("diagnose", () => {
 
 	it("labels the screen list as the XWayland view so it is not over-trusted", () => {
 		const screens = diagnoseChecks("display").find(check => check.argv[0] === "xrandr");
-		expect(screens?.label).toMatch(/XWayland/);
+		expect(screens?.label.en).toMatch(/XWayland/);
+		expect(screens?.label.vi).toMatch(/XWayland/);
 	});
 
 	it("reads the sound device name and the mute state through wpctl", async () => {
@@ -441,5 +442,92 @@ describe("os_setting and open_item", () => {
 			const result = await definition.execute("t1", {});
 			expect(text(result)).toBe("This works only on SAI OS.");
 		}
+	});
+});
+
+describe("sentences in the app language", () => {
+	const vi = { lang: "vi" };
+
+	it("open_item says in Vietnamese what it opened or could not find", async () => {
+		writeFileSync(join(home, "notes.md"), "x");
+		const { launch } = recorder();
+		const opener = tool("open_item", { ...vi, launch });
+		expect(text(await opener.execute("t1", { kind: "file", value: "~/notes.md" }))).toBe("Đã mở.");
+		const missing = await opener.execute("t2", { kind: "file", value: "~/missing.md" });
+		expect(missing.isError).toBe(true);
+		expect(text(missing)).toBe("Tôi không tìm thấy tệp hoặc thư mục đó.");
+		const panel = await opener.execute("t3", { kind: "settings", value: "rm" });
+		expect(text(panel)).toBe(
+			"Tôi chỉ mở được các mục cài đặt sau: mạng, Wi-Fi, Bluetooth, màn hình, âm thanh, máy in, nguồn điện, bàn phím, thông báo, giao diện.",
+		);
+	});
+
+	it("os_setting says in Vietnamese what it changed or could not change", async () => {
+		const done = await tool("os_setting", { ...vi, execFile: recorder().exec }).execute("t1", {
+			setting: "volume",
+			value: 30,
+		});
+		expect(text(done)).toBe("Đã xong: Đặt âm lượng 30%.");
+		const { exec } = recorder(() => new Error("gsettings failed"));
+		const failed = await tool("os_setting", { ...vi, execFile: exec }).execute("t2", {
+			setting: "dark_mode",
+			value: true,
+		});
+		expect(failed.isError).toBe(true);
+		expect(text(failed)).toBe("Tôi không thay đổi được cài đặt đó.");
+	});
+
+	it("system_status labels its lines in Vietnamese and keeps the command output as printed", async () => {
+		const { exec } = recorder(call => {
+			if (call.file === "lpstat") return enoent();
+			if (call.file === "upower") return call.args[0] === "-e" ? "" : "fine\n";
+			return "fine\n";
+		});
+		const lines = text(await tool("system_status", { ...vi, execFile: exec }).execute("t1", {})).split("\n");
+		expect(lines).toEqual([
+			"Ổ đĩa: fine",
+			"Bộ nhớ: fine",
+			"Pin: không tìm thấy pin",
+			"Mạng: fine",
+			"Máy in: không có trên máy này",
+		]);
+		const elsewhere = await tool("system_status", { ...vi, platform: "darwin" }).execute("t2", {});
+		expect(elsewhere.isError).toBe(true);
+		expect(text(elsewhere)).toBe("Tính năng này chỉ dùng được trên SAI OS.");
+	});
+
+	it("diagnose labels its findings in Vietnamese and keeps the output and the fixes hint as they are", async () => {
+		const { exec } = recorder(call => (call.args[0] === "inspect" ? "" : "Volume: 0.34 [MUTED]\n"));
+		const output = text(await tool("diagnose", { ...vi, execFile: exec }).execute("t1", { area: "sound" }));
+		expect(output).toContain("Đầu ra mặc định: không tìm thấy gì");
+		expect(output).toContain("Âm lượng và tắt tiếng: Volume: 0.34 [MUTED]");
+		expect(output).toContain("Fixes you may offer");
+		const elsewhere = await tool("diagnose", { ...vi, platform: "darwin" }).execute("t2", { area: "sound" });
+		expect(text(elsewhere)).toBe("Tính năng này chỉ dùng được trên SAI OS.");
+	});
+
+	it("keeps argument checks for the model in English", async () => {
+		const result = await tool("os_setting", vi).execute("t1", { setting: "volume", value: 101 });
+		expect(text(result)).toBe("The volume must be a number from 0 to 100.");
+		const area = await tool("diagnose", vi).execute("t2", { area: "kernel" });
+		expect(text(area)).toBe(`Choose one of these areas: ${DIAGNOSE_AREAS.join(", ")}.`);
+	});
+
+	it("falls back to English for an unknown language", async () => {
+		const fr = { lang: "fr" };
+		writeFileSync(join(home, "notes.md"), "x");
+		const opened = await tool("open_item", { ...fr, launch: recorder().launch }).execute("t1", {
+			kind: "file",
+			value: "~/notes.md",
+		});
+		expect(text(opened)).toBe("Opened.");
+		const done = await tool("os_setting", { ...fr, execFile: recorder().exec }).execute("t2", {
+			setting: "volume",
+			value: 30,
+		});
+		expect(text(done)).toBe("Done: Set the volume to 30%.");
+		const { exec } = recorder(call => (call.file === "lpstat" ? enoent() : "fine\n"));
+		const status = text(await tool("system_status", { ...fr, execFile: exec }).execute("t3", {}));
+		expect(status).toContain("Printers: not available");
 	});
 });

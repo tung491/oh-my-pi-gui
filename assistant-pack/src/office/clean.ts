@@ -8,7 +8,7 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import ExcelJS from "exceljs";
 import { countOf } from "./markdown";
-import { PlainError, throwIfStopped } from "./output";
+import { PlainError, type PlainText, throwIfStopped } from "./output";
 
 export type Decimal = "comma" | "dot";
 
@@ -26,7 +26,7 @@ export interface CleanOptions {
 	totals?: boolean;
 	/** Decimal mark of numbers stored as text; follows `lang` when absent. */
 	decimal?: Decimal;
-	/** Session language (`SAI_ATLAS_LANG`): `vi` reads decimal commas and names the sheets in Vietnamese. */
+	/** Session language (`SAI_ATLAS_LANG`): `vi` reads decimal commas and writes the sheet names and check in Vietnamese. */
 	lang: string;
 	/** Runs LibreOffice for .xls and .ods input. */
 	convert?: RunFile;
@@ -39,12 +39,34 @@ export interface CleanedWorkbook {
 	check: string;
 }
 
-const FORMULA_WITHOUT_RESULT =
-	"This file has formulas without saved results. Open it in your spreadsheet app, save it, then try again.";
-const SAVE_AS_XLSX = "Save this file as .xlsx in your spreadsheet app, then try again.";
+const FORMULA_WITHOUT_RESULT: PlainText = {
+	en: "This file has formulas without saved results. Open it in your spreadsheet app, save it, then try again.",
+	vi: "Tệp này có công thức chưa lưu kết quả. Hãy mở tệp trong ứng dụng bảng tính, lưu lại rồi thử lại.",
+};
+const SAVE_AS_XLSX: PlainText = {
+	en: "Save this file as .xlsx in your spreadsheet app, then try again.",
+	vi: "Hãy lưu tệp này dưới dạng .xlsx trong ứng dụng bảng tính rồi thử lại.",
+};
 const CONVERT_TIMEOUT_MS = 60_000;
-const TOO_LARGE = "This file is too large for me to clean. The limit is 20 MB.";
-const TOO_MANY_CELLS = "This spreadsheet has too many cells for me to clean.";
+const TOO_LARGE: PlainText = {
+	en: "This file is too large for me to clean. The limit is 20 MB.",
+	vi: "Tệp này quá lớn nên tôi không làm sạch được. Giới hạn là 20 MB.",
+};
+const TOO_MANY_CELLS: PlainText = {
+	en: "This spreadsheet has too many cells for me to clean.",
+	vi: "Bảng tính này có quá nhiều ô nên tôi không làm sạch được.",
+};
+const NOT_FOUND: PlainText = { en: "I could not find that file.", vi: "Tôi không tìm thấy tệp đó." };
+const WRONG_KIND: PlainText = {
+	en: "I can only clean .xlsx, .xls, .ods and .csv files.",
+	vi: "Tôi chỉ làm sạch được tệp .xlsx, .xls, .ods và .csv.",
+};
+const UNREADABLE: PlainText = { en: "I could not read this spreadsheet.", vi: "Tôi không đọc được bảng tính này." };
+const NO_SUCH_SHEET: PlainText = {
+	en: "This file has no sheet with that name.",
+	vi: "Tệp này không có trang tính nào mang tên đó.",
+};
+const NO_SHEETS: PlainText = { en: "This file has no sheets.", vi: "Tệp này không có trang tính nào." };
 /**
  * The clean-up runs inside the agent process, so a workbook is refused before it is loaded
  * when its file is over this size (a zip bomb or a huge export would starve the session).
@@ -242,10 +264,10 @@ async function readCsv(path: string): Promise<ExcelJS.Workbook> {
 }
 
 async function readWorkbook(inPath: string, run: RunFile, signal: AbortSignal | undefined): Promise<ExcelJS.Workbook> {
-	if (!existsSync(inPath) || !statSync(inPath).isFile()) throw new PlainError("I could not find that file.");
+	if (!existsSync(inPath) || !statSync(inPath).isFile()) throw new PlainError(NOT_FOUND);
 	const ext = extname(inPath).toLowerCase();
 	if (![".xlsx", ".xls", ".ods", ".csv"].includes(ext)) {
-		throw new PlainError("I can only clean .xlsx, .xls, .ods and .csv files.");
+		throw new PlainError(WRONG_KIND);
 	}
 	assertSmallEnough(inPath);
 	if (ext === ".xls" || ext === ".ods") {
@@ -260,7 +282,7 @@ async function readWorkbook(inPath: string, run: RunFile, signal: AbortSignal | 
 		try {
 			return await readCsv(inPath);
 		} catch {
-			throw new PlainError("I could not read this spreadsheet.");
+			throw new PlainError(UNREADABLE);
 		}
 	}
 	return readXlsx(inPath);
@@ -273,7 +295,7 @@ async function readXlsx(path: string): Promise<ExcelJS.Workbook> {
 	try {
 		await workbook.xlsx.readFile(path);
 	} catch {
-		throw new PlainError("I could not read this spreadsheet.");
+		throw new PlainError(UNREADABLE);
 	}
 	return workbook;
 }
@@ -535,23 +557,63 @@ function writeChanges(workbook: ExcelJS.Workbook, reports: readonly SheetReport[
 	sheet.getColumn(4).width = 40;
 }
 
-function summary(reports: readonly SheetReport[], rowsKept: number): string {
+interface Totals {
+	sheets: number;
+	rowsKept: number;
+	emptyRows: number;
+	duplicateRows: number;
+	trimmed: number;
+	numbers: number;
+	formulas: number;
+	merges: number;
+	textColumns: string[];
+	totals: boolean;
+}
+
+/** The check line, in the session language; Vietnamese has no plural. */
+const SUMMARY: Record<"en" | "vi", (totals: Totals) => string[]> = {
+	en: t => [
+		countOf(t.sheets, "sheet"),
+		`${countOf(t.rowsKept, "row")} kept`,
+		`${countOf(t.emptyRows, "empty row")} removed`,
+		`${countOf(t.duplicateRows, "duplicate row")} removed`,
+		`${countOf(t.trimmed, "cell")} trimmed`,
+		`${countOf(t.numbers, "number")} converted`,
+		...(t.formulas > 0 ? [`${countOf(t.formulas, "formula")} replaced by values`] : []),
+		...(t.merges > 0 ? [`${countOf(t.merges, "merged range")} unmerged`] : []),
+		...(t.textColumns.length > 0 ? [`kept as text: ${t.textColumns.join(", ")}`] : []),
+		...(t.totals ? ["totals row added"] : []),
+	],
+	vi: t => [
+		`${t.sheets} trang tính`,
+		`giữ ${t.rowsKept} dòng`,
+		`xóa ${t.emptyRows} dòng trống`,
+		`xóa ${t.duplicateRows} dòng trùng lặp`,
+		`bỏ khoảng trắng thừa ở ${t.trimmed} ô`,
+		`chuyển ${t.numbers} giá trị thành số`,
+		...(t.formulas > 0 ? [`thay ${t.formulas} công thức bằng giá trị`] : []),
+		...(t.merges > 0 ? [`tách ${t.merges} vùng ô gộp`] : []),
+		...(t.textColumns.length > 0 ? [`giữ dạng chữ: ${t.textColumns.join(", ")}`] : []),
+		...(t.totals ? ["đã thêm dòng tổng"] : []),
+	],
+};
+
+function summary(reports: readonly SheetReport[], rowsKept: number, lang: string): string {
 	const sum = (key: "trimmed" | "emptyRows" | "duplicateRows" | "numbers" | "percents" | "formulas" | "merges") =>
 		reports.reduce((total, report) => total + report[key], 0);
-	const parts = [
-		countOf(reports.length, "sheet"),
-		`${countOf(rowsKept, "row")} kept`,
-		`${countOf(sum("emptyRows"), "empty row")} removed`,
-		`${countOf(sum("duplicateRows"), "duplicate row")} removed`,
-		`${countOf(sum("trimmed"), "cell")} trimmed`,
-		`${countOf(sum("numbers") + sum("percents"), "number")} converted`,
-	];
-	if (sum("formulas") > 0) parts.push(`${countOf(sum("formulas"), "formula")} replaced by values`);
-	if (sum("merges") > 0) parts.push(`${countOf(sum("merges"), "merged range")} unmerged`);
-	const textColumns = reports.flatMap(report => report.textColumns);
-	if (textColumns.length > 0) parts.push(`kept as text: ${textColumns.join(", ")}`);
-	if (reports.some(report => report.totals)) parts.push("totals row added");
-	return parts.join(", ");
+	const totals: Totals = {
+		sheets: reports.length,
+		rowsKept,
+		emptyRows: sum("emptyRows"),
+		duplicateRows: sum("duplicateRows"),
+		trimmed: sum("trimmed"),
+		numbers: sum("numbers") + sum("percents"),
+		formulas: sum("formulas"),
+		merges: sum("merges"),
+		textColumns: reports.flatMap(report => report.textColumns),
+		totals: reports.some(report => report.totals),
+	};
+	return SUMMARY[lang === "vi" ? "vi" : "en"](totals).join(", ");
 }
 
 /** Builds a tidy copy of the spreadsheet at `inPath`; the input file is never written. */
@@ -562,7 +624,7 @@ export async function cleanWorkbook(inPath: string, options: CleanOptions): Prom
 	const source = await readWorkbook(inPath, options.convert ?? defaultRun, options.signal);
 	const sheets = options.sheet ? source.worksheets.filter(ws => ws.name === options.sheet) : source.worksheets;
 	if (sheets.length === 0) {
-		throw new PlainError(options.sheet ? "This file has no sheet with that name." : "This file has no sheets.");
+		throw new PlainError(options.sheet ? NO_SUCH_SHEET : NO_SHEETS);
 	}
 
 	const cells = sheets.reduce((total, sheet) => total + sheet.rowCount * sheet.columnCount, 0);
@@ -598,5 +660,5 @@ export async function cleanWorkbook(inPath: string, options: CleanOptions): Prom
 	writeChanges(out, reports, labels);
 	if (options.totals) out.calcProperties.fullCalcOnLoad = true;
 	const bytes = new Uint8Array(await out.xlsx.writeBuffer());
-	return { bytes, check: summary(reports, rowsKept) };
+	return { bytes, check: summary(reports, rowsKept, options.lang) };
 }

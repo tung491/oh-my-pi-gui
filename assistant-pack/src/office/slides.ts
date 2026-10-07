@@ -1,17 +1,20 @@
 // Markdown string -> slide deck (.pptx). The layout follows the shape of each section:
 // dark title and divider slides, card grids, big-number callouts, native charts and
 // tables, and bullet slides that split onto "(cont.)" slides instead of shrinking text.
+// The check and the "(cont.)" mark follow the session language.
 import type { Token, Tokens } from "marked";
 import PptxGenJS from "pptxgenjs";
 import { BODY_FONT, TITLE_FONT } from "./fonts";
 import { countOf, type InlineRun, inlineRuns, plainText, resolveTitle, splitLines } from "./markdown";
-import { PlainError } from "./output";
+import { PlainError, type PlainText } from "./output";
 
 export interface SlidesInput {
 	markdown: string;
 	/** Explicit deck title; when absent the first `#` heading, else `fallbackTitle`. */
 	title?: string;
 	fallbackTitle: string;
+	/** Session language (`SAI_ATLAS_LANG`): `vi` writes the check and "(cont.)" in Vietnamese, anything else in English. */
+	lang: string;
 }
 
 export interface BuiltDeck {
@@ -37,6 +40,7 @@ type SlideKind = "title slide" | "section divider" | "card grid" | "big number" 
 
 interface DeckState {
 	pptx: PptxGenJS;
+	text: DeckText;
 	kinds: SlideKind[];
 	splits: { title: string; slides: number }[];
 }
@@ -66,6 +70,50 @@ const TABLE_ROWS_PER_SLIDE = 8;
 const CARD_BODY_MAX_CHARS = 220;
 const BIG_NUMBER_MAX_CHARS = 12;
 const NOTES_PREFIX = /^\s*(notes|ghi chú)\s*:\s*/i;
+
+interface DeckText {
+	/** Appended to the title of each slide a section continues on. */
+	continued: string;
+	/** The whole check: slide count with the kinds in brackets, then each split section. */
+	describe: (
+		slides: number,
+		kinds: readonly { kind: SlideKind; count: number }[],
+		splits: DeckState["splits"],
+	) => string;
+}
+
+const SLIDE_KINDS_VI: Record<SlideKind, string> = {
+	"title slide": "trang tiêu đề",
+	"section divider": "trang chuyển phần",
+	"card grid": "trang dạng thẻ",
+	"big number": "trang số liệu lớn",
+	chart: "biểu đồ",
+	table: "bảng",
+	"bullet slide": "trang gạch đầu dòng",
+};
+
+const DECK_TEXT: Record<"en" | "vi", DeckText> = {
+	en: {
+		continued: "(cont.)",
+		describe: (slides, kinds, splits) =>
+			[
+				`${countOf(slides, "slide")} (${kinds.map(entry => countOf(entry.count, entry.kind)).join(", ")})`,
+				...splits.map(split => `split onto ${split.slides} slides: ${split.title}`),
+			].join("; "),
+	},
+	// Vietnamese has no plural: the count stands in front of the noun unchanged.
+	vi: {
+		continued: "(tiếp)",
+		describe: (slides, kinds, splits) =>
+			[
+				`${slides} trang chiếu (${kinds.map(entry => `${entry.count} ${SLIDE_KINDS_VI[entry.kind]}`).join(", ")})`,
+				...splits.map(split => `chia thành ${split.slides} trang chiếu: ${split.title}`),
+			].join("; "),
+	},
+};
+
+const NOT_CREATED: PlainText = { en: "I could not create the slides.", vi: "Tôi không tạo được bài trình chiếu." };
+/** Tells the model how to write the Markdown, so it stays in English like the argument checks. */
 const NO_SLIDES = "There are no slides yet. Start each slide with a line beginning with ##.";
 
 function itemText(item: Item): string {
@@ -234,15 +282,15 @@ function bulletPages(items: readonly Item[]): Item[][] {
 	return pages;
 }
 
-function cont(title: string, index: number): string {
-	return index === 0 ? title : `${title} (cont.)`;
+function cont(state: DeckState, title: string, index: number): string {
+	return index === 0 ? title : `${title} ${state.text.continued}`;
 }
 
 function bulletSlides(state: DeckState, title: string, items: readonly Item[], first = 0): PptxGenJS.Slide[] {
 	const pages = bulletPages(items);
 	if (pages.length > 1) state.splits.push({ title, slides: pages.length + first });
 	return pages.map((page, index) => {
-		const slide = contentSlide(state, cont(title, index + first), "bullet slide");
+		const slide = contentSlide(state, cont(state, title, index + first), "bullet slide");
 		slide.addText(bulletRuns(page), {
 			x: MARGIN_X,
 			y: BODY_Y,
@@ -408,7 +456,7 @@ function tableSlides(state: DeckState, title: string, header: string[], rows: st
 	if (pages.length > 1) state.splits.push({ title, slides: pages.length });
 	const columnWidth = BODY_W / Math.max(header.length, 1);
 	return pages.map((page, index) => {
-		const slide = contentSlide(state, cont(title, index), "table");
+		const slide = contentSlide(state, cont(state, title, index), "table");
 		const headerRow = header.map(text => ({
 			text,
 			options: { bold: true, color: DARK, fill: { color: HEADER_FILL } },
@@ -469,13 +517,10 @@ function describe(state: DeckState): string {
 		"table",
 		"bullet slide",
 	];
-	const counts = order
+	const kinds = order
 		.map(kind => ({ kind, count: state.kinds.filter(k => k === kind).length }))
-		.filter(entry => entry.count > 0)
-		.map(entry => countOf(entry.count, entry.kind));
-	const parts = [`${countOf(state.kinds.length, "slide")} (${counts.join(", ")})`];
-	for (const split of state.splits) parts.push(`split onto ${split.slides} slides: ${split.title}`);
-	return parts.join("; ");
+		.filter(entry => entry.count > 0);
+	return state.text.describe(state.kinds.length, kinds, state.splits);
 }
 
 export async function buildSlides(input: SlidesInput): Promise<BuiltDeck> {
@@ -489,10 +534,10 @@ export async function buildSlides(input: SlidesInput): Promise<BuiltDeck> {
 	pptx.layout = LAYOUT;
 	pptx.title = title;
 	pptx.author = "Sai ATLAS";
-	const state: DeckState = { pptx, kinds: [], splits: [] };
+	const state: DeckState = { pptx, text: DECK_TEXT[input.lang === "vi" ? "vi" : "en"], kinds: [], splits: [] };
 	for (const section of sections) renderSection(state, section);
 
 	const output = await pptx.write({ outputType: "nodebuffer" });
-	if (!(output instanceof Uint8Array)) throw new PlainError("I could not create the slides.");
+	if (!(output instanceof Uint8Array)) throw new PlainError(NOT_CREATED);
 	return { bytes: new Uint8Array(output), check: describe(state), title };
 }

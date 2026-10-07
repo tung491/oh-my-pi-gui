@@ -6,7 +6,7 @@ import { existsSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { promisify } from "node:util";
-import { expandHome, isInsideDir, PlainError } from "../office/output";
+import { expandHome, inLanguage, isInsideDir, PlainError, type PlainText } from "../office/output";
 import { ArgumentError, asRecord, type PackTool, type ToolResult, textResult } from "./types";
 
 /** Runs a short read or set command and resolves with its output; rejects on failure or timeout. */
@@ -22,7 +22,7 @@ export type Launch = (file: string, args: readonly string[]) => Promise<void>;
 export interface OsEnv {
 	platform: NodeJS.Platform;
 	home: string;
-	/** `SAI_ATLAS_LANG`: the language of the approval sentences. */
+	/** `SAI_ATLAS_LANG`: the language of the approval, result and error sentences; English unless `vi`. */
 	lang: string;
 	/** System-wide .desktop files; the person's own folder is never consulted. */
 	applicationsDir: string;
@@ -36,7 +36,8 @@ export interface OsEnv {
 }
 
 export interface Check {
-	label: string;
+	/** Shown in front of the command output, in the session language; the output itself stays as printed. */
+	label: PlainText;
 	argv: readonly string[];
 	/** Keeps only the output lines that match, for a command that prints far more than the answer. */
 	keep?: RegExp;
@@ -92,58 +93,112 @@ type OsSetting = (typeof OS_SETTINGS)[number];
 const COMMAND_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_LINES = 12;
 const MAX_OUTPUT_CHARS = 1_200;
-const ONLY_SAI_OS = "This works only on SAI OS.";
-const NOT_AVAILABLE = "This is not available on this computer.";
-const DOCUMENTS_ONLY = "I can only open documents and pictures.";
+const ONLY_SAI_OS: PlainText = { en: "This works only on SAI OS.", vi: "Tính năng này chỉ dùng được trên SAI OS." };
+const NOT_AVAILABLE: PlainText = {
+	en: "This is not available on this computer.",
+	vi: "Máy tính này không có tính năng này.",
+};
+const DOCUMENTS_ONLY: PlainText = {
+	en: "I can only open documents and pictures.",
+	vi: "Tôi chỉ mở được tài liệu và hình ảnh.",
+};
+const PATH_NOT_FOUND: PlainText = {
+	en: "I could not find that file or folder.",
+	vi: "Tôi không tìm thấy tệp hoặc thư mục đó.",
+};
+const HOME_ONLY: PlainText = {
+	en: "I can only open files and folders in your home folder.",
+	vi: "Tôi chỉ mở được tệp và thư mục trong thư mục nhà của bạn.",
+};
+const NOT_A_FOLDER: PlainText = { en: "That is not a folder.", vi: "Đó không phải là thư mục." };
+const NOT_A_FILE: PlainText = { en: "That is not a file.", vi: "Đó không phải là tệp." };
+const APP_NOT_FOUND: PlainText = { en: "I could not find that app.", vi: "Tôi không tìm thấy ứng dụng đó." };
+const OPEN_FAILED: PlainText = { en: "I could not open it.", vi: "Tôi không mở được mục này." };
+const SETTING_FAILED: PlainText = {
+	en: "I could not change that setting.",
+	vi: "Tôi không thay đổi được cài đặt đó.",
+};
+const UNEXPECTED: PlainText = {
+	en: "Something went wrong on this computer.",
+	vi: "Đã có lỗi trên máy tính này.",
+};
+const OPENED: PlainText = { en: "Opened.", vi: "Đã mở." };
+/** Words around the label of a check whose command printed nothing or does not exist. */
+const NOTHING_FOUND: PlainText = { en: "nothing found", vi: "không tìm thấy gì" };
+const UNAVAILABLE: PlainText = { en: "not available", vi: "không có trên máy này" };
+const NO_BATTERY: PlainText = { en: "no battery found", vi: "không tìm thấy pin" };
+const BATTERY: PlainText = { en: "Battery", vi: "Pin" };
 
 const df = (path: string): readonly string[] => ["df", "-h", "--output=target,size,avail,pcent", path];
 
 const CHECKS: Record<DiagnoseArea, readonly Check[]> = {
 	network: [
-		{ label: "Connection", argv: ["nmcli", "-t", "-f", "STATE,CONNECTIVITY", "general"] },
-		{ label: "Wi-Fi radio", argv: ["nmcli", "-t", "-f", "WIFI", "radio"] },
-		{ label: "Devices", argv: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"] },
+		{ label: { en: "Connection", vi: "Kết nối" }, argv: ["nmcli", "-t", "-f", "STATE,CONNECTIVITY", "general"] },
+		{ label: { en: "Wi-Fi radio", vi: "Sóng Wi-Fi" }, argv: ["nmcli", "-t", "-f", "WIFI", "radio"] },
+		{
+			label: { en: "Devices", vi: "Thiết bị" },
+			argv: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device"],
+		},
 	],
 	sound: [
-		{ label: "Default output", argv: ["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"], keep: /\bnode\.description\b/ },
+		{
+			label: { en: "Default output", vi: "Đầu ra mặc định" },
+			argv: ["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"],
+			keep: /\bnode\.description\b/,
+		},
 		// wpctl prints "Volume: 0.34", with " [MUTED]" appended when the output is muted.
-		{ label: "Volume and mute", argv: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"] },
+		{
+			label: { en: "Volume and mute", vi: "Âm lượng và tắt tiếng" },
+			argv: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"],
+		},
 	],
 	printer: [
-		{ label: "Printers", argv: ["lpstat", "-p", "-d"] },
-		{ label: "Waiting print jobs", argv: ["lpstat", "-o"] },
+		{ label: { en: "Printers", vi: "Máy in" }, argv: ["lpstat", "-p", "-d"] },
+		{ label: { en: "Waiting print jobs", vi: "Lệnh in đang chờ" }, argv: ["lpstat", "-o"] },
 	],
 	storage: [
-		{ label: "Home disk", argv: df("/home") },
-		{ label: "System disk", argv: df("/") },
+		{ label: { en: "Home disk", vi: "Ổ đĩa thư mục nhà" }, argv: df("/home") },
+		{ label: { en: "System disk", vi: "Ổ đĩa hệ thống" }, argv: df("/") },
 	],
 	performance: [
-		{ label: "Running time and load", argv: ["uptime"] },
-		{ label: "Memory", argv: ["free", "-h"] },
-		{ label: "Busiest programs", argv: ["ps", "-eo", "comm,%cpu,%mem", "--sort=-%cpu"] },
+		{ label: { en: "Running time and load", vi: "Thời gian chạy và mức tải" }, argv: ["uptime"] },
+		{ label: { en: "Memory", vi: "Bộ nhớ" }, argv: ["free", "-h"] },
+		{
+			label: { en: "Busiest programs", vi: "Chương trình bận nhất" },
+			argv: ["ps", "-eo", "comm,%cpu,%mem", "--sort=-%cpu"],
+		},
 	],
 	bluetooth: [
-		{ label: "Bluetooth radio", argv: ["rfkill", "list", "bluetooth"] },
-		{ label: "Bluetooth adapter", argv: ["bluetoothctl", "show"] },
+		{ label: { en: "Bluetooth radio", vi: "Sóng Bluetooth" }, argv: ["rfkill", "list", "bluetooth"] },
+		{ label: { en: "Bluetooth adapter", vi: "Bộ điều hợp Bluetooth" }, argv: ["bluetoothctl", "show"] },
 	],
 	display: [
 		{
-			label: "Screens (XWayland view, may not list every screen or its real size)",
+			label: {
+				en: "Screens (XWayland view, may not list every screen or its real size)",
+				vi: "Màn hình (theo XWayland, có thể thiếu màn hình hoặc sai kích thước thật)",
+			},
 			argv: ["xrandr", "--listmonitors"],
 		},
-		{ label: "Colour scheme", argv: ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"] },
 		{
-			label: "Night light",
+			label: { en: "Colour scheme", vi: "Bảng màu" },
+			argv: ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
+		},
+		{
+			label: { en: "Night light", vi: "Ánh sáng ban đêm" },
 			argv: ["gsettings", "get", "org.gnome.settings-daemon.plugins.color", "night-light-enabled"],
 		},
-		{ label: "Text size", argv: ["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"] },
+		{
+			label: { en: "Text size", vi: "Cỡ chữ" },
+			argv: ["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"],
+		},
 	],
 	typing: [
-		{ label: "Input method setting", argv: ["im-config", "-m"] },
-		{ label: "IBus running", argv: ["pgrep", "-l", "-x", "ibus-daemon"] },
-		{ label: "Fcitx running", argv: ["pgrep", "-l", "-x", "fcitx5"] },
+		{ label: { en: "Input method setting", vi: "Cài đặt bộ gõ" }, argv: ["im-config", "-m"] },
+		{ label: { en: "IBus running", vi: "IBus đang chạy" }, argv: ["pgrep", "-l", "-x", "ibus-daemon"] },
+		{ label: { en: "Fcitx running", vi: "Fcitx đang chạy" }, argv: ["pgrep", "-l", "-x", "fcitx5"] },
 	],
-	updates: [{ label: "Waiting updates", argv: ["apt", "list", "--upgradable"] }],
+	updates: [{ label: { en: "Waiting updates", vi: "Bản cập nhật đang chờ" }, argv: ["apt", "list", "--upgradable"] }],
 };
 
 /** System monitors in order of preference: Resources ships with Ubuntu 26.04, the GNOME one with 24.04. */
@@ -170,10 +225,10 @@ function fixesFor(area: DiagnoseArea, applicationsDir: string): string {
 
 /** Read-only checks of the overall system; the battery is looked up separately through upower. */
 export const STATUS_CHECKS: readonly Check[] = [
-	{ label: "Disk", argv: ["df", "-h", "--output=target,avail,pcent", "/home"] },
-	{ label: "Memory", argv: ["free", "-h"] },
-	{ label: "Network", argv: ["nmcli", "-t", "-f", "STATE", "general"] },
-	{ label: "Printers", argv: ["lpstat", "-p", "-d"] },
+	{ label: { en: "Disk", vi: "Ổ đĩa" }, argv: ["df", "-h", "--output=target,avail,pcent", "/home"] },
+	{ label: { en: "Memory", vi: "Bộ nhớ" }, argv: ["free", "-h"] },
+	{ label: { en: "Network", vi: "Mạng" }, argv: ["nmcli", "-t", "-f", "STATE", "general"] },
+	{ label: { en: "Printers", vi: "Máy in" }, argv: ["lpstat", "-p", "-d"] },
 ];
 
 export function diagnoseChecks(area: DiagnoseArea): readonly Check[] {
@@ -263,16 +318,16 @@ export function buildOpenItemArgv(item: { kind: unknown; value: unknown }, conte
 		case "file":
 		case "folder": {
 			const path = resolveExisting(value, context.home);
-			if (!path) throw new PlainError("I could not find that file or folder.");
+			if (!path) throw new PlainError(PATH_NOT_FOUND);
 			if (!isInsideDir(path, context.home)) {
-				throw new PlainError("I can only open files and folders in your home folder.");
+				throw new PlainError(HOME_ONLY);
 			}
 			const stats = statSync(path);
 			if (kind === "folder") {
-				if (!stats.isDirectory()) throw new PlainError("That is not a folder.");
+				if (!stats.isDirectory()) throw new PlainError(NOT_A_FOLDER);
 				return ["xdg-open", path];
 			}
-			if (!stats.isFile()) throw new PlainError("That is not a file.");
+			if (!stats.isFile()) throw new PlainError(NOT_A_FILE);
 			const ext = extname(path).slice(1).toLowerCase();
 			if (!(OPENABLE as readonly string[]).includes(ext) || (stats.mode & 0o111) !== 0) {
 				throw new PlainError(DOCUMENTS_ONLY);
@@ -281,13 +336,16 @@ export function buildOpenItemArgv(item: { kind: unknown; value: unknown }, conte
 		}
 		case "app": {
 			const desktop = systemDesktopEntry(value.trim().replace(/\.desktop$/, ""), context.applicationsDir);
-			if (!desktop) throw new PlainError("I could not find that app.");
+			if (!desktop) throw new PlainError(APP_NOT_FOUND);
 			if (!existsSync(context.gioPath)) throw new PlainError(NOT_AVAILABLE);
 			return [context.gioPath, "launch", desktop];
 		}
 		case "settings":
 			if (!isPanel(value.trim())) {
-				throw new PlainError(`I can only open these settings: ${SETTINGS_PANELS.join(", ")}.`);
+				throw new PlainError({
+					en: `I can only open these settings: ${SETTINGS_PANELS.join(", ")}.`,
+					vi: `Tôi chỉ mở được các mục cài đặt sau: ${SETTINGS_PANELS.map(panel => PANEL_NAMES[panel].vi).join(", ")}.`,
+				});
 			}
 			return ["gnome-control-center", value.trim()];
 		default:
@@ -390,42 +448,51 @@ function clip(output: string): string {
 /** Runs one read-only check and returns "label: output", never throwing. */
 async function runCheck(env: OsEnv, check: Check): Promise<string> {
 	const [file, ...args] = check.argv;
+	const label = inLanguage(check.label, env.lang);
+	const nothing = inLanguage(NOTHING_FOUND, env.lang);
 	try {
 		const { stdout, stderr } = await env.execFile(file, args, { timeout: COMMAND_TIMEOUT_MS });
 		const output = clip(keepLines(stdout || stderr, check.keep));
-		return `${check.label}: ${output || "nothing found"}`;
+		return `${label}: ${output || nothing}`;
 	} catch (error) {
-		if (isEnoent(error)) return `${check.label}: not available`;
+		if (isEnoent(error)) return `${label}: ${inLanguage(UNAVAILABLE, env.lang)}`;
 		const { stdout, stderr } = error as { stdout?: unknown; stderr?: unknown };
 		const output = clip(`${typeof stdout === "string" ? stdout : ""}${typeof stderr === "string" ? stderr : ""}`);
-		return `${check.label}: ${output || "nothing found"}`;
+		return `${label}: ${output || nothing}`;
 	}
 }
 
 async function batteryLine(env: OsEnv): Promise<string> {
+	const label = inLanguage(BATTERY, env.lang);
 	let devices: string;
 	try {
 		devices = (await env.execFile("upower", ["-e"], { timeout: COMMAND_TIMEOUT_MS })).stdout;
 	} catch (error) {
-		return isEnoent(error) ? "Battery: not available" : "Battery: nothing found";
+		return `${label}: ${inLanguage(isEnoent(error) ? UNAVAILABLE : NOTHING_FOUND, env.lang)}`;
 	}
 	const battery = devices
 		.split("\n")
 		.map(line => line.trim())
 		.find(line => /battery/i.test(line));
-	if (!battery) return "Battery: no battery found";
-	const details = await runCheck(env, { label: "Battery", argv: ["upower", "-i", battery] });
+	if (!battery) return `${label}: ${inLanguage(NO_BATTERY, env.lang)}`;
+	const details = await runCheck(env, { label: BATTERY, argv: ["upower", "-i", battery] });
 	return details
 		.split("\n")
 		.filter((line, index) => index === 0 || /percentage|state|time to/i.test(line))
 		.join("\n");
 }
 
+/**
+ * Runs a tool call on SAI OS only and turns a failure into an error result: a sentence for the
+ * person in the session language, an argument check in English for the model, and never a raw
+ * system error.
+ */
 function guard(env: OsEnv, job: () => Promise<ToolResult>): Promise<ToolResult> {
-	if (env.platform !== "linux") return Promise.resolve(textResult(ONLY_SAI_OS, true));
+	if (env.platform !== "linux") return Promise.resolve(textResult(inLanguage(ONLY_SAI_OS, env.lang), true));
 	return job().catch(error => {
-		const known = error instanceof PlainError || error instanceof ArgumentError;
-		return textResult(known ? error.message : "Something went wrong on this computer.", true);
+		if (error instanceof ArgumentError) return textResult(error.message, true);
+		const plain = error instanceof PlainError ? error.inLanguage(env.lang) : inLanguage(UNEXPECTED, env.lang);
+		return textResult(plain, true);
 	});
 }
 
@@ -531,9 +598,9 @@ export function createOsTools(env: OsEnv = defaultOsEnv()): PackTool[] {
 						await env.launch(file, rest);
 					} catch (error) {
 						if (isEnoent(error)) throw new PlainError(NOT_AVAILABLE);
-						throw new PlainError("I could not open it.");
+						throw new PlainError(OPEN_FAILED);
 					}
-					return textResult("Opened.");
+					return textResult(inLanguage(OPENED, env.lang));
 				}),
 		},
 		{
@@ -565,9 +632,10 @@ export function createOsTools(env: OsEnv = defaultOsEnv()): PackTool[] {
 						await env.execFile(file, rest, { timeout: COMMAND_TIMEOUT_MS });
 					} catch (error) {
 						if (isEnoent(error)) throw new PlainError(NOT_AVAILABLE);
-						throw new PlainError("I could not change that setting.");
+						throw new PlainError(SETTING_FAILED);
 					}
-					return textResult(`Done: ${osSettingSentence(args, "en")}.`);
+					const done = osSettingSentence(args, env.lang);
+					return textResult(env.lang === "vi" ? `Đã xong: ${done}.` : `Done: ${done}.`);
 				}),
 		},
 	];

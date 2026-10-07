@@ -5,8 +5,8 @@ import { fixture, zipEntry, zipNames } from "./zip-helpers";
 /** Slides the fixture must produce. */
 const EXPECTED_SLIDES = 8;
 
-async function build(markdown: string, title?: string) {
-	const deck = await buildSlides({ markdown, title, fallbackTitle: "Slides" });
+async function build(markdown: string, title?: string, lang = "en") {
+	const deck = await buildSlides({ markdown, title, fallbackTitle: "Slides", lang });
 	const names = await zipNames(deck.bytes);
 	const slideNames = names
 		.filter(name => /^ppt\/slides\/slide\d+\.xml$/.test(name))
@@ -76,6 +76,21 @@ describe("buildSlides", () => {
 		expect(deck.check).toContain("split onto 2 slides: Next steps");
 	});
 
+	it("writes its check and the continued-slide mark in Vietnamese when the language is vi", async () => {
+		const { deck, slides } = await build(fixture("report-shapes.md"), undefined, "vi");
+		expect(deck.check).toMatch(new RegExp(`^${EXPECTED_SLIDES} trang chiếu \\(1 trang tiêu đề, `));
+		expect(deck.check).toContain("chia thành 2 trang chiếu: Next steps");
+		expect(deck.check).not.toMatch(/slide|\d+ \S+s\b/);
+		expect(slides.some(slide => texts(slide).includes("Next steps (tiếp)"))).toBe(true);
+		expect(slides.some(slide => slide.includes("(cont.)"))).toBe(false);
+	});
+
+	it("marks a continued slide in English for an unknown language", async () => {
+		const { deck, slides } = await build(fixture("report-shapes.md"), undefined, "fr");
+		expect(deck.check).toContain("split onto 2 slides: Next steps");
+		expect(slides.some(slide => texts(slide).includes("Next steps (cont.)"))).toBe(true);
+	});
+
 	it("uses the first # heading as the title slide without repeating it as a divider", async () => {
 		const { slides, deck } = await build("# Plan for 2027\n\n## Goals\n\n- Grow\n- Hire\n");
 		expect(deck.title).toBe("Plan for 2027");
@@ -103,7 +118,7 @@ describe("buildSlides", () => {
 	it.each(["   ", "Just one line of text", "# Only a title\n\nSome text\n\n- a point"])(
 		"refuses Markdown without a slide section: %j",
 		async markdown => {
-			await expect(buildSlides({ markdown, fallbackTitle: "Slides" })).rejects.toThrow(
+			await expect(buildSlides({ markdown, fallbackTitle: "Slides", lang: "en" })).rejects.toThrow(
 				"There are no slides yet. Start each slide with a line beginning with ##.",
 			);
 		},

@@ -24,6 +24,8 @@ export interface ReportInput {
 	/** Explicit title; when absent the first `#` heading, else `fallbackTitle`. */
 	title?: string;
 	fallbackTitle: string;
+	/** Session language (`SAI_ATLAS_LANG`): `vi` writes the check in Vietnamese, anything else in English. */
+	lang: string;
 }
 
 export interface BuiltDocument {
@@ -212,6 +214,18 @@ function numberingLevels(format: "bullet" | "decimal") {
 	}));
 }
 
+/** "2 headings, 1 table, 3 list items"; Vietnamese has no plural. */
+function describe(counts: Counts, lang: string): string {
+	if (lang === "vi") {
+		return `${counts.headings} đề mục, ${counts.tables} bảng, ${counts.listItems} mục danh sách`;
+	}
+	return [
+		countOf(counts.headings, "heading"),
+		countOf(counts.tables, "table"),
+		countOf(counts.listItems, "list item"),
+	].join(", ");
+}
+
 export async function buildReport(input: ReportInput): Promise<BuiltDocument> {
 	const { title, tokens } = resolveTitle(input.markdown, input.title, input.fallbackTitle);
 	const counts: Counts = { headings: 0, tables: 0, listItems: 0, orderedLists: 0 };
@@ -259,10 +273,5 @@ export async function buildReport(input: ReportInput): Promise<BuiltDocument> {
 		],
 	});
 	const bytes = new Uint8Array(await Packer.toBuffer(doc));
-	const check = [
-		countOf(counts.headings, "heading"),
-		countOf(counts.tables, "table"),
-		countOf(counts.listItems, "list item"),
-	].join(", ");
-	return { bytes, check, title };
+	return { bytes, check: describe(counts, input.lang), title };
 }

@@ -214,6 +214,56 @@ describe("cleanWorkbook", () => {
 		expect(vi.workbook.getWorksheet("Changes")).toBeUndefined();
 	});
 
+	it("writes the check in English, with plural endings only above one", async () => {
+		const path = await writeXlsx(
+			"summary.xlsx",
+			[
+				["Name", "SĐT", "Amount"],
+				[" Ann ", "0905123456", "1,500"],
+				[null, null, null],
+				["Bob", "0912000111", "2,000"],
+				["Bob", "0912000111", "2,000"],
+			],
+			sheet => {
+				sheet.getCell("A6").value = "Note";
+				sheet.mergeCells("A6:C6");
+			},
+		);
+		const { result } = await clean(path, { totals: true });
+		expect(result.check).toBe(
+			"1 sheet, 4 rows kept, 1 empty row removed, 1 duplicate row removed, 1 cell trimmed, " +
+				"2 numbers converted, 1 merged range unmerged, kept as text: SĐT, totals row added",
+		);
+	});
+
+	it("writes the check in Vietnamese without plural endings when the language is vi", async () => {
+		const path = await writeXlsx(
+			"summary.xlsx",
+			[
+				["Tên", "SĐT", "Số tiền"],
+				[" An ", "0905123456", "1.500"],
+				[null, null, null],
+				["Bình", "0912000111", "2.000"],
+				["Bình", "0912000111", "2.000"],
+			],
+			sheet => {
+				sheet.getCell("A6").value = "Ghi chú";
+				sheet.mergeCells("A6:C6");
+			},
+		);
+		const { result } = await clean(path, { lang: "vi", totals: true });
+		expect(result.check).toBe(
+			"1 trang tính, giữ 4 dòng, xóa 1 dòng trống, xóa 1 dòng trùng lặp, bỏ khoảng trắng thừa ở 1 ô, " +
+				"chuyển 2 giá trị thành số, tách 1 vùng ô gộp, giữ dạng chữ: SĐT, đã thêm dòng tổng",
+		);
+	});
+
+	it("writes the check in English for an unknown language", async () => {
+		const path = await writeXlsx("summary.xlsx", [["A"], ["1"]]);
+		const { result } = await clean(path, { lang: "fr", decimal: "dot" });
+		expect(result.check).toMatch(/^1 sheet, 2 rows kept, /);
+	});
+
 	it("never changes the input file", async () => {
 		const path = await writeXlsx("keep.xlsx", [
 			["Name", "Amount"],
@@ -234,7 +284,7 @@ describe("cleanWorkbook", () => {
 			["Ann", "0905123456", 1500],
 			["Binh", "0912000111", 2000],
 		]);
-		expect(result.check).toContain("kept as text: Phone");
+		expect(result.check).toContain("giữ dạng chữ: Phone");
 	});
 
 	it("refuses an unknown file type, a missing file and an unreadable workbook with plain sentences", async () => {
