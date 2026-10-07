@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **A context size for each local model**: Sai ATLAS measures the largest context each installed Ollama model can use while it stays entirely in graphics memory (or, without a graphics card, within system memory), up to 128k, and uses it for that model. It measures new models at startup and right after a download, and measures again when the computer's memory or graphics card changes, never while a reply is being written. The Ollama window shows each model's size, lets you lower it and has **Measure again**. A lower size applies from the next reply without a restart, and a conversation that no longer fits is compacted.
+
 ### Changed
 
 - **Sai ATLAS is now an assistant for everyday work**: it writes Word reports, cleans up spreadsheets, turns reports into slides and helps with computer problems on SAI OS, with a model that runs on this computer through Ollama. The developer features were removed: the code lane, git, pull requests, statistics, extensions, MCP, SSH, the debug tools, live voice and collaboration. Power users keep all of them in the omp terminal app. Windows builds are no longer made.
@@ -28,6 +32,10 @@
 - Startup needs the standard `XDG_RUNTIME_DIR` (`/run/user/<uid>`), which every desktop login session sets; without it the WebKit sandbox cannot start.
 - The first start after the update from 0.9.16 shows the local-model welcome screen once more; what you choose there is remembered from then on.
 - When an update asks you to quit and reopen Sai ATLAS before it can install, it downloads the update again after the reopen.
+- An `ollama` entry in the agent's `models.yml` turns the per-model context sizes off; the Ollama window says so.
+- A context size is never measured above 128k, or above `OLLAMA_CONTEXT_LENGTH` when you set it. After raising or removing `OLLAMA_CONTEXT_LENGTH`, choose **Measure again**.
+- The graphics-memory check assumes one graphics card.
+- A new graphics card or more memory is noticed at the next launch.
 
 ## [0.9.16] - 2026-10-04
 

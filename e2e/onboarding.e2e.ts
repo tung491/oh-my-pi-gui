@@ -8,6 +8,9 @@ import { writeDesktopPrefs } from "./desktop-prefs";
 
 // A fresh profile meets the welcome screen once: download a model from a fake
 // Ollama, continue, and the next launch goes straight to the assistant.
+// The fake answers 404 to /api/show and /api/ps, so the context measurement
+// of the pulled model, held until the welcome screen closes, ends as a failure
+// that is remembered and not retried on the next launch.
 // The Playwright runner is Node, so the daemon is the node:http fake the unit
 // tests share rather than Bun.serve.
 
@@ -19,6 +22,19 @@ let record: string;
 let ollama: FakeOllama;
 const installed = new Set<string>();
 const pulls: string[] = [];
+
+interface FakeRequest {
+	method: string;
+	path: string;
+	at: number;
+}
+
+interface ContextFitPrefs {
+	ollamaContextFit?: { models?: Record<string, { lastError?: string | null }> };
+}
+
+const requests: FakeRequest[] = [];
+const showRequests = (since = 0) => requests.filter(request => request.path === "/api/show" && request.at >= since);
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -33,6 +49,7 @@ test.beforeAll(async () => {
 	await fs.chmod(path.resolve("e2e/sidecar-fixture.ts"), 0o755);
 	ollama = await startFakeOllama((req, res, body) => {
 		const url = new URL(req.url ?? "/", "http://fake.invalid");
+		requests.push({ method: req.method ?? "", path: url.pathname, at: Date.now() });
 		if (req.method === "GET" && url.pathname === "/api/version") return sendJson(res, { version: "0.12.0" });
 		if (req.method === "GET" && url.pathname === "/api/tags")
 			return sendJson(res, { models: [...installed].map(name => ({ name })) });
@@ -139,6 +156,8 @@ test("a fresh profile downloads a model on the welcome screen and does not see i
 
 		const continueButton = welcome.locator('[data-action="continue"]');
 		await expect(continueButton).toBeEnabled();
+		// The pulled model's measurement waits for the welcome screen to close.
+		expect(showRequests()).toEqual([]);
 		await continueButton.click();
 		await expect(welcome).toBeHidden();
 
@@ -148,13 +167,26 @@ test("a fresh profile downloads a model on the welcome screen and does not see i
 		expect(await recorded("set_model_role")).toEqual([
 			expect.objectContaining({ role: "default", modelId: `ollama/${tag}` }),
 		]);
-		const prefs = JSON.parse(await fs.readFile(path.join(userData, "prefs.json"), "utf8")) as {
+		const prefsFile = path.join(userData, "prefs.json");
+		const prefs = JSON.parse(await fs.readFile(prefsFile, "utf8")) as {
 			welcome?: { completed?: unknown };
 		};
 		expect(typeof prefs.welcome?.completed).toBe("string");
+
+		// The fake has no /api/show, so the measurement fails and the failure is stored.
+		const lastError = async () => {
+			try {
+				const stored = JSON.parse(await fs.readFile(prefsFile, "utf8")) as ContextFitPrefs;
+				return stored.ollamaContextFit?.models?.[tag]?.lastError ?? null;
+			} catch {
+				return null;
+			}
+		};
+		await expect.poll(lastError, { timeout: 20_000 }).toMatch(/HTTP 404/);
 	} finally {
 		await quit(first.app);
 	}
+	const relaunchedAt = Date.now();
 
 	const second = await launch();
 	try {
@@ -163,6 +195,8 @@ test("a fresh profile downloads a model on the welcome screen and does not see i
 		// The gate runs on the ready transition; give it the time a probe would take before asserting absence.
 		await second.page.waitForTimeout(2_000);
 		await expect(second.page.getByRole("dialog", { name: "Set up your local assistant" })).toHaveCount(0);
+		// A failure under the same machine is not retried automatically.
+		expect(showRequests(relaunchedAt)).toEqual([]);
 	} finally {
 		await quit(second.app);
 	}
