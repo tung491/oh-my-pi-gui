@@ -30,5 +30,9 @@
   {
     "ts": "src/main/session-new-window.test.ts",
     "rust": "src-tauri/src/services/ipc.rs"
+  },
+  {
+    "ts": "src/main/fs-read-pdf.test.ts",
+    "rust": "src-tauri/src/services/ipc.rs"
   }
 ]

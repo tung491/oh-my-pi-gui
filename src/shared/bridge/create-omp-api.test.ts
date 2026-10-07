@@ -181,4 +181,32 @@ describe("createOmpApi", () => {
 			details: { channel: IPC_EVENTS.DEEP_LINK },
 		});
 	});
+
+	it("reads a PDF over its own channel and passes the shell's pathForFile through", async () => {
+		const { port, invokes } = fakePort(() => ({ ok: true, data: "JVBERi0=", size: 5 }));
+		const api = createOmpApi(port, "linux");
+		await expect(api.fs.readPdf("/docs/a.pdf")).resolves.toEqual({ ok: true, data: "JVBERi0=", size: 5 });
+		expect(invokes).toEqual([{ channel: IPC_COMMANDS.FS_READ_PDF, args: [{ path: "/docs/a.pdf" }] }]);
+		expect(api.system.pathForFile).toBeUndefined();
+
+		const pathForFile = (file: File) => `/dropped/${file.name}`;
+		const electronApi = createOmpApi(port, "darwin", "/Users/u", { pathForFile });
+		expect(electronApi.system.pathForFile?.(new File(["x"], "b.txt"))).toBe("/dropped/b.txt");
+		expect(electronApi.system.onNativeDropPaths).toBeUndefined();
+	});
+
+	it("delivers native drop paths only when the shell emits them, dropping malformed entries", () => {
+		const { port, emit, listenerCount } = fakePort();
+		expect(createOmpApi(port, "linux").system.onNativeDropPaths).toBeUndefined();
+
+		const api = createOmpApi(port, "linux", "/home/u", { nativeDropPaths: true });
+		const seen: string[][] = [];
+		const unsubscribe = api.system.onNativeDropPaths?.(paths => seen.push(paths));
+		emit(IPC_EVENTS.NATIVE_DROP_PATHS, { paths: ["/a b.pdf", 7, "", "/c.txt"] });
+		emit(IPC_EVENTS.NATIVE_DROP_PATHS, { paths: "nope" });
+		emit(IPC_EVENTS.NATIVE_DROP_PATHS, null);
+		expect(seen).toEqual([["/a b.pdf", "/c.txt"], [], []]);
+		unsubscribe?.();
+		expect(listenerCount(IPC_EVENTS.NATIVE_DROP_PATHS)).toBe(0);
+	});
 });

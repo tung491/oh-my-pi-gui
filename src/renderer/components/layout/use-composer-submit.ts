@@ -1,7 +1,8 @@
 /**
  * useComposerSubmit: the composer submit controller extracted from InputArea.
  * Owns the entire send pipeline: yield-queue shorthand, slash-command
- * routing, and the prompt/steer/followUp dispatch. Text is sent as typed.
+ * routing, and the prompt/steer/followUp dispatch. Text is sent as typed,
+ * followed by one quoted path line per attached document.
  */
 
 import { useCallback } from "react";
@@ -15,13 +16,14 @@ import { clearSessionContext } from "../../lib/messages";
 import { dropReferencedPastes, expandPasteMarkers } from "../../lib/paste-blobs";
 import { parseQueueShorthand, splitQueuedMessages } from "../../lib/queue-input";
 import { useTabRpc } from "../../lib/tab-rpc";
-import { type ComposerImage, type ComposerStore, useComposerStore } from "../../stores/composer";
+import { type ComposerDocument, type ComposerImage, type ComposerStore, useComposerStore } from "../../stores/composer";
 import { useInputHistoryStore } from "../../stores/input-history";
 import { type MessagesStore, useMessagesStore } from "../../stores/messages";
 import { type SessionStore, useSessionStore } from "../../stores/session";
 import { sessionRuntimeStore, useRuntimeTabId } from "../../stores/session-runtime-context";
 import { restoreTabComposer, useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
+import { appendDocumentPaths } from "./attach-document";
 
 type SendMode = "prompt" | "steer" | "followUp";
 
@@ -68,18 +70,22 @@ export function useComposerSubmit({
 	const contextTabId = useRuntimeTabId();
 	const activeTabId = useTabsStore(state => state.activeTabId);
 	const runtimeTabId = contextTabId ?? activeTabId;
+	const composerDocuments = useComposerStore(state => state.documents);
+	const setDocuments = useComposerStore(state => state.setDocuments);
 	const send = useCallback(
 		// `overrideText` sends a freshly computed value (voice dictation submit
 		// trigger) instead of the rendered `text` state, which lags a setText.
 		// `forceMode` overrides the steer/followUp toggle for one send (⌃Enter).
 		// `keepDraft` sends `overrideText` on its own (a starter card): no composer
-		// image rides along, and the typed draft and images are never cleared or
-		// overwritten, not even to restore a failed send.
+		// image or document rides along, and the typed draft and attachments are
+		// never cleared or overwritten, not even to restore a failed send.
 		(overrideText?: string, forceMode?: SendMode, options?: { keepDraft?: boolean }) => {
 			const keepDraft = options?.keepDraft === true && overrideText !== undefined;
 			const images = keepDraft ? [] : composerImages;
+			const documents: ComposerDocument[] = keepDraft ? [] : composerDocuments;
+			const documentPaths = documents.map(document => document.path);
 			const message = (overrideText ?? text).trim();
-			if (!message && images.length === 0) return;
+			if (!message && images.length === 0 && documents.length === 0) return;
 			// A starter card that cannot go out now waits in the composer, after any
 			// typed draft, so the file it names is not lost; the notice says why.
 			const keepStarter = (reason: keyof typeof STARTER_KEPT_KEYS) => {
@@ -124,13 +130,14 @@ export function useComposerSubmit({
 					? sessionRuntimeStore<ComposerStore>(originTabId, "composer") === originComposer
 					: useTabsStore.getState().activeTabId === originTabId &&
 						useSessionStore.getState().sessionId === originSessionId;
-			const restoreDraft = (draft: string, attachments: ComposerImage[]) => {
+			const restoreDraft = (draft: string, attachments: ComposerImage[], restoredDocuments: ComposerDocument[]) => {
 				if (keepDraft) return;
 				restoreTabComposer(
 					originTabId,
 					originSessionId,
 					draft,
 					attachments,
+					restoredDocuments,
 					originSession ? originComposer : undefined,
 				);
 			};
@@ -138,6 +145,7 @@ export function useComposerSubmit({
 				if (keepDraft) return;
 				setText("");
 				setImages([]);
+				setDocuments([]);
 				setMenu(null);
 			};
 
@@ -160,6 +168,10 @@ export function useComposerSubmit({
 			const expandedMessage = emojiAutocomplete
 				? expandEmoticons(expandPasteMarkers(message))
 				: expandPasteMarkers(message);
+			// Documents are named after the typed text, one quoted path per line,
+			// once markers and emoticons are expanded so neither touches a path.
+			// ↑ history keeps them too: a recalled entry replays what the model got.
+			const historyEntry = appendDocumentPaths(message, documentPaths);
 
 			// ↑ history is a record of what the model received, so it is written only
 			// once delivery is confirmed. Recording up front left every failed or
@@ -168,40 +180,47 @@ export function useComposerSubmit({
 			// `->` / `=>` yield-queue shorthand (TUI #queueForYield parity): split an
 			// enumerated list into one queue entry per item; first item prompts with
 			// streamingBehavior:"followUp" when idle, everything else followUps;
-			// images ride on the first item only.
+			// images and documents ride on the first item only.
 			const queueBody = keepDraft ? undefined : parseQueueShorthand(expandedMessage);
 			if (queueBody !== undefined) {
 				const payload = images.map(image => image.content);
 				const items = splitQueuedMessages(queueBody);
-				// Bare prefix + no images hits the usage warning, it does NOT enqueue
-				// (input-controller.ts:1186-1190). Images alone queue a single empty item.
-				if (items.length === 0 && payload.length === 0) {
+				// Bare prefix + no attachments hits the usage warning, it does NOT enqueue
+				// (input-controller.ts:1186-1190). Attachments alone queue a single item.
+				if (items.length === 0 && payload.length === 0 && documents.length === 0) {
 					toast({ variant: "warning", message: t("input.queue.usage") });
 					return;
 				}
 				const previousImages = images;
+				const previousDocuments = documents;
 				setText("");
 				setImages([]);
+				setDocuments([]);
 				setMenu(null);
-				const dispatchItems = items.length > 0 ? items : [""];
+				const typedItems = items.length > 0 ? items : [""];
+				const dispatchItems = typedItems.map((item, index) =>
+					index === 0 ? appendDocumentPaths(item, documentPaths) : item,
+				);
+				const restoreRefused = () => {
+					setText(message);
+					setImages(previousImages);
+					setDocuments(previousDocuments);
+				};
 				// Queued items reach the agent's prompt RPC, which runs its builtin
 				// commands, so a removed command or a cloud model is refused here as in a
 				// plain send.
 				if (dispatchItems.some(item => removedCommandName(item, commands) !== null)) {
-					setText(message);
-					setImages(previousImages);
+					restoreRefused();
 					toast({ variant: "warning", message: t("unavailable.tuiOnly") });
 					return;
 				}
 				if (dispatchItems.some(item => cloudModelCommand(item, commands))) {
-					setText(message);
-					setImages(previousImages);
+					restoreRefused();
 					toast({ variant: "warning", message: t("ollama.settings.cloudRefused") });
 					return;
 				}
 				if (dispatchItems.some(item => isGuiOnlyBuiltinCommand(item, commands))) {
-					setText(message);
-					setImages(previousImages);
+					restoreRefused();
 					toast({ variant: "warning", message: t("input.queue.guiCommand") });
 					return;
 				}
@@ -239,25 +258,26 @@ export function useComposerSubmit({
 						// Only a fully dispatched shorthand enters history. A partial run
 						// restores the unsent remainder as the draft, so recording the
 						// original would offer ↑ a list whose first items already ran.
-						useInputHistoryStore.getState().record(message, originCwd);
+						useInputHistoryStore.getState().record(historyEntry, originCwd);
 						if (originStillActive()) dropReferencedPastes(message);
 					} catch (error) {
 						if (deliveryPending) markUncertain();
 						if (sent === 0) {
-							// Zero items sent: restore the original draft (markers) and images.
-							restoreDraft(message, previousImages);
+							// Zero items sent: restore the original draft (markers) and attachments.
+							restoreDraft(message, previousImages, previousDocuments);
 						} else {
 							// Partial failure: restore the remainder in the exact shorthand
 							// shape the parser can consume again. Continuation indentation
 							// prevents marker-looking lines inside one item from splitting.
-							const remaining = dispatchItems.slice(sent);
+							// The attachments went out with the first item, so none return.
+							const remaining = typedItems.slice(sent);
 							const remainingDraft =
 								remaining.length === 1
 									? `=> ${remaining[0]}`
 									: `=>\n${remaining
 											.map((item, index) => `${index + 1}. ${item.replaceAll("\n", "\n   ")}`)
 											.join("\n")}`;
-							restoreDraft(remainingDraft, []);
+							restoreDraft(remainingDraft, [], []);
 							if (originStillActive()) dropReferencedPastes(message);
 						}
 						toast({
@@ -278,8 +298,9 @@ export function useComposerSubmit({
 			// while streaming), session-replacing commands are blocked while
 			// busy, and local-only resolutions rehydrate the transcript.
 			const payload = images.map(image => image.content);
+			const outgoingMessage = appendDocumentPaths(expandedMessage, documentPaths);
 			const submit = planComposerSubmit({
-				message: expandedMessage,
+				message: outgoingMessage,
 				images: payload,
 				isStreaming,
 				mode: forceMode ?? mode,
@@ -288,7 +309,7 @@ export function useComposerSubmit({
 			});
 			if (submit.kind === "blocked") return;
 			if (submit.kind === "handled") {
-				useInputHistoryStore.getState().record(message, originCwd);
+				useInputHistoryStore.getState().record(historyEntry, originCwd);
 				clearComposer();
 				dropReferencedPastes(message);
 				return;
@@ -297,23 +318,25 @@ export function useComposerSubmit({
 			// is restored when the server refuses (busy).
 			if (submit.kind === "clear") {
 				const previousImages = images;
+				const previousDocuments = documents;
 				clearComposer();
 				void clearSessionContext(rpc, () => hydrateTabSession(originTabId)).then(cleared => {
 					if (cleared) {
-						useInputHistoryStore.getState().record(message, originCwd);
+						useInputHistoryStore.getState().record(historyEntry, originCwd);
 						if (originStillActive()) dropReferencedPastes(message);
 						return;
 					}
-					restoreDraft(message, previousImages);
+					restoreDraft(message, previousImages, previousDocuments);
 				});
 				return;
 			}
 			const previousImages = images;
+			const previousDocuments = documents;
 			const optimisticMessage: AgentMessage | undefined =
-				!isStreaming && !expandedMessage.startsWith("/")
+				!isStreaming && !outgoingMessage.startsWith("/")
 					? {
 							role: "user",
-							content: [{ type: "text", text: expandedMessage }, ...payload],
+							content: [{ type: "text", text: outgoingMessage }, ...payload],
 							timestamp: Date.now(),
 							optimistic: true,
 							optimisticAfterEntryId:
@@ -333,7 +356,7 @@ export function useComposerSubmit({
 			setTimeout(() => {
 				if (!originStillActive()) {
 					if (optimisticMessage) originMessages.getState().removeLiveMessage(optimisticMessage);
-					restoreDraft(message, previousImages);
+					restoreDraft(message, previousImages, previousDocuments);
 					return;
 				}
 				void submit
@@ -342,12 +365,12 @@ export function useComposerSubmit({
 						if (!response.success) {
 							if (response.code === "rpc_delivery_unknown") markUncertain();
 							if (optimisticMessage) originMessages.getState().removeLiveMessage(optimisticMessage);
-							restoreDraft(message, previousImages);
+							restoreDraft(message, previousImages, previousDocuments);
 							showSendError(t("input.sendFailed"), response.error);
 							return;
 						}
 						accepted = true;
-						useInputHistoryStore.getState().record(message, originCwd);
+						useInputHistoryStore.getState().record(historyEntry, originCwd);
 						if (!originStillActive()) return;
 						dropReferencedPastes(message);
 						await settleComposerResponse(response, () => hydrateTabSession(originTabId));
@@ -359,7 +382,7 @@ export function useComposerSubmit({
 						}
 						markUncertain();
 						if (optimisticMessage) originMessages.getState().removeLiveMessage(optimisticMessage);
-						restoreDraft(message, previousImages);
+						restoreDraft(message, previousImages, previousDocuments);
 						showSendError(t("input.sendFailed"), String(error));
 					})
 					.finally(() => {
@@ -370,6 +393,7 @@ export function useComposerSubmit({
 		[
 			text,
 			composerImages,
+			composerDocuments,
 			sending,
 			status,
 			isStreaming,
@@ -383,6 +407,7 @@ export function useComposerSubmit({
 			t,
 			setText,
 			setImages,
+			setDocuments,
 			setSending,
 			setMenu,
 		],

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Drop files on the message box**: dropped or picked files show as cards above the text, with the picture for an image, the first page for a PDF and a type icon for anything else, and each card has a remove button. The sent message shows the same cards instead of the file paths. The agent still receives the same message as before.
+
 ### Changed
 
 - **Sai ATLAS is now an assistant for everyday work**: it writes Word reports, cleans up spreadsheets, turns reports into slides and helps with computer problems on SAI OS, with a model that runs on this computer through Ollama. The developer features were removed: the code lane, git, pull requests, statistics, extensions, MCP, SSH, the debug tools, live voice and collaboration. Power users keep all of them in the omp terminal app. Windows builds are no longer made.

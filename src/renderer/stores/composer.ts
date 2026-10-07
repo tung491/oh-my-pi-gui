@@ -1,6 +1,7 @@
 /**
  * Composer content. Lives in a store (not InputArea-local state) so session
- * tabs can snapshot/restore text and image attachments together.
+ * tabs can snapshot/restore text, image attachments and attached documents
+ * together.
  *
  * Writes still flow through the same call sites as the old useState: every
  * producer (typing, paste markers, mentions, history recall, dequeue
@@ -14,6 +15,16 @@ import { createScopedStoreHook } from "./session-runtime-context";
 export interface ComposerImage {
 	content: ImageContent;
 	preview: string;
+	/** File name shown on the image's card; absent for pasted images. */
+	name?: string;
+	/** Where the image was read from on disk; absent for pasted images. */
+	path?: string;
+}
+
+/** A non-image file named in the prompt by its quoted path at send time. */
+export interface ComposerDocument {
+	path: string;
+	name: string;
 }
 
 export interface ComposerStore {
@@ -27,6 +38,9 @@ export interface ComposerStore {
 	 * (React setState parity — InputArea's updater-form call sites unchanged). */
 	setDraft: (next: string | ((current: string) => string)) => void;
 	setImages: (next: ComposerImage[] | ((current: ComposerImage[]) => ComposerImage[])) => void;
+	/** Attached documents, held apart from the draft until a send serializes them. */
+	documents: ComposerDocument[];
+	setDocuments: (next: ComposerDocument[] | ((current: ComposerDocument[]) => ComposerDocument[])) => void;
 	/** A quick-entry prompt waiting for its tab to be ready; InputArea sends it once. */
 	autoSubmit: { id: string } | null;
 	/** The prompt InputArea last took over; a reset clears autoSubmit without setting it. */
@@ -48,12 +62,22 @@ export const createComposerStore = () =>
 		images: [],
 		setDraft: next => set(state => ({ draft: typeof next === "function" ? next(state.draft) : next })),
 		setImages: next => set(state => ({ images: typeof next === "function" ? next(state.images) : next })),
+		documents: [],
+		setDocuments: next => set(state => ({ documents: typeof next === "function" ? next(state.documents) : next })),
 		autoSubmit: null,
 		handedOff: null,
 		queueAutoSubmit: ({ id, text }) => set({ draft: text, autoSubmit: { id }, handedOff: null }),
 		clearAutoSubmit: () => set(state => ({ autoSubmit: null, handedOff: state.autoSubmit?.id ?? state.handedOff })),
 		reset: () =>
-			set({ draft: "", images: [], sending: false, submissionUncertain: false, autoSubmit: null, handedOff: null }),
+			set({
+				draft: "",
+				images: [],
+				documents: [],
+				sending: false,
+				submissionUncertain: false,
+				autoSubmit: null,
+				handedOff: null,
+			}),
 	}));
 
 const defaultComposerStore = createComposerStore();

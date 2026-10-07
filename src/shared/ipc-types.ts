@@ -84,6 +84,8 @@ export const IPC_EVENTS = {
 	SESSIONS_CHANGED: "sessions:changed",
 	/** Log line appended */
 	LOG_LINE: "log:line",
+	/** Tauri on Linux → renderer: file paths of a drag over the window, read from the GTK drop data (IpcNativeDropPathsPayload) */
+	NATIVE_DROP_PATHS: "system:native-drop-paths",
 	/** Native application menu action */
 	MENU_ACTION: "menu:action",
 	/** omp:// deep link (new session / switch session) */
@@ -186,6 +188,8 @@ export const IPC_COMMANDS = {
 	FS_READ_PLAN: "fs:read-plan",
 	/** Read an image file as a data URL for markdown <img> rendering (sniffed mime, size cap) */
 	FS_READ_IMAGE: "fs:read-image",
+	/** Read a PDF (absolute or `~` path) as base64 for a local page-1 thumbnail (PDF sniff, size cap) */
+	FS_READ_PDF: "fs:read-pdf",
 	/** Open a session (or a fresh window) in a new parallel window with its own sidecar */
 	SESSION_OPEN_NEW_WINDOW: "session:open-new-window",
 	/** Fresh window pulls the session it was opened for (one-shot) */
@@ -736,6 +740,29 @@ export interface IpcFsReadImageResult {
 	error?: string;
 }
 
+export interface IpcFsReadPdfPayload {
+	/**
+	 * Absolute (or `~/`) path of a PDF the user attached. The bytes only reach a
+	 * local thumbnail render, so the path is not workspace-confined, but the file
+	 * must start with `%PDF-` and fit under the size cap.
+	 */
+	path: string;
+}
+
+export interface IpcFsReadPdfResult {
+	ok: boolean;
+	/** The whole file, base64-encoded; absent on failure. */
+	data?: string;
+	/** Total file size in bytes (0 when unknown). */
+	size: number;
+	error?: string;
+}
+
+/** `system:native-drop-paths`: absolute local paths of the files being dragged over the window, in drag order. */
+export interface IpcNativeDropPathsPayload {
+	paths: string[];
+}
+
 export interface IpcFsReadPlanResult {
 	ok: boolean;
 	/** The file actually read (fsPath or the fallback pick); null when no plan file exists. */
@@ -1243,6 +1270,19 @@ export interface OmpApi {
 		): Promise<string[] | null>;
 		clipboardRead(): Promise<string>;
 		notify(title: string, body?: string): void;
+		/**
+		 * Filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`;
+		 * "" when the file has none). Undefined under Tauri, where dropped paths
+		 * come from the drop's `text/uri-list`.
+		 */
+		pathForFile?: (file: File) => string;
+		/**
+		 * File paths of a drag over the window as the shell reads them from the
+		 * native drop data, which arrives before the page's `drop` event. Tauri
+		 * only: WebKitGTK hides dropped file paths from the page. Undefined under
+		 * Electron. Returns the unsubscribe function.
+		 */
+		onNativeDropPaths?: (callback: (paths: string[]) => void) => () => void;
 	};
 	prefs: {
 		get(key?: string): Promise<unknown>;
@@ -1287,6 +1327,7 @@ export interface OmpApi {
 		read(path: string, maxBytes?: number, tabId?: string): Promise<IpcFsReadResult>;
 		readPlan(payload: IpcFsReadPlanPayload): Promise<IpcFsReadPlanResult>;
 		readImage(path: string, tabId?: string): Promise<IpcFsReadImageResult>;
+		readPdf(path: string): Promise<IpcFsReadPdfResult>;
 	};
 	editor: {
 		openExternal(content: string): Promise<{

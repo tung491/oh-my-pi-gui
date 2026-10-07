@@ -1,10 +1,11 @@
-import { ArrowUp, ChevronDown, History, Mic, MoreHorizontal, Paperclip, Square, SquarePen, X, Zap } from "lucide-react";
-import type { ClipboardEvent, KeyboardEvent } from "react";
+import { ArrowUp, ChevronDown, History, Mic, MoreHorizontal, Paperclip, Square, SquarePen, Zap } from "lucide-react";
+import type { ClipboardEvent, DragEvent, KeyboardEvent } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AvailableCommand, ImageContent } from "../../../shared/rpc-types";
 import { useOverlayPresence } from "../../hooks/use-overlay-presence";
 import { useDisplayPreference } from "../../lib/display-preferences";
+import { dragCarriesFiles, hasDroppedFiles, isFileDrag, resolveDroppedPaths } from "../../lib/dropped-files";
 import { tryEmojiInlineReplace } from "../../lib/emoji";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
@@ -29,7 +30,7 @@ import {
 	recordAndTranscribe,
 	stopVoiceRecording,
 } from "../../lib/voice";
-import { useComposerStore } from "../../stores/composer";
+import { type ComposerImage, useComposerStore } from "../../stores/composer";
 import { useInputHistoryStore } from "../../stores/input-history";
 import { useModelStore } from "../../stores/model";
 import { type SessionStore, useSessionStore } from "../../stores/session";
@@ -38,10 +39,11 @@ import { useSettingsStore } from "../../stores/settings";
 import { useActiveTabKind, useTabsStore } from "../../stores/tabs";
 import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
+import { AttachmentCard, AttachmentStrip, fileKindOf } from "../attachments";
 import { IconButton } from "../common";
 import {
 	ATTACH_FILTERS,
-	appendDocumentPaths,
+	addDocuments,
 	isPromptSafePath,
 	readImageAttachment,
 	splitAttachments,
@@ -55,6 +57,19 @@ import { useComposerSubmit } from "./use-composer-submit";
 type SendMode = "prompt" | "steer" | "followUp";
 
 const MENTION_FS_DEBOUNCE_MS = 150;
+
+const NO_FILE_DRAG = { depth: 0, claimed: false };
+
+/** One attached image not yet in the composer, by the tab it was attached in and its path. */
+interface PendingImage {
+	id: number;
+	tabId: string;
+	path: string;
+	/** The read image, held until every image attached before it in its tab has landed. */
+	image?: ComposerImage;
+	/** False once the tab or its session changed; the image is then dropped. */
+	stillOrigin: () => boolean;
+}
 
 /** 30px composer toolbar chip; pair with a surface (sunken, or a state fill). */
 const CHIP = "omp-pressable flex h-[30px] items-center rounded-md border";
@@ -101,6 +116,23 @@ export function InputArea() {
 	const setText = useComposerStore(s => s.setDraft);
 	const images = useComposerStore(s => s.images);
 	const setImages = useComposerStore(s => s.setImages);
+	const documents = useComposerStore(s => s.documents);
+	const setDocuments = useComposerStore(s => s.setDocuments);
+	/**
+	 * Attached images not yet in the composer, in attach order: a spinner card
+	 * while each is read, its thumbnail once read. The ref is the source of truth
+	 * for the async reads; the state renders it. A removed card's entry is gone,
+	 * so its read result is discarded.
+	 */
+	const pendingImagesRef = useRef<PendingImage[]>([]);
+	const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+	const nextPendingImageId = useRef(0);
+	/**
+	 * A URI-list or file drag over the composer: its enter/leave nesting depth,
+	 * so child elements do not flicker the hint, and whether it is known to
+	 * carry files, which shows the hint.
+	 */
+	const [fileDrag, setFileDrag] = useState(NO_FILE_DRAG);
 	const [mode, setMode] = useState<SendMode>("prompt");
 	const [menu, setMenu] = useState<CompletionMenu | null>(null);
 	const [commands, setCommands] = useState<AvailableCommand[]>([]);
@@ -460,41 +492,163 @@ export function InputArea() {
 	// (counter allocated agent-side so two windows can never collide) and the
 	// composer gets the returned literal reference. Any protocol or transport
 	// failure falls back to the inline marker, so clipboard content is not lost.
-	// The paperclip: one native dialog for any document. Images join the
-	// attachments; every other file is named in the draft by its quoted path.
-	const attachDocuments = useCallback(() => {
-		const origin = {
+	// Attaching files, from the paperclip or a drop: images become image
+	// attachments (a spinner card while each is read), every other file a
+	// document card the send names by its quoted path. Results are dropped when
+	// the tab or its session changed meanwhile.
+	const captureOrigin = useCallback(
+		() => ({
 			tabId: runtimeTabId,
 			sessionId: sessionRuntimeStore<SessionStore>(runtimeTabId, "session")?.getState().sessionId,
-		};
-		const stillOrigin = () =>
-			origin.tabId !== null &&
-			sessionRuntimeStore<SessionStore>(origin.tabId, "session")?.getState().sessionId === origin.sessionId;
+		}),
+		[runtimeTabId],
+	);
+	const replacePendingImages = useCallback((next: PendingImage[]) => {
+		pendingImagesRef.current = next;
+		setPendingImages(next);
+	}, []);
+	// Moves a tab's leading run of read images into the composer, so images land
+	// in attach order whatever order their reads finish in.
+	const settlePendingImages = useCallback(
+		(tabId: string) => {
+			const landed: ComposerImage[] = [];
+			const remaining: PendingImage[] = [];
+			let blocked = false;
+			for (const entry of pendingImagesRef.current) {
+				if (entry.tabId !== tabId || blocked || !entry.image) {
+					if (entry.tabId === tabId) blocked = true;
+					remaining.push(entry);
+				} else if (entry.stillOrigin()) {
+					landed.push(entry.image);
+				}
+			}
+			if (remaining.length === pendingImagesRef.current.length) return;
+			replacePendingImages(remaining);
+			if (landed.length === 0) return;
+			setImages(current => {
+				const attached = new Set(current.map(image => image.path));
+				const added = landed.filter(image => {
+					if (image.path === undefined) return true;
+					if (attached.has(image.path)) return false;
+					attached.add(image.path);
+					return true;
+				});
+				return added.length === 0 ? current : [...current, ...added];
+			});
+		},
+		[replacePendingImages, setImages],
+	);
+	const updatePendingImage = useCallback(
+		(id: number, update: (entry: PendingImage) => PendingImage | null): boolean => {
+			const current = pendingImagesRef.current;
+			const index = current.findIndex(entry => entry.id === id);
+			const entry = current[index];
+			if (!entry) return false;
+			const next = update(entry);
+			replacePendingImages(
+				next ? current.map(item => (item === entry ? next : item)) : current.filter(item => item !== entry),
+			);
+			settlePendingImages(entry.tabId);
+			return true;
+		},
+		[replacePendingImages, settlePendingImages],
+	);
+	const attachPaths = useCallback(
+		async (paths: readonly string[], origin: ReturnType<typeof captureOrigin>) => {
+			const stillOrigin = () =>
+				origin.tabId !== null &&
+				sessionRuntimeStore<SessionStore>(origin.tabId, "session")?.getState().sessionId === origin.sessionId;
+			const originTabId = origin.tabId;
+			if (paths.length === 0 || originTabId === null || !stillOrigin()) return;
+			const { images: imagePaths, documents: documentPaths } = splitAttachments(paths);
+			if (!documentPaths.every(isPromptSafePath)) {
+				toast({ variant: "warning", message: t("input.attach.unusualName") });
+			}
+			if (documentPaths.length > 0) setDocuments(current => addDocuments(current, documentPaths));
+			// Already attached (closure state; the settle step re-checks the latest) or still loading.
+			const loading = new Set(
+				pendingImagesRef.current.filter(entry => entry.tabId === originTabId).map(entry => entry.path),
+			);
+			const newImages = [...new Set(imagePaths)].filter(
+				path => !loading.has(path) && !images.some(image => image.path === path),
+			);
+			requestAnimationFrame(() => textareaRef.current?.focus());
+			if (newImages.length === 0) return;
+			const reads: PendingImage[] = newImages.map(path => ({
+				id: nextPendingImageId.current++,
+				tabId: originTabId,
+				path,
+				stillOrigin,
+			}));
+			replacePendingImages([...pendingImagesRef.current, ...reads]);
+			await Promise.all(
+				reads.map(async read => {
+					try {
+						const image = await readImageAttachment(read.path, imagePath => window.omp.fs.readImage(imagePath));
+						updatePendingImage(read.id, entry => ({ ...entry, image }));
+					} catch (cause) {
+						// False when the user removed the card meanwhile: nothing to report.
+						if (!updatePendingImage(read.id, () => null)) return;
+						toast({
+							variant: "error",
+							title: t("input.attach.failed"),
+							message: cause instanceof Error ? cause.message : String(cause),
+						});
+					}
+				}),
+			);
+		},
+		[images, replacePendingImages, setDocuments, t, updatePendingImage],
+	);
+
+	// The paperclip: one native dialog for any document.
+	const attachDocuments = useCallback(() => {
+		const origin = captureOrigin();
 		void (async () => {
 			try {
 				const paths = await window.omp.system.showOpenDialog(ATTACH_FILTERS);
-				if (!paths || paths.length === 0 || !stillOrigin()) return;
-				const { images: imagePaths, documents: picked } = splitAttachments(paths);
-				const documents = picked.filter(isPromptSafePath);
-				if (documents.length < picked.length) toast({ variant: "warning", message: t("input.attach.unusualName") });
-				if (documents.length > 0) setText(current => appendDocumentPaths(current, documents));
-				const read = await Promise.allSettled(
-					imagePaths.map(path => readImageAttachment(path, imagePath => window.omp.fs.readImage(imagePath))),
-				);
-				if (!stillOrigin()) return;
-				const attached = read.flatMap(result => (result.status === "fulfilled" ? [result.value] : []));
-				if (attached.length > 0) setImages(previous => [...previous, ...attached]);
-				for (const result of read) {
-					if (result.status === "rejected") {
-						toast({ variant: "error", title: t("input.attach.failed"), message: String(result.reason) });
-					}
-				}
-				requestAnimationFrame(() => textareaRef.current?.focus());
+				if (paths && paths.length > 0) await attachPaths(paths, origin);
 			} catch (cause) {
 				toast({ variant: "error", title: t("input.attach.failed"), message: String(cause) });
 			}
 		})();
-	}, [runtimeTabId, setText, setImages, t]);
+	}, [attachPaths, captureOrigin, t]);
+
+	// The composer is a drop zone for files only: tab, pane, text and link drags
+	// pass through untouched. A drag is claimed (default cancelled, hint shown)
+	// only once it is known to carry files, since WebKit skips a text field's own
+	// insertion for any drag whose `dragover` the page cancelled; the drop then
+	// decides synchronously whether it carries files.
+	const claimFileDrag = (event: DragEvent<HTMLDivElement>) => {
+		if (!dragCarriesFiles(event.dataTransfer)) return;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "copy";
+		setFileDrag(current => (current.claimed ? current : { ...current, claimed: true }));
+	};
+	const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
+		if (collabReadOnly || !isFileDrag(event.dataTransfer)) return;
+		setFileDrag(current => ({ ...current, depth: current.depth + 1 }));
+		claimFileDrag(event);
+	};
+	const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+		if (collabReadOnly) return;
+		claimFileDrag(event);
+	};
+	const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+		if (collabReadOnly || !isFileDrag(event.dataTransfer)) return;
+		setFileDrag(current => (current.depth <= 1 ? NO_FILE_DRAG : { ...current, depth: current.depth - 1 }));
+	};
+	const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+		setFileDrag(NO_FILE_DRAG);
+		if (collabReadOnly || !hasDroppedFiles(event.dataTransfer)) return;
+		event.preventDefault();
+		const origin = captureOrigin();
+		void resolveDroppedPaths(event.dataTransfer)
+			.then(paths => attachPaths(paths, origin))
+			.catch((cause: unknown) =>
+				toast({ variant: "error", title: t("input.attach.failed"), message: String(cause) }),
+			);
+	};
 
 	const choosePasteSaveFile = useCallback(() => {
 		if (!pasteMenu) return;
@@ -760,7 +914,7 @@ export function InputArea() {
 				status !== "ready" ||
 				sending ||
 				submissionUncertain ||
-				(!text.trim() && images.length === 0)
+				(!text.trim() && images.length === 0 && documents.length === 0)
 			}
 			icon={<ArrowUp size={16} strokeWidth={2.2} />}
 			label={t("input.send")}
@@ -770,9 +924,18 @@ export function InputArea() {
 		/>
 	);
 
+	const visiblePendingImages = pendingImages.filter(entry => entry.tabId === runtimeTabId);
+	const attachmentCount = images.length + visiblePendingImages.length + documents.length;
+
 	return (
 		<div className="omp-composer-region relative shrink-0 bg-transparent pb-1">
-			<div className="omp-composer-shell relative w-full">
+			<div
+				className="omp-composer-shell relative w-full"
+				onDragEnter={handleDragEnter}
+				onDragOver={handleDragOver}
+				onDragLeave={handleDragLeave}
+				onDrop={handleDrop}
+			>
 				{queueBody !== undefined && (
 					<div
 						className="absolute -top-2 right-5 z-10 flex items-center gap-1.5 rounded-full border border-[var(--omp-warning)] px-2 py-0.5 text-omp-xs font-semibold text-[var(--omp-warning)]"
@@ -891,7 +1054,15 @@ export function InputArea() {
 							}}
 						/>
 					)}
-					<div className="overflow-hidden rounded-xl border border-(--omp-border) bg-(--omp-input-bg) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus-within:border-[var(--omp-input-focus-border)] focus-within:shadow-[var(--omp-shadow-glow)]">
+					<div className="relative overflow-hidden rounded-xl border border-(--omp-border) bg-(--omp-input-bg) shadow-(--omp-shadow-sm) transition-[border-color,box-shadow] duration-150 focus-within:border-[var(--omp-input-focus-border)] focus-within:shadow-[var(--omp-shadow-glow)]">
+						{fileDrag.claimed && fileDrag.depth > 0 && (
+							<div
+								aria-hidden
+								className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-(--omp-accent) bg-(--omp-bg-primary)/85 text-omp-md font-medium text-(--omp-accent)"
+							>
+								{t("input.drop.hint")}
+							</div>
+						)}
 						<div className="px-3.5 pb-1.5 pt-2.5">
 							{submissionUncertain && (
 								<div
@@ -908,27 +1079,44 @@ export function InputArea() {
 									</button>
 								</div>
 							)}
-							{images.length > 0 && (
-								<div className="mb-3 flex flex-wrap gap-2">
-									{images.map((image, index) => (
-										<div key={index} className="group relative">
-											<img
-												src={image.preview}
-												alt={t("input.attachmentAlt", { index: index + 1 })}
-												className="h-16 w-16 rounded-lg border border-[var(--omp-border-muted)] object-cover"
-											/>
-											<button
-												type="button"
-												title={t("input.removeAttachment")}
-												onClick={() =>
+							{attachmentCount > 0 && (
+								<div className="mb-3">
+									<AttachmentStrip>
+										{images.map((image, index) => (
+											<AttachmentCard
+												key={`image:${index}`}
+												name={image.name ?? t("input.attachmentAlt", { index: index + 1 })}
+												kind="image"
+												path={image.path}
+												preview={image.preview}
+												onRemove={() =>
 													setImages(previous => previous.filter((_, itemIndex) => itemIndex !== index))
 												}
-												className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--omp-error)] text-[var(--omp-btn-danger-text)] opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-											>
-												<X size={11} />
-											</button>
-										</div>
-									))}
+											/>
+										))}
+										{visiblePendingImages.map(entry => (
+											<AttachmentCard
+												key={`pending:${entry.path}`}
+												name={entry.path.slice(entry.path.lastIndexOf("/") + 1)}
+												kind="image"
+												path={entry.path}
+												preview={entry.image?.preview}
+												loading={!entry.image}
+												onRemove={() => updatePendingImage(entry.id, () => null)}
+											/>
+										))}
+										{documents.map(document => (
+											<AttachmentCard
+												key={`document:${document.path}`}
+												name={document.name}
+												kind={fileKindOf(document.name)}
+												path={document.path}
+												onRemove={() =>
+													setDocuments(previous => previous.filter(item => item.path !== document.path))
+												}
+											/>
+										))}
+									</AttachmentStrip>
 								</div>
 							)}
 							<textarea

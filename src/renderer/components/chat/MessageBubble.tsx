@@ -9,11 +9,13 @@ import { MarkdownRenderer } from "../../lib/markdown";
 import { forkSessionFromMessageInNewTab, isRenderableMessageText, retryLastTurn } from "../../lib/messages";
 import { extractModelMentions, type ModelMentionChip } from "../../lib/model-mentions";
 import { PREVIEW_SCROLL_LG } from "../../lib/preview";
+import { splitPromptAttachments } from "../../lib/prompt-attachments";
 import { useTabRpc } from "../../lib/tab-rpc";
 import { useSessionStore } from "../../stores/session";
 import { useRuntimeTabId, withSessionRuntime } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { toolEntryKey } from "../../stores/tools";
+import { AttachmentCard, AttachmentStrip, fileKindOf } from "../attachments";
 import { IconButton, SaiAtlasLogo } from "../common";
 import { type RunningIndicator, ToolCard } from "../tools/ToolCard";
 import { CustomMessageCard, isCustomMessageCardType } from "./CustomMessageCard";
@@ -51,6 +53,23 @@ function InlineImage({ image }: { image: ImageContent }) {
 		/>
 	);
 }
+
+/**
+ * A user turn as sent: the document paths the composer appended after the last
+ * text block come back out as cards, and that block keeps only the typed text.
+ */
+function splitUserContent(content: MessageContent[]): { blocks: MessageContent[]; documentPaths: string[] } {
+	const lastText = content.findLastIndex(block => block.type === "text");
+	const block = content[lastText];
+	if (block?.type !== "text") return { blocks: content, documentPaths: [] };
+	const { body, paths } = splitPromptAttachments(block.text);
+	if (paths.length === 0) return { blocks: content, documentPaths: [] };
+	const blocks = [...content];
+	blocks[lastText] = { ...block, text: body };
+	return { blocks, documentPaths: paths };
+}
+
+const fileNameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
 /** ToolCard subscribes to the tools store itself, so the tool result lands inline. */
 function ToolCardWithResult({ call, runningIndicator }: { call: ToolCallContent; runningIndicator: RunningIndicator }) {
@@ -288,12 +307,18 @@ export const MessageBubble = memo(function MessageBubble({
 	}
 	if (message.role === "toolResult") return null;
 
-	const content: MessageContent[] = Array.isArray(message.content)
+	const rawContent: MessageContent[] = Array.isArray(message.content)
 		? message.content
 		: typeof message.content === "string"
 			? [{ type: "text", text: message.content }]
 			: [];
 	const isUser = message.role === "user";
+	const { blocks: content, documentPaths } = isUser
+		? splitUserContent(rawContent)
+		: { blocks: rawContent, documentPaths: [] as string[] };
+	const userImages = isUser
+		? content.filter((block): block is ImageContent => block.type === "image")
+		: ([] as ImageContent[]);
 	const isAssistant = message.role === "assistant";
 	const isSteering = Boolean(message.steering);
 	const timestamp = formatClock(message.timestamp);
@@ -416,16 +441,35 @@ export const MessageBubble = memo(function MessageBubble({
 									))}
 								</div>
 							)}
+							{userImages.length + documentPaths.length > 0 && (
+								<div className="mb-1.5">
+									<AttachmentStrip>
+										{userImages.map((image, i) => (
+											<AttachmentCard
+												key={`image:${i}`}
+												name={t("chat.attachedImage")}
+												kind="image"
+												preview={`data:${image.mimeType};base64,${image.data}`}
+											/>
+										))}
+										{documentPaths.map(path => (
+											<AttachmentCard
+												key={`document:${path}`}
+												name={fileNameOf(path)}
+												kind={fileKindOf(path)}
+												path={path}
+											/>
+										))}
+									</AttachmentStrip>
+								</div>
+							)}
 							{userMentions.blocks.map((block, i) => {
-								if (block.type === "text") {
+								if (block.type === "text" && block.text.trim()) {
 									return (
 										<div key={i} className="text-omp-xl leading-[1.6] text-[var(--omp-text)]">
 											<MarkdownRenderer content={block.text} singleDollarTextMath={false} />
 										</div>
 									);
-								}
-								if (block.type === "image") {
-									return <InlineImage key={i} image={block} />;
 								}
 								return null;
 							})}

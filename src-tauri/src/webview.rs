@@ -342,7 +342,7 @@ pub fn build_window(app: &AppHandle, spec: WindowSpec) -> tauri::Result<WebviewW
     ctx.bridge.register_window(caller);
     let window = builder.build()?;
     #[cfg(target_os = "linux")]
-    configure_webkit(&window, &spec);
+    configure_webkit(&window, &spec, &ctx);
     Ok(window)
 }
 
@@ -630,8 +630,30 @@ mod linux {
 #[cfg(target_os = "linux")]
 pub use linux::{hooked_contexts, install_sandbox_hook};
 
+/// The channel the WebKitGTK drag observer sends a file drag's paths on.
+const NATIVE_DROP_PATHS_CHANNEL: &str = "system:native-drop-paths";
+
+/// Absolute local paths of the `file://` URIs in a drag's URI list, in order and
+/// without duplicates. Other schemes, remote hosts and non-UTF-8 paths are skipped.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn file_paths_from_uris<S: AsRef<str>>(uris: &[S]) -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    for uri in uris {
+        let Ok(url) = Url::parse(uri.as_ref().trim()) else { continue };
+        if url.scheme() != "file" || !matches!(url.host_str(), None | Some("") | Some("localhost")) {
+            continue;
+        }
+        let Ok(path) = url.to_file_path() else { continue };
+        let Some(path) = path.to_str().filter(|path| Path::new(path).is_absolute()) else { continue };
+        if !paths.iter().any(|seen| seen == path) {
+            paths.push(path.to_string());
+        }
+    }
+    paths
+}
+
 #[cfg(target_os = "linux")]
-fn configure_webkit(window: &WebviewWindow, spec: &WindowSpec) {
+fn configure_webkit(window: &WebviewWindow, spec: &WindowSpec, ctx: &Arc<AppCtx>) {
     use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -640,8 +662,25 @@ fn configure_webkit(window: &WebviewWindow, spec: &WindowSpec) {
 
     let label = spec.label();
     let failed_label = label.clone();
+    let drop_target = (spec.kind == WindowKind::Main).then(|| (ctx.clone(), spec.win_id));
     let result = window.with_webview(move |platform| {
         let webview = platform.inner();
+        // The page never sees a dropped file's path on WebKitGTK, and Tauri's own
+        // drop handler stays off because it would take every drop away from HTML5
+        // DnD (tab reorder, pane split). This handler only reads the data WebKit
+        // already requested and returns nothing, so WebKit's own handling and the
+        // page's drag events run unchanged; the page pairs the paths with its drop.
+        // Every URI-list drag is reported, an empty list included, so a link drag
+        // clears the paths an earlier, abandoned file drag left behind.
+        if let Some((ctx, win_id)) = drop_target {
+            gtk::prelude::WidgetExt::connect_drag_data_received(&webview, move |_, _, _, _, data, _, _| {
+                if data.target().name() != "text/uri-list" {
+                    return;
+                }
+                let paths = file_paths_from_uris(&data.uris());
+                ctx.bridge.emit_to_window(win_id, NATIVE_DROP_PATHS_CHANNEL, json!({ "paths": paths }));
+            });
+        }
         match webview.context() {
             Some(context) if context.is_sandbox_enabled() => {
                 context.set_spell_checking_enabled(true);
@@ -703,6 +742,23 @@ fn configure_webkit(window: &WebviewWindow, spec: &WindowSpec) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_paths_from_uris_decodes_local_file_uris_in_order_without_duplicates() {
+        let uris = [
+            "file:///home/u/B%C3%A1o%20c%C3%A1o%201.pdf",
+            "file:///home/u/notes.txt\r\n",
+            "file://localhost/tmp/a.png",
+            "file:///home/u/B%C3%A1o%20c%C3%A1o%201.pdf",
+        ];
+        assert_eq!(file_paths_from_uris(&uris), ["/home/u/Báo cáo 1.pdf", "/home/u/notes.txt", "/tmp/a.png"]);
+    }
+
+    #[test]
+    fn file_paths_from_uris_skips_other_schemes_remote_hosts_and_garbage() {
+        let uris = ["https://example.com/a.pdf", "file://server/share/b.pdf", "not a uri", "", "# comment"];
+        assert!(file_paths_from_uris(&uris).is_empty());
+    }
 
     fn url(text: &str) -> Url {
         Url::parse(text).unwrap()

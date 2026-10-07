@@ -603,6 +603,26 @@ describe("tabs store switch", () => {
 		expect(useComposerStore.getState().images.map(image => image.content.data)).toEqual(["failed-image", "image-t0"]);
 	});
 
+	it("restores failed documents as documents ahead of ones attached since, without duplicates", async () => {
+		seedTabs();
+		fillLiveStores("t0");
+		useComposerStore.getState().setDocuments([
+			{ path: "/a/later.pdf", name: "later.pdf" },
+			{ path: "/a/report.docx", name: "report.docx" },
+		]);
+		await useTabsStore.getState().switchTab("t1");
+
+		restoreTabComposer("t0", "s-t0", "failed-t0", [], [{ path: "/a/report.docx", name: "report.docx" }]);
+
+		expect(useComposerStore.getState().documents).toEqual([]);
+		await useTabsStore.getState().switchTab("t0");
+		expect(useComposerStore.getState().draft).toBe("failed-t0\ndraft-t0");
+		expect(useComposerStore.getState().documents.map(document => document.path)).toEqual([
+			"/a/report.docx",
+			"/a/later.pdf",
+		]);
+	});
+
 	it("derives run state from the tab entry when restoring a background-running tab", async () => {
 		seedTabs();
 		// t1's run kept going in the background; the pool reported it.

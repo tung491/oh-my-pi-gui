@@ -22,6 +22,7 @@ import type {
 	IpcFsReadImagePayload,
 	IpcFsReadImageResult,
 	IpcFsReadPayload,
+	IpcFsReadPdfPayload,
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
 	IpcGetSessionOwnerPayload,
@@ -53,6 +54,7 @@ import { requestQuit } from "./app-quit";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
+import { readPdfFile } from "./fs-read-pdf";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
@@ -1071,6 +1073,12 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 			return fail(err instanceof Error ? err.message : String(err));
 		}
 	});
+
+	// Attached-PDF read for a local page-1 thumbnail; see fs-read-pdf.ts for the
+	// path and sniff rules.
+	ipcMain.handle(IPC_COMMANDS.FS_READ_PDF, (_event, payload: IpcFsReadPdfPayload | undefined) =>
+		readPdfFile(payload?.path),
+	);
 
 	// Plan-mode document read — deliberately OFF the RPC bus: reading via the
 	// bash RPC injected the plan into the model context and appended

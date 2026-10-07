@@ -1,11 +1,15 @@
 /**
  * The composer's attach button: one native dialog for any document. Images
- * become composer image attachments; every other file is named in the prompt
- * by its quoted path, which the pack skills read with their own tools.
+ * become composer image attachments; every other file is held as a composer
+ * document and named in the prompt by its quoted path at send time, which the
+ * pack skills read with their own tools.
  */
 
 import type { IpcFsReadImageResult } from "../../../shared/ipc-types";
-import type { ComposerImage } from "../../stores/composer";
+import { isPromptSafePath, quotePromptPath } from "../../lib/prompt-attachments";
+import type { ComposerDocument, ComposerImage } from "../../stores/composer";
+
+export { isPromptSafePath, quotePromptPath };
 
 const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set(["png", "jpg", "jpeg", "webp"]);
 
@@ -16,30 +20,13 @@ export const ATTACH_FILTERS: { name: string; extensions: string[] }[] = [
 	},
 ];
 
-/** C0/C1 controls and the Unicode line and paragraph separators. */
-const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
-
-/**
- * Whether a path can be named on a prompt line: a line break would split the
- * one-path-per-line draft, and no control character survives a model copying
- * the path back exactly.
- */
-export function isPromptSafePath(path: string): boolean {
-	return !CONTROL_CHARACTER.test(path);
-}
-
-/**
- * Quotes a file path for a prompt line. Single quotes, as the pack skills were
- * measured with, unless the name holds one (`Bob's notes.docx`); then double
- * quotes, escaping any double quote or backslash inside.
- */
-export function quotePromptPath(path: string): string {
-	if (!path.includes("'")) return `'${path}'`;
-	return `"${path.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+/** The last segment of a path, the name a card shows. */
+function fileNameOf(path: string): string {
+	return path.slice(path.lastIndexOf("/") + 1);
 }
 
 function extensionOf(path: string): string {
-	const name = path.slice(path.lastIndexOf("/") + 1);
+	const name = fileNameOf(path);
 	const dot = name.lastIndexOf(".");
 	return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
@@ -65,7 +52,30 @@ export async function readImageAttachment(
 	return {
 		content: { type: "image", data: dataUrl.slice(dataUrl.indexOf(",") + 1), mimeType },
 		preview: dataUrl,
+		name: fileNameOf(path),
+		path,
 	};
+}
+
+export function toComposerDocument(path: string): ComposerDocument {
+	return { path, name: fileNameOf(path) };
+}
+
+/**
+ * Adds documents after the ones already attached. A path already attached, or
+ * repeated in `paths`, keeps its first entry; a path that is not prompt-safe
+ * (`isPromptSafePath`) is left out, so callers warn about it while the user is
+ * still composing rather than at send time.
+ */
+export function addDocuments(current: readonly ComposerDocument[], paths: readonly string[]): ComposerDocument[] {
+	const attached = new Set(current.map(document => document.path));
+	const next = [...current];
+	for (const path of paths) {
+		if (!isPromptSafePath(path) || attached.has(path)) continue;
+		attached.add(path);
+		next.push(toComposerDocument(path));
+	}
+	return next;
 }
 
 /** Appends each path to the draft on its own line. */

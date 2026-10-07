@@ -3,7 +3,7 @@
  * `window.ompQuickEntry` in the quick-entry bar (main passes --omp-quick-entry).
  * The API itself is built by the shared bridge code over an ipcRenderer port.
  */
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import { createOmpApi } from "../shared/bridge/create-omp-api";
 import { createQuickEntryApi } from "../shared/bridge/create-quick-entry-api";
 import type { IpcPort } from "../shared/bridge/ipc-port";
@@ -26,4 +26,11 @@ const isQuickEntry = process.argv.includes("--omp-quick-entry");
 
 if (isQuickEntry) contextBridge.exposeInMainWorld("ompQuickEntry", createQuickEntryApi(port, process.platform));
 // A sandboxed preload still sees the process env; the sidecar inherits the same HOME.
-else contextBridge.exposeInMainWorld("omp", createOmpApi(port, process.platform, process.env.HOME ?? ""));
+// `File.path` is gone since Electron 32; `webUtils` is the supported way to get a dropped file's path.
+else
+	contextBridge.exposeInMainWorld(
+		"omp",
+		createOmpApi(port, process.platform, process.env.HOME ?? "", {
+			pathForFile: file => webUtils.getPathForFile(file),
+		}),
+	);

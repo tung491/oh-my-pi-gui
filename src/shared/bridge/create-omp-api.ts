@@ -9,9 +9,11 @@ import type {
 	IpcActiveTabEnvelope,
 	IpcFsListResult,
 	IpcFsReadImageResult,
+	IpcFsReadPdfResult,
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
 	IpcFsReadResult,
+	IpcNativeDropPathsPayload,
 	IpcOpenPathResult,
 	IpcSessionOpenNewWindowPayload,
 	IpcSessionOpenNewWindowResult,
@@ -73,7 +75,27 @@ import type {
 import { DeepLinkBuffer } from "./deep-link-buffer";
 import type { IpcPort } from "./ipc-port";
 
-export function createOmpApi(port: IpcPort, platform: OmpApi["platform"], homeDir = ""): OmpApi {
+/** Shell-specific members the shared bridge cannot build over an {@link IpcPort}. */
+export interface OmpApiShellExtras {
+	/** Electron preload passes `webUtils.getPathForFile`; Tauri leaves it out. */
+	pathForFile?: (file: File) => string;
+	/** The Tauri boot sets this: its shell emits `system:native-drop-paths`. */
+	nativeDropPaths?: boolean;
+}
+
+/** The string entries of a `system:native-drop-paths` payload; anything malformed yields none. */
+function nativeDropPathsOf(payload: unknown): string[] {
+	const paths = (payload as Partial<IpcNativeDropPathsPayload> | null)?.paths;
+	if (!Array.isArray(paths)) return [];
+	return paths.filter((path): path is string => typeof path === "string" && path.length > 0);
+}
+
+export function createOmpApi(
+	port: IpcPort,
+	platform: OmpApi["platform"],
+	homeDir = "",
+	extras: OmpApiShellExtras = {},
+): OmpApi {
 	function rpcCommand(cmd: RpcCommand, timeoutMs?: number): Promise<RpcResponse> {
 		return port.invoke(IPC_COMMANDS.RPC_COMMAND, {
 			command: cmd,
@@ -288,6 +310,11 @@ export function createOmpApi(port: IpcPort, platform: OmpApi["platform"], homeDi
 			notify: (title: string, body?: string) => {
 				void port.invoke(IPC_COMMANDS.SYSTEM_NOTIFY, { title, body });
 			},
+			pathForFile: extras.pathForFile,
+			onNativeDropPaths: extras.nativeDropPaths
+				? (callback: (paths: string[]) => void) =>
+						subscribe<unknown>(IPC_EVENTS.NATIVE_DROP_PATHS, payload => callback(nativeDropPathsOf(payload)))
+				: undefined,
 		},
 
 		prefs: {
@@ -349,6 +376,7 @@ export function createOmpApi(port: IpcPort, platform: OmpApi["platform"], homeDi
 				port.invoke(IPC_COMMANDS.FS_READ_PLAN, payload) as Promise<IpcFsReadPlanResult>,
 			readImage: (path: string, tabId?: string) =>
 				port.invoke(IPC_COMMANDS.FS_READ_IMAGE, { path, tabId }) as Promise<IpcFsReadImageResult>,
+			readPdf: (path: string) => port.invoke(IPC_COMMANDS.FS_READ_PDF, { path }) as Promise<IpcFsReadPdfResult>,
 		},
 
 		editor: {

@@ -55,12 +55,15 @@ pub const CHANNELS: &[(&str, Scope)] = &[
     ("fs:read", Scope::Main),
     ("fs:read-plan", Scope::Main),
     ("fs:read-image", Scope::Main),
+    ("fs:read-pdf", Scope::Main),
     ("editor:open-external", Scope::Main),
 ];
 
 pub const EMITS: &[&str] = &[
     "sessions:changed",
     "log:line",
+    // Emitted by the WebKitGTK drag observer in `webview.rs`.
+    "system:native-drop-paths",
 ];
 
 pub fn register(reg: &mut Registry) {
@@ -87,6 +90,7 @@ pub fn register(reg: &mut Registry) {
     reg.register("fs:read", Scope::Main, ipc::fs_read);
     reg.register("fs:read-plan", Scope::Main, ipc::fs_read_plan);
     reg.register("fs:read-image", Scope::Main, ipc::fs_read_image);
+    reg.register("fs:read-pdf", Scope::Main, ipc::fs_read_pdf);
     reg.register("editor:open-external", Scope::Main, ipc::editor_open_external);
 }
 

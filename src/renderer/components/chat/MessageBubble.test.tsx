@@ -2,7 +2,7 @@ import { parseHTML } from "linkedom";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentMessage, RpcResponse } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
 import { createMessagesStore, useMessagesStore } from "../../stores/messages";
@@ -298,6 +298,89 @@ describe("MessageBubble user content", () => {
 		expect(html).toContain("$.reasoning_effort.required");
 		expect(html).toContain("$.reasoning_effort.default");
 		expect(html).not.toContain("katex");
+	});
+});
+
+describe("MessageBubble user attachments", () => {
+	// A PDF card reads its first page; these tests only look at the card itself.
+	beforeEach(() => {
+		(window as unknown as Record<string, unknown>).omp = { fs: { readPdf: () => new Promise(() => {}) } };
+	});
+
+	const sentWithAttachments: AgentMessage = {
+		role: "user",
+		content: [
+			{ type: "text", text: "Summarise these\n'/home/u/Q3 report.pdf'\n\"/home/u/Bob's notes.zip\"" },
+			{ type: "image", data: "AAAA", mimeType: "image/png" },
+		],
+		timestamp: "2026-10-07T00:00:00.000Z",
+	};
+
+	it("shows trailing quoted document paths as cards and only the typed text", async () => {
+		const container = await mount(<MessageBubble message={sentWithAttachments} />);
+
+		const cards = Array.from(container.querySelectorAll("figure"));
+		expect(cards.map(card => card.getAttribute("title"))).toEqual([
+			"attached image",
+			"/home/u/Q3 report.pdf",
+			"/home/u/Bob's notes.zip",
+		]);
+		expect(cards.map(card => card.querySelector("figcaption")?.textContent)).toEqual([
+			"attached image",
+			"Q3 report.pdf",
+			"Bob's notes.zip",
+		]);
+		expect(cards[0]?.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+		// Transcript cards cannot be removed.
+		expect(container.querySelector("figure button")).toBeNull();
+		const body = container.querySelector(".omp-user-bubble-content")?.textContent ?? "";
+		expect(body).toContain("Summarise these");
+		expect(body).not.toContain("'/home/u/Q3 report.pdf'");
+	});
+
+	it("copies only the typed text", async () => {
+		const writeText = vi.fn(async (_text: string) => {});
+		vi.stubGlobal("navigator", { clipboard: { writeText } });
+		try {
+			const container = await mount(<MessageBubble message={sentWithAttachments} />);
+			const copy = container.querySelector("button[title='Copy message text']");
+			expect(copy).not.toBeNull();
+			await click(copy as unknown as TestElement);
+			expect(writeText).toHaveBeenCalledWith("Summarise these");
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("renders a documents-only send as cards with no empty text", async () => {
+		const container = await mount(
+			<MessageBubble
+				message={{
+					role: "user",
+					content: [{ type: "text", text: "'/home/u/song.mp3'" }],
+					timestamp: "2026-10-07T00:00:00.000Z",
+				}}
+			/>,
+		);
+
+		expect(container.querySelectorAll("figure")).toHaveLength(1);
+		expect(container.querySelector("figcaption")?.textContent).toBe("song.mp3");
+		expect(container.querySelector(".omp-user-bubble-content .text-omp-xl")).toBeNull();
+	});
+
+	it("leaves a quoted relative path in the text", async () => {
+		const container = await mount(
+			<MessageBubble
+				message={{
+					role: "user",
+					content: [{ type: "text", text: "Open\n'notes.md'" }],
+					timestamp: "2026-10-07T00:00:00.000Z",
+				}}
+			/>,
+		);
+
+		expect(container.querySelector("figure")).toBeNull();
+		expect(container.querySelector(".omp-user-bubble-content")?.textContent).toContain("'notes.md'");
 	});
 });
 

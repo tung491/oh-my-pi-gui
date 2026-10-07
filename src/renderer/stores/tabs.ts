@@ -31,7 +31,7 @@ import { basename } from "../lib/format";
 import { translate } from "../lib/i18n";
 import { sessionDisplayTitle } from "../lib/session-title";
 import { beginTabRoute, reconcileTabRoute, resetTabRoute, settleTabRoute } from "../lib/tab-routing";
-import { type ComposerImage, type ComposerStore, useComposerStore } from "./composer";
+import { type ComposerDocument, type ComposerImage, type ComposerStore, useComposerStore } from "./composer";
 import type { ExtensionUiStore } from "./extension-ui";
 import {
 	type PendingPlanProposal,
@@ -702,31 +702,35 @@ export function pushTabExtensionUiRequest(tabId: string, request: ExtensionUIReq
 
 /** Restore a failed submit to the tab that issued it, even when that tab is now
  * parked in the background. A response from one sidecar must never inject its
- * draft or attachments into whichever tab happens to be visible later. */
+ * draft or attachments into whichever tab happens to be visible later. Restored
+ * documents go back as documents, ahead of any attached since; a path attached
+ * again in the meantime keeps a single entry. */
 export function restoreTabComposer(
 	tabId: string | null,
 	sessionId: string,
 	draft: string,
 	images: ComposerImage[],
+	documents: ComposerDocument[] = [],
 	originComposer?: StoreApi<ComposerStore>,
 ): void {
 	if (!tabId) return;
-	const prependDraft = (current: string): string => (current ? `${draft}\n${current}` : draft);
+	const restore = (current: ComposerStore): Pick<ComposerStore, "draft" | "images" | "documents"> => ({
+		draft: current.draft ? `${draft}\n${current.draft}` : draft,
+		images: [...images, ...current.images],
+		documents: [
+			...documents,
+			...current.documents.filter(document => !documents.some(restored => restored.path === document.path)),
+		],
+	});
 	const session = sessionRuntimeStore<SessionStore>(tabId, "session");
 	const composer = sessionRuntimeStore<ComposerStore>(tabId, "composer");
 	if (!session || !composer) {
 		if (useTabsStore.getState().activeTabId !== tabId || useSessionStore.getState().sessionId !== sessionId) return;
-		useComposerStore.setState(current => ({
-			draft: prependDraft(current.draft),
-			images: [...images, ...current.images],
-		}));
+		useComposerStore.setState(restore);
 		return;
 	}
 	if (originComposer ? composer !== originComposer : session.getState().sessionId !== sessionId) return;
-	composer.setState(current => ({
-		draft: prependDraft(current.draft),
-		images: [...images, ...current.images],
-	}));
+	composer.setState(restore);
 }
 
 /** Finish a plan-approval request in the tab that issued it. The response may

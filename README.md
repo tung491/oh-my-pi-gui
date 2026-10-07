@@ -90,7 +90,7 @@ Ollama follows `OLLAMA_BASE_URL` or `OLLAMA_HOST` when set, the same rule the ag
 
 1. **Get a local model:** finish the welcome screen, or open **Ollama** from the sidebar to download a model and choose **Use as default**.
 2. **Start a task:** choose **New task** in the sidebar, or pick one of the suggestions on the empty screen: a Word report, a spreadsheet clean-up, slides from a report, or help with your computer.
-3. **Attach a file** when the job needs one, such as the spreadsheet to clean or the report to turn into slides, and say what you want in your own words.
+3. **Attach a file** when the job needs one, such as the spreadsheet to clean or the report to turn into slides: drop it on the message box or use the paperclip. Each file shows as a card (a PDF shows its first page), and you can remove it before sending. Then say what you want in your own words.
 4. **Approve the steps:** Sai ATLAS asks before it creates a file or changes a setting. When it is done, open the result from the card in the conversation.
 
 <a id="en-shortcuts"></a>

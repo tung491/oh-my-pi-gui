@@ -90,6 +90,10 @@ export const en: Record<string, string> = {
 	"input.attach.failed": "Could not attach the file",
 	"input.attach.unusualName":
 		"That file's name has a line break or another hidden character. Rename the file, then try again.",
+	"input.attachment.remove": "Remove {name}",
+	"input.attachment.loading": "Loading preview…",
+	"input.attachment.previewFailed": "Preview unavailable",
+	"input.drop.hint": "Drop files to attach",
 	"input.model": "Change model",
 	"input.thinking": "Thinking: {level} — click to change",
 	"input.thinking.failed": "Thinking level",
@@ -158,7 +162,6 @@ export const en: Record<string, string> = {
 	"input.steeringMode.all": "all",
 	"input.steeringMode.oneAtATime": "one at a time",
 	"input.attachmentAlt": "attachment {index}",
-	"input.removeAttachment": "Remove",
 	"input.chooseModel": "Choose model",
 	"input.fast.label": "Fast",
 	"input.moreModes": "More run settings",

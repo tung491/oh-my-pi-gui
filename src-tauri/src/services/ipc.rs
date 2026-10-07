@@ -16,9 +16,13 @@ use super::fs as workspace_fs;
 
 /// `~/` expands against the home directory; everything else passes through unchanged.
 pub(super) fn expand_home(path: &str) -> String {
-    match path.strip_prefix("~/") {
-        Some(rest) => dirs::home_dir().map(|home| home.join(rest).to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string()),
-        None => path.to_string(),
+    expand_home_in(path, dirs::home_dir().as_deref())
+}
+
+fn expand_home_in(path: &str, home: Option<&Path>) -> String {
+    match (path.strip_prefix("~/"), home) {
+        (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
+        _ => path.to_string(),
     }
 }
 
@@ -513,6 +517,101 @@ pub fn fs_read_image(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Rep
     Reply::ok(json!({ "ok": true, "dataUrl": data_url, "mime": mime, "size": metadata.len() }))
 }
 
+/// Size cap for `fs:read-pdf`, matching the Electron handler.
+const FS_PDF_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+const PDF_SIGNATURE: &[u8] = b"%PDF-";
+
+/// `fs:read-pdf`: a user-attached PDF, base64-encoded for a local page-1
+/// thumbnail. Not workspace-confined: like a markdown image, the bytes never
+/// leave a local render. Absolute or `~/` paths only; the file must start
+/// with `%PDF-` and fit under the size cap. Failures come back as `ok: false`.
+/// The read and encode run on a blocking thread so a large file never holds
+/// up the window's other calls (sending or aborting a prompt).
+pub fn fs_read_pdf(_ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let path = payload.get("path").and_then(Value::as_str).unwrap_or("").to_string();
+    Reply::Later(Box::pin(async move {
+        let result =
+            tokio::task::spawn_blocking(move || read_pdf_file(&path, dirs::home_dir().as_deref(), FS_PDF_MAX_BYTES))
+                .await;
+        Ok(result.unwrap_or_else(|error| pdf_failure(&error.to_string(), 0)))
+    }))
+}
+
+fn pdf_failure(error: &str, size: u64) -> Value {
+    json!({ "ok": false, "size": size, "error": error })
+}
+
+/// Opens without blocking so a named pipe at the path cannot stall the
+/// thread before `fstat` rejects it; reads from a regular file ignore the flag.
+fn open_for_sniff(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    options.open(path)
+}
+
+fn read_pdf_file(path: &str, home: Option<&Path>, max_bytes: u64) -> Value {
+    if path.is_empty() {
+        return pdf_failure("Invalid path", 0);
+    }
+    let raw = expand_home_in(path, home);
+    let abs = Path::new(&raw);
+    if !abs.is_absolute() {
+        return pdf_failure("Path must be absolute", 0);
+    }
+    // One handle for every check and the read: the type and size come from
+    // `fstat` on it, so the path cannot be swapped between check and read.
+    let mut file = match open_for_sniff(abs) {
+        Ok(file) => file,
+        Err(error) => return pdf_failure(&error.to_string(), 0),
+    };
+    let metadata = match file.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) => return pdf_failure(&error.to_string(), 0),
+    };
+    if !metadata.is_file() {
+        return pdf_failure("Not a file", 0);
+    }
+    if metadata.len() > max_bytes {
+        return pdf_failure("PDF too large", metadata.len());
+    }
+    match read_pdf_bytes(&mut file, metadata.len(), max_bytes) {
+        Ok(bytes) => {
+            json!({ "ok": true, "data": base64::engine::general_purpose::STANDARD.encode(&bytes), "size": bytes.len() })
+        }
+        Err(failure) => failure,
+    }
+}
+
+/// Reads the signature first and stops on a non-PDF, then reads at most one
+/// byte past the cap, so a file that grew after `fstat` is refused rather
+/// than read whole. `size` is the `fstat` size, reported on a non-PDF.
+fn read_pdf_bytes(reader: &mut impl std::io::Read, size: u64, max_bytes: u64) -> Result<Vec<u8>, Value> {
+    use std::io::Read;
+    let mut bytes = vec![0u8; PDF_SIGNATURE.len()];
+    match reader.read_exact(&mut bytes) {
+        Ok(()) if bytes == PDF_SIGNATURE => {}
+        Ok(()) => return Err(pdf_failure("Not a PDF", size)),
+        Err(error) if error.kind() == std::io::ErrorKind::UnexpectedEof => return Err(pdf_failure("Not a PDF", size)),
+        Err(error) => return Err(pdf_failure(&error.to_string(), 0)),
+    }
+    let remaining = (max_bytes + 1).saturating_sub(PDF_SIGNATURE.len() as u64);
+    if let Err(error) = reader.take(remaining).read_to_end(&mut bytes) {
+        return Err(pdf_failure(&error.to_string(), 0));
+    }
+    let read = bytes.len() as u64;
+    if read > max_bytes {
+        return Err(pdf_failure("PDF too large", read));
+    }
+    Ok(bytes)
+}
+
 /// `editor:open-external`
 pub fn editor_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
     let payload = args.into_iter().next().unwrap_or(Value::Null);
@@ -665,6 +764,130 @@ mod tests {
         let fakes = new_window_fakes(SessionKind::Agent, None, true);
         assert_eq!(open_new_window(&fakes, json!({ "sessionPath": "/s/session.jsonl" })).await, json!(false));
         assert!(spawned_windows(&fakes).is_empty());
+    }
+
+    const PDF: &[u8] = b"%PDF-1.7\n%\xe2\xe3\n1 0 obj\n<<>>\nendobj\n";
+
+    fn pdf_dir() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    fn read_pdf(path: &str, home: Option<&std::path::Path>, max_bytes: u64) -> serde_json::Value {
+        super::read_pdf_file(path, home, max_bytes)
+    }
+
+    fn base64(bytes: &[u8]) -> String {
+        use base64::Engine;
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    }
+
+    #[test]
+    fn returns_a_pdf_as_base64_with_its_size() {
+        let dir = pdf_dir();
+        let file = dir.path().join("report.pdf");
+        std::fs::write(&file, PDF).unwrap();
+        let result = read_pdf(file.to_str().unwrap(), None, super::FS_PDF_MAX_BYTES);
+        assert_eq!(result, json!({ "ok": true, "data": base64(PDF), "size": PDF.len() }));
+    }
+
+    #[test]
+    fn expands_a_home_relative_path() {
+        let dir = pdf_dir();
+        std::fs::create_dir(dir.path().join("Documents")).unwrap();
+        std::fs::write(dir.path().join("Documents").join("a b.pdf"), PDF).unwrap();
+        let result = read_pdf("~/Documents/a b.pdf", Some(dir.path()), super::FS_PDF_MAX_BYTES);
+        assert_eq!(result["ok"], json!(true));
+        assert_eq!(result["size"], json!(PDF.len()));
+    }
+
+    #[test]
+    fn rejects_a_relative_path() {
+        let result = read_pdf("report.pdf", None, super::FS_PDF_MAX_BYTES);
+        assert_eq!(result, json!({ "ok": false, "size": 0, "error": "Path must be absolute" }));
+    }
+
+    #[test]
+    fn rejects_a_missing_or_empty_path() {
+        assert_eq!(read_pdf("", None, super::FS_PDF_MAX_BYTES), json!({ "ok": false, "size": 0, "error": "Invalid path" }));
+    }
+
+    #[test]
+    fn rejects_a_file_that_does_not_start_with_the_pdf_signature() {
+        let dir = pdf_dir();
+        let file = dir.path().join("fake.pdf");
+        std::fs::write(&file, b"PK\x03\x04 not a pdf").unwrap();
+        let result = read_pdf(file.to_str().unwrap(), None, super::FS_PDF_MAX_BYTES);
+        assert_eq!(result["ok"], json!(false));
+        assert_eq!(result["error"], json!("Not a PDF"));
+        assert!(result.get("data").is_none());
+    }
+
+    #[test]
+    fn rejects_a_pdf_over_the_size_cap() {
+        let dir = pdf_dir();
+        let file = dir.path().join("big.pdf");
+        std::fs::write(&file, PDF).unwrap();
+        let result = read_pdf(file.to_str().unwrap(), None, PDF.len() as u64 - 1);
+        assert_eq!(result, json!({ "ok": false, "size": PDF.len(), "error": "PDF too large" }));
+    }
+
+    #[test]
+    fn rejects_a_directory_and_a_missing_file() {
+        let dir = pdf_dir();
+        let as_dir = read_pdf(dir.path().to_str().unwrap(), None, super::FS_PDF_MAX_BYTES);
+        assert_eq!(as_dir, json!({ "ok": false, "size": 0, "error": "Not a file" }));
+        let missing = read_pdf(dir.path().join("missing.pdf").to_str().unwrap(), None, super::FS_PDF_MAX_BYTES);
+        assert_eq!(missing["ok"], json!(false));
+        assert!(missing["error"].as_str().is_some_and(|error| !error.is_empty()));
+    }
+
+    #[test]
+    fn stops_reading_once_a_file_grows_past_the_size_cap() {
+        // The reader yields more than the `fstat` size allowed: the file grew
+        // after it was checked.
+        let mut grown = std::io::Cursor::new([PDF, b"appended after the size check".as_slice()].concat());
+        let result = super::read_pdf_bytes(&mut grown, PDF.len() as u64, PDF.len() as u64);
+        let failure = result.unwrap_err();
+        assert_eq!(failure["ok"], json!(false));
+        assert_eq!(failure["error"], json!("PDF too large"));
+        assert_eq!(failure["size"], json!(PDF.len() + 1));
+        assert!(failure.get("data").is_none());
+    }
+
+    #[test]
+    fn reads_a_file_that_grew_but_still_fits_under_the_cap() {
+        let whole = [PDF, b"more".as_slice()].concat();
+        let mut grown = std::io::Cursor::new(whole.clone());
+        let result = super::read_pdf_bytes(&mut grown, PDF.len() as u64, PDF.len() as u64 + 100);
+        assert_eq!(result.unwrap(), whole);
+    }
+
+    #[test]
+    fn rejects_a_non_pdf_after_reading_only_its_signature() {
+        let mut reader = std::io::Cursor::new(b"PK\x03\x04 not a pdf, and much more after it".to_vec());
+        let result = super::read_pdf_bytes(&mut reader, 40, super::FS_PDF_MAX_BYTES);
+        assert_eq!(result.unwrap_err(), json!({ "ok": false, "size": 40, "error": "Not a PDF" }));
+        assert_eq!(reader.position(), super::PDF_SIGNATURE.len() as u64);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_a_named_pipe_without_blocking() {
+        let dir = pdf_dir();
+        let fifo = dir.path().join("pipe.pdf");
+        nix::unistd::mkfifo(&fifo, nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR).unwrap();
+        let result = read_pdf(fifo.to_str().unwrap(), None, super::FS_PDF_MAX_BYTES);
+        assert_eq!(result, json!({ "ok": false, "size": 0, "error": "Not a file" }));
+    }
+
+    #[tokio::test]
+    async fn dispatches_fs_read_pdf_without_throwing() {
+        let fakes = Fakes::default();
+        let ctx = ctx(&fakes);
+        let reply = bridge::dispatch_for_test(&ctx, Caller::main(WindowId(1)), "fs:read-pdf", vec![json!({ "path": "relative.pdf" })])
+            .await
+            .unwrap();
+        assert_eq!(reply, json!({ "ok": false, "size": 0, "error": "Path must be absolute" }));
     }
 
     #[tokio::test]
