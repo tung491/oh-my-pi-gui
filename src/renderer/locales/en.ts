@@ -370,6 +370,7 @@ export const en: Record<string, string> = {
 
 	// Language switcher
 	"lang.switch": "Switch language",
+	"lang.assistantNextLaunch": "The assistant switches language the next time Sai ATLAS starts.",
 
 	// Modes panel (Vibe / Goal / Loop session modes)
 	"modesPanel.goal.statusValue.active": "active",

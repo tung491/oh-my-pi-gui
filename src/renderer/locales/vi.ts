@@ -339,6 +339,7 @@ export const vi: Record<string, string> = {
 	"common.retry": "Thử lại",
 	"common.notConnected": "Sidecar chưa kết nối",
 	"lang.switch": "Chuyển đổi ngôn ngữ",
+	"lang.assistantNextLaunch": "Trợ lý sẽ chuyển sang ngôn ngữ mới vào lần tới Sai ATLAS khởi động.",
 	"modesPanel.goal.statusValue.active": "đang hoạt động",
 	"modesPanel.goal.statusValue.paused": "đã tạm dừng",
 	"modesPanel.goal.statusValue.budgetLimited": "giới hạn ngân sách",
