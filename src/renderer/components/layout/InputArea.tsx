@@ -749,7 +749,8 @@ export function InputArea() {
 			? t("input.followUp")
 			: t("input.steer")
 		: t("input.sendLabel");
-	const modeTitle = isStreaming ? t("input.streamingTitle", { mode: steeringMode }) : t("input.sendPrompt");
+	const steeringModeLabel = t(steeringMode === "all" ? "input.steeringMode.all" : "input.steeringMode.oneAtATime");
+	const modeTitle = isStreaming ? t("input.streamingTitle", { mode: steeringModeLabel }) : t("input.sendPrompt");
 	const sendButton = (
 		<IconButton
 			className="omp-pressable shadow-(--omp-shadow-sm) disabled:shadow-none"

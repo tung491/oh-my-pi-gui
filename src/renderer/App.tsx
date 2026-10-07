@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo } from "react";
 import type { DeepLinkPayload, MenuAction, MenuActionPayload, RunProgressState } from "../shared/ipc-types";
 import { PRODUCT_NAME } from "../shared/product";
-import { ToastStack } from "./components/common";
+import { ToastStack, useSwitchLanguage } from "./components/common";
 import { BtwDialog } from "./components/dialogs/BtwDialog";
 import { ChangelogDialog } from "./components/dialogs/ChangelogDialog";
 import { CommandPalette } from "./components/dialogs/CommandPalette";
@@ -160,7 +160,8 @@ export function App() {
 	const activeTabId = useTabsStore(s => s.activeTabId);
 	const activeTabStatus = useTabsStore(s => s.tabs.find(tab => tab.id === s.activeTabId)?.status);
 	const themeSidecarReady = activeTabStatus === "ready" || activeTabStatus === "running";
-	const { lang, setLang } = useLang();
+	const { lang } = useLang();
+	const switchLanguage = useSwitchLanguage();
 	const t = useT();
 
 	// Main refused the quick-entry chord at startup: say so once, in the first
@@ -501,7 +502,7 @@ export function App() {
 				return;
 			}
 			if (action === "toggle-language") {
-				setLang(lang === "vi" ? "en" : "vi");
+				switchLanguage(lang === "vi" ? "en" : "vi");
 				return;
 			}
 			// New tab actions never touch the live run — they must stay OUT of the
@@ -585,7 +586,7 @@ export function App() {
 			}
 		};
 		return window.omp.events.onMenuAction((action, payload) => void run(action, payload));
-	}, [lang, setLang, t]);
+	}, [lang, switchLanguage, t]);
 
 	const focusedRuntime = activeTabId ? ensureTabRuntime(activeTabId) : null;
 	const surface = (

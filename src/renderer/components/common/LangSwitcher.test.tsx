@@ -9,6 +9,7 @@ import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "../../lib/i18n";
+import { useToastStore } from "../../stores/toast";
 import { LangSwitcher } from "./LangSwitcher";
 
 const { document, window, Event, HTMLElement } = parseHTML("<html><body></body></html>");
@@ -53,6 +54,8 @@ afterEach(async () => {
 		await act(async () => root?.unmount());
 	}
 	container?.remove();
+	useToastStore.setState({ toasts: [] });
+	document.documentElement.removeAttribute("lang");
 	try {
 		window.localStorage.removeItem("omp.lang");
 	} catch {
@@ -99,6 +102,7 @@ describe("LangSwitcher", () => {
 		try {
 			await mountSwitcher();
 			expect(document.querySelector("button")?.textContent).toContain("VI");
+			expect(document.documentElement.getAttribute("lang")).toBe("vi");
 		} finally {
 			delete globals.localStorage;
 		}
@@ -166,5 +170,42 @@ describe("LangSwitcher", () => {
 		} finally {
 			delete bridgeWindow.omp;
 		}
+	});
+
+	it("says in the new language that the assistant follows at the next start", async () => {
+		await mountSwitcher();
+		expect(useToastStore.getState().toasts).toEqual([]);
+		const button = document.querySelector("button") as unknown as TestElement;
+
+		await act(async () => {
+			button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		expect(useToastStore.getState().toasts.map(entry => entry.message)).toEqual([
+			"Trợ lý sẽ chuyển sang ngôn ngữ mới vào lần tới Sai ATLAS khởi động.",
+		]);
+
+		useToastStore.setState({ toasts: [] });
+		await act(async () => {
+			button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		expect(useToastStore.getState().toasts.map(entry => entry.message)).toEqual([
+			"The assistant switches language the next time Sai ATLAS starts.",
+		]);
+	});
+
+	it("marks the page with the active language and follows a switch", async () => {
+		await mountSwitcher();
+		expect(document.documentElement.getAttribute("lang")).toBe("en");
+		const button = document.querySelector("button") as unknown as TestElement;
+
+		await act(async () => {
+			button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		expect(document.documentElement.getAttribute("lang")).toBe("vi");
+
+		await act(async () => {
+			button.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		expect(document.documentElement.getAttribute("lang")).toBe("en");
 	});
 });

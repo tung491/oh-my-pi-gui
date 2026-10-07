@@ -10,8 +10,10 @@
  */
 
 import { Globe } from "lucide-react";
+import { useCallback } from "react";
 import { cx } from "../../lib/format";
-import { useLang, useT } from "../../lib/i18n";
+import { type Lang, translateForLang, useLang, useT } from "../../lib/i18n";
+import { toast } from "../../stores/toast";
 
 export type LangSwitcherTone = "default" | "onDark";
 
@@ -27,14 +29,31 @@ const TONE_CLASSES: Record<LangSwitcherTone, string> = {
 		"text-[var(--omp-sidebar-muted)] hover:bg-[var(--omp-sidebar-item-hover)] hover:text-[var(--omp-sidebar-text)]",
 };
 
+/**
+ * Switches the interface language at once. The assistant reads the language
+ * only when it starts, so a note in the new language says when it follows;
+ * the sidecar is not restarted, which would cut off a running task.
+ */
+export function useSwitchLanguage(): (next: Lang) => void {
+	const { setLang } = useLang();
+	return useCallback(
+		(next: Lang) => {
+			setLang(next);
+			toast({ variant: "info", message: translateForLang(next, "lang.assistantNextLaunch") });
+		},
+		[setLang],
+	);
+}
+
 export function LangSwitcher({ className, tone = "default" }: LangSwitcherProps) {
-	const { lang, setLang } = useLang();
+	const { lang } = useLang();
+	const switchLanguage = useSwitchLanguage();
 	const t = useT();
 	const next = lang === "en" ? "vi" : "en";
 	return (
 		<button
 			type="button"
-			onClick={() => setLang(next)}
+			onClick={() => switchLanguage(next)}
 			title={t("lang.switch")}
 			aria-label={t("lang.switch")}
 			className={cx(

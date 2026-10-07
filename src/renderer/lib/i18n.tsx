@@ -33,7 +33,7 @@ export function getCurrentLanguage(): Lang {
 	return nav.startsWith("vi") ? "vi" : "en";
 }
 
-function translateForLang(lang: Lang, key: string, params?: Record<string, string | number>): string {
+export function translateForLang(lang: Lang, key: string, params?: Record<string, string | number>): string {
 	const locale = LOCALES[lang];
 	let str = locale[key] ?? en[key] ?? key;
 	if (params) {
@@ -86,6 +86,11 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 			cancelled = true;
 		};
 	}, []);
+
+	// The page language tells screen readers and hyphenation how to read the text.
+	useEffect(() => {
+		document.documentElement.lang = lang;
+	}, [lang]);
 
 	const setLang = useCallback((next: Lang) => {
 		userSelected.current = true;

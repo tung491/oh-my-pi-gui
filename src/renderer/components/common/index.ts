@@ -9,7 +9,7 @@ export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { IconButton, type IconButtonProps, type IconButtonSize, type IconButtonVariant } from "./IconButton";
 export { Input, type InputProps, TextArea, type TextAreaProps } from "./Input";
 export { Kbd, type KbdProps } from "./Kbd";
-export { LangSwitcher, type LangSwitcherProps, type LangSwitcherTone } from "./LangSwitcher";
+export { LangSwitcher, type LangSwitcherProps, type LangSwitcherTone, useSwitchLanguage } from "./LangSwitcher";
 export { Modal, type ModalProps, type ModalSize } from "./Modal";
 export { PanelErrorBoundary } from "./PanelErrorBoundary";
 export { ProgressBar, type ProgressBarFill, type ProgressBarProps } from "./ProgressBar";

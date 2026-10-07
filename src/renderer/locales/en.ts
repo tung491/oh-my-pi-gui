@@ -155,6 +155,8 @@ export const en: Record<string, string> = {
 	"input.sendLabel": "Send",
 	"input.sendPrompt": "Send prompt",
 	"input.streamingTitle": 'Streaming — steering mode "{mode}". Click to switch steer/follow-up.',
+	"input.steeringMode.all": "all",
+	"input.steeringMode.oneAtATime": "one at a time",
 	"input.attachmentAlt": "attachment {index}",
 	"input.removeAttachment": "Remove",
 	"input.chooseModel": "Choose model",
@@ -370,6 +372,7 @@ export const en: Record<string, string> = {
 
 	// Language switcher
 	"lang.switch": "Switch language",
+	"lang.assistantNextLaunch": "The assistant switches language the next time Sai ATLAS starts.",
 
 	// Modes panel (Vibe / Goal / Loop session modes)
 	"modesPanel.goal.statusValue.active": "active",
@@ -1000,6 +1003,9 @@ export const en: Record<string, string> = {
 	"tools.path.openFailed": "Could not open file",
 	"tools.office.open": "Open",
 	"tools.office.showInFolder": "Show in folder",
+	"tools.office.title.report": "Word report",
+	"tools.office.title.slides": "Slide deck",
+	"tools.office.title.clean": "Cleaned spreadsheet",
 	"tools.write.lines": "{count} line{plural}",
 	"tools.write.overwritten": "Overwrote existing file (diff unavailable)",
 	"tools.grep.searching": "searching…",

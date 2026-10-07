@@ -164,7 +164,7 @@ describe("office cards in the live turn", () => {
 		const group = host.querySelector(".omp-execution-group");
 		expect(group).not.toBeNull();
 		expect(cardNames(group)).toEqual([]);
-		expect(cardNames(host)).toEqual(["office_report"]);
+		expect(cardNames(host)).toEqual(["Word report"]);
 		expect(group?.textContent).toContain("1 step");
 	});
 
@@ -173,6 +173,6 @@ describe("office cards in the live turn", () => {
 		useMessagesStore.setState({ streamingMessage: live });
 		const host = await mount(<StreamingRows expanded={false} onExpandedChange={() => {}} />);
 		expect(host.querySelector(".omp-execution-group")).toBeNull();
-		expect(cardNames(host)).toEqual(["glob", "office_report"]);
+		expect(cardNames(host)).toEqual(["glob", "Word report"]);
 	});
 });
