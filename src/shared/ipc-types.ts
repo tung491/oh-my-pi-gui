@@ -1097,7 +1097,6 @@ export interface OmpApi {
 			host?: RpcSshHostInput;
 		}): Promise<RpcResponse>;
 		sshTest(host: RpcSshHostInput & { name: string }): Promise<RpcResponse>;
-		getOmpUpdate(): Promise<RpcResponse>;
 		getContextReport(): Promise<RpcResponse>;
 		previewShareSession(): Promise<RpcResponse>;
 		shareSession(snapshotId?: string): Promise<RpcResponse>;

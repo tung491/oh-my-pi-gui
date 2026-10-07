@@ -1376,9 +1376,6 @@ export const en: Record<string, string> = {
 	"updates.subtitle": "Keep the desktop application and its bundled OMP Core aligned.",
 	"updates.gui.name": "GUI application",
 	"updates.gui.description": "Electron shell, renderer, and bundled resources.",
-	"updates.core.name": "OMP Core",
-	"updates.core.description": "The signed agent sidecar bundled inside the desktop application.",
-	"updates.core.checkFailed": "Could not check the OMP Core version.",
 	"updates.current": "Current",
 	"updates.latest": "Latest",
 	"updates.systemHealthy": "OMP system is up to date",
@@ -1390,7 +1387,6 @@ export const en: Record<string, string> = {
 	"updates.checking": "Checking…",
 	"updates.checkFailed": "Check failed",
 	"updates.upToDate": "Up to date",
-	"updates.coreBundledPending": "Included with the next GUI update",
 
 	// Cross-surface text completed by the GUI i18n audit
 	"app.actionFailed": "Action failed",

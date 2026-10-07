@@ -215,7 +215,6 @@ export function createSessionRpcClient(transport: RpcTransport): SessionRpcClien
 			host?: RpcSshHostInput;
 		}) => rpcCommand({ type: "ssh_manage", ...payload }, 30_000),
 		sshTest: (host: RpcSshHostInput & { name: string }) => rpcCommand({ type: "ssh_test", host }, 60_000),
-		getOmpUpdate: () => rpcCommand({ type: "get_omp_update" }, 60_000),
 		getContextReport: () => rpcCommand({ type: "get_context_report" }),
 		// Uploads + seals the session snapshot to the share server — network-bound.
 		previewShareSession: () => rpcCommand({ type: "preview_share_session" }),

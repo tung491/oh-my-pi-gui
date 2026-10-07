@@ -44,7 +44,6 @@ export type RpcMcpServerInput = Accepts<Gui.RpcMcpServerInput, Wire<Core.RpcMcpS
 export type RpcMcpServersResult = Accepts<Gui.RpcMcpServersResult, Wire<Core.RpcMcpServersResult>>;
 export type RpcMemoryReport = Accepts<Gui.RpcMemoryReport, Wire<Core.RpcMemoryReport>>;
 export type RpcMemoryStatus = Accepts<Gui.RpcMemoryStatus, Wire<Core.RpcMemoryStatus>>;
-export type RpcOmpUpdateResult = Accepts<Gui.RpcOmpUpdateResult, Wire<Core.RpcOmpUpdateResult>>;
 export type RpcPluginDetail = Accepts<Gui.RpcPluginDetail, Wire<Core.RpcPluginDetail>>;
 export type RpcPluginInfo = Accepts<Gui.RpcPluginInfo, Wire<Core.RpcPluginInfo>>;
 export type RpcPluginsResult = Accepts<Gui.RpcPluginsResult, Wire<Core.RpcPluginsResult>>;
