@@ -155,6 +155,8 @@ export const en: Record<string, string> = {
 	"input.sendLabel": "Send",
 	"input.sendPrompt": "Send prompt",
 	"input.streamingTitle": 'Streaming — steering mode "{mode}". Click to switch steer/follow-up.',
+	"input.steeringMode.all": "all",
+	"input.steeringMode.oneAtATime": "one at a time",
 	"input.attachmentAlt": "attachment {index}",
 	"input.removeAttachment": "Remove",
 	"input.chooseModel": "Choose model",

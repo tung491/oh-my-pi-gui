@@ -146,6 +146,8 @@ export const vi: Record<string, string> = {
 	"input.sendPrompt": "Gửi lời nhắc",
 	"input.streamingTitle":
 		'Đang phát trực tiếp — chế độ điều hướng "{mode}". Nhấn để chuyển đổi giữa điều hướng/tiếp nối.',
+	"input.steeringMode.all": "tất cả",
+	"input.steeringMode.oneAtATime": "từng cái một",
 	"input.attachmentAlt": "tệp đính kèm {index}",
 	"input.removeAttachment": "Xóa",
 	"input.chooseModel": "Chọn mô hình",
