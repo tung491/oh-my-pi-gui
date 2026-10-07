@@ -6,7 +6,7 @@ import type { Token, Tokens } from "marked";
 import PptxGenJS from "pptxgenjs";
 import { BODY_FONT, TITLE_FONT } from "./fonts";
 import { countOf, type InlineRun, inlineRuns, plainText, resolveTitle, splitLines } from "./markdown";
-import { PlainError } from "./output";
+import { PlainError, type PlainText } from "./output";
 
 export interface SlidesInput {
 	markdown: string;
@@ -112,6 +112,8 @@ const DECK_TEXT: Record<"en" | "vi", DeckText> = {
 	},
 };
 
+const NOT_CREATED: PlainText = { en: "I could not create the slides.", vi: "Tôi không tạo được bài trình chiếu." };
+/** Tells the model how to write the Markdown, so it stays in English like the argument checks. */
 const NO_SLIDES = "There are no slides yet. Start each slide with a line beginning with ##.";
 
 function itemText(item: Item): string {
@@ -536,6 +538,6 @@ export async function buildSlides(input: SlidesInput): Promise<BuiltDeck> {
 	for (const section of sections) renderSection(state, section);
 
 	const output = await pptx.write({ outputType: "nodebuffer" });
-	if (!(output instanceof Uint8Array)) throw new PlainError("I could not create the slides.");
+	if (!(output instanceof Uint8Array)) throw new PlainError(NOT_CREATED);
 	return { bytes: new Uint8Array(output), check: describe(state), title };
 }

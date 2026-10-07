@@ -12,7 +12,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { documentsDir, expandHome, isInsideDir, resultLine, safeBaseName, writeUnique } from "../src/office/output";
+import {
+	documentsDir,
+	expandHome,
+	isInsideDir,
+	PlainError,
+	resultLine,
+	safeBaseName,
+	writeUnique,
+} from "../src/office/output";
 
 let tmp: string;
 
@@ -186,5 +194,19 @@ describe("expandHome", () => {
 	it("resolves a relative path against the working directory", () => {
 		expect(expandHome("a/b.xlsx", "/home/u")).toBe(resolve("a/b.xlsx"));
 		expect(expandHome("/abs/c.csv", "/home/u")).toBe("/abs/c.csv");
+	});
+});
+
+describe("PlainError", () => {
+	it("keeps English as its message and picks Vietnamese only for vi", () => {
+		const error = new PlainError({ en: "I could not find that file.", vi: "Tôi không tìm thấy tệp đó." });
+		expect(error.message).toBe("I could not find that file.");
+		expect(error.inLanguage("vi")).toBe("Tôi không tìm thấy tệp đó.");
+		expect(error.inLanguage("en")).toBe("I could not find that file.");
+		expect(error.inLanguage("")).toBe("I could not find that file.");
+	});
+
+	it("uses a plain string in every language", () => {
+		expect(new PlainError("That is not a file.").inLanguage("vi")).toBe("That is not a file.");
 	});
 });

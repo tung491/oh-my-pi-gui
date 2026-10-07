@@ -137,6 +137,46 @@ describe("names and checks in the app language", () => {
 	});
 });
 
+describe("error sentences in the app language", () => {
+	it("tells the person in Vietnamese when the file is missing or of the wrong kind", async () => {
+		const clean = tool("office_clean", { lang: "vi" });
+		const missing = await clean.execute("t1", { file: join(home, "nothing.xlsx") });
+		expect(missing.isError).toBe(true);
+		expect(text(missing)).toBe("Tôi không tìm thấy tệp đó.");
+		writeFileSync(join(home, "notes.txt"), "text");
+		const wrongKind = await clean.execute("t2", { file: "~/notes.txt" });
+		expect(text(wrongKind)).toBe("Tôi chỉ làm sạch được tệp .xlsx, .xls, .ods và .csv.");
+	});
+
+	it("tells the person in Vietnamese that a cancelled call made no file", async () => {
+		const stopped = new AbortController();
+		stopped.abort();
+		const result = await tool("office_report", { lang: "vi" }).execute(
+			"t1",
+			{ markdown: "# A\n\nB" },
+			stopped.signal,
+		);
+		expect(result.isError).toBe(true);
+		expect(text(result)).toBe("Tôi đã dừng trước khi tạo xong tệp.");
+		expect(walk(home)).toEqual([]);
+	});
+
+	it("keeps the sentence in English for English and for an unknown language", async () => {
+		for (const lang of ["en", "fr"]) {
+			const result = await tool("office_clean", { lang }).execute("t1", { file: join(home, "nothing.xlsx") });
+			expect(text(result)).toBe("I could not find that file.");
+		}
+	});
+
+	it("keeps argument checks for the model in English whatever the language", async () => {
+		const vi = { lang: "vi" };
+		const totals = await tool("office_clean", vi).execute("t1", { file: "~/a.xlsx", totals: "yes" });
+		expect(text(totals)).toBe("Totals must be true or false.");
+		const noSlides = await tool("office_slides", vi).execute("t2", { markdown: "Just one line of text" });
+		expect(text(noSlides)).toBe("There are no slides yet. Start each slide with a line beginning with ##.");
+	});
+});
+
 describe("office_slides", () => {
 	it("saves a deck named after the given title", async () => {
 		const result = await tool("office_slides").execute("t1", {

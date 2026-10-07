@@ -9,6 +9,7 @@ import {
 	expandHome,
 	type OfficeKind,
 	PlainError,
+	type PlainText,
 	resultLine,
 	safeBaseName,
 	throwIfStopped,
@@ -97,10 +98,16 @@ function namesFor(lang: string): (typeof NAMES)[keyof typeof NAMES] {
 
 const PATH_PREFIX = /^(\/|~\/|\.\/|\.\.\/)/;
 const PATH_SUFFIX = /\.(md|txt|docx|pdf)$/i;
-const SAVE_FAILED = "I could not save the file in the Sai ATLAS folder.";
+const SAVE_FAILED: PlainText = {
+	en: "I could not save the file in the Sai ATLAS folder.",
+	vi: "Tôi không lưu được tệp vào thư mục Sai ATLAS.",
+};
 /** The markdown builds in-process inside the agent, so one call stays small. */
 const MAX_MARKDOWN_BYTES = 1024 * 1024;
-const UNEXPECTED = "Something went wrong while making the file.";
+const UNEXPECTED = new PlainError({
+	en: "Something went wrong while making the file.",
+	vi: "Đã có lỗi khi tạo tệp.",
+});
 
 function optionalString(args: Record<string, unknown>, key: string, message: string): string | undefined {
 	const value = args[key];
@@ -142,12 +149,16 @@ function save(
 	return textResult(resultLine({ file, kind, check }));
 }
 
-async function run(job: () => Promise<ToolResult>): Promise<ToolResult> {
+/**
+ * Runs a tool call and turns a failure into an error result: a sentence for the person in the
+ * session language, an argument check in English for the model, and never a raw system error.
+ */
+async function run(lang: string, job: () => Promise<ToolResult>): Promise<ToolResult> {
 	try {
 		return await job();
 	} catch (error) {
-		const known = error instanceof PlainError || error instanceof ArgumentError;
-		return textResult(known ? error.message : UNEXPECTED, true);
+		if (error instanceof ArgumentError) return textResult(error.message, true);
+		return textResult((error instanceof PlainError ? error : UNEXPECTED).inLanguage(lang), true);
 	}
 }
 
@@ -165,7 +176,7 @@ function documentTool(env: OfficeEnv, kind: "docx" | "pptx"): PackTool {
 		approval: "write",
 		loadMode: "essential",
 		execute: (_toolCallId, params, signal) =>
-			run(async () => {
+			run(env.lang, async () => {
 				throwIfStopped(signal);
 				const args = asRecord(params);
 				const markdown = requiredString(
@@ -202,7 +213,7 @@ function cleanTool(env: OfficeEnv): PackTool {
 		approval: "write",
 		loadMode: "essential",
 		execute: (_toolCallId, params, signal) =>
-			run(async () => {
+			run(env.lang, async () => {
 				throwIfStopped(signal);
 				const args = asRecord(params);
 				const file = requiredString(
