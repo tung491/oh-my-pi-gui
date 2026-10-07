@@ -27,7 +27,8 @@
         ],
         "desktopTemplate": "linux/vn.io.vif.saiatlas.desktop",
         "files": {
-          "/usr/lib/Sai ATLAS/package-type": "linux/package-type"
+          "/usr/lib/Sai ATLAS/package-type": "linux/package-type",
+          "/usr/lib/systemd/system/ollama.service.d/sai-atlas.conf": "linux/ollama-no-cloud.conf"
         }
       }
     }

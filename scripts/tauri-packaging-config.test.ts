@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { type PlistObject, parsePlistFile } from "app-builder-lib/out/util/plist";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
+import { OLLAMA_REMEDY_COMMANDS } from "../src/shared/ollama-types";
 import { APP_ID, PRODUCT_NAME } from "../src/shared/product";
 import { BUNDLED_GSTREAMER_PLUGINS } from "../src-tauri/linux/finalize-appimage";
 import {
@@ -371,6 +372,19 @@ describe("Linux package", () => {
 		const files = platform("linux").bundle?.linux?.deb?.files ?? {};
 		expect(files["/usr/lib/Sai ATLAS/package-type"]).toBe("linux/package-type");
 		expect(fs.readFileSync(path.join(TAURI, "linux/package-type"), "utf8").trim()).toBe("deb");
+	});
+
+	it("deb turns off Ollama's online features with the same drop-in the welcome screen writes", () => {
+		// A vendor drop-in applies to the ollama.service the official installer writes to /etc, at its next
+		// start; one in /etc with the same name (the welcome screen's) overrides it with the same content.
+		const files = platform("linux").bundle?.linux?.deb?.files ?? {};
+		expect(files["/usr/lib/systemd/system/ollama.service.d/sai-atlas.conf"]).toBe("linux/ollama-no-cloud.conf");
+		const dropIn = fs.readFileSync(path.join(TAURI, "linux/ollama-no-cloud.conf"), "utf8");
+		expect(dropIn).toBe('[Service]\nEnvironment="OLLAMA_NO_CLOUD=1"\n');
+		for (const command of Object.values(OLLAMA_REMEDY_COMMANDS)) {
+			expect(command).toContain(`s=$(printf '${dropIn.trimEnd().replace("\n", "\\n")}')`);
+			expect(command).toContain("/etc/systemd/system/ollama.service.d/sai-atlas.conf");
+		}
 	});
 
 	it("deb ships the /opt compat symlink and one desktop entry named after the app id", () => {
