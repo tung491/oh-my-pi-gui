@@ -1,22 +1,11 @@
 /**
- * Capabilities home page: the OMP Capabilities tab in settings that showcases
- * differentiating workflows with discovery cards and direct actions.
+ * Settings landing page: introduces Sai ATLAS and links to what an assistant
+ * session offers — the action search, the model, Ollama, this conversation and
+ * the app itself. Cards are discovery and navigation only; values live in their
+ * own pages.
  */
 
-import {
-	BarChart3,
-	Bot,
-	BrainCircuit,
-	Command,
-	Database,
-	FolderOpen,
-	Keyboard,
-	Network,
-	Plug,
-	ShieldCheck,
-	Sparkles,
-	Wrench,
-} from "lucide-react";
+import { Bot, Command, MessageSquare, Plug, Settings2, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { useT } from "../../../lib/i18n";
 import { Button } from "../../common";
@@ -29,15 +18,8 @@ export type CapabilityTarget =
 	| "clear"
 	| "sessionInfo"
 	| "export"
-	| "dump"
-	| "fork"
 	| "retry"
 	| "resend"
-	| "btw"
-	| "tan"
-	| "omfg"
-	| "queue"
-	| "jobs"
 	| "hotkeys"
 	| "theme"
 	| "settings"
@@ -45,16 +27,6 @@ export type CapabilityTarget =
 	| "copy";
 
 interface CapabilitiesHomeProps {
-	ready: boolean;
-	ttsrEnabled: boolean;
-	advisorEnabled: boolean;
-	advisorActive: boolean | undefined;
-	memoryBackend: string;
-	onConfigureTtsr: () => void;
-	onOpenAgents: () => void;
-	onConfigureAdvisor: () => void;
-	onOpenMemory: () => void;
-	onOpenTools: () => void;
 	onOpenCommandCenter: () => void;
 	onOpenTarget: (target: CapabilityTarget) => void;
 }
@@ -63,16 +35,12 @@ function CapabilityCard({
 	icon,
 	title,
 	description,
-	status,
-	statusActive = false,
 	featured = false,
 	children,
 }: {
 	icon: ReactNode;
 	title: string;
 	description: string;
-	status?: string;
-	statusActive?: boolean;
 	featured?: boolean;
 	children: ReactNode;
 }) {
@@ -91,20 +59,7 @@ function CapabilityCard({
 					{icon}
 				</div>
 				<div className="min-w-0 flex-1">
-					<div className="flex flex-wrap items-center gap-2">
-						<h3 className="text-omp-lg font-semibold text-(--omp-text)">{title}</h3>
-						{status && (
-							<span
-								className={`rounded-full border px-1.5 py-0.5 text-omp-xxs font-medium ${
-									statusActive
-										? "border-[color-mix(in_srgb,var(--omp-success)_35%,transparent)] bg-transparent text-(--omp-success)"
-										: "border-(--omp-border-muted) text-(--omp-dim)"
-								}`}
-							>
-								{status}
-							</span>
-						)}
-					</div>
+					<h3 className="text-omp-lg font-semibold text-(--omp-text)">{title}</h3>
 					<p className="mt-1 text-omp-sm leading-relaxed text-(--omp-muted)">{description}</p>
 				</div>
 			</div>
@@ -130,25 +85,8 @@ function TargetButton({
 	);
 }
 
-export function CapabilitiesHome({
-	ready,
-	ttsrEnabled,
-	advisorEnabled,
-	advisorActive,
-	memoryBackend,
-	onConfigureTtsr,
-	onOpenAgents,
-	onConfigureAdvisor,
-	onOpenMemory,
-	onOpenTools,
-	onOpenCommandCenter,
-	onOpenTarget,
-}: CapabilitiesHomeProps) {
+export function CapabilitiesHome({ onOpenCommandCenter, onOpenTarget }: CapabilitiesHomeProps) {
 	const t = useT();
-	const stateLabel = (enabled: boolean) =>
-		ready
-			? t(enabled ? "settings.capabilities.enabled" : "settings.capabilities.disabled")
-			: t("settings.capabilities.loading");
 
 	return (
 		<div>
@@ -182,86 +120,7 @@ export function CapabilitiesHome({
 						{t("settings.capabilities.openCommandCenter")}
 					</Button>
 				</CapabilityCard>
-				<CapabilityCard
-					description={t("settings.capabilities.quickActionsDesc")}
-					icon={<Command size={16} />}
-					title={t("settings.capabilities.quickActions")}
-				>
-					<TargetButton label={t("cmd.btw")} onOpen={onOpenTarget} target="btw" variant="secondary" />
-					<TargetButton label={t("cmd.tan")} onOpen={onOpenTarget} target="tan" />
-					<TargetButton label={t("cmd.omfg")} onOpen={onOpenTarget} target="omfg" />
-					<TargetButton label={t("cmd.queue")} onOpen={onOpenTarget} target="queue" />
-				</CapabilityCard>
 
-				<CapabilityCard
-					description={t("settings.capabilities.ttsrDesc")}
-					featured
-					icon={<ShieldCheck size={17} />}
-					status={stateLabel(ttsrEnabled)}
-					statusActive={ready && ttsrEnabled}
-					title={t("settings.capabilities.ttsr")}
-				>
-					{/* Toggle lives in Context › Rules (schema owns the value); this card
-					    is discovery + navigation only. */}
-					<Button onClick={onConfigureTtsr} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.configureRules")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("settings.capabilities.agentsDesc")}
-					icon={<Network size={16} />}
-					title={t("settings.capabilities.agents")}
-				>
-					<Button onClick={onOpenAgents} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.openAgentHub")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("settings.capabilities.advisorDesc")}
-					icon={<BrainCircuit size={16} />}
-					status={
-						ready && advisorEnabled && advisorActive === false
-							? t("settings.capabilities.advisorInactive")
-							: stateLabel(advisorEnabled)
-					}
-					statusActive={ready && advisorEnabled && advisorActive !== false}
-					title={t("settings.capabilities.advisor")}
-				>
-					{/* Toggle lives in Model › Advisor (schema owns the value). */}
-					<Button onClick={onConfigureAdvisor} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.configureAdvisor")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("settings.capabilities.memoryDesc")}
-					icon={<Database size={16} />}
-					status={
-						ready
-							? t("settings.capabilities.memoryBackend", {
-									backend: memoryBackend || t("settings.capabilities.unconfigured"),
-								})
-							: t("settings.capabilities.loading")
-					}
-					statusActive={ready && memoryBackend !== "" && memoryBackend !== "off"}
-					title={t("settings.capabilities.memory")}
-				>
-					<Button onClick={onOpenMemory} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.configureMemory")}
-					</Button>
-				</CapabilityCard>
-
-				<CapabilityCard
-					description={t("settings.capabilities.toolsDesc")}
-					icon={<Wrench size={16} />}
-					title={t("settings.capabilities.tools")}
-				>
-					<Button onClick={onOpenTools} size="sm" type="button" variant="secondary">
-						{t("settings.capabilities.configureTools")}
-					</Button>
-				</CapabilityCard>
 				<CapabilityCard description={t("cmd.model.desc")} icon={<Bot size={16} />} title={t("cmd.model")}>
 					<TargetButton label={t("cmd.model")} onOpen={onOpenTarget} target="model" variant="secondary" />
 				</CapabilityCard>
@@ -270,34 +129,29 @@ export function CapabilitiesHome({
 					<TargetButton label={t("cmd.providers")} onOpen={onOpenTarget} target="providers" variant="secondary" />
 				</CapabilityCard>
 
-				<CapabilityCard description={t("cmd.import.desc")} icon={<FolderOpen size={16} />} title={t("cmd.session")}>
-					<TargetButton label={t("cmd.clear")} onOpen={onOpenTarget} target="clear" variant="secondary" />
-					<TargetButton label={t("cmd.session")} onOpen={onOpenTarget} target="sessionInfo" />
-					<TargetButton label={t("cmd.export")} onOpen={onOpenTarget} target="export" />
-					<TargetButton label={t("cmd.dump")} onOpen={onOpenTarget} target="dump" />
-					<TargetButton label={t("cmd.fork")} onOpen={onOpenTarget} target="fork" />
-					<TargetButton label={t("cmd.retry")} onOpen={onOpenTarget} target="retry" />
+				<CapabilityCard
+					description={t("settings.capabilities.conversationDesc")}
+					icon={<MessageSquare size={16} />}
+					title={t("settings.capabilities.conversation")}
+				>
+					<TargetButton label={t("cmd.retry")} onOpen={onOpenTarget} target="retry" variant="secondary" />
 					<TargetButton label={t("cmd.resend")} onOpen={onOpenTarget} target="resend" />
-				</CapabilityCard>
-
-				<CapabilityCard description={t("cmd.jobs.desc")} icon={<BarChart3 size={16} />} title={t("cmd.jobs")}>
-					<TargetButton label={t("cmd.jobs")} onOpen={onOpenTarget} target="jobs" variant="secondary" />
+					<TargetButton label={t("cmd.copy")} onOpen={onOpenTarget} target="copy" />
+					<TargetButton label={t("cmd.export")} onOpen={onOpenTarget} target="export" />
+					<TargetButton label={t("cmd.session")} onOpen={onOpenTarget} target="sessionInfo" />
+					<TargetButton label={t("cmd.clear")} onOpen={onOpenTarget} target="clear" />
 				</CapabilityCard>
 
 				<CapabilityCard
-					description={t("cmd.settings.desc")}
-					icon={<ShieldCheck size={16} />}
+					description={t("settings.capabilities.applicationDesc")}
+					icon={<Settings2 size={16} />}
 					title={t("settings.nav.application")}
 				>
-					<TargetButton label={t("cmd.hotkeys")} onOpen={onOpenTarget} target="hotkeys" variant="secondary" />
+					<TargetButton label={t("cmd.settings")} onOpen={onOpenTarget} target="settings" variant="secondary" />
 					<TargetButton label={t("cmd.theme")} onOpen={onOpenTarget} target="theme" />
-					<TargetButton label={t("cmd.settings")} onOpen={onOpenTarget} target="settings" />
+					<TargetButton label={t("cmd.hotkeys")} onOpen={onOpenTarget} target="hotkeys" />
 					<TargetButton label={t("cmd.changelog")} onOpen={onOpenTarget} target="changelog" />
 					<TargetButton label={t("settings.tabs.updates")} onOpen={onOpenTarget} target="updates" />
-				</CapabilityCard>
-
-				<CapabilityCard description={t("cmd.copy.desc")} icon={<Keyboard size={16} />} title={t("cmd.copy")}>
-					<TargetButton label={t("cmd.copy")} onOpen={onOpenTarget} target="copy" variant="secondary" />
 				</CapabilityCard>
 			</div>
 		</div>

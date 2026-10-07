@@ -247,7 +247,6 @@ export const en: Record<string, string> = {
 	"cmd.clear.desc": "Drop the conversation context, keep the session",
 	"cmd.resume": "Resume Session",
 	"cmd.resume.desc": "Switch to a different session",
-	"cmd.import.desc": "Import a Claude or Codex session as an OMP copy",
 	"cmd.session": "Session Info",
 	"cmd.session.desc": "Show session info and stats",
 	"cmd.session.info": "Session Info",
@@ -432,45 +431,20 @@ export const en: Record<string, string> = {
 	"settings.tabs.providers": "Providers",
 	"settings.tabs.advanced": "Advanced",
 	"settings.tabs.gui": "GUI",
-	"settings.tabs.capabilities": "OMP Capabilities",
+	"settings.tabs.capabilities": "Overview",
 	"settings.nav.application": "Application",
-	"settings.capabilities.eyebrow": "Start with OMP",
-	"settings.capabilities.title": "Start with what makes OMP different",
+	"settings.capabilities.eyebrow": "Sai ATLAS",
+	"settings.capabilities.title": "What Sai ATLAS can do for you",
 	"settings.capabilities.description":
-		"These controls change how work is executed, not how the settings page looks: intervene mid-stream, fan work out, route model roles, and keep project memory.",
-	"settings.capabilities.commandCenter": "Command Center",
-	"settings.capabilities.commandCenterDesc":
-		"Browse every GUI command, mode, provider action, extension action, and shortcut from one searchable palette.",
-	"settings.capabilities.openCommandCenter": "Browse all commands",
-	"settings.capabilities.quickActions": "Quick actions",
-	"settings.capabilities.quickActionsDesc":
-		"Start side questions, background work, recurring-behavior rules, guided goals, or queued follow-ups without remembering slash-command syntax.",
-	"settings.capabilities.enabled": "Enabled",
-	"settings.capabilities.disabled": "Off",
-	"settings.capabilities.loading": "Loading…",
-	"settings.capabilities.ttsr": "Mid-stream correction · TTSR",
-	"settings.capabilities.ttsrDesc":
-		"When output matches a rule, OMP interrupts generation, injects the relevant guidance, and continues from the same turn—without permanently bloating the prompt.",
-	"settings.capabilities.configureRules": "Configure rules",
-	"settings.capabilities.agents": "Parallel helpers",
-	"settings.capabilities.agentsDesc":
-		"Fan independent work out to isolated agents, collect structured results, and let sibling tasks coordinate through the hub.",
-	"settings.capabilities.openAgentHub": "Open Agent Hub",
-	"settings.capabilities.advisor": "Second-model advisor",
-	"settings.capabilities.advisorDesc":
-		"Have an independent model review the primary agent's work each turn and return inline guidance or a blocking correction.",
-	"settings.capabilities.configureAdvisor": "Advisor settings",
-	"settings.capabilities.advisorInactive": "Enabled, not running",
-	"settings.capabilities.memory": "Cross-session project memory",
-	"settings.capabilities.memoryDesc":
-		"Keep project facts, learned context, or friction-earned decisions across sessions using Local, Hindsight, Mnemopi, or Sharpshooter.",
-	"settings.capabilities.memoryBackend": "Backend: {backend}",
-	"settings.capabilities.unconfigured": "not configured",
-	"settings.capabilities.configureMemory": "Configure memory",
-	"settings.capabilities.tools": "Auditable native toolchain",
-	"settings.capabilities.toolsDesc":
-		"Use structured read, search, edit, LSP, debugger, and browser tools—with staged AST rewrites and explicit approval boundaries.",
-	"settings.capabilities.configureTools": "Configure tool access",
+		"Sai ATLAS helps with everyday work: Word reports, tidy spreadsheets, slide decks and, on SAI OS, help with your computer. It uses only models on this computer, so your files and conversations stay here.",
+	"settings.capabilities.commandCenter": "Find an action",
+	"settings.capabilities.commandCenterDesc": "Search everything Sai ATLAS can do by name and run it with one click.",
+	"settings.capabilities.openCommandCenter": "Search actions",
+	"settings.capabilities.conversation": "This conversation",
+	"settings.capabilities.conversationDesc":
+		"Try your last request again, copy or save the answers, see details about this task, or clear it to start fresh.",
+	"settings.capabilities.applicationDesc":
+		"Change how Sai ATLAS looks, see keyboard shortcuts, read what's new and get updates.",
 	"settings.gui.theme": "Choose GUI theme",
 	"settings.gui.followAgentTheme": "Follow the current task's terminal palette",
 	"settings.gui.followAgentThemeDesc":

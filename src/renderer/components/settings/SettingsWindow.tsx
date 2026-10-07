@@ -39,14 +39,13 @@ import {
 	profileToFlags,
 } from "../../../shared/launch-profile";
 import type { SettingEntry, SettingsSchemaResult, SidecarStatus } from "../../../shared/rpc-types";
-import { forkSessionFromGui, prefillComposer, retryFailedTurn } from "../../lib/command-registry";
+import { retryFailedTurn } from "../../lib/command-registry";
 import { exportSessionHtml } from "../../lib/export-session";
 import { useLang, useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
 import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
 import { setCodeLineNumbersPref } from "../../lib/markdown";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "../../lib/messages";
-import { dumpTranscriptToClipboard } from "../../lib/transcript-copy";
 import { en } from "../../locales/en";
 import { vi } from "../../locales/vi";
 import { useMessagesStore } from "../../stores/messages";
@@ -220,7 +219,6 @@ export function SettingsWindow() {
 	);
 	const sidecarBusy = sessionBusy || executionBusy;
 	const [reloadToken, setReloadToken] = useState(0);
-	const [advisorActive, setAdvisorActive] = useState<boolean>();
 	const retrySettingsConnection = useCallback(() => {
 		clearSidecarError();
 		setReloadToken(token => token + 1);
@@ -274,7 +272,6 @@ export function SettingsWindow() {
 					const data = settingsRes.data as SettingsResponseData | undefined;
 					if (data?.values) Object.assign(nextValues, data.values);
 					if (typeof data?.advisorEnabled === "boolean") nextValues["advisor.enabled"] = data.advisorEnabled;
-					setAdvisorActive(data?.advisorActive);
 				}
 				setFontSizeDraft(null);
 				setSchema(result);
@@ -336,7 +333,6 @@ export function SettingsWindow() {
 									}
 								: previous,
 						);
-					setAdvisorActive(data.advisorActive);
 				})
 				.catch(() => {});
 		});
@@ -686,10 +682,6 @@ export function SettingsWindow() {
 					toast({ variant: "error", title: t("palette.failed"), message: String(error) }),
 				);
 			};
-			const prefill = (text: string) => {
-				close();
-				prefillComposer(text);
-			};
 			switch (target) {
 				case "model":
 					external(() => useUiStore.getState().openModelPicker());
@@ -712,12 +704,6 @@ export function SettingsWindow() {
 				case "export":
 					runAsync(() => exportSessionHtml());
 					return;
-				case "dump":
-					runAsync(() => dumpTranscriptToClipboard());
-					return;
-				case "fork":
-					runAsync(() => forkSessionFromGui());
-					return;
 				case "retry":
 					runAsync(() => retryFailedTurn());
 					return;
@@ -731,21 +717,6 @@ export function SettingsWindow() {
 							}),
 						),
 					);
-					return;
-				case "btw":
-					prefill("/btw ");
-					return;
-				case "tan":
-					prefill("/tan ");
-					return;
-				case "omfg":
-					prefill("/omfg ");
-					return;
-				case "queue":
-					prefill("-> ");
-					return;
-				case "jobs":
-					external(() => useUiStore.getState().openJobs());
 					return;
 				case "hotkeys":
 					external(() => useUiStore.getState().openHotkeys());
@@ -888,38 +859,11 @@ export function SettingsWindow() {
 								{tab === UPDATES_TAB_ID && <UpdatesSettingsPage />}
 								{tab === CAPABILITIES_TAB_ID && (
 									<CapabilitiesHome
-										advisorActive={advisorActive}
-										advisorEnabled={values["advisor.enabled"] === true}
-										memoryBackend={
-											typeof values["memory.backend"] === "string" ? values["memory.backend"] : ""
-										}
-										onConfigureAdvisor={() => {
-											setTab("model");
-											setQuery("advisor");
-										}}
-										onConfigureTtsr={() => {
-											setTab("context");
-											setQuery("ttsr");
-										}}
-										onOpenAgents={() => {
-											close();
-											useUiStore.getState().openAgentHub("definitions");
-										}}
-										onOpenMemory={() => {
-											setTab("memory");
-											setQuery("");
-										}}
-										onOpenTools={() => {
-											setTab("tools");
-											setQuery("");
-										}}
 										onOpenCommandCenter={() => {
 											close();
 											useUiStore.getState().openCommandPalette();
 										}}
 										onOpenTarget={openCapabilityTarget}
-										ready={loadState === "ready" && sidecarReady}
-										ttsrEnabled={values["ttsr.enabled"] === true}
 									/>
 								)}
 
