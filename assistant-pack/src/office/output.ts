@@ -18,6 +18,11 @@ export interface PlainText {
 	vi: string;
 }
 
+/** The text in the session language (`SAI_ATLAS_LANG`): Vietnamese for `vi`, else English. */
+export function inLanguage(text: PlainText, lang: string): string {
+	return lang === "vi" ? text.vi : text.en;
+}
+
 /**
  * A failure whose message is a fixed plain sentence, safe to show the person. `message` is
  * the English sentence; a plain string is the same sentence in every language.
@@ -33,7 +38,7 @@ export class PlainError extends Error {
 
 	/** The sentence in the session language (`SAI_ATLAS_LANG`): Vietnamese for `vi`, else English. */
 	inLanguage(lang: string): string {
-		return lang === "vi" ? this.#text.vi : this.#text.en;
+		return inLanguage(this.#text, lang);
 	}
 }
 
