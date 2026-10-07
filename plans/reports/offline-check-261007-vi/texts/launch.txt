@@ -1,0 +1,107 @@
+## body text
+
+
+
+Việc mới
+
+Lệnh
+Ctrl+K / Super+K
+
+Ollama
+
+Cài đặt
+
+GẦN ĐÂY
+Chưa có tác vụ công việc nào
+Sai ATLAS 0.9.16 · Trạng thái: Sẵn sàng
+
+
+VI
+
+
+
+Phiên mới
+
+Sẵn sàng
+0
+$0.0000
+17%
+0%
+0s
+
+Không gian làm việc
+
+
+work
+work
+
+
+
+Hôm nay tôi có thể giúp gì cho bạn?
+
+Biến ghi chú thành báo cáo Word
+
+Dọn dẹp bảng tính và thêm tổng
+
+Tạo slide từ báo cáo
+
+Trợ giúp máy tính
+Chuyển đến mới nhất
+
+
+
+
+
+hf.co/mradermacher/Quyet-1.0-Medium-GGUF:Q4_K_M
+
+
+
+## attributes
+title: Tìm kiếm phiên
+aria-label: Tìm kiếm phiên
+title: Mở Trung tâm Lệnh (Ctrl+K / Super+K)
+title: Thu gọn điều hướng
+aria-label: Thu gọn điều hướng
+title: Sai ATLAS 0.9.16 · Trạng thái: Sẵn sàng
+title: Chọn giao diện
+aria-label: Chọn giao diện
+title: Chuyển đổi ngôn ngữ
+aria-label: Chuyển đổi ngôn ngữ
+title: Mở cài đặt
+aria-label: Mở cài đặt
+title: Bật/tắt thanh bên
+aria-label: Bật/tắt thanh bên
+title: Lệnh
+aria-label: Lệnh
+title: Đổi tên phiên
+title: Sẵn sàng
+aria-label: Sẵn sàng
+aria-label: Chỉ số phiên
+title: Token nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Chi phí nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Cửa sổ ngữ cảnh đã dùng
+title: Tỷ lệ trúng cache
+title: Thời gian thực thi thực tế
+title: Mở không gian làm việc
+title: Thao tác phiên
+aria-label: Thao tác phiên
+aria-label: Các thẻ phiên
+title: work — work
+title: Thao tác thẻ
+aria-label: Thao tác thẻ
+title: Thẻ agent mới (Ctrl+T)
+aria-label: Thẻ Agent Mới
+aria-label: Phiên: work
+aria-label: Bản ghi cuộc trò chuyện
+aria-label: Chuyển đến mới nhất
+placeholder: Nhờ Sai ATLAS soạn thư, sắp xếp bảng tính hoặc làm trang trình chiếu…
+title: Đính kèm tệp
+aria-label: Đính kèm tệp
+title: Chỉnh sửa bản nháp
+title: Lịch sử
+aria-label: Lịch sử
+title: Đổi mô hình
+title: Thêm cài đặt chạy
+aria-label: Thêm cài đặt chạy
+title: Gửi (Enter)
+aria-label: Gửi (Enter)

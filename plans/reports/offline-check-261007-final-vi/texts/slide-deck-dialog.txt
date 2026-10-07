@@ -1,0 +1,154 @@
+## body text
+
+
+
+Việc mới
+
+Lệnh
+Ctrl+K / Super+K
+
+Ollama
+
+Cài đặt
+
+GẦN ĐÂY
+3
+
+Chưa có tiêu đề
+
+Chưa có tiêu đề
+
+Chưa có tiêu đề
+Sai ATLAS 0.9.16 · Trạng thái: Đang xử lý
+
+
+VI
+
+
+
+Phiên mới
+
+Đang xử lý
+4.0k
+$0.0000
+23%
+88%
+1.0s
+
+Không gian làm việc
+
+
+Chưa có tiêu đề
+work
+
+
+
+KỸ NĂNG
+slides-from-report
+'/home/ubuntu/Inputs/cap-nhat-du-an.md'
+/usr/lib/Sai ATLAS/assistant-pack/skills/slides-from-report/SKILL.md
+·
+14 dòng
+
+3 bước
+read
+Đã hoàn thành 3 bước
+
+Bản trình chiếu
+Cập nhật dự án chuyển văn phòng
+1.0s
+ĐỐI SỐ
+i
+·
+Turn the report into a slide deck
+markdown
+·
+mở rộng
+title
+·
+Cập nhật dự án chuyển văn phòng
+KẾT QUẢ MỘT PHẦN
+—
+Chuyển đến mới nhất
+
+
+
+
+
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest
+
+Điều hướng
+
+
+Phê duyệt công cụ
+
+Sai ATLAS muốn tạo bộ slide. Cho phép không?
+ghi
+Không có đối số nào để xem trước.
+Agent sẽ đợi cho đến khi bạn quyết định.
+Từ chối
+Phê duyệt
+
+## attributes
+title: Tìm kiếm phiên
+aria-label: Tìm kiếm phiên
+title: Mở Trung tâm Lệnh (Ctrl+K / Super+K)
+title: Thu gọn điều hướng
+aria-label: Thu gọn điều hướng
+title: Đang chờ xác nhận hoặc phê duyệt
+aria-label: Đang chờ xác nhận hoặc phê duyệt
+title: Chưa có tiêu đề
+title: Đã hoàn thành
+aria-label: Đã hoàn thành
+title: Đổi tên phiên
+aria-label: Đổi tên phiên
+title: Xóa phiên
+aria-label: Xóa phiên
+title: Sai ATLAS 0.9.16 · Trạng thái: Đang xử lý
+title: Chọn giao diện
+aria-label: Chọn giao diện
+title: Chuyển đổi ngôn ngữ
+aria-label: Chuyển đổi ngôn ngữ
+title: Mở cài đặt
+aria-label: Mở cài đặt
+title: Bật/tắt thanh bên
+aria-label: Bật/tắt thanh bên
+title: Lệnh
+aria-label: Lệnh
+title: Đang xử lý
+aria-label: Đang xử lý
+aria-label: Chỉ số phiên
+title: Token nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Chi phí nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Cửa sổ ngữ cảnh đã dùng
+title: Tỷ lệ trúng cache
+title: Thời gian thực thi thực tế
+title: Mở không gian làm việc
+title: Thao tác phiên
+aria-label: Thao tác phiên
+aria-label: Các thẻ phiên
+title: Chưa có tiêu đề — work
+title: Thao tác thẻ
+aria-label: Thao tác thẻ
+title: Thẻ agent mới (Ctrl+T)
+aria-label: Thẻ Agent Mới
+aria-label: Phiên: Chưa có tiêu đề
+aria-label: Bản ghi cuộc trò chuyện
+aria-label: Tác vụ: Đã hoàn thành 3 bước
+aria-label: Chuyển đến mới nhất
+placeholder: Thêm chỉ dẫn trong khi Sai ATLAS đang xử lý…
+title: Đính kèm tệp
+aria-label: Đính kèm tệp
+title: Chỉnh sửa bản nháp
+title: Lịch sử
+aria-label: Lịch sử
+title: Đổi mô hình
+title: Thêm cài đặt chạy
+aria-label: Thêm cài đặt chạy
+title: Đang phát trực tiếp — chế độ điều hướng "từng cái một". Nhấn để chuyển đổi giữa điều hướng/tiếp nối.
+title: Gửi (Enter)
+aria-label: Gửi (Enter)
+title: Hủy
+aria-label: Hủy
+aria-label: Phê duyệt công cụ
+aria-label: Đóng

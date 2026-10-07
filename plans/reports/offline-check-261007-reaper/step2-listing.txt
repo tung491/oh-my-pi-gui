@@ -1,0 +1,8 @@
+$ ls -la /home/ubuntu/Documents/Sai ATLAS
+total 104
+drwxr-xr-x 2 ubuntu ubuntu  4096 Oct  7 04:37 .
+drwxr-xr-x 3 ubuntu ubuntu  4096 Oct  7 04:36 ..
+-rw-r--r-- 1 ubuntu ubuntu 74511 Oct  7 04:37 Office move project update.pptx
+-rw-r--r-- 1 ubuntu ubuntu 10048 Oct  7 04:36 Team meeting, 3 October.docx
+-rw-r--r-- 1 ubuntu ubuntu  7834 Oct  7 04:37 store-sales (cleaned).xlsx
+(exit 0)

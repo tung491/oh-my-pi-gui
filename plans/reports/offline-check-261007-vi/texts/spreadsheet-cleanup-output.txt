@@ -1,0 +1,146 @@
+## body text
+
+
+
+Việc mới
+
+Lệnh
+Ctrl+K / Super+K
+
+Ollama
+
+Cài đặt
+
+GẦN ĐÂY
+2
+
+Chưa có tiêu đề
+
+Chưa có tiêu đề
+Sai ATLAS 0.9.16 · Trạng thái: Sẵn sàng
+
+
+VI
+
+
+
+Phiên mới
+
+Sẵn sàng
+7.8k
+$0.0000
+23%
+93%
+2.6s
+
+Không gian làm việc
+
+
+Chưa có tiêu đề
+work
+
+
+
+KỸ NĂNG
+spreadsheet-cleanup
+'/home/ubuntu/Inputs/doanh-so-cua-hang.csv'
+/usr/lib/Sai ATLAS/assistant-pack/skills/spreadsheet-cleanup/SKILL.md
+·
+12 dòngs
+
+1 bước
+Đã hoàn thành 1 bước
+
+office_clean
+/home/ubuntu/Inputs/doanh-so-cua-hang.csv
+596ms
+doanh-so-cua-hang (cleaned).xlsx
+1 sheet, 7 rows kept, 0 empty rows removed, 1 duplicate row removed, 3 cells trimmed, 10 numbers converted
+Mở
+Mở thư mục
+
+1 bước
+Đã hoàn thành 1 bước
+
+Trợ lý Sai ATLAS
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest · 04:52
+Tôi đã làm sạch tệp bảng tính của bạn. Tệp đã được lưu tại /home/ubuntu/Documents/Sai ATLAS/doanh-so-cua-hang (cleaned).xlsx.
+
+Tệp này đã được làm sạch bằng cách giữ lại 7 hàng, loại bỏ 0 hàng trống, loại bỏ 1 hàng trùng lặp, cắt bớt 3 ô và chuyển đổi 10 số từ văn bản thành số. Bạn có thể mở tệp này từ thẻ.
+
+
+
+
+Chuyển đến mới nhất
+
+
+
+
+
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest
+
+
+
+## attributes
+title: Tìm kiếm phiên
+aria-label: Tìm kiếm phiên
+title: Mở Trung tâm Lệnh (Ctrl+K / Super+K)
+title: Thu gọn điều hướng
+aria-label: Thu gọn điều hướng
+title: Sẵn sàng
+aria-label: Sẵn sàng
+title: Chưa có tiêu đề
+title: Đổi tên phiên
+aria-label: Đổi tên phiên
+title: Xóa phiên
+aria-label: Xóa phiên
+title: Đã hoàn thành
+aria-label: Đã hoàn thành
+title: Sai ATLAS 0.9.16 · Trạng thái: Sẵn sàng
+title: Chọn giao diện
+aria-label: Chọn giao diện
+title: Chuyển đổi ngôn ngữ
+aria-label: Chuyển đổi ngôn ngữ
+title: Mở cài đặt
+aria-label: Mở cài đặt
+title: Bật/tắt thanh bên
+aria-label: Bật/tắt thanh bên
+title: Lệnh
+aria-label: Lệnh
+aria-label: Chỉ số phiên
+title: Token nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Chi phí nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Cửa sổ ngữ cảnh đã dùng
+title: Tỷ lệ trúng cache
+title: Thời gian thực thi thực tế
+title: Mở không gian làm việc
+title: Thao tác phiên
+aria-label: Thao tác phiên
+aria-label: Các thẻ phiên
+title: Chưa có tiêu đề — work
+title: Thao tác thẻ
+aria-label: Thao tác thẻ
+title: Thẻ agent mới (Ctrl+T)
+aria-label: Thẻ Agent Mới
+aria-label: Phiên: Chưa có tiêu đề
+aria-label: Bản ghi cuộc trò chuyện
+aria-label: Tác vụ: Đã hoàn thành 1 bước
+title: /home/ubuntu/Documents/Sai ATLAS/doanh-so-cua-hang (cleaned).xlsx
+title: Sao chép văn bản tin nhắn
+aria-label: Sao chép văn bản tin nhắn
+title: Thử lại lượt này
+aria-label: Thử lại lượt này
+title: Tạo nhánh sang thẻ mới từ đây
+aria-label: Tạo nhánh sang thẻ mới từ đây
+aria-label: Chuyển đến mới nhất
+placeholder: Nhờ Sai ATLAS soạn thư, sắp xếp bảng tính hoặc làm trang trình chiếu…
+title: Đính kèm tệp
+aria-label: Đính kèm tệp
+title: Chỉnh sửa bản nháp
+title: Lịch sử
+aria-label: Lịch sử
+title: Đổi mô hình
+title: Thêm cài đặt chạy
+aria-label: Thêm cài đặt chạy
+title: Gửi (Enter)
+aria-label: Gửi (Enter)

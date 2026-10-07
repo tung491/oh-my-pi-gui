@@ -1,0 +1,156 @@
+## body text
+
+
+
+New task
+
+Commands
+Ctrl+K / Super+K
+
+Ollama
+
+Settings
+
+RECENT
+4
+
+Wi-Fi của tôi cứ bị ngắt sau vài phút. Bạn kiểm tra giúp tôi xem có chuyện gì không?
+
+Untitled
+
+Untitled
+
+Untitled
+Sai ATLAS 0.9.16 · Ready
+
+
+EN
+
+
+
+New session
+
+Ready
+17.2k
+$0.0000
+26%
+94%
+48.9s
+
+Workspace
+
+
+Wi-Fi của tôi cứ bị ngắt sau vài phút. Bạn kiểm tra giúp tôi xem có chuyện gì không?
+work
+
+
+
+SKILL
+sai-os-helpdesk
+Tôi cần trợ giúp với máy tính.
+/usr/lib/Sai ATLAS/assistant-pack/skills/sai-os-helpdesk/SKILL.md
+·
+22 lines
+
+3 steps
+system_status
+3 steps complete
+
+Sai ATLAS
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest · 05:24
+Chào bạn, tôi có thể giúp bạn. Bạn đang gặp vấn đề cụ thể nào với máy tính vậy?
+
+
+
+You
+Wi-Fi của tôi cứ bị ngắt sau vài phút. Bạn kiểm tra giúp tôi xem có chuyện gì không?
+05:24
+
+
+
+3 steps
+diagnose
+3 steps complete
+
+Sai ATLAS
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest · 05:24
+Tôi kiểm tra thấy máy tính của bạn hiện không kết nối với bất kỳ mạng Wi-Fi nào.
+
+Để khắc phục, bạn hãy mở cài đặt Wi-Fi. Bạn có muốn tôi mở cài đặt Wi-Fi ngay bây giờ không?
+
+
+
+
+Jump to latest
+
+
+
+
+
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest
+
+
+
+## attributes
+title: Search sessions
+aria-label: Search sessions
+title: Open Command Center (Ctrl+K / Super+K)
+title: Collapse navigation
+aria-label: Collapse navigation
+title: Ready
+aria-label: Ready
+title: Wi-Fi của tôi cứ bị ngắt sau vài phút. Bạn kiểm tra giúp tôi xem có chuyện gì không?
+title: Rename session
+aria-label: Rename session
+title: Delete session
+aria-label: Delete session
+title: Completed
+aria-label: Completed
+title: Untitled
+title: Sai ATLAS 0.9.16 · Ready
+title: Choose theme
+aria-label: Choose theme
+title: Switch language
+aria-label: Switch language
+title: Open settings
+aria-label: Open settings
+title: Toggle sidebar
+aria-label: Toggle sidebar
+title: Commands
+aria-label: Commands
+aria-label: Session metrics
+title: Session journal tokens · includes compacted history and sibling branches
+title: Session journal cost · includes compacted history and sibling branches
+title: Context window used
+title: Cache hit rate
+title: Actual execution time
+title: Open workspace
+title: Session actions
+aria-label: Session actions
+aria-label: Session tabs
+title: Wi-Fi của tôi cứ bị ngắt sau vài phút. Bạn kiểm tra giúp tôi xem có chuyện gì không? — work
+title: Tab actions
+aria-label: Tab actions
+title: New agent tab (Ctrl+T)
+aria-label: New Agent Tab
+aria-label: Session: Wi-Fi của tôi cứ bị ngắt sau vài phút. Bạn kiểm tra giúp tôi xem có chuyện gì không?
+aria-label: Conversation transcript
+aria-label: Tasks: 3 steps complete
+title: Copy message text
+aria-label: Copy message text
+title: Branch to a new tab from here
+aria-label: Branch to a new tab from here
+title: Retry this turn
+aria-label: Retry this turn
+aria-label: Jump to latest
+placeholder: Ask Sai ATLAS to draft a letter, tidy a spreadsheet, or make slides…
+title: Attach a file
+aria-label: Attach a file
+title: Edit Draft
+title: History
+aria-label: History
+title: Change model
+title: More run settings
+aria-label: More run settings
+title: Send (Enter)
+aria-label: Send (Enter)

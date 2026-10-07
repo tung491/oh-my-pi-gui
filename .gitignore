@@ -37,3 +37,7 @@ src-tauri/target-linux-2404/
 src-tauri/gen/
 src-tauri/binaries/
 dist-release/
+
+# Local agent tooling (AgentKit kit and Claude Code project config)
+.agentkit/
+.claude/

@@ -1,0 +1,268 @@
+# Egress rows (2026-10-07T03:39:16.565Z)
+
+Traces: egress-app.txt (present), egress-ollama.txt (present). Actions in timeline.tsv: first-run, word-report, spreadsheet-cleanup, slide-deck, helpdesk, read-document-with-url, web-search, typed-model-anthropic, typed-login, update-check, cloud-tag-pull, cloud-tag-select.
+
+| first (UTC) | source | process | destination | name | action | count | results | suggested |
+|---|---|---|---|---|---|---|---|---|
+| 2026-10-07T01:51:53.727Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | before first-run | 8 | -1 EINPROGRESS | check |
+| 2026-10-07T01:51:53.727Z | ollama | ollama (host) thread 1896006<ollama> | 127.0.0.1:36253 | loopback | before first-run | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:51:55.493Z | ollama | ollama (host) thread 274943<ollama> | 127.0.0.1:36253 | loopback | before first-run | 8 | -1 EINPROGRESS | check |
+| 2026-10-07T01:51:55.494Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | before first-run | 14 | -1 EINPROGRESS | check |
+| 2026-10-07T01:51:57.378Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36253 | loopback | before first-run | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:08.407Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | before first-run | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:10.246Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | before first-run | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:23.419Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | before first-run | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:23.420Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | before first-run | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:25.228Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | first-run | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:25.229Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | first-run | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:25.636Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 140<sai-atlas> | 127.0.0.1:37633 | loopback | first-run | 1 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:52:25.887Z | app | 330 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36 (parent 329) / thread 330<WebKitWebProces> | 127.0.0.1:37633 | loopback | first-run | 1 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:52:27.129Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | first-run | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:27.130Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | first-run | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:27.866Z | app | 354 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules (parent 334) / thread 476<HTTP Client> | 127.0.0.1:11434 | Ollama on loopback | first-run | 4 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:52:28.638Z | app | (exited before a ps snapshot) / thread 332<tokio-rt-worker> | 172.17.0.1:53 | DNS resolver (a name lookup) | first-run | 2 | 0 | check: a name lookup (see the next connect of this thread) |
+| 2026-10-07T01:52:28.642Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 206<tokio-rt-worker> | 20.200.245.247:443 | github.com | first-run | 1 | -1 EINPROGRESS | NOT ALLOWED (unless the auditor names it as an allowed host) |
+| 2026-10-07T01:52:28.939Z | ollama | ollama (host) thread 4377<ollama> | 127.0.0.1:36253 | loopback | first-run | 7 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:28.940Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | first-run | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:29.257Z | app | (exited before a ps snapshot) / thread 332<tokio-rt-worker> | 185.199.108.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | first-run | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:52:29.257Z | app | (exited before a ps snapshot) / thread 332<tokio-rt-worker> | 185.199.111.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | first-run | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:52:29.257Z | app | (exited before a ps snapshot) / thread 332<tokio-rt-worker> | 185.199.109.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | first-run | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:52:29.257Z | app | (exited before a ps snapshot) / thread 332<tokio-rt-worker> | 185.199.110.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | first-run | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:52:29.257Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 198<tokio-rt-worker> | 185.199.108.133:443 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com | first-run | 1 | -1 EINPROGRESS | NOT ALLOWED (unless the auditor names it as an allowed host) |
+| 2026-10-07T01:52:30.737Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | first-run | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:30.738Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | first-run | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:32.548Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | first-run | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:43.220Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 193<tokio-rt-worker> | 127.0.0.1:11434 | Ollama on loopback | first-run | 4 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:52:43.338Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 192<tokio-rt-worker> | 127.0.0.1:11434 | Ollama on loopback | first-run | 2 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:52:43.364Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 198<tokio-rt-worker> | 127.0.0.1:11434 | Ollama on loopback | first-run | 1 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:52:44.308Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | first-run | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:44.819Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:33825 | loopback | between first-run and word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:45.070Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:33825 | loopback | between first-run and word-report | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:46.123Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36253 | loopback | between first-run and word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:46.124Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between first-run and word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:46.124Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | between first-run and word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:46.334Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:33825 | loopback | between first-run and word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:46.590Z | ollama | ollama (host) thread 1896006<ollama> | 127.0.0.1:33825 | loopback | between first-run and word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:47.953Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | between first-run and word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:47.954Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | between first-run and word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:47.954Z | ollama | ollama (host) thread 274943<ollama> | 127.0.0.1:36253 | loopback | between first-run and word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:49.710Z | ollama | ollama (host) thread 274943<ollama> | 127.0.0.1:36253 | loopback | word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:49.710Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | word-report | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:51.554Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | word-report | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:51.555Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:52.107Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:45759 | loopback | word-report | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:52.358Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:45759 | loopback | word-report | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:52.861Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:45759 | loopback | word-report | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:53.759Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:53.760Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:54.374Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:45759 | loopback | word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:54.419Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:45759 | loopback | word-report | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:56.137Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:45759 | loopback | word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:57.111Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36253 | loopback | word-report | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:57.113Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:58.014Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:45759 | loopback | word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:58.053Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:45759 | loopback | word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:58.053Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:45759 | loopback | word-report | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:59.042Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | word-report | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:52:59.044Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | word-report | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:04.477Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | between word-report and spreadsheet-cleanup | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:04.477Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36253 | loopback | between word-report and spreadsheet-cleanup | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:06.272Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | between word-report and spreadsheet-cleanup | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:08.076Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | between word-report and spreadsheet-cleanup | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:09.717Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:45759 | loopback | spreadsheet-cleanup | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:09.720Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:45759 | loopback | spreadsheet-cleanup | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:09.757Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:45759 | loopback | spreadsheet-cleanup | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:10.002Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:10.008Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:10.010Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:11.882Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:45759 | loopback | spreadsheet-cleanup | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:11.894Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:45759 | loopback | spreadsheet-cleanup | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:12.870Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:12.871Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:14.441Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:14.441Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | spreadsheet-cleanup | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:19.975Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | between spreadsheet-cleanup and slide-deck | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:19.976Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | between spreadsheet-cleanup and slide-deck | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:19.976Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | between spreadsheet-cleanup and slide-deck | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:23.773Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | between spreadsheet-cleanup and slide-deck | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:24.313Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:24.314Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:24.347Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:25.631Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | slide-deck | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:25.632Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | slide-deck | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:25.633Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | slide-deck | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:26.061Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:26.081Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:27.471Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:27.474Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:45759 | loopback | slide-deck | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:27.485Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | slide-deck | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:29.334Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | slide-deck | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:31.510Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | slide-deck | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:33.668Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | between slide-deck and helpdesk | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:33.668Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | between slide-deck and helpdesk | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:33.668Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | between slide-deck and helpdesk | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:35.851Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | between slide-deck and helpdesk | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:39.019Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:39.020Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:39.055Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 7 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:39.180Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:39.180Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:39.181Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 8 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:42.143Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:42.996Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:43.551Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:44.937Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 8 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:46.823Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 7 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:48.667Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:54.474Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:54.476Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:54.503Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:45759 | loopback | helpdesk | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:53:55.898Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | helpdesk | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:03.153Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between helpdesk and read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:03.153Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | between helpdesk and read-document-with-url | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:03.154Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | between helpdesk and read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:04.985Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | between helpdesk and read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:07.978Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:45759 | loopback | read-document-with-url | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:07.979Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:45759 | loopback | read-document-with-url | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:07.998Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:45759 | loopback | read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:08.688Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:08.689Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:08.850Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:45759 | loopback | read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:08.874Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:45759 | loopback | read-document-with-url | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:10.547Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | read-document-with-url | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:10.547Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:10.548Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | read-document-with-url | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:16.000Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | between read-document-with-url and web-search | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:16.001Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | between read-document-with-url and web-search | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:16.001Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between read-document-with-url and web-search | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:17.902Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | between read-document-with-url and web-search | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:20.516Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:45759 | loopback | web-search | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:20.517Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:45759 | loopback | web-search | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:20.536Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:45759 | loopback | web-search | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:21.247Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:45759 | loopback | web-search | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:21.571Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | web-search | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:21.571Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | web-search | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:23.382Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | web-search | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:23.383Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | web-search | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:25.299Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | web-search | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:29.022Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | between web-search and typed-model-anthropic | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:29.023Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | between web-search and typed-model-anthropic | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:29.023Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between web-search and typed-model-anthropic | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:31.175Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | between web-search and typed-model-anthropic | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:33.348Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | typed-model-anthropic | 10 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:33.349Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | typed-model-anthropic | 12 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:34.899Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | typed-model-anthropic | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:36.385Z | ollama | ollama (host) thread 4377<ollama> | 127.0.0.1:36253 | loopback | typed-model-anthropic | 11 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:43.721Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | typed-model-anthropic | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:53.208Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | typed-model-anthropic | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:55.349Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | between typed-model-anthropic and typed-login | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:55.349Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between typed-model-anthropic and typed-login | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:57.539Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | between typed-model-anthropic and typed-login | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:54:59.422Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | typed-login | 8 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:01.638Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | typed-login | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:01.639Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | typed-login | 5 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:01.639Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | typed-login | 7 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:11.391Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | typed-login | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:14.305Z | ollama | ollama (host) thread 4377<ollama> | 127.0.0.1:36253 | loopback | typed-login | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:14.306Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | typed-login | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:20.040Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | between typed-login and update-check | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:20.041Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | between typed-login and update-check | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:20.041Z | ollama | ollama (host) thread 4377<ollama> | 127.0.0.1:36253 | loopback | between typed-login and update-check | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:21.483Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | between typed-login and update-check | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:23.695Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between typed-login and update-check | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:25.955Z | ollama | ollama (host) thread 4377<ollama> | 127.0.0.1:36253 | loopback | update-check | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:25.956Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | update-check | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:25.957Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | update-check | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:26.228Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 581<tokio-rt-worker> | 172.17.0.1:53 | DNS resolver (a name lookup) | update-check | 2 | 0 | check: a name lookup (see the next connect of this thread) |
+| 2026-10-07T01:55:26.233Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 197<tokio-rt-worker> | 20.200.245.247:443 | github.com | update-check | 1 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:55:26.789Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 581<tokio-rt-worker> | 185.199.111.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | update-check | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:55:26.789Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 581<tokio-rt-worker> | 185.199.108.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | update-check | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:55:26.789Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 581<tokio-rt-worker> | 185.199.109.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | update-check | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:55:26.789Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 581<tokio-rt-worker> | 185.199.110.133:0 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com [port-0 address-sorting probe after a name lookup; no packet sent] | update-check | 1 | 0 | check: the process looked this name up (no packet to it); see its DNS row |
+| 2026-10-07T01:55:26.790Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 198<tokio-rt-worker> | 185.199.111.133:443 | objects.githubusercontent.com, raw.githubusercontent.com, release-assets.githubusercontent.com | update-check | 1 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:55:28.108Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | update-check | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:28.108Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | update-check | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:30.325Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | between update-check and cloud-tag-pull | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:30.325Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | between update-check and cloud-tag-pull | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:30.326Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | between update-check and cloud-tag-pull | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:33.585Z | app | 140 /usr/bin/sai-atlas (parent 135) / thread 198<tokio-rt-worker> | 127.0.0.1:11434 | Ollama on loopback | cloud-tag-pull | 2 | -1 EINPROGRESS | allowed |
+| 2026-10-07T01:55:34.644Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-pull | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:34.644Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-pull | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:34.645Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-pull | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:36.740Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-pull | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:41.031Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | between cloud-tag-pull and cloud-tag-select | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:41.032Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | between cloud-tag-pull and cloud-tag-select | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:41.032Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | between cloud-tag-pull and cloud-tag-select | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:43.258Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | between cloud-tag-pull and cloud-tag-select | 1 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:45.103Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-select | 7 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:45.103Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-select | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:45.104Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-select | 10 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:46.602Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-select | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:58.058Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-select | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:55:58.059Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | cloud-tag-select | 3 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:05.970Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 167 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:05.970Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 212 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:05.971Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 103 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:08.886Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 126 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:11.018Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 189 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:15.061Z | ollama | ollama (host) thread 274946<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 197 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:15.062Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 233 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:24.945Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 207 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:32.719Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 155 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:45.595Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 146 | -1 EINPROGRESS | check |
+| 2026-10-07T01:56:45.596Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 31 | -1 EINPROGRESS | check |
+| 2026-10-07T01:57:09.210Z | ollama | ollama (host) thread 4377<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 6 | -1 EINPROGRESS | check |
+| 2026-10-07T01:57:46.824Z | ollama | ollama (host) thread 294454<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 186 | -1 EINPROGRESS | check |
+| 2026-10-07T01:58:27.518Z | ollama | ollama (host) thread 274943<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 180 | -1 EINPROGRESS | check |
+| 2026-10-07T01:59:22.871Z | ollama | ollama (host) thread 1896006<ollama> | 127.0.0.1:36253 | loopback | after cloud-tag-select | 187 | -1 EINPROGRESS | check |
+| 2026-10-07T03:13:59.671Z | ollama | ollama (host) thread 4374<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 59 | -1 EINPROGRESS | check |
+| 2026-10-07T03:13:59.922Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 40 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:00.175Z | ollama | ollama (host) thread 4375<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 39 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:00.426Z | ollama | ollama (host) thread 274944<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 29 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:14.312Z | ollama | ollama (host) thread 1896006<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 36 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:14.313Z | ollama | ollama (host) thread 4360<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 87 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:14.411Z | ollama | ollama (host) thread 274945<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 35 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:14.932Z | ollama | ollama (host) thread 4376<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 29 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:15.023Z | ollama | ollama (host) thread 4463<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 23 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:16.643Z | ollama | ollama (host) thread 274942<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 47 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:17.162Z | ollama | ollama (host) thread 4464<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 50 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:18.623Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 46 | -1 EINPROGRESS | check |
+| 2026-10-07T03:14:21.556Z | ollama | ollama (host) thread 274943<ollama> | 127.0.0.1:36531 | loopback | after cloud-tag-select | 11 | -1 EINPROGRESS | check |
+| 2026-10-07T03:21:44.779Z | ollama | ollama (host) thread 4378<ollama> | 127.0.0.1:33889 | loopback | after cloud-tag-select | 4 | -1 EINPROGRESS | check |
+| 2026-10-07T03:21:45.038Z | ollama | ollama (host) thread 294454<ollama> | 127.0.0.1:33889 | loopback | after cloud-tag-select | 2 | -1 EINPROGRESS | check |
+| 2026-10-07T03:21:45.290Z | ollama | ollama (host) thread 4361<ollama> | 127.0.0.1:33889 | loopback | after cloud-tag-select | 4 | -1 EINPROGRESS | check |
+
+## Per action: loopback rows and rows that leave this computer
+
+- first-run: 16 loopback, 7 other
+- word-report: 19 loopback, 0 other
+- spreadsheet-cleanup: 12 loopback, 0 other
+- slide-deck: 13 loopback, 0 other
+- helpdesk: 16 loopback, 0 other
+- read-document-with-url: 10 loopback, 0 other
+- web-search: 9 loopback, 0 other
+- typed-model-anthropic: 6 loopback, 0 other
+- typed-login: 7 loopback, 0 other
+- update-check: 5 loopback, 7 other
+- cloud-tag-pull: 5 loopback, 0 other
+- cloud-tag-select: 6 loopback, 0 other
+
+## Local IPC (AF_UNIX), not egress
+
+- app WebKitNetworkPr -> "/run/dbus/system_bus_socket": 2
+- app WebKitWebProces -> "/run/dbus/system_bus_socket": 1
+- app WebKitWebProces -> "/run/user/1000/webkitgtk/bus": 4
+- app pool -> "/run/dbus/system_bus_socket": 2
+- app pool -> "/run/user/1000/at-spi/bus": 1
+- app pool -> "/run/user/1000/webkitgtk/at-spi-bus": 1
+- app pool -> "/tmp/dbus-y0EYyL6hQg": 4
+- app pool-vn.io.vif. -> "/tmp/dbus-y0EYyL6hQg": 1
+- app sai-atlas -> "/run/dbus/system_bus_socket": 2
+- app sai-atlas -> "/run/user/1000/at-spi/bus": 1
+- app sai-atlas -> "/run/user/1000/wayland-1": 2
+- app sai-atlas -> "/tmp/dbus-y0EYyL6hQg": 3
+- app tokio-rt-worker -> "/tmp/dbus-y0EYyL6hQg": 2
+- app tokio-rt-worker -> "/var/run/dbus/system_bus_socket": 7
+- app tokio-rt-worker -> "/var/run/nscd/socket": 2
+- ollama llama-server -> "/tmp/nvidia-mps/control": 20
+- ollama ollama -> "/tmp/nvidia-mps/control": 8

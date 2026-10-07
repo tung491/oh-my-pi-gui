@@ -1,0 +1,11 @@
+## ~/Documents (find)
+2026-10-07 04:09:35.0330256460      10012 /home/ubuntu/Documents/Sai ATLAS/Team meeting, 3 October.docx
+2026-10-07 04:09:43.6230698450       7834 /home/ubuntu/Documents/Sai ATLAS/store-sales (cleaned).xlsx
+2026-10-07 04:09:55.1571291950      74511 /home/ubuntu/Documents/Sai ATLAS/Office move project update.pptx
+## ls ~/Documents/Sai ATLAS (end of run)
+total 104
+drwxr-xr-x 2 ubuntu ubuntu  4096 Oct  7 04:09 .
+drwxr-xr-x 3 ubuntu ubuntu  4096 Oct  7 04:09 ..
+-rw-r--r-- 1 ubuntu ubuntu 74511 Oct  7 04:09 Office move project update.pptx
+-rw-r--r-- 1 ubuntu ubuntu 10012 Oct  7 04:09 Team meeting, 3 October.docx
+-rw-r--r-- 1 ubuntu ubuntu  7834 Oct  7 04:09 store-sales (cleaned).xlsx

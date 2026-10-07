@@ -1,0 +1,2 @@
+$ grep -rlE '"name": ?"bash"' ~/.omp/agent/sessions
+(exit 1: no match)

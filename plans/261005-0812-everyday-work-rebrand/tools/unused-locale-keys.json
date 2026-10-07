@@ -1,0 +1,1383 @@
+{
+	"unused": [],
+	"review": [
+		"agentHub.defs.prewalk.default",
+		"agentHub.defs.prewalk.off",
+		"agentHub.defs.prewalk.on",
+		"agentHub.source.bundled",
+		"agentHub.source.project",
+		"agentHub.source.user",
+		"category.context",
+		"category.extensions",
+		"category.model",
+		"category.modes",
+		"category.other",
+		"category.providers",
+		"category.session",
+		"category.tools",
+		"category.view",
+		"category.workspace",
+		"chat.compaction.reason.idle",
+		"chat.compaction.reason.incomplete",
+		"chat.compaction.reason.overflow",
+		"cmd.advisor.dump",
+		"cmd.advisor.off",
+		"cmd.advisor.on",
+		"cmd.advisor.status",
+		"cmd.session.delete",
+		"cmd.session.pin",
+		"cmd.todo.copy",
+		"cmd.todo.edit",
+		"cmd.todo.export",
+		"cmd.todo.import",
+		"input.thinking.level.auto",
+		"input.thinking.level.high",
+		"input.thinking.level.low",
+		"input.thinking.level.max",
+		"input.thinking.level.medium",
+		"input.thinking.level.minimal",
+		"input.thinking.level.off",
+		"input.thinking.level.xhigh",
+		"input.thinking.name.auto",
+		"input.thinking.name.low",
+		"input.thinking.name.medium",
+		"input.thinking.name.minimal",
+		"input.thinking.name.off",
+		"input.thinking.name.xhigh",
+		"jobs.status.cancelled",
+		"jobs.status.completed",
+		"jobs.status.failed",
+		"jobs.status.running",
+		"jobs.type.bash",
+		"jobs.type.eval",
+		"jobs.type.task",
+		"settings.display.collapseCompacted",
+		"settings.display.emojiAutocomplete",
+		"settings.display.goalStatusInFooter",
+		"settings.display.hideThinkingBlock",
+		"settings.display.proseOnlyThinking",
+		"settings.display.showProgress",
+		"settings.display.showTokenUsage",
+		"settings.display.titleState",
+		"settings.nav.experience",
+		"settings.nav.extensions",
+		"settings.nav.memory",
+		"settings.nav.models",
+		"settings.nav.system",
+		"settings.nav.tasks",
+		"settings.nav.tools",
+		"settings.source.global",
+		"settings.source.overlay",
+		"settings.source.project",
+		"settings.source.runtime",
+		"settings.tabs.advanced",
+		"settings.tabs.appearance",
+		"settings.tabs.capabilities",
+		"settings.tabs.context",
+		"settings.tabs.files",
+		"settings.tabs.gui",
+		"settings.tabs.interaction",
+		"settings.tabs.memory",
+		"settings.tabs.model",
+		"settings.tabs.providers",
+		"settings.tabs.shell",
+		"settings.tabs.tasks",
+		"settings.tabs.tools",
+		"themePicker.theme.dark.description",
+		"themePicker.theme.dawn.description",
+		"themePicker.theme.dawn.label",
+		"themePicker.theme.frost.description",
+		"themePicker.theme.frost.label",
+		"themePicker.theme.gruvbox.description",
+		"themePicker.theme.gruvbox.label",
+		"themePicker.theme.latte.description",
+		"themePicker.theme.latte.label",
+		"themePicker.theme.light.description",
+		"themePicker.theme.matcha.description",
+		"themePicker.theme.matcha.label",
+		"themePicker.theme.nord.description",
+		"themePicker.theme.nord.label",
+		"themePicker.theme.paper.description",
+		"themePicker.theme.paper.label",
+		"themePicker.theme.solarized.description",
+		"themePicker.theme.solarized.label",
+		"themePicker.theme.titanium.description",
+		"themePicker.theme.titanium.label",
+		"tools.coordination.status.cancelled",
+		"tools.coordination.status.completed",
+		"tools.coordination.status.failed",
+		"tools.coordination.status.running",
+		"tools.memory.operation.memory",
+		"tools.memory.operation.recall",
+		"tools.memory.operation.reflect",
+		"tools.memory.operation.retain",
+		"welcome.card.fit.offload",
+		"welcome.card.fit.ram",
+		"welcome.card.fit.vram",
+		"welcome.card.speed.fast",
+		"welcome.card.speed.moderate",
+		"welcome.card.speed.slow",
+		"welcome.tier.maximum",
+		"welcome.tier.minimal",
+		"welcome.tier.recommended"
+	],
+	"dynamicPrefixes": [
+		"#!/usr/bin/env bun\nimport * as fs from \"node:fs/promises\";\nawait fs.appendFile(",
+		"#!/usr/bin/env bun\nimport * as fs from \"node:fs/promises\";\nawait fs.writeFile(",
+		"*\n",
+		"*\n\nTail still growing",
+		"*\ncritical final argument",
+		"* ",
+		"* > [data-logo-tone=\"dark\"]",
+		"* > [data-logo-tone=\"light\"]",
+		"* B",
+		"* GB",
+		"* KB",
+		"* MB",
+		"* bg-[linear-gradient(135deg,var(--omp-brand),var(--omp-btn-primary-bg))] text-(--omp-btn-primary-text)",
+		"* border border-(--omp-border-muted) bg-(--omp-bg-secondary) text-(--omp-muted)",
+		"* chars]",
+		"* claimed by two groups",
+		"* dark tone",
+		"* declares no afterPack policy hook",
+		"* declares no transport policy",
+		"* description",
+		"* disabled:cursor-not-allowed disabled:opacity-50",
+		"* display 显示 偏好",
+		"* flex-1",
+		"* is not a submenu",
+		"* is not installed",
+		"* is still executable in a chat tab",
+		"* label",
+		"* leaves arbitrary loads enabled in the bundle",
+		"* light tone",
+		"* mt-0.5 border-t border-(--omp-border-muted) rounded-t-none",
+		"* names no DMG",
+		"* on --omp-sidebar-bg",
+		"* overflow-auto",
+		"* rounded-md border border-[var(--omp-border-muted)] object-contain",
+		"* scheme",
+		"* ships no URL scheme",
+		"* w-20 text-right",
+		"* w-[45%]",
+		"* whitespace-pre-wrap break-words",
+		"* whitespace-pre-wrap break-words rounded bg-[var(--omp-tool-error-bg)] px-2 py-1.5 font-mono text-omp-sm text-[var(--omp-error)]",
+		"* — infron",
+		"*\"",
+		"*\"; edit the file by hand.",
+		"*%",
+		"*)",
+		"*. ",
+		"*...",
+		"*.1",
+		"*.app",
+		"*.artifactName",
+		"*.desktop",
+		"*.exe",
+		"*.html",
+		"*.jsonl",
+		"*.notify",
+		"*.ts",
+		"*/",
+		"*/api/generate",
+		"*/api/pull",
+		"*/api/tags",
+		"*/api/version",
+		"*55",
+		"*:",
+		"*: --omp-info on --omp-info-dim",
+		"*: success vs error",
+		"*://",
+		"*:latest",
+		"*B",
+		"*END",
+		"*Explanation",
+		"*M",
+		"*Next",
+		"*Second paragraph",
+		"*\\]\n",
+		"*\\]\nExplanation",
+		"*```\n",
+		"*ch",
+		"*fr",
+		"*k",
+		"*m",
+		"*ms",
+		"*px",
+		"*s",
+		"*…",
+		"../renderer/",
+		"../styles/",
+		"./brand/sai-atlas-",
+		"Sai ATLAS 0.9.10 · ",
+		"absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-all duration-150 ",
+		"absolute top-0.5 size-[18px] rounded-full bg-white shadow transition-all duration-(--omp-motion-fast) ",
+		"agentHub.defs.prewalk.",
+		"agentHub.source.",
+		"category.",
+		"chat.compaction.reason.",
+		"cmd.",
+		"displayPreferences.",
+		"fixed z-[100] flex min-w-56 flex-col gap-1 rounded-xl border border-[var(--omp-border)] bg-[var(--omp-bg-elevated)] p-1.5 shadow-[var(--omp-shadow-md)] ",
+		"flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2 transition-colors ",
+		"flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors ",
+		"flex items-center gap-0.5 border-b border-(--omp-border-muted) ",
+		"flex items-center gap-3 border-b px-4 py-2.5 ",
+		"flex items-start gap-2.5 rounded-xl border border-(--omp-border-muted) border-l-2 bg-(--omp-toast-bg) px-3 py-2.5 shadow-(--omp-shadow-lg) ",
+		"flex min-h-[52px] w-full items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors ",
+		"flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-xs ",
+		"flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors ",
+		"flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-xs ",
+		"flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ",
+		"globalShortcut.register refused ",
+		"globalShortcut.register threw for ",
+		"group flex min-h-8 items-center gap-2 rounded-lg py-1 pr-1 pl-0.5 text-omp-lg transition-colors ",
+		"http://127.0.0.1",
+		"http://127.0.0.1:",
+		"inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-omp-xs font-medium leading-4 tracking-wide whitespace-nowrap ",
+		"input.thinking.level.",
+		"input.thinking.name.",
+		"jobs.status.",
+		"jobs.type.",
+		"models.yml.bak-",
+		"mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center ",
+		"omp.linux-",
+		"queuePanel.lane.",
+		"relative h-4.5 w-8 shrink-0 rounded-full transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ",
+		"relative inline-flex size-1.5 rounded-full ",
+		"relative mt-0.5 h-[22px] w-10 shrink-0 rounded-full transition-colors duration-(--omp-motion-fast) ",
+		"rendererStorage.",
+		"rounded px-1.5 py-0.5 text-omp-xs transition-colors ",
+		"rounded-full border px-1.5 py-0.5 text-omp-xxs font-medium ",
+		"settings.display.",
+		"settings.nav.",
+		"settings.source.",
+		"settings.tabs.",
+		"tabs.menu.split",
+		"themePicker.theme.",
+		"titlebar.status.",
+		"tools.coordination.status.",
+		"tools.memory.operation.",
+		"w-full rounded px-2 py-1.5 text-left font-mono text-xs text-(--omp-accent) ",
+		"welcome.card.fit.",
+		"welcome.card.speed.",
+		"welcome.tier."
+	],
+	"dynamicSites": {
+		"#!/usr/bin/env bun\nimport * as fs from \"node:fs/promises\";\nawait fs.appendFile(": [
+			"src/main/sidecar.test.ts:275"
+		],
+		"#!/usr/bin/env bun\nimport * as fs from \"node:fs/promises\";\nawait fs.writeFile(": [
+			"src/main/shell-env.test.ts:177",
+			"src/main/sidecar.test.ts:31",
+			"src/main/sidecar.test.ts:59",
+			"src/main/sidecar.test.ts:83",
+			"src/main/sidecar.test.ts:143",
+			"src/main/sidecar.test.ts:209"
+		],
+		"*\n": [
+			"src/main/ollama/pull.test.ts:53",
+			"src/main/ollama/pull.test.ts:102",
+			"src/main/ollama/pull.test.ts:144",
+			"src/main/ollama/pull.test.ts:169",
+			"src/main/ollama/pull.test.ts:209",
+			"src/main/runtime-log-core.ts:114",
+			"src/main/session-index.test.ts:22",
+			"src/main/session-index.test.ts:31",
+			"src/main/session-index.test.ts:77",
+			"src/main/sidecar.ts:348",
+			"src/main/sidecar.ts:581",
+			"src/renderer/components/layout/InputArea.tsx:893"
+		],
+		"*\n\nTail still growing": [
+			"src/renderer/components/chat/StreamingText.test.tsx:146"
+		],
+		"*\ncritical final argument": [
+			"src/renderer/components/common/Modal.test.tsx:101"
+		],
+		"* ": [
+			"src/renderer/components/layout/InputArea.tsx:329",
+			"src/renderer/components/layout/InputArea.tsx:472",
+			"src/renderer/components/layout/use-completion-menu.ts:155"
+		],
+		"* > [data-logo-tone=\"dark\"]": [
+			"src/renderer/components/common/SaiAtlasLogo.test.tsx:121"
+		],
+		"* > [data-logo-tone=\"light\"]": [
+			"src/renderer/components/common/SaiAtlasLogo.test.tsx:122"
+		],
+		"* B": [
+			"src/renderer/components/layout/UpdateBanner.tsx:22",
+			"src/renderer/lib/format.ts:159"
+		],
+		"* GB": [
+			"src/renderer/components/onboarding/MachineFacts.tsx:13"
+		],
+		"* KB": [
+			"src/renderer/components/layout/UpdateBanner.tsx:21",
+			"src/renderer/lib/format.ts:158"
+		],
+		"* MB": [
+			"src/renderer/components/layout/UpdateBanner.tsx:20",
+			"src/renderer/lib/format.ts:157"
+		],
+		"* bg-[linear-gradient(135deg,var(--omp-brand),var(--omp-btn-primary-bg))] text-(--omp-btn-primary-text)": [
+			"src/renderer/components/dialogs/ModelPicker.tsx:37"
+		],
+		"* border border-(--omp-border-muted) bg-(--omp-bg-secondary) text-(--omp-muted)": [
+			"src/renderer/components/dialogs/ModelPicker.tsx:38"
+		],
+		"* chars]": [
+			"src/renderer/lib/transcript-copy.ts:30"
+		],
+		"* claimed by two groups": [
+			"src/renderer/lib/keymap.test.ts:240"
+		],
+		"* dark tone": [
+			"src/renderer/components/common/SaiAtlasLogo.test.tsx:121"
+		],
+		"* declares no afterPack policy hook": [
+			"src/main/packaging-config.test.ts:133"
+		],
+		"* declares no transport policy": [
+			"src/main/packaging-config.test.ts:108"
+		],
+		"* description": [
+			"src/renderer/lib/themes.test.ts:59"
+		],
+		"* disabled:cursor-not-allowed disabled:opacity-50": [
+			"src/renderer/components/settings/ModelValueSelect.tsx:201"
+		],
+		"* display 显示 偏好": [
+			"src/renderer/components/settings/settings-window-model.ts:96"
+		],
+		"* flex-1": [
+			"src/renderer/components/settings/editors/RecordKvEditor.tsx:120",
+			"src/renderer/components/settings/editors/RecordKvEditor.tsx:133"
+		],
+		"* is not a submenu": [
+			"src/renderer/lib/command-registry-actions.test.ts:103",
+			"src/renderer/lib/command-registry-submenus.test.ts:70",
+			"src/renderer/lib/command-registry-submenus.test.ts:113"
+		],
+		"* is not installed": [
+			"src/main/ollama/remedy.ts:111"
+		],
+		"* is still executable in a chat tab": [
+			"src/renderer/lib/command-registry-availability.test.ts:56"
+		],
+		"* label": [
+			"src/renderer/lib/themes.test.ts:58"
+		],
+		"* leaves arbitrary loads enabled in the bundle": [
+			"src/main/packaging-config.test.ts:141"
+		],
+		"* light tone": [
+			"src/renderer/components/common/SaiAtlasLogo.test.tsx:122"
+		],
+		"* mt-0.5 border-t border-(--omp-border-muted) rounded-t-none": [
+			"src/renderer/components/settings/ModelValueSelect.tsx:312"
+		],
+		"* names no DMG": [
+			"src/main/packaging-config.test.ts:265"
+		],
+		"* on --omp-sidebar-bg": [
+			"src/renderer/lib/themes.test.ts:178"
+		],
+		"* overflow-auto": [
+			"src/renderer/lib/preview.ts:17",
+			"src/renderer/lib/preview.ts:19"
+		],
+		"* rounded-md border border-[var(--omp-border-muted)] object-contain": [
+			"src/renderer/components/tools/ReadRenderer.tsx:78"
+		],
+		"* scheme": [
+			"src/renderer/lib/themes.test.ts:60"
+		],
+		"* ships no URL scheme": [
+			"src/main/packaging-config.test.ts:85",
+			"src/main/packaging-config.test.ts:162"
+		],
+		"* w-20 text-right": [
+			"src/renderer/components/settings/editors/ProviderLimitsEditor.tsx:59"
+		],
+		"* w-[45%]": [
+			"src/renderer/components/settings/editors/RecordKvEditor.tsx:90"
+		],
+		"* whitespace-pre-wrap break-words": [
+			"src/renderer/components/dialogs/JobsDialog.tsx:94"
+		],
+		"* whitespace-pre-wrap break-words rounded bg-[var(--omp-tool-error-bg)] px-2 py-1.5 font-mono text-omp-sm text-[var(--omp-error)]": [
+			"src/renderer/components/tools/ReadRenderer.tsx:82"
+		],
+		"* — infron": [
+			"src/renderer/components/layout/TabBar.test.tsx:299"
+		],
+		"*\"": [
+			"src/renderer/lib/keymap.test.ts:66"
+		],
+		"*\"; edit the file by hand.": [
+			"src/main/provider-cleanup.ts:70"
+		],
+		"*%": [
+			"src/main/tray.ts:77",
+			"src/renderer/components/common/ProgressBar.tsx:43",
+			"src/renderer/components/common/ProgressBar.tsx:48",
+			"src/renderer/components/layout/TitleBar.tsx:287",
+			"src/renderer/components/layout/UpdateBanner.tsx:71",
+			"src/renderer/components/onboarding/InstallProgressBar.tsx:42",
+			"src/renderer/components/onboarding/PullBar.tsx:36",
+			"src/renderer/components/onboarding/PullBar.tsx:37",
+			"src/renderer/components/onboarding/PullBar.tsx:50",
+			"src/renderer/components/tools/TodoRenderer.tsx:206",
+			"src/renderer/lib/format.ts:172"
+		],
+		"*)": [
+			"src/main/updater.ts:146",
+			"src/main/updater.ts:359"
+		],
+		"*. ": [
+			"src/renderer/components/dialogs/ExtensionDialog.tsx:335",
+			"src/renderer/components/tools/TodoRenderer.tsx:198"
+		],
+		"*...": [
+			"src/renderer/lib/thinking.ts:69",
+			"src/renderer/lib/thinking.ts:71"
+		],
+		"*.1": [
+			"src/main/runtime-log-core.ts:101"
+		],
+		"*.app": [
+			"src/main/packaging-config.test.ts:117"
+		],
+		"*.artifactName": [
+			"src/main/packaging-config.test.ts:251",
+			"src/main/packaging-config.test.ts:252"
+		],
+		"*.desktop": [
+			"src/main/index.ts:495",
+			"src/main/packaging-config.test.ts:228"
+		],
+		"*.exe": [
+			"src/main/bundled-omp-path.ts:14"
+		],
+		"*.html": [
+			"src/main/window.ts:100"
+		],
+		"*.jsonl": [
+			"src/main/session-index.test.ts:21"
+		],
+		"*.notify": [
+			"src/renderer/hooks/use-rpc-events.ts:155"
+		],
+		"*.ts": [
+			"src/renderer/components/tools/ToolCard.test.tsx:26",
+			"src/renderer/components/tools/ToolCard.test.tsx:36",
+			"src/renderer/stores/tools.test.ts:8",
+			"src/renderer/stores/tools.test.ts:28"
+		],
+		"*/": [
+			"src/main/updater-state.ts:180"
+		],
+		"*/api/generate": [
+			"src/main/ollama/warm.ts:18"
+		],
+		"*/api/pull": [
+			"src/main/ollama/pull.ts:178"
+		],
+		"*/api/tags": [
+			"src/main/ollama/probe.ts:148"
+		],
+		"*/api/version": [
+			"src/main/ollama/probe.ts:147"
+		],
+		"*55": [
+			"src/renderer/lib/chart.ts:125",
+			"src/renderer/lib/chart.ts:130"
+		],
+		"*:": [
+			"src/renderer/lib/emoji.ts:149",
+			"src/shared/ollama-catalog.ts:134"
+		],
+		"*: --omp-info on --omp-info-dim": [
+			"src/renderer/lib/themes.test.ts:204"
+		],
+		"*: success vs error": [
+			"src/renderer/lib/themes.test.ts:222"
+		],
+		"*://": [
+			"src/main/launch-argv.ts:36"
+		],
+		"*:latest": [
+			"src/shared/ollama-catalog.test.ts:75",
+			"src/shared/ollama-catalog.test.ts:91",
+			"src/shared/ollama-catalog.test.ts:92",
+			"src/shared/ollama-catalog.test.ts:93",
+			"src/shared/ollama-catalog.test.ts:182",
+			"src/shared/ollama-catalog.test.ts:185",
+			"src/shared/ollama-catalog.ts:146"
+		],
+		"*B": [
+			"src/renderer/components/onboarding/ModelCard.tsx:53",
+			"src/renderer/components/onboarding/ModelCard.tsx:55",
+			"src/renderer/lib/chart.ts:150"
+		],
+		"*END": [
+			"src/main/ollama/remedy.test.ts:200"
+		],
+		"*Explanation": [
+			"src/renderer/lib/streaming-markdown.test.ts:32",
+			"src/renderer/lib/streaming-markdown.test.ts:45"
+		],
+		"*M": [
+			"src/main/tray-labels.ts:78",
+			"src/renderer/lib/chart.ts:151",
+			"src/renderer/lib/format.ts:151"
+		],
+		"*Next": [
+			"src/renderer/lib/streaming-markdown.test.ts:24"
+		],
+		"*Second paragraph": [
+			"src/renderer/lib/streaming-markdown.test.ts:67"
+		],
+		"*\\]\n": [
+			"src/renderer/lib/streaming-markdown.test.ts:44"
+		],
+		"*\\]\nExplanation": [
+			"src/renderer/components/chat/StreamingText.test.tsx:185"
+		],
+		"*```\n": [
+			"src/renderer/components/chat/StreamingText.test.tsx:157"
+		],
+		"*ch": [
+			"src/renderer/lib/diff.tsx:524",
+			"src/renderer/lib/diff.tsx:529",
+			"src/renderer/lib/diff.tsx:547",
+			"src/renderer/lib/diff.tsx:554"
+		],
+		"*fr": [
+			"src/renderer/components/layout/SplitWorkspace.tsx:129",
+			"src/renderer/components/layout/SplitWorkspace.tsx:130"
+		],
+		"*k": [
+			"src/main/tray-labels.ts:79",
+			"src/renderer/lib/chart.ts:152",
+			"src/renderer/lib/format.ts:152"
+		],
+		"*m": [
+			"src/renderer/components/panels/subagent-graph.ts:84"
+		],
+		"*ms": [
+			"src/renderer/lib/chart.ts:163"
+		],
+		"*px": [
+			"src/renderer/components/common/Input.tsx:92",
+			"src/renderer/components/dialogs/CopySelectorDialog.tsx:125",
+			"src/renderer/components/layout/InputArea.tsx:288",
+			"src/renderer/components/layout/TabBar.tsx:147",
+			"src/renderer/lib/theme.ts:96",
+			"src/renderer/lib/theme.ts:97"
+		],
+		"*s": [
+			"src/renderer/components/panels/subagent-graph.ts:81",
+			"src/renderer/components/panels/subagent-graph.ts:83",
+			"src/renderer/lib/chart.ts:164"
+		],
+		"*…": [
+			"src/main/runtime-log-core.ts:47",
+			"src/main/sidecar.ts:54",
+			"src/renderer/components/chat/ChatStream.tsx:963",
+			"src/renderer/components/chat/chat-stream-utils.ts:217",
+			"src/renderer/components/panels/AgentHubWindow.test.tsx:212",
+			"src/renderer/components/panels/SubagentTranscript.tsx:148",
+			"src/renderer/components/panels/subagent-graph.ts:157",
+			"src/renderer/components/tools/CoordinationRenderer.tsx:165",
+			"src/renderer/components/tools/TaskRenderer.tsx:77",
+			"src/renderer/components/tools/index.tsx:32",
+			"src/renderer/lib/messages.ts:57"
+		],
+		"../renderer/": [
+			"src/main/window.ts:102"
+		],
+		"../styles/": [
+			"src/renderer/lib/themes.test.ts:254"
+		],
+		"./brand/sai-atlas-": [
+			"src/renderer/components/common/SaiAtlasLogo.tsx:42",
+			"src/renderer/components/common/SaiAtlasLogo.tsx:49"
+		],
+		"Sai ATLAS 0.9.10 · ": [
+			"src/renderer/components/layout/Sidebar.test.tsx:729",
+			"src/renderer/components/layout/Sidebar.test.tsx:737"
+		],
+		"absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-all duration-150 ": [
+			"src/renderer/components/panels/AgentHubWindow.tsx:80"
+		],
+		"absolute top-0.5 size-[18px] rounded-full bg-white shadow transition-all duration-(--omp-motion-fast) ": [
+			"src/renderer/components/settings/editors/Toggle.tsx:47"
+		],
+		"agentHub.defs.prewalk.": [
+			"src/renderer/components/panels/AgentHubWindow.tsx:142",
+			"src/renderer/components/panels/AgentHubWindow.tsx:296"
+		],
+		"agentHub.source.": [
+			"src/renderer/components/panels/AgentHubWindow.tsx:119",
+			"src/renderer/components/panels/AgentHubWindow.tsx:440"
+		],
+		"category.": [
+			"src/renderer/components/dialogs/CommandPalette.tsx:697"
+		],
+		"chat.compaction.reason.": [
+			"src/renderer/components/chat/ChatStream.tsx:953"
+		],
+		"cmd.": [
+			"src/renderer/lib/command-registry.ts:267",
+			"src/renderer/lib/command-registry.ts:275"
+		],
+		"displayPreferences.": [
+			"src/renderer/lib/display-preferences.ts:70"
+		],
+		"fixed z-[100] flex min-w-56 flex-col gap-1 rounded-xl border border-[var(--omp-border)] bg-[var(--omp-bg-elevated)] p-1.5 shadow-[var(--omp-shadow-md)] ": [
+			"src/renderer/components/layout/InputArea.tsx:1080"
+		],
+		"flex cursor-pointer items-start gap-2.5 rounded-md border px-2.5 py-2 transition-colors ": [
+			"src/renderer/components/settings/editors/RadioGroup.tsx:50"
+		],
+		"flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors ": [
+			"src/renderer/components/settings/editors/RadioGroup.tsx:45"
+		],
+		"flex items-center gap-0.5 border-b border-(--omp-border-muted) ": [
+			"src/renderer/components/common/Tabs.tsx:51"
+		],
+		"flex items-center gap-3 border-b px-4 py-2.5 ": [
+			"src/renderer/components/layout/SidecarBanner.tsx:50"
+		],
+		"flex items-start gap-2.5 rounded-xl border border-(--omp-border-muted) border-l-2 bg-(--omp-toast-bg) px-3 py-2.5 shadow-(--omp-shadow-lg) ": [
+			"src/renderer/components/common/Toast.tsx:40"
+		],
+		"flex min-h-[52px] w-full items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors ": [
+			"src/renderer/components/dialogs/CommandPalette.tsx:555"
+		],
+		"flex w-full items-center gap-2 rounded-md py-1.5 pr-2 text-left text-xs ": [
+			"src/renderer/components/dialogs/CopySelectorDialog.tsx:116"
+		],
+		"flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left transition-colors ": [
+			"src/renderer/components/dialogs/SessionPickerDialog.tsx:313"
+		],
+		"flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-xs ": [
+			"src/renderer/components/settings/editors/EnumerableSelect.tsx:258",
+			"src/renderer/components/settings/editors/EnumerableSelect.tsx:269"
+		],
+		"flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs ": [
+			"src/renderer/components/settings/editors/EnumerableSelect.tsx:248"
+		],
+		"globalShortcut.register refused ": [
+			"src/main/index.ts:484",
+			"src/main/quick-entry-shortcut.ts:78",
+			"src/main/quick-entry-shortcut.ts:111"
+		],
+		"globalShortcut.register threw for ": [
+			"src/main/quick-entry-shortcut.ts:171"
+		],
+		"group flex min-h-8 items-center gap-2 rounded-lg py-1 pr-1 pl-0.5 text-omp-lg transition-colors ": [
+			"src/renderer/components/chat/dock/TodoDockCard.tsx:135"
+		],
+		"http://127.0.0.1": [
+			"src/main/ollama/base-url.ts:21"
+		],
+		"http://127.0.0.1:": [
+			"src/main/ollama/test-fake-ollama.ts:27",
+			"src/main/stats-client.ts:57",
+			"src/main/stats-client.ts:82"
+		],
+		"inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-omp-xs font-medium leading-4 tracking-wide whitespace-nowrap ": [
+			"src/renderer/components/common/Badge.tsx:40"
+		],
+		"input.thinking.level.": [
+			"src/renderer/components/layout/ThinkingControl.tsx:212"
+		],
+		"input.thinking.name.": [
+			"src/renderer/components/layout/ThinkingControl.test.tsx:102",
+			"src/renderer/components/layout/ThinkingControl.tsx:156",
+			"src/renderer/components/layout/ThinkingControl.tsx:166",
+			"src/renderer/components/layout/ThinkingControl.tsx:209"
+		],
+		"jobs.status.": [
+			"src/renderer/components/dialogs/JobsDialog.tsx:82"
+		],
+		"jobs.type.": [
+			"src/renderer/components/dialogs/JobsDialog.tsx:80"
+		],
+		"models.yml.bak-": [
+			"src/main/provider-cleanup.test.ts:68",
+			"src/main/provider-cleanup.test.ts:72"
+		],
+		"mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center ": [
+			"src/renderer/components/settings/pages/CapabilitiesHome.tsx:89"
+		],
+		"omp.linux-": [
+			"src/main/bundled-omp-path.ts:29"
+		],
+		"queuePanel.lane.": [
+			"src/renderer/components/panels/QueuePanel.tsx:238",
+			"src/renderer/components/panels/QueuePanel.tsx:245"
+		],
+		"relative h-4.5 w-8 shrink-0 rounded-full transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ": [
+			"src/renderer/components/panels/AgentHubWindow.tsx:71"
+		],
+		"relative inline-flex size-1.5 rounded-full ": [
+			"src/renderer/components/common/Badge.tsx:45"
+		],
+		"relative mt-0.5 h-[22px] w-10 shrink-0 rounded-full transition-colors duration-(--omp-motion-fast) ": [
+			"src/renderer/components/settings/editors/Toggle.tsx:42"
+		],
+		"rendererStorage.": [
+			"src/shared/renderer-storage.ts:24"
+		],
+		"rounded px-1.5 py-0.5 text-omp-xs transition-colors ": [
+			"src/renderer/components/panels/LogPanel.tsx:133"
+		],
+		"rounded-full border px-1.5 py-0.5 text-omp-xxs font-medium ": [
+			"src/renderer/components/settings/pages/CapabilitiesHome.tsx:98"
+		],
+		"settings.display.": [
+			"src/renderer/components/settings/SettingsWindow.tsx:103",
+			"src/renderer/components/settings/settings-window-model.ts:95"
+		],
+		"settings.nav.": [
+			"src/renderer/components/settings/SettingsWindow.tsx:843"
+		],
+		"settings.source.": [
+			"src/renderer/components/settings/SchemaSettingRow.tsx:590"
+		],
+		"settings.tabs.": [
+			"src/renderer/components/settings/SettingsWindow.tsx:783"
+		],
+		"tabs.menu.split": [
+			"src/renderer/components/layout/SplitWorkspace.tsx:53"
+		],
+		"themePicker.theme.": [
+			"src/renderer/components/dialogs/ThemePickerDialog.tsx:58",
+			"src/renderer/components/dialogs/ThemePickerDialog.tsx:59"
+		],
+		"titlebar.status.": [
+			"src/renderer/components/layout/TitleBar.tsx:162",
+			"src/renderer/lib/tab-signal.ts:32"
+		],
+		"tools.coordination.status.": [
+			"src/renderer/components/tools/CoordinationRenderer.tsx:157"
+		],
+		"tools.memory.operation.": [
+			"src/renderer/components/tools/MemoryRenderer.tsx:62"
+		],
+		"w-full rounded px-2 py-1.5 text-left font-mono text-xs text-(--omp-accent) ": [
+			"src/renderer/components/settings/editors/EnumerableSelect.tsx:280"
+		],
+		"welcome.card.fit.": [
+			"src/renderer/components/onboarding/ModelCard.tsx:61"
+		],
+		"welcome.card.speed.": [
+			"src/renderer/components/onboarding/ModelCard.tsx:63"
+		],
+		"welcome.tier.": [
+			"src/renderer/components/onboarding/ModelCard.tsx:43"
+		]
+	},
+	"reviewDecisions": [
+		{
+			"key": "agentHub.defs.prewalk.default",
+			"decision": "keep",
+			"why": "src/renderer/components/panels/AgentHubWindow.tsx:94 PrewalkState"
+		},
+		{
+			"key": "agentHub.defs.prewalk.off",
+			"decision": "keep",
+			"why": "src/renderer/components/panels/AgentHubWindow.tsx:94 PrewalkState"
+		},
+		{
+			"key": "agentHub.defs.prewalk.on",
+			"decision": "keep",
+			"why": "src/renderer/components/panels/AgentHubWindow.tsx:94 PrewalkState"
+		},
+		{
+			"key": "agentHub.source.bundled",
+			"decision": "keep",
+			"why": "src/renderer/components/panels/AgentHubWindow.tsx:116 KNOWN_SOURCES"
+		},
+		{
+			"key": "agentHub.source.project",
+			"decision": "keep",
+			"why": "src/renderer/components/panels/AgentHubWindow.tsx:116 KNOWN_SOURCES"
+		},
+		{
+			"key": "agentHub.source.user",
+			"decision": "keep",
+			"why": "src/renderer/components/panels/AgentHubWindow.tsx:116 KNOWN_SOURCES"
+		},
+		{
+			"key": "category.context",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.extensions",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.model",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.modes",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.other",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.providers",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.session",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.tools",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.view",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "category.workspace",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:68 CommandCategory"
+		},
+		{
+			"key": "chat.compaction.reason.idle",
+			"decision": "keep",
+			"why": "src/renderer/stores/session.ts:45 compactionInfo.reason (threshold reads no key, ChatStream.tsx:953)"
+		},
+		{
+			"key": "chat.compaction.reason.incomplete",
+			"decision": "keep",
+			"why": "src/renderer/stores/session.ts:45 compactionInfo.reason (threshold reads no key, ChatStream.tsx:953)"
+		},
+		{
+			"key": "chat.compaction.reason.overflow",
+			"decision": "keep",
+			"why": "src/renderer/stores/session.ts:45 compactionInfo.reason (threshold reads no key, ChatStream.tsx:953)"
+		},
+		{
+			"key": "cmd.advisor.dump",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:540"
+		},
+		{
+			"key": "cmd.advisor.off",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:537"
+		},
+		{
+			"key": "cmd.advisor.on",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:536"
+		},
+		{
+			"key": "cmd.advisor.status",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:539"
+		},
+		{
+			"key": "cmd.session.delete",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:373"
+		},
+		{
+			"key": "cmd.session.pin",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:374"
+		},
+		{
+			"key": "cmd.todo.copy",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:649"
+		},
+		{
+			"key": "cmd.todo.edit",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:640"
+		},
+		{
+			"key": "cmd.todo.export",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:650"
+		},
+		{
+			"key": "cmd.todo.import",
+			"decision": "keep",
+			"why": "src/renderer/lib/command-registry.ts:651"
+		},
+		{
+			"key": "input.thinking.level.auto",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.high",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.low",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.max",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.medium",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.minimal",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.off",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.level.xhigh",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.name.auto",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.name.low",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.name.medium",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.name.minimal",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.name.off",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "input.thinking.name.xhigh",
+			"decision": "keep",
+			"why": "src/renderer/components/layout/ThinkingControl.tsx:36 offers off, auto and THINKING_LEVEL_VALUES (src/shared/rpc-types.ts:1428)"
+		},
+		{
+			"key": "jobs.status.cancelled",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:367 RpcAsyncJobItem.status"
+		},
+		{
+			"key": "jobs.status.completed",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:367 RpcAsyncJobItem.status"
+		},
+		{
+			"key": "jobs.status.failed",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:367 RpcAsyncJobItem.status"
+		},
+		{
+			"key": "jobs.status.running",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:367 RpcAsyncJobItem.status"
+		},
+		{
+			"key": "jobs.type.bash",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:366 RpcAsyncJobItem.type"
+		},
+		{
+			"key": "jobs.type.eval",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:366 RpcAsyncJobItem.type"
+		},
+		{
+			"key": "jobs.type.task",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:366 RpcAsyncJobItem.type"
+		},
+		{
+			"key": "settings.display.collapseCompacted",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.emojiAutocomplete",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.goalStatusInFooter",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.hideThinkingBlock",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.proseOnlyThinking",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.showProgress",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.showTokenUsage",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.display.titleState",
+			"decision": "keep",
+			"why": "src/renderer/lib/display-preferences.ts:6 GUI_DISPLAY_BOOL_FIELDS"
+		},
+		{
+			"key": "settings.nav.experience",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.nav.extensions",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.nav.memory",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.nav.models",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.nav.system",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.nav.tasks",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.nav.tools",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:46 SettingsNavGroup.id"
+		},
+		{
+			"key": "settings.source.global",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:1634 SettingProvenance.layers"
+		},
+		{
+			"key": "settings.source.overlay",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:1634 SettingProvenance.layers"
+		},
+		{
+			"key": "settings.source.project",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:1634 SettingProvenance.layers"
+		},
+		{
+			"key": "settings.source.runtime",
+			"decision": "keep",
+			"why": "src/shared/rpc-types.ts:1634 SettingProvenance.layers"
+		},
+		{
+			"key": "settings.tabs.advanced",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.appearance",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.capabilities",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.context",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.files",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.gui",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.interaction",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.memory",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.model",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.providers",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.shell",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.tasks",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "settings.tabs.tools",
+			"decision": "keep",
+			"why": "src/renderer/components/settings/settings-window-model.ts:33-36 GUI tab ids and :72 owners (the agent's SETTING_TABS); an unknown tab falls back to its schema label (SettingsWindow.tsx:785)"
+		},
+		{
+			"key": "themePicker.theme.dark.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.dawn.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.dawn.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.frost.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.frost.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.gruvbox.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.gruvbox.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.latte.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.latte.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.light.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.matcha.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.matcha.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.nord.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.nord.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.paper.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.paper.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.solarized.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.solarized.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.titanium.description",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "themePicker.theme.titanium.label",
+			"decision": "keep",
+			"why": "src/renderer/lib/themes.ts:1659 THEMES"
+		},
+		{
+			"key": "tools.coordination.status.cancelled",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/CoordinationRenderer.tsx:19 JobStatus"
+		},
+		{
+			"key": "tools.coordination.status.completed",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/CoordinationRenderer.tsx:19 JobStatus"
+		},
+		{
+			"key": "tools.coordination.status.failed",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/CoordinationRenderer.tsx:19 JobStatus"
+		},
+		{
+			"key": "tools.coordination.status.running",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/CoordinationRenderer.tsx:19 JobStatus"
+		},
+		{
+			"key": "tools.memory.operation.memory",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/MemoryRenderer.tsx:41,54 operation"
+		},
+		{
+			"key": "tools.memory.operation.recall",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/MemoryRenderer.tsx:41,54 operation"
+		},
+		{
+			"key": "tools.memory.operation.reflect",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/MemoryRenderer.tsx:41,54 operation"
+		},
+		{
+			"key": "tools.memory.operation.retain",
+			"decision": "keep",
+			"why": "src/renderer/components/tools/MemoryRenderer.tsx:41,54 operation"
+		},
+		{
+			"key": "welcome.card.fit.offload",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:52 ModelFit"
+		},
+		{
+			"key": "welcome.card.fit.ram",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:52 ModelFit"
+		},
+		{
+			"key": "welcome.card.fit.vram",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:52 ModelFit"
+		},
+		{
+			"key": "welcome.card.speed.fast",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:53 ModelSpeed"
+		},
+		{
+			"key": "welcome.card.speed.moderate",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:53 ModelSpeed"
+		},
+		{
+			"key": "welcome.card.speed.slow",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:53 ModelSpeed"
+		},
+		{
+			"key": "welcome.tier.maximum",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:47 ModelTier"
+		},
+		{
+			"key": "welcome.tier.minimal",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:47 ModelTier"
+		},
+		{
+			"key": "welcome.tier.recommended",
+			"decision": "keep",
+			"why": "src/shared/ollama-types.ts:47 ModelTier"
+		}
+	]
+}

@@ -1,0 +1,156 @@
+## body text
+
+
+
+Việc mới
+
+Lệnh
+Ctrl+K / Super+K
+
+Ollama
+
+Cài đặt
+
+GẦN ĐÂY
+Chưa có tác vụ công việc nào
+Sai ATLAS 0.9.16 · Trạng thái: Sẵn sàng
+
+
+VI
+
+
+
+Phiên mới
+
+Sẵn sàng
+0
+$0.0000
+17%
+0%
+0s
+
+Không gian làm việc
+
+
+work
+work
+
+
+
+Hôm nay tôi có thể giúp gì cho bạn?
+
+Biến ghi chú thành báo cáo Word
+
+Dọn dẹp bảng tính và thêm tổng
+
+Tạo slide từ báo cáo
+
+Trợ giúp máy tính
+Chuyển đến mới nhất
+
+
+
+
+
+hf.co/mradermacher/Quyet-1.0-Medium-GGUF:Q4_K_M
+
+
+
+Thiết lập trợ lý cục bộ của bạn
+Máy này có thể chạy trợ lý AI ngay trên máy, không có dữ liệu nào rời khỏi máy tính.
+Bộ nhớ: 65.4 GB
+Đồ họa: không có GPU rời
+Ollama đang chạy (4 mô hình)
+Chọn mô hình cho máy này
+
+TỐI THIỂU
+Gemma 4 E2B
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest
+Tham số
+5.1B
+Hoạt động mỗi token
+2.3B
+Dung lượng tải
+3.3 GB
+Cần
+8.0 GB
+Chạy trên
+Bộ nhớ hệ thống
+Tốc độ
+Vừa phải
+Đã có trên máy này, sẵn sàng sử dụng
+Dùng mô hình này
+ĐỀ XUẤT
+TỐI ĐA
+Gemma 4 26B A4B
+hf.co/google/gemma-4-26B-A4B-it-qat-q4_0-gguf:latest
+Tham số
+25.2B
+Hoạt động mỗi token
+3.8B
+Dung lượng tải
+14.4 GB
+Cần
+19.3 GB
+Chạy trên
+Bộ nhớ hệ thống
+Tốc độ
+Vừa phải
+Chưa tải xuống.
+Tải về
+Thiết lập sau
+hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest sẽ trở thành mô hình mặc định của bạn. Bạn có thể đổi bất cứ lúc nào trong Cài đặt › Ollama.
+Bắt đầu
+
+## attributes
+title: Tìm kiếm phiên
+aria-label: Tìm kiếm phiên
+title: Mở Trung tâm Lệnh (Ctrl+K / Super+K)
+title: Thu gọn điều hướng
+aria-label: Thu gọn điều hướng
+title: Sai ATLAS 0.9.16 · Trạng thái: Sẵn sàng
+title: Chọn giao diện
+aria-label: Chọn giao diện
+title: Chuyển đổi ngôn ngữ
+aria-label: Chuyển đổi ngôn ngữ
+title: Mở cài đặt
+aria-label: Mở cài đặt
+title: Bật/tắt thanh bên
+aria-label: Bật/tắt thanh bên
+title: Lệnh
+aria-label: Lệnh
+title: Đổi tên phiên
+title: Sẵn sàng
+aria-label: Sẵn sàng
+aria-label: Chỉ số phiên
+title: Token nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Chi phí nhật ký phiên · bao gồm lịch sử đã nén và các nhánh liên quan
+title: Cửa sổ ngữ cảnh đã dùng
+title: Tỷ lệ trúng cache
+title: Thời gian thực thi thực tế
+title: Mở không gian làm việc
+title: Thao tác phiên
+aria-label: Thao tác phiên
+aria-label: Các thẻ phiên
+title: work — work
+title: Thao tác thẻ
+aria-label: Thao tác thẻ
+title: Thẻ agent mới (Ctrl+T)
+aria-label: Thẻ Agent Mới
+aria-label: Phiên: work
+aria-label: Bản ghi cuộc trò chuyện
+aria-label: Chuyển đến mới nhất
+placeholder: Nhờ Sai ATLAS soạn thư, sắp xếp bảng tính hoặc làm trang trình chiếu…
+title: Đính kèm tệp
+aria-label: Đính kèm tệp
+title: Chỉnh sửa bản nháp
+title: Lịch sử
+aria-label: Lịch sử
+title: Đổi mô hình
+title: Thêm cài đặt chạy
+aria-label: Thêm cài đặt chạy
+title: Gửi (Enter)
+aria-label: Gửi (Enter)
+aria-label: Thiết lập trợ lý cục bộ của bạn
+aria-label: Gemma 4 E2B
+aria-label: Gemma 4 26B A4B

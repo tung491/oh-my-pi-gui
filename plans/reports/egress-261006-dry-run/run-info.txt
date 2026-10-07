@@ -1,0 +1,8 @@
+started: 2026-10-06T23:28:05+09:00
+dry run: 1
+deb: /home/tung491/WORK/worktrees/rebrand-integration/src-tauri/target-linux-2404/x86_64-unknown-linux-gnu/release/bundle/deb/Sai ATLAS_0.9.16_amd64.deb
+deb sha256: c4d34d6c8d62457fab87fa453e42dad78ffc3d5238ba321a6234e6cce47d4d9c
+image: sai-atlas-egress-audit sha256:e0e6ecbe7c02bae9ce39025b64e6bbbfcd0cbd0529fc7495976d36b5b395604f
+host ollama: http://127.0.0.1:11434 (pid 4345 )
+host ollama models: hf.co/mradermacher/Quyet-1.0-Medium-GGUF:Q4_K_M hf.co/mradermacher/Quyet-1.0-Medium-GGUF:Q8_0 hf.co/google/gemma-4-E4B-it-qat-q4_0-gguf:latest hf.co/google/gemma-4-E2B-it-qat-q4_0-gguf:latest 
+finished: 2026-10-06T23:28:34+09:00 (exit 0)

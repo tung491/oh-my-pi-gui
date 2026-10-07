@@ -1,0 +1,2 @@
+action	start	end	outcome	notes
+dry-run-first-run-screen	1791296653.596	1791296774.741	error	the first-run screen never showed

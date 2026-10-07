@@ -1,0 +1,6 @@
+started: 2026-10-07T14:15:56+09:00
+deb: /home/tung491/WORK/worktrees/rebrand-integration/src-tauri/target-linux-2404/x86_64-unknown-linux-gnu/release/bundle/deb/Sai ATLAS_0.9.16_amd64.deb
+language: en (default)
+deb sha256: 550c4ca6cb230f5940b570a86e7c087e772d76241e7be2bc0f4b0dbba325827a
+image: sha256:6773e734a409b7fbc75dad9f05bc1c3e3c8472a40ffa427929b67b8c07692abe
+finished: 2026-10-07T14:20:37+09:00 (exit 0)

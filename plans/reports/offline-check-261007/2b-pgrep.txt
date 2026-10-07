@@ -1,0 +1,34 @@
+tool never reported within 300000 ms of the stop
+$ ps -eo pid,ppid,stat,etime,args
+    PID    PPID STAT     ELAPSED COMMAND
+      1       0 Ss         06:05 /sbin/docker-init -- /tools/offline-entrypoint.sh
+      7       1 S          06:05 dbus-run-session -- /tools/offline-entrypoint.sh --session
+     40       7 S          06:03 socat TCP-LISTEN:11434,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/relay/ollama.sock
+    126       7 S          06:02 dbus-daemon --nofork --print-address 4 --session
+    127       7 S          06:02 bash /tools/offline-entrypoint.sh --session
+    128     127 S          06:02 weston --backend=headless --renderer=pixman --width=1600 --height=1000 --socket=wayland-1 --idle-time=0 --log=/run/user/1000/weston.log
+    131     128 Ss         06:02 /usr/libexec/weston-keyboard
+    132     128 Ss         06:02 /usr/libexec/weston-desktop-shell
+    138     127 Sl         06:02 node node_modules/@wdio/cli/bin/wdio.js run /tmp/offline-work-eIw7ID/offline.conf.ts
+    151     138 Sl         06:01 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    168     138 S          06:01 /usr/local/bin/tauri-driver --port 4444 --native-port 4445 --native-driver /usr/bin/WebKitWebDriver
+    169     168 Sl         06:01 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    175     138 Sl         06:01 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/offline-work-eIw7ID/offline.conf.ts
+    184     175 Sl         06:01 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    201     169 Sl         06:01 /usr/bin/sai-atlas
+    212       1 Sl         06:01 /usr/libexec/at-spi-bus-launcher
+    218     212 S          06:01 /usr/bin/dbus-daemon --config-file=/usr/share/defaults/at-spi2/accessibility.conf --nofork --print-address 11 --address=unix:path=/run/user/1000/at-spi/bus
+    256       1 Sl         06:01 /usr/libexec/at-spi2-registryd --use-gnome-session
+    279     201 SLl        06:01 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 33
+    386     201 S          06:01 /usr/bin/bwrap --args 46 -- /usr/bin/xdg-dbus-proxy --args=42
+    387     386 S          06:01 /usr/bin/bwrap --args 46 -- /usr/bin/xdg-dbus-proxy --args=42
+    388     387 Sl         06:01 /usr/bin/xdg-dbus-proxy --args=42
+    391     201 S          06:01 /usr/bin/bwrap --args 42 -- /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    392     391 S          06:01 /usr/bin/bwrap --args 42 -- /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    393     392 SLl        06:01 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    396     201 Ss         06:01 /usr/bin/sai-atlas --omp-supervise /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    417     396 Sl         06:01 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    629     417 Sl         05:00 /usr/lib/libreoffice/program/oosplash --headless -env:UserInstallation=file:///tmp/sai-atlas-convert-OQEZoI/lo-profile --convert-to xlsx --outdir /tmp/sai-atlas-convert-OQEZoI /home/ubuntu/Inputs/yearly-sales.xls
+    644     629 Z          05:00 [soffice.bin] <defunct>
+    739     175 R          00:00 ps -eo pid,ppid,stat,etime,args
+(exit 0)

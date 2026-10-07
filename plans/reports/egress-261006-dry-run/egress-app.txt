@@ -1,0 +1,409 @@
+143<generated tauri> 1791296889.369267 +++ exited with 0 +++
+139<sai-atlas> 1791296889.369624 connect(7, {sa_family=AF_UNIX, sun_path="/run/user/1000/wayland-1"}, 27) = 0
+144<pool-vn.io.vif.> 1791296889.372092 connect(8, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 110) = 0
+139<sai-atlas> 1791296889.392332 connect(12, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 22) = 0
+139<sai-atlas> 1791296889.398837 connect(13, {sa_family=AF_UNIX, sun_path="/run/user/1000/at-spi/bus"}, 27) = 0
+139<sai-atlas> 1791296889.412998 connect(15, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 22) = 0
+161<tokio-rt-worker> 1791296889.416050 connect(22, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 23) = 0
+139<sai-atlas> 1791296889.416660 connect(23, {sa_family=AF_UNIX, sun_path="/run/user/1000/wayland-1"}, 27) = 0
+181<sai-atlas> 1791296889.417029 +++ exited with 0 +++
+139<sai-atlas> 1791296889.435114 connect(30, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 22) = 0
+214<olveDirectories> 1791296889.437398 +++ exited with 0 +++
+215<WebKitNetworkPr> 1791296889.465591 connect(8, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+318<sai-atlas> 1791296889.516360 +++ exited with 0 +++
+317<sai-atlas> 1791296889.516378 +++ exited with 0 +++
+316<sai-atlas> 1791296889.516380 +++ exited with 0 +++
+312<sai-atlas> 1791296889.516383 +++ exited with 0 +++
+311<sai-atlas> 1791296889.516385 +++ exited with 0 +++
+310<sai-atlas> 1791296889.516386 +++ exited with 0 +++
+306<sai-atlas> 1791296889.516390 +++ exited with 0 +++
+305<sai-atlas> 1791296889.516392 +++ exited with 0 +++
+303<sai-atlas> 1791296889.516394 +++ exited with 0 +++
+302<sai-atlas> 1791296889.516396 +++ exited with 0 +++
+301<sai-atlas> 1791296889.516397 +++ exited with 0 +++
+300<sai-atlas> 1791296889.516399 +++ exited with 0 +++
+299<sai-atlas> 1791296889.516400 +++ exited with 0 +++
+297<sai-atlas> 1791296889.516403 +++ exited with 0 +++
+296<sai-atlas> 1791296889.516404 +++ exited with 0 +++
+315<sai-atlas> 1791296889.516423 +++ exited with 0 +++
+314<sai-atlas> 1791296889.516426 +++ exited with 0 +++
+313<sai-atlas> 1791296889.516427 +++ exited with 0 +++
+307<sai-atlas> 1791296889.516431 +++ exited with 0 +++
+304<sai-atlas> 1791296889.516432 +++ exited with 0 +++
+309<sai-atlas> 1791296889.516465 +++ exited with 0 +++
+319<sai-atlas> 1791296889.516472 +++ exited with 0 +++
+308<sai-atlas> 1791296889.516480 +++ exited with 0 +++
+298<sai-atlas> 1791296889.516482 +++ exited with 0 +++
+272<llvmpipe-0> 1791296889.516859 +++ exited with 0 +++
+273<llvmpipe-1> 1791296889.516899 +++ exited with 0 +++
+274<llvmpipe-2> 1791296889.516911 +++ exited with 0 +++
+275<llvmpipe-3> 1791296889.516943 +++ exited with 0 +++
+276<llvmpipe-4> 1791296889.516945 +++ exited with 0 +++
+277<llvmpipe-5> 1791296889.516973 +++ exited with 0 +++
+278<llvmpipe-6> 1791296889.516987 +++ exited with 0 +++
+279<llvmpipe-7> 1791296889.517015 +++ exited with 0 +++
+280<llvmpipe-8> 1791296889.517028 +++ exited with 0 +++
+281<llvmpipe-9> 1791296889.517057 +++ exited with 0 +++
+282<llvmpipe-10> 1791296889.517068 +++ exited with 0 +++
+283<llvmpipe-11> 1791296889.517088 +++ exited with 0 +++
+284<llvmpipe-12> 1791296889.517114 +++ exited with 0 +++
+285<llvmpipe-13> 1791296889.517126 +++ exited with 0 +++
+286<llvmpipe-14> 1791296889.517153 +++ exited with 0 +++
+287<llvmpipe-15> 1791296889.517165 +++ exited with 0 +++
+288<llvmpipe-16> 1791296889.517192 +++ exited with 0 +++
+289<llvmpipe-17> 1791296889.517206 +++ exited with 0 +++
+290<llvmpipe-18> 1791296889.517233 +++ exited with 0 +++
+291<llvmpipe-19> 1791296889.517244 +++ exited with 0 +++
+292<llvmpipe-20> 1791296889.517260 +++ exited with 0 +++
+293<llvmpipe-21> 1791296889.517280 +++ exited with 0 +++
+294<llvmpipe-22> 1791296889.517283 +++ exited with 0 +++
+295<llvmpipe-23> 1791296889.517300 +++ exited with 0 +++
+320<sai-atl:disk$0> 1791296889.517646 +++ exited with 0 +++
+139<sai-atlas> 1791296889.534679 connect(36, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+330<tokio-rt-worker> 1791296889.577843 +++ exited with 127 +++
+139<sai-atlas> 1791296889.577874 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=330, si_uid=1000, si_status=127, si_utime=0, si_stime=0} ---
+331<tokio-rt-worker> 1791296889.579730 connect(36, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 23) = 0
+139<sai-atlas> 1791296889.588320 connect(39, {sa_family=AF_INET, sin_port=htons(47027), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+139<sai-atlas> 1791296889.590397 connect(51, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+339<pool> 1791296889.593409 connect(14, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+215<WebKitNetworkPr> 1791296889.595273 connect(17, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+350<pool> 1791296889.612817 connect(14, {sa_family=AF_UNIX, sun_path="/run/user/1000/webkitgtk/at-spi-bus"}, 110) = 0
+351<pool> 1791296889.613569 connect(9, {sa_family=AF_UNIX, sun_path="/run/user/1000/at-spi/bus"}, 110) = 0
+329<WebKitWebProces> 1791296889.616112 connect(18, {sa_family=AF_UNIX, sun_path="/run/user/1000/webkitgtk/bus"}, 110) = 0
+351<pool> 1791296889.616340 connect(11, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 110) = 0
+350<pool> 1791296889.619973 connect(19, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+329<WebKitWebProces> 1791296889.710178 connect(20, {sa_family=AF_UNIX, sun_path="/run/user/1000/webkitgtk/bus"}, 110) = 0
+351<pool> 1791296889.710532 connect(11, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 110) = 0
+329<WebKitWebProces> 1791296889.728676 connect(22, {sa_family=AF_UNIX, sun_path="/run/user/1000/webkitgtk/bus"}, 110) = 0
+351<pool> 1791296889.728966 connect(11, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 110) = 0
+329<WebKitWebProces> 1791296889.740643 connect(24, {sa_family=AF_UNIX, sun_path="/run/user/1000/webkitgtk/bus"}, 110) = 0
+351<pool> 1791296889.740925 connect(11, {sa_family=AF_UNIX, sun_path="/tmp/dbus-mLC227Cc98"}, 110) = 0
+329<WebKitWebProces> 1791296889.745743 connect(24, {sa_family=AF_UNIX, sun_path="/run/dbus/system_bus_socket"}, 110) = -1 ENOENT (No such file or directory)
+329<WebKitWebProces> 1791296889.751110 connect(27, {sa_family=AF_INET, sin_port=htons(47027), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+424<update-desktop-> 1791296889.828883 +++ exited with 0 +++
+198<tokio-rt-worker> 1791296889.828912 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=424, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+427<xdg-mime> 1791296889.831312 +++ exited with 127 +++
+426<xdg-mime> 1791296889.831328 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=427, si_uid=1000, si_status=127, si_utime=0, si_stime=0} ---
+428<cut> 1791296889.832036 +++ exited with 0 +++
+426<xdg-mime> 1791296889.832050 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=428, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+426<xdg-mime> 1791296889.832144 +++ exited with 0 +++
+425<xdg-mime> 1791296889.832164 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=426<xdg-mime>, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+429<touch> 1791296889.833193 +++ exited with 0 +++
+425<xdg-mime> 1791296889.833205 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=429, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+430<awk> 1791296889.834594 +++ exited with 0 +++
+425<xdg-mime> 1791296889.834607 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=430, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+431<mv> 1791296889.836405 +++ exited with 0 +++
+425<xdg-mime> 1791296889.836433 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=431, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+425<xdg-mime> 1791296889.836584 +++ exited with 0 +++
+193<tokio-rt-worker> 1791296889.836602 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=425, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+433<gst-plugin-scan> 1791296889.964969 +++ exited with 0 +++
+329<WebKitWebProces> 1791296889.965087 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=71, si_uid=1000, si_status=0, si_utime=2 /* 0.02 s */, si_stime=2 /* 0.02 s */} ---
+332<pool-vn.io.vif.> 1791296890.085149 +++ exited with 0 +++
+473<HTTP Client> 1791296891.522422 connect(30, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+473<HTTP Client> 1791296891.524510 connect(31, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+473<HTTP Client> 1791296891.524622 connect(32, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+473<HTTP Client> 1791296891.524705 connect(33, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+475<mcp-notes-serve> 1791296891.634492 connect(3, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+475<mcp-notes-serve> 1791296891.634581 connect(3, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+476<date> 1791296891.637651 +++ exited with 0 +++
+475<mcp-notes-serve> 1791296891.637716 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=476, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+477<mcp-notes-serve> 1791296891.639115 connect(3, {sa_family=AF_INET, sin_port=htons(9), sin_addr=inet_addr("192.0.2.12")}, 16 <unfinished ...>
+331<tokio-rt-worker> 1791296892.589169 connect(56, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+331<tokio-rt-worker> 1791296892.590253 connect(56, {sa_family=AF_UNIX, sun_path="/var/run/nscd/socket"}, 110) = -1 ENOENT (No such file or directory)
+331<tokio-rt-worker> 1791296892.591285 connect(56, {sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_addr("172.17.0.1")}, 16) = 0
+202<tokio-rt-worker> 1791296892.593446 connect(56, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("20.200.245.247")}, 16) = -1 EINPROGRESS (Operation now in progress)
+331<tokio-rt-worker> 1791296893.166247 connect(57, {sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_addr("172.17.0.1")}, 16) = 0
+331<tokio-rt-worker> 1791296893.170384 connect(57, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr("185.199.109.133")}, 16) = 0
+331<tokio-rt-worker> 1791296893.170873 connect(57, {sa_family=AF_UNSPEC, sa_data="\0\0\0\0\0\0\0\0\0\0\0\0\0\0"}, 16) = 0
+331<tokio-rt-worker> 1791296893.170989 connect(57, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr("185.199.108.133")}, 16) = 0
+331<tokio-rt-worker> 1791296893.171120 connect(57, {sa_family=AF_UNSPEC, sa_data="\0\0\0\0\0\0\0\0\0\0\0\0\0\0"}, 16) = 0
+331<tokio-rt-worker> 1791296893.171186 connect(57, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr("185.199.111.133")}, 16) = 0
+331<tokio-rt-worker> 1791296893.171338 connect(57, {sa_family=AF_UNSPEC, sa_data="\0\0\0\0\0\0\0\0\0\0\0\0\0\0"}, 16) = 0
+331<tokio-rt-worker> 1791296893.171405 connect(57, {sa_family=AF_INET, sin_port=htons(0), sin_addr=inet_addr("185.199.110.133")}, 16) = 0
+202<tokio-rt-worker> 1791296893.172698 connect(57, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("185.199.109.133")}, 16) = -1 EINPROGRESS (Operation now in progress)
+161<tokio-rt-worker> 1791296899.417216 +++ exited with 0 +++
+407<JITWorker> 1791296901.822126 +++ exited with 0 +++
+406<JITWorker> 1791296901.883984 +++ exited with 0 +++
+354<JITWorker> 1791296901.887441 +++ exited with 0 +++
+331<tokio-rt-worker> 1791296903.172315 +++ exited with 0 +++
+442<ollector Thread> 1791296903.682089 +++ exited with 0 +++
+219<WebKitNetworkPr> 1791296903.901986 +++ exited with 0 +++
+144<pool-vn.io.vif.> 1791296905.080825 +++ exited with 0 +++
+339<pool> 1791296905.094302 +++ exited with 0 +++
+351<pool> 1791296905.241869 +++ exited with 0 +++
+350<pool> 1791296905.248324 +++ exited with 0 +++
+193<tokio-rt-worker> 1791296906.944503 connect(65, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+193<tokio-rt-worker> 1791296906.944807 connect(66, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+198<tokio-rt-worker> 1791296907.625116 connect(65, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+198<tokio-rt-worker> 1791296907.625820 connect(67, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+483<tokio-rt-worker> 1791296907.628235 +++ exited with 127 +++
+139<sai-atlas> 1791296907.628250 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=483, si_uid=1000, si_status=127, si_utime=0, si_stime=0} ---
+484<tokio-rt-worker> 1791296907.629331 +++ exited with 127 +++
+140<sai-atlas> 1791296907.629354 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=484, si_uid=1000, si_status=127, si_utime=0, si_stime=0} ---
+202<tokio-rt-worker> 1791296907.630510 connect(65, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+202<tokio-rt-worker> 1791296907.631175 connect(68, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+186<tokio-rt-worker> 1791296907.642736 connect(65, {sa_family=AF_INET, sin_port=htons(11434), sin_addr=inet_addr("127.0.0.1")}, 16) = -1 EINPROGRESS (Operation now in progress)
+139<sai-atlas> 1791296913.229261 --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=109<MainThread>, si_uid=1000} ---
+333<sai-atlas> 1791296913.230950 --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=139<sai-atlas>, si_uid=1000} ---
+353<omp> 1791296913.231920 --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=333<sai-atlas>, si_uid=1000} ---
+481<JITWorker> 1791296913.260314 +++ exited with 143 +++
+480<JITWorker> 1791296913.260333 +++ exited with 143 +++
+478<Bun Pool 6> 1791296913.260335 +++ exited with 143 +++
+471<Bun Pool 4> 1791296913.260337 +++ exited with 143 +++
+469<Bun Pool 2> 1791296913.260339 +++ exited with 143 +++
+468<Bun Pool 1> 1791296913.260340 +++ exited with 143 +++
+467<Bun Pool 0> 1791296913.260342 +++ exited with 143 +++
+462<tokio-rt-worker> 1791296913.260343 +++ exited with 143 +++
+461<tokio-rt-worker> 1791296913.260345 +++ exited with 143 +++
+459<tokio-rt-worker> 1791296913.260346 +++ exited with 143 +++
+456<tokio-rt-worker> 1791296913.260348 +++ exited with 143 +++
+449<tokio-rt-worker> 1791296913.260349 +++ exited with 143 +++
+448<tokio-rt-worker> 1791296913.260351 +++ exited with 143 +++
+443<tokio-rt-worker> 1791296913.260352 +++ exited with 143 +++
+420<HeapHelper> 1791296913.260354 +++ exited with 143 +++
+417<HeapHelper> 1791296913.260355 +++ exited with 143 +++
+416<HeapHelper> 1791296913.260357 +++ exited with 143 +++
+479<JITWorker> 1791296913.260529 +++ exited with 143 +++
+474<fs.watch> 1791296913.260532 +++ exited with 143 +++
+472<Bun Pool 5> 1791296913.260533 +++ exited with 143 +++
+470<Bun Pool 3> 1791296913.260535 +++ exited with 143 +++
+457<tokio-rt-worker> 1791296913.260536 +++ exited with 143 +++
+455<tokio-rt-worker> 1791296913.260538 +++ exited with 143 +++
+452<tokio-rt-worker> 1791296913.260539 +++ exited with 143 +++
+450<tokio-rt-worker> 1791296913.260541 +++ exited with 143 +++
+447<tokio-rt-worker> 1791296913.260543 +++ exited with 143 +++
+414<HeapHelper> 1791296913.260544 +++ exited with 143 +++
+355<mi-scavenger> 1791296913.260546 +++ exited with 143 +++
+465<tokio-rt-worker> 1791296913.260988 +++ exited with 143 +++
+473<HTTP Client> 1791296913.260991 +++ exited with 143 +++
+466<tokio-rt-worker> 1791296913.260993 +++ exited with 143 +++
+464<tokio-rt-worker> 1791296913.260994 +++ exited with 143 +++
+460<tokio-rt-worker> 1791296913.260996 +++ exited with 143 +++
+458<tokio-rt-worker> 1791296913.261002 +++ exited with 143 +++
+454<tokio-rt-worker> 1791296913.261004 +++ exited with 143 +++
+453<tokio-rt-worker> 1791296913.261005 +++ exited with 143 +++
+451<tokio-rt-worker> 1791296913.261007 +++ exited with 143 +++
+446<tokio-rt-worker> 1791296913.261008 +++ exited with 143 +++
+445<tokio-rt-worker> 1791296913.261010 +++ exited with 143 +++
+419<HeapHelper> 1791296913.261011 +++ exited with 143 +++
+418<HeapHelper> 1791296913.261013 +++ exited with 143 +++
+415<HeapHelper> 1791296913.261014 +++ exited with 143 +++
+356<JSCWarmUp> 1791296913.261016 +++ exited with 143 +++
+463<tokio-rt-worker> 1791296913.262430 +++ exited with 143 +++
+444<tokio-rt-worker> 1791296913.274743 +++ exited with 143 +++
+353<omp> 1791296913.274756 +++ exited with 143 +++
+333<sai-atlas> 1791296913.274766 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=353<omp>, si_uid=1000, si_status=143, si_utime=300 /* 3.00 s */, si_stime=58 /* 0.58 s */} ---
+475<mcp-notes-serve> 1791296913.274964 +++ exited with 0 +++
+333<sai-atlas> 1791296913.275056 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=475<cat>, si_uid=1000, si_status=0, si_utime=0, si_stime=0} ---
+477<mcp-notes-serve> 1791296913.278264 <... connect resumed>) = ?
+477<mcp-notes-serve> 1791296913.278400 +++ killed by SIGKILL +++
+333<sai-atlas> 1791296913.278409 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=477<mcp-notes-serve>, si_uid=1000, si_status=SIGKILL, si_utime=0, si_stime=0} ---
+333<sai-atlas> 1791296913.305276 +++ exited with 143 +++
+204<tokio-rt-worker> 1791296913.305309 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=333<sai-atlas>, si_uid=1000, si_status=143, si_utime=1 /* 0.01 s */, si_stime=1 /* 0.01 s */} ---
+208<notify-rs inoti> 1791296913.306633 +++ exited with 0 +++
+271<sai-atl:disk$0> 1791296913.308064 +++ exited with 0 +++
+409<VBlankMonitor> 1791296913.310573 +++ exited with 0 +++
+345<ReceiveQueue> 1791296913.310578 +++ exited with 0 +++
+334<ReceiveQueue> 1791296913.310580 +++ exited with 0 +++
+321<PressureMonitor> 1791296913.310582 +++ exited with 0 +++
+270<sai-atlas> 1791296913.310584 +++ exited with 0 +++
+269<sai-atlas> 1791296913.310586 +++ exited with 0 +++
+268<sai-atlas> 1791296913.310587 +++ exited with 0 +++
+267<sai-atlas> 1791296913.310589 +++ exited with 0 +++
+266<sai-atlas> 1791296913.310591 +++ exited with 0 +++
+265<sai-atlas> 1791296913.310592 +++ exited with 0 +++
+264<sai-atlas> 1791296913.310594 +++ exited with 0 +++
+263<sai-atlas> 1791296913.310595 +++ exited with 0 +++
+262<sai-atlas> 1791296913.310597 +++ exited with 0 +++
+261<sai-atlas> 1791296913.310599 +++ exited with 0 +++
+260<sai-atlas> 1791296913.310601 +++ exited with 0 +++
+259<sai-atlas> 1791296913.310602 +++ exited with 0 +++
+258<sai-atlas> 1791296913.310604 +++ exited with 0 +++
+257<sai-atlas> 1791296913.310606 +++ exited with 0 +++
+256<sai-atlas> 1791296913.310607 +++ exited with 0 +++
+255<sai-atlas> 1791296913.310609 +++ exited with 0 +++
+254<sai-atlas> 1791296913.310610 +++ exited with 0 +++
+253<sai-atlas> 1791296913.310612 +++ exited with 0 +++
+252<sai-atlas> 1791296913.310614 +++ exited with 0 +++
+251<sai-atlas> 1791296913.310615 +++ exited with 0 +++
+250<sai-atlas> 1791296913.310617 +++ exited with 0 +++
+249<sai-atlas> 1791296913.310619 +++ exited with 0 +++
+248<sai-atlas> 1791296913.310620 +++ exited with 0 +++
+247<sai-atlas> 1791296913.310622 +++ exited with 0 +++
+246<llvmpipe-23> 1791296913.310624 +++ exited with 0 +++
+245<llvmpipe-22> 1791296913.310625 +++ exited with 0 +++
+244<llvmpipe-21> 1791296913.310627 +++ exited with 0 +++
+243<llvmpipe-20> 1791296913.310629 +++ exited with 0 +++
+242<llvmpipe-19> 1791296913.310630 +++ exited with 0 +++
+241<llvmpipe-18> 1791296913.310632 +++ exited with 0 +++
+240<llvmpipe-17> 1791296913.310634 +++ exited with 0 +++
+239<llvmpipe-16> 1791296913.310636 +++ exited with 0 +++
+238<llvmpipe-15> 1791296913.310637 +++ exited with 0 +++
+237<llvmpipe-14> 1791296913.310639 +++ exited with 0 +++
+236<llvmpipe-13> 1791296913.310640 +++ exited with 0 +++
+235<llvmpipe-12> 1791296913.310642 +++ exited with 0 +++
+234<llvmpipe-11> 1791296913.310648 +++ exited with 0 +++
+233<llvmpipe-10> 1791296913.310650 +++ exited with 0 +++
+232<llvmpipe-9> 1791296913.310652 +++ exited with 0 +++
+231<llvmpipe-8> 1791296913.310654 +++ exited with 0 +++
+230<llvmpipe-7> 1791296913.310655 +++ exited with 0 +++
+229<llvmpipe-6> 1791296913.310657 +++ exited with 0 +++
+228<llvmpipe-5> 1791296913.310659 +++ exited with 0 +++
+227<llvmpipe-4> 1791296913.310660 +++ exited with 0 +++
+226<llvmpipe-3> 1791296913.310662 +++ exited with 0 +++
+225<llvmpipe-2> 1791296913.310663 +++ exited with 0 +++
+224<llvmpipe-1> 1791296913.310665 +++ exited with 0 +++
+223<llvmpipe-0> 1791296913.310667 +++ exited with 0 +++
+213<ebsiteDataStore> 1791296913.310668 +++ exited with 0 +++
+212<sai-atlas> 1791296913.310670 +++ exited with 0 +++
+207<tokio-rt-worker> 1791296913.310672 +++ exited with 0 +++
+206<tokio-rt-worker> 1791296913.310674 +++ exited with 0 +++
+205<tokio-rt-worker> 1791296913.310675 +++ exited with 0 +++
+204<tokio-rt-worker> 1791296913.310677 +++ exited with 0 +++
+203<tokio-rt-worker> 1791296913.310679 +++ exited with 0 +++
+202<tokio-rt-worker> 1791296913.310680 +++ exited with 0 +++
+200<tokio-rt-worker> 1791296913.310682 +++ exited with 0 +++
+199<tokio-rt-worker> 1791296913.310684 +++ exited with 0 +++
+198<tokio-rt-worker> 1791296913.310685 +++ exited with 0 +++
+197<tokio-rt-worker> 1791296913.310687 +++ exited with 0 +++
+196<tokio-rt-worker> 1791296913.310689 +++ exited with 0 +++
+195<tokio-rt-worker> 1791296913.310690 +++ exited with 0 +++
+194<tokio-rt-worker> 1791296913.310692 +++ exited with 0 +++
+193<tokio-rt-worker> 1791296913.310694 +++ exited with 0 +++
+192<tokio-rt-worker> 1791296913.310696 +++ exited with 0 +++
+191<tokio-rt-worker> 1791296913.310697 +++ exited with 0 +++
+190<tokio-rt-worker> 1791296913.310699 +++ exited with 0 +++
+189<tokio-rt-worker> 1791296913.310701 +++ exited with 0 +++
+188<tokio-rt-worker> 1791296913.310702 +++ exited with 0 +++
+187<tokio-rt-worker> 1791296913.310704 +++ exited with 0 +++
+186<tokio-rt-worker> 1791296913.310706 +++ exited with 0 +++
+185<tokio-rt-worker> 1791296913.310707 +++ exited with 0 +++
+183<tokio-rt-worker> 1791296913.310709 +++ exited with 0 +++
+180<tokio-rt-worker> 1791296913.310711 +++ exited with 0 +++
+179<tokio-rt-worker> 1791296913.310712 +++ exited with 0 +++
+178<tokio-rt-worker> 1791296913.310714 +++ exited with 0 +++
+177<tokio-rt-worker> 1791296913.310716 +++ exited with 0 +++
+176<tokio-rt-worker> 1791296913.310717 +++ exited with 0 +++
+175<tokio-rt-worker> 1791296913.310719 +++ exited with 0 +++
+174<tokio-rt-worker> 1791296913.310720 +++ exited with 0 +++
+173<tokio-rt-worker> 1791296913.310722 +++ exited with 0 +++
+172<tokio-rt-worker> 1791296913.310724 +++ exited with 0 +++
+171<tokio-rt-worker> 1791296913.310725 +++ exited with 0 +++
+170<tokio-rt-worker> 1791296913.310727 +++ exited with 0 +++
+169<tokio-rt-worker> 1791296913.310729 +++ exited with 0 +++
+168<tokio-rt-worker> 1791296913.310730 +++ exited with 0 +++
+167<tokio-rt-worker> 1791296913.310732 +++ exited with 0 +++
+166<tokio-rt-worker> 1791296913.310734 +++ exited with 0 +++
+165<tokio-rt-worker> 1791296913.310735 +++ exited with 0 +++
+164<tokio-rt-worker> 1791296913.310737 +++ exited with 0 +++
+163<tokio-rt-worker> 1791296913.310739 +++ exited with 0 +++
+162<tokio-rt-worker> 1791296913.310740 +++ exited with 0 +++
+160<tokio-rt-worker> 1791296913.310742 +++ exited with 0 +++
+159<tokio-rt-worker> 1791296913.310744 +++ exited with 0 +++
+158<tokio-rt-worker> 1791296913.310745 +++ exited with 0 +++
+157<tokio-rt-worker> 1791296913.310747 +++ exited with 0 +++
+156<tokio-rt-worker> 1791296913.310748 +++ exited with 0 +++
+155<sai-atlas> 1791296913.310750 +++ exited with 0 +++
+146<dconf worker> 1791296913.310752 +++ exited with 0 +++
+145<gdbus> 1791296913.310753 +++ exited with 0 +++
+142<gmain> 1791296913.310755 +++ exited with 0 +++
+141<pool-spawner> 1791296913.310757 +++ exited with 0 +++
+140<sai-atlas> 1791296913.310758 +++ exited with 0 +++
+201<tokio-rt-worker> 1791296913.317349 +++ exited with 0 +++
+139<sai-atlas> 1791296913.317369 +++ exited with 0 +++
+325<pool-spawner> 1791296913.317743 +++ exited with 0 +++
+326<gmain> 1791296913.317970 +++ exited with 0 +++
+324<xdg-dbus-proxy> 1791296913.317973 +++ exited with 0 +++
+322<bwrap> 1791296913.318186 +++ exited with 0 +++
+323<bwrap> 1791296913.318329 +++ exited with 0 +++
+338<erialBackground> 1791296913.318739 +++ exited with 0 +++
+337<background> 1791296913.318742 +++ exited with 0 +++
+336<Storage> 1791296913.318743 +++ exited with 0 +++
+346<ReceiveQueue> 1791296913.319099 +++ exited with 0 +++
+488<WatchDogQueue> 1791296913.319107 +++ exited with 0 +++
+485<WebKitNetworkPr> 1791296913.319110 +++ exited with 0 +++
+335<persistent> 1791296913.319111 +++ exited with 0 +++
+222<ReceiveQueue> 1791296913.319113 +++ exited with 0 +++
+221<gmain> 1791296913.319115 +++ exited with 0 +++
+220<pool-spawner> 1791296913.319117 +++ exited with 0 +++
+215<WebKitNetworkPr> 1791296913.321490 +++ exited with 0 +++
+412<SkiaGPUWorker> 1791296913.334802 +++ exited with 0 +++
+408<eadedCompositor> 1791296913.336974 +++ exited with 0 +++
+411<SkiaGPUWorker> 1791296913.343256 +++ exited with 0 +++
+405<WebKitW:disk$0> 1791296913.347049 +++ exited with 0 +++
+432<WebKitW:disk$1> 1791296913.347124 +++ exited with 0 +++
+404<WebKitWebProces> 1791296913.347859 +++ exited with 0 +++
+403<WebKitWebProces> 1791296913.347870 +++ exited with 0 +++
+401<WebKitWebProces> 1791296913.347872 +++ exited with 0 +++
+400<WebKitWebProces> 1791296913.347873 +++ exited with 0 +++
+399<WebKitWebProces> 1791296913.347875 +++ exited with 0 +++
+398<WebKitWebProces> 1791296913.347876 +++ exited with 0 +++
+395<WebKitWebProces> 1791296913.347878 +++ exited with 0 +++
+394<WebKitWebProces> 1791296913.347879 +++ exited with 0 +++
+387<WebKitWebProces> 1791296913.347880 +++ exited with 0 +++
+384<WebKitWebProces> 1791296913.347882 +++ exited with 0 +++
+382<WebKitWebProces> 1791296913.347883 +++ exited with 0 +++
+396<WebKitWebProces> 1791296913.347902 +++ exited with 0 +++
+388<WebKitWebProces> 1791296913.348062 +++ exited with 0 +++
+385<WebKitWebProces> 1791296913.348067 +++ exited with 0 +++
+402<WebKitWebProces> 1791296913.348082 +++ exited with 0 +++
+393<WebKitWebProces> 1791296913.348154 +++ exited with 0 +++
+390<WebKitWebProces> 1791296913.348156 +++ exited with 0 +++
+391<WebKitWebProces> 1791296913.348158 +++ exited with 0 +++
+389<WebKitWebProces> 1791296913.348159 +++ exited with 0 +++
+386<WebKitWebProces> 1791296913.348161 +++ exited with 0 +++
+383<WebKitWebProces> 1791296913.348162 +++ exited with 0 +++
+381<WebKitWebProces> 1791296913.348164 +++ exited with 0 +++
+397<WebKitWebProces> 1791296913.348175 +++ exited with 0 +++
+392<WebKitWebProces> 1791296913.348225 +++ exited with 0 +++
+360<llvmpipe-3> 1791296913.348583 +++ exited with 0 +++
+358<llvmpipe-1> 1791296913.348614 +++ exited with 0 +++
+361<llvmpipe-4> 1791296913.348644 +++ exited with 0 +++
+362<llvmpipe-5> 1791296913.348671 +++ exited with 0 +++
+363<llvmpipe-6> 1791296913.348701 +++ exited with 0 +++
+365<llvmpipe-8> 1791296913.348735 +++ exited with 0 +++
+357<llvmpipe-0> 1791296913.348782 +++ exited with 0 +++
+366<llvmpipe-9> 1791296913.348833 +++ exited with 0 +++
+359<llvmpipe-2> 1791296913.348881 +++ exited with 0 +++
+369<llvmpipe-12> 1791296913.348956 +++ exited with 0 +++
+368<llvmpipe-11> 1791296913.348959 +++ exited with 0 +++
+367<llvmpipe-10> 1791296913.348961 +++ exited with 0 +++
+370<llvmpipe-13> 1791296913.348981 +++ exited with 0 +++
+371<llvmpipe-14> 1791296913.348996 +++ exited with 0 +++
+364<llvmpipe-7> 1791296913.349031 +++ exited with 0 +++
+372<llvmpipe-15> 1791296913.349049 +++ exited with 0 +++
+373<llvmpipe-16> 1791296913.349078 +++ exited with 0 +++
+374<llvmpipe-17> 1791296913.349104 +++ exited with 0 +++
+375<llvmpipe-18> 1791296913.349131 +++ exited with 0 +++
+376<llvmpipe-19> 1791296913.349158 +++ exited with 0 +++
+377<llvmpipe-20> 1791296913.349183 +++ exited with 0 +++
+378<llvmpipe-21> 1791296913.349200 +++ exited with 0 +++
+379<llvmpipe-22> 1791296913.349232 +++ exited with 0 +++
+380<llvmpipe-23> 1791296913.349266 +++ exited with 0 +++
+489<WatchDogQueue> 1791296913.350865 +++ exited with 0 +++
+482<ollector Thread> 1791296913.350875 +++ exited with 0 +++
+441<HeapHelper> 1791296913.350877 +++ exited with 0 +++
+440<HeapHelper> 1791296913.350879 +++ exited with 0 +++
+439<HeapHelper> 1791296913.350880 +++ exited with 0 +++
+438<HeapHelper> 1791296913.350882 +++ exited with 0 +++
+437<HeapHelper> 1791296913.350883 +++ exited with 0 +++
+436<HeapHelper> 1791296913.350885 +++ exited with 0 +++
+435<HeapHelper> 1791296913.350886 +++ exited with 0 +++
+434<DataURLDecoder> 1791296913.350888 +++ exited with 0 +++
+423<JITWorker> 1791296913.350889 +++ exited with 0 +++
+422<JITWorker> 1791296913.350891 +++ exited with 0 +++
+421<JITWorker> 1791296913.350892 +++ exited with 0 +++
+413<CryptoQueue> 1791296913.350894 +++ exited with 0 +++
+410<Core: Scrolling> 1791296913.350895 +++ exited with 0 +++
+352<gdbus> 1791296913.350897 +++ exited with 0 +++
+349<gmain> 1791296913.350898 +++ exited with 0 +++
+348<pool-spawner> 1791296913.350900 +++ exited with 0 +++
+347<ReceiveQueue> 1791296913.350901 +++ exited with 0 +++
+344<ReceiveQueue> 1791296913.350903 +++ exited with 0 +++
+343<uggerDispatcher> 1791296913.350904 +++ exited with 0 +++
+342<rruptDispatcher> 1791296913.350906 +++ exited with 0 +++
+341<EventDispatcher> 1791296913.350907 +++ exited with 0 +++
+340<WebKitWebProces> 1791296913.350909 +++ exited with 0 +++
+329<WebKitWebProces> 1791296913.375030 +++ exited with 0 +++
+327<bwrap> 1791296913.375251 +++ exited with 0 +++
+328<bwrap> 1791296913.375439 +++ exited with 0 +++

@@ -1,0 +1,4 @@
+$ ps -o pid,ppid,stat,args -p 644
+    PID    PPID STAT COMMAND
+    644     629 T    /usr/lib/libreoffice/program/soffice.bin -env:UserInstallation=file:///tmp/sai-atlas-convert-OQEZoI/lo-profile --headless --convert-to xlsx --outdir /tmp/sai-atlas-convert-OQEZoI /home/ubuntu/Inputs/yearly-sales.xls
+(exit 0)

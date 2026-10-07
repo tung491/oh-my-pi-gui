@@ -1,0 +1,39 @@
+stopped pid 635; tool reported 60.1 s later; 5 s after that:
+$ pgrep -af soffice.bin
+(exit 1)
+
+$ ps -eo pid,ppid,stat,etime,args
+    PID    PPID STAT     ELAPSED COMMAND
+      1       0 Ss         02:08 /sbin/docker-init -- /tools/offline-entrypoint.sh
+      7       1 S          02:08 dbus-run-session -- /tools/offline-entrypoint.sh --session
+     40       7 S          02:06 socat TCP-LISTEN:11434,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/relay/ollama.sock
+    128       7 S          02:05 dbus-daemon --nofork --print-address 4 --session
+    129       7 S          02:05 bash /tools/offline-entrypoint.sh --session
+    130     129 S          02:05 weston --backend=headless --renderer=pixman --width=1600 --height=1000 --socket=wayland-1 --idle-time=0 --log=/run/user/1000/weston.log
+    133     130 Ss         02:05 /usr/libexec/weston-keyboard
+    134     130 Ss         02:05 /usr/libexec/weston-desktop-shell
+    140     129 Sl         02:05 node node_modules/@wdio/cli/bin/wdio.js run /tmp/offline-work-l3O1Xz/offline.conf.ts
+    153     140 Sl         02:04 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    168     140 S          02:04 /usr/local/bin/tauri-driver --port 4444 --native-port 4445 --native-driver /usr/bin/WebKitWebDriver
+    169     168 Sl         02:04 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    175     140 Sl         02:04 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/offline-work-l3O1Xz/offline.conf.ts
+    184     175 Sl         02:04 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    202     169 Sl         02:04 /usr/bin/sai-atlas
+    213       1 Sl         02:04 /usr/libexec/at-spi-bus-launcher
+    219     213 S          02:04 /usr/bin/dbus-daemon --config-file=/usr/share/defaults/at-spi2/accessibility.conf --nofork --print-address 11 --address=unix:path=/run/user/1000/at-spi/bus
+    254       1 Sl         02:04 /usr/libexec/at-spi2-registryd --use-gnome-session
+    280     202 SLl        02:04 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 33
+    387     202 S          02:04 /usr/bin/bwrap --args 46 -- /usr/bin/xdg-dbus-proxy --args=42
+    388     387 S          02:04 /usr/bin/bwrap --args 46 -- /usr/bin/xdg-dbus-proxy --args=42
+    389     388 Sl         02:04 /usr/bin/xdg-dbus-proxy --args=42
+    392     202 S          02:04 /usr/bin/bwrap --args 42 -- /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    393     392 S          02:04 /usr/bin/bwrap --args 42 -- /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    394     393 SLl        02:04 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    398     202 Ss         02:04 /usr/bin/sai-atlas --omp-supervise /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    418     398 Sl         02:04 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    539      40 S          02:02 socat TCP-LISTEN:11434,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/relay/ollama.sock
+    540      40 S          02:02 socat TCP-LISTEN:11434,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/relay/ollama.sock
+    541      40 S          02:02 socat TCP-LISTEN:11434,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/relay/ollama.sock
+    542      40 S          02:02 socat TCP-LISTEN:11434,bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:/relay/ollama.sock
+    664     175 R          00:00 ps -eo pid,ppid,stat,etime,args
+(exit 0)

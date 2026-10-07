@@ -1,0 +1,11 @@
+## ~/Documents (find)
+2026-10-07 05:22:37.4100942210      10119 /home/ubuntu/Documents/Sai ATLAS/Họp nhóm ngày 3 tháng 10.docx
+2026-10-07 05:23:03.1282111460       7976 /home/ubuntu/Documents/Sai ATLAS/doanh-so-cua-hang (đã làm sạch).xlsx
+2026-10-07 05:23:58.9284648320      74682 /home/ubuntu/Documents/Sai ATLAS/Cập nhật dự án chuyển văn phòng.pptx
+## ls ~/Documents/Sai ATLAS (end of run)
+total 104
+drwxr-xr-x 2 ubuntu ubuntu  4096 Oct  7 05:23 .
+drwxr-xr-x 3 ubuntu ubuntu  4096 Oct  7 05:22 ..
+-rw-r--r-- 1 ubuntu ubuntu 74682 Oct  7 05:23 Cập nhật dự án chuyển văn phòng.pptx
+-rw-r--r-- 1 ubuntu ubuntu 10119 Oct  7 05:22 Họp nhóm ngày 3 tháng 10.docx
+-rw-r--r-- 1 ubuntu ubuntu  7976 Oct  7 05:23 doanh-so-cua-hang (đã làm sạch).xlsx

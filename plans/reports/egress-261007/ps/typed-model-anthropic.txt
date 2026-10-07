@@ -1,0 +1,357 @@
+      1       0       1 /sbin/docker-init -- /tools/egress-entrypoint.sh
+      7       1       7 dbus-run-session -- /tools/egress-entrypoint.sh --session
+     61       7      61 dbus-daemon --nofork --print-address 4 --session
+     62       7      62 bash /tools/egress-entrypoint.sh --session
+     63      62      63 weston --backend=headless --renderer=pixman --width=1600 --height=1000 --socket=wayland-1 --idle-time=0 --log=/run/user/1000/weston.log
+     66      63      66 /usr/libexec/weston-keyboard
+     67      63      67 /usr/libexec/weston-desktop-shell
+     73      62      73 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      74 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      75 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      76 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      77 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      78 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      79 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      81 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      82 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      83 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      84 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     73      62      85 node node_modules/@wdio/cli/bin/wdio.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+     86      73      86 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      87 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      88 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      89 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      90 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      91 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      92 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      93 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      94 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      95 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      96 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      97 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      98 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+     86      73      99 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    102      73     102 /usr/local/bin/tauri-driver --port 4444 --native-port 4445 --native-driver /usr/bin/WebKitWebDriver
+    103     102     103 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    103     102     104 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    103     102     136 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    103     102     137 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    103     102     156 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    103     102     157 /usr/bin/WebKitWebDriver --port=4445 --host=127.0.0.1
+    109      73     109 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     110 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     111 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     112 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     113 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     114 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     115 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     117 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     125 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     126 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     127 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    109      73     128 /usr/local/bin/node /repo/node_modules/@wdio/local-runner/build/run.js run /tmp/egress-work-jliGQ3/egress.conf.ts
+    118     109     118 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     119 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     120 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     121 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     122 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     123 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     124 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     129 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     130 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     131 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     132 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     133 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    118     109     134 /repo/node_modules/tsx/node_modules/esbuild/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.28.2 --ping
+    135     103     135 strace -f -ttt -Y -e trace=connect,sendto,sendmsg -o /out/egress-app.txt /usr/bin/sai-atlas
+    140     135     140 /usr/bin/sai-atlas
+    140     135     141 /usr/bin/sai-atlas
+    140     135     142 /usr/bin/sai-atlas
+    140     135     143 /usr/bin/sai-atlas
+    140     135     146 /usr/bin/sai-atlas
+    140     135     147 /usr/bin/sai-atlas
+    140     135     159 /usr/bin/sai-atlas
+    140     135     160 /usr/bin/sai-atlas
+    140     135     161 /usr/bin/sai-atlas
+    140     135     162 /usr/bin/sai-atlas
+    140     135     163 /usr/bin/sai-atlas
+    140     135     164 /usr/bin/sai-atlas
+    140     135     165 /usr/bin/sai-atlas
+    140     135     166 /usr/bin/sai-atlas
+    140     135     167 /usr/bin/sai-atlas
+    140     135     168 /usr/bin/sai-atlas
+    140     135     169 /usr/bin/sai-atlas
+    140     135     170 /usr/bin/sai-atlas
+    140     135     171 /usr/bin/sai-atlas
+    140     135     172 /usr/bin/sai-atlas
+    140     135     173 /usr/bin/sai-atlas
+    140     135     174 /usr/bin/sai-atlas
+    140     135     175 /usr/bin/sai-atlas
+    140     135     176 /usr/bin/sai-atlas
+    140     135     177 /usr/bin/sai-atlas
+    140     135     178 /usr/bin/sai-atlas
+    140     135     179 /usr/bin/sai-atlas
+    140     135     180 /usr/bin/sai-atlas
+    140     135     181 /usr/bin/sai-atlas
+    140     135     183 /usr/bin/sai-atlas
+    140     135     184 /usr/bin/sai-atlas
+    140     135     187 /usr/bin/sai-atlas
+    140     135     189 /usr/bin/sai-atlas
+    140     135     190 /usr/bin/sai-atlas
+    140     135     191 /usr/bin/sai-atlas
+    140     135     192 /usr/bin/sai-atlas
+    140     135     193 /usr/bin/sai-atlas
+    140     135     194 /usr/bin/sai-atlas
+    140     135     195 /usr/bin/sai-atlas
+    140     135     196 /usr/bin/sai-atlas
+    140     135     197 /usr/bin/sai-atlas
+    140     135     198 /usr/bin/sai-atlas
+    140     135     199 /usr/bin/sai-atlas
+    140     135     200 /usr/bin/sai-atlas
+    140     135     201 /usr/bin/sai-atlas
+    140     135     202 /usr/bin/sai-atlas
+    140     135     203 /usr/bin/sai-atlas
+    140     135     204 /usr/bin/sai-atlas
+    140     135     205 /usr/bin/sai-atlas
+    140     135     206 /usr/bin/sai-atlas
+    140     135     207 /usr/bin/sai-atlas
+    140     135     208 /usr/bin/sai-atlas
+    140     135     209 /usr/bin/sai-atlas
+    140     135     210 /usr/bin/sai-atlas
+    140     135     211 /usr/bin/sai-atlas
+    140     135     212 /usr/bin/sai-atlas
+    140     135     216 /usr/bin/sai-atlas
+    140     135     217 /usr/bin/sai-atlas
+    140     135     224 /usr/bin/sai-atlas
+    140     135     225 /usr/bin/sai-atlas
+    140     135     226 /usr/bin/sai-atlas
+    140     135     227 /usr/bin/sai-atlas
+    140     135     228 /usr/bin/sai-atlas
+    140     135     229 /usr/bin/sai-atlas
+    140     135     230 /usr/bin/sai-atlas
+    140     135     231 /usr/bin/sai-atlas
+    140     135     232 /usr/bin/sai-atlas
+    140     135     233 /usr/bin/sai-atlas
+    140     135     234 /usr/bin/sai-atlas
+    140     135     235 /usr/bin/sai-atlas
+    140     135     236 /usr/bin/sai-atlas
+    140     135     237 /usr/bin/sai-atlas
+    140     135     238 /usr/bin/sai-atlas
+    140     135     239 /usr/bin/sai-atlas
+    140     135     240 /usr/bin/sai-atlas
+    140     135     241 /usr/bin/sai-atlas
+    140     135     242 /usr/bin/sai-atlas
+    140     135     243 /usr/bin/sai-atlas
+    140     135     244 /usr/bin/sai-atlas
+    140     135     245 /usr/bin/sai-atlas
+    140     135     246 /usr/bin/sai-atlas
+    140     135     247 /usr/bin/sai-atlas
+    140     135     248 /usr/bin/sai-atlas
+    140     135     249 /usr/bin/sai-atlas
+    140     135     250 /usr/bin/sai-atlas
+    140     135     251 /usr/bin/sai-atlas
+    140     135     252 /usr/bin/sai-atlas
+    140     135     253 /usr/bin/sai-atlas
+    140     135     254 /usr/bin/sai-atlas
+    140     135     255 /usr/bin/sai-atlas
+    140     135     256 /usr/bin/sai-atlas
+    140     135     257 /usr/bin/sai-atlas
+    140     135     258 /usr/bin/sai-atlas
+    140     135     259 /usr/bin/sai-atlas
+    140     135     260 /usr/bin/sai-atlas
+    140     135     261 /usr/bin/sai-atlas
+    140     135     262 /usr/bin/sai-atlas
+    140     135     263 /usr/bin/sai-atlas
+    140     135     264 /usr/bin/sai-atlas
+    140     135     265 /usr/bin/sai-atlas
+    140     135     266 /usr/bin/sai-atlas
+    140     135     267 /usr/bin/sai-atlas
+    140     135     268 /usr/bin/sai-atlas
+    140     135     269 /usr/bin/sai-atlas
+    140     135     270 /usr/bin/sai-atlas
+    140     135     271 /usr/bin/sai-atlas
+    140     135     272 /usr/bin/sai-atlas
+    140     135     322 /usr/bin/sai-atlas
+    140     135     335 /usr/bin/sai-atlas
+    140     135     346 /usr/bin/sai-atlas
+    140     135     409 /usr/bin/sai-atlas
+    140     135     557 /usr/bin/sai-atlas
+    140     135     558 /usr/bin/sai-atlas
+    140     135     559 /usr/bin/sai-atlas
+    140     135     560 /usr/bin/sai-atlas
+    140     135     561 /usr/bin/sai-atlas
+    140     135     562 /usr/bin/sai-atlas
+    140     135     563 /usr/bin/sai-atlas
+    140     135     564 /usr/bin/sai-atlas
+    149       1     149 /usr/libexec/at-spi-bus-launcher
+    149       1     150 /usr/libexec/at-spi-bus-launcher
+    149       1     151 /usr/libexec/at-spi-bus-launcher
+    149       1     152 /usr/libexec/at-spi-bus-launcher
+    149       1     154 /usr/libexec/at-spi-bus-launcher
+    155     149     155 /usr/bin/dbus-daemon --config-file=/usr/share/defaults/at-spi2/accessibility.conf --nofork --print-address 11 --address=unix:path=/run/user/1000/at-spi/bus
+    188       1     188 /usr/libexec/at-spi2-registryd --use-gnome-session
+    188       1     213 /usr/libexec/at-spi2-registryd --use-gnome-session
+    188       1     214 /usr/libexec/at-spi2-registryd --use-gnome-session
+    188       1     215 /usr/libexec/at-spi2-registryd --use-gnome-session
+    219     140     219 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     221 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     222 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     223 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     337 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     338 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     342 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     344 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    219     140     347 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess 1 34
+    323     140     323 /usr/bin/bwrap --args 46 -- /usr/bin/xdg-dbus-proxy --args=42
+    324     323     324 /usr/bin/bwrap --args 46 -- /usr/bin/xdg-dbus-proxy --args=42
+    325     324     325 /usr/bin/xdg-dbus-proxy --args=42
+    325     324     326 /usr/bin/xdg-dbus-proxy --args=42
+    325     324     327 /usr/bin/xdg-dbus-proxy --args=42
+    328     140     328 /usr/bin/bwrap --args 42 -- /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    329     328     329 /usr/bin/bwrap --args 42 -- /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     330 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     336 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     339 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     340 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     341 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     343 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     348 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     349 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     350 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     353 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     358 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     359 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     360 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     361 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     362 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     363 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     364 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     365 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     366 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     367 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     368 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     369 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     370 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     371 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     372 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     373 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     374 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     375 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     376 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     377 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     378 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     379 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     380 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     381 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     382 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     383 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     384 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     385 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     386 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     387 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     388 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     389 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     390 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     391 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     392 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     393 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     394 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     395 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     396 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     397 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     398 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     399 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     400 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     401 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     402 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     403 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     404 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     405 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     406 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     408 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     410 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     411 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     412 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     420 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     433 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     434 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     435 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     436 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     437 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     438 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     439 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     440 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     441 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     473 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    330     329     477 /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitWebProcess 4 36
+    334     140     334 /usr/bin/sai-atlas --omp-supervise /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     354 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     356 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     413 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     414 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     415 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     416 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     417 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     418 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     419 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     442 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     443 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     444 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     445 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     446 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     447 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     448 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     449 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     450 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     451 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     452 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     453 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     454 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     455 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     456 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     457 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     458 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     459 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     460 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     461 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     462 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     463 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     464 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     465 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     467 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     468 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     469 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     470 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     471 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     472 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     474 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     475 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     476 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     478 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     486 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     487 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     488 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     489 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     490 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     491 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     492 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     493 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     494 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     495 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     496 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     497 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     498 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     499 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     500 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     501 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     502 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     503 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     504 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     505 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     506 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     507 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     508 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     509 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     552 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    354     334     553 /usr/lib/Sai ATLAS/omp --mode rpc-ui --no-auto-resume --no-extensions --no-rules --no-context-files --extension /usr/lib/Sai ATLAS/assistant-pack --tools read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean --system-prompt /usr/lib/Sai ATLAS/assistant-pack/system-prompt.md --append-system-prompt /usr/lib/Sai ATLAS/assistant-pack/append-system-prompt.md --config /usr/lib/Sai ATLAS/assistant-pack/config.yml --approval-mode always-ask
+    565     109     565 ps -eLo pid=,ppid=,lwp=,args=
