@@ -198,6 +198,19 @@ export const SIDECAR_DEFAULT_OLLAMA_CONTEXT = 131_072;
 /** The smallest context worth running the agent at: its first request already needs about this much. */
 export const CONTEXT_FLOOR = 16_384;
 
+/**
+ * The contexts a model is measured at and the user may choose from, ascending:
+ * the floor doubled while it stays under the ceiling, then the ceiling itself.
+ * The engine walks it; the Ollama window offers it as the limit choices.
+ */
+export function contextLadder(ceiling: number): number[] {
+	const floor = Math.min(CONTEXT_FLOOR, ceiling);
+	const ladder: number[] = [];
+	for (let n = floor; n < ceiling; n *= 2) ladder.push(n);
+	ladder.push(ceiling);
+	return ladder;
+}
+
 /** The machine facts a measurement depends on; a change makes the measurement stale. */
 export type MachineFingerprint = Pick<MachineFacts, "ramBytes" | "vramBytes" | "gpuName" | "unifiedMemory">;
 

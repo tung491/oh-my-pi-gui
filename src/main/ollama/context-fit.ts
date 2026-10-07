@@ -16,12 +16,13 @@ import {
 	type ContextFitProgress,
 	type ContextPool,
 	type ContextVerdict,
+	contextLadder,
 	type MachineFacts,
 	type MeasureOutcome,
 } from "../../shared/ollama-types";
 import { isValidModelTag } from "./pull";
 
-export { CONTEXT_FLOOR };
+export { CONTEXT_FLOOR, contextLadder };
 /** The ceiling assumed when Ollama reports no plausible trained context. */
 export const UNKNOWN_TRAINED_CONTEXT = 131_072;
 /** A trained context above this (16M tokens) is treated as unknown. */
@@ -66,15 +67,6 @@ export interface MeasureContextFitInput {
 	isBusy(): boolean;
 	onProgress?(progress: ContextFitProgress): void;
 	timing?: Partial<ContextFitTiming>;
-}
-
-/** The rungs to try, ascending: the floor doubled while it stays under the ceiling, then the ceiling itself. */
-export function contextLadder(ceiling: number): number[] {
-	const floor = Math.min(CONTEXT_FLOOR, ceiling);
-	const ladder: number[] = [];
-	for (let n = floor; n < ceiling; n *= 2) ladder.push(n);
-	ladder.push(ceiling);
-	return ladder;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

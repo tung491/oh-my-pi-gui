@@ -2,13 +2,20 @@
  * The Ollama window (opened by `openProviders`, so every former "Providers"
  * entry point lands here): whether the local daemon answers and how to fix it,
  * the endpoint the agent uses, the installed models with "Use as default", a
- * tag-based download, and a way back into the welcome screen. Ollama is the
+ * tag-based download, each local model's context limit, and a way back into
+ * the welcome screen. Ollama is the
  * only provider the GUI offers, so there is no sign-in or custom provider here.
  */
 
 import { Check, Download, RefreshCw, RotateCcw } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import type { OllamaInstallProgress, OllamaRemedyId, OllamaStatus, PullProgress } from "../../../shared/ollama-types";
+import type {
+	ContextFitList,
+	OllamaInstallProgress,
+	OllamaRemedyId,
+	OllamaStatus,
+	PullProgress,
+} from "../../../shared/ollama-types";
 import { applyModelInfo } from "../../hooks/use-rpc-events";
 import { useT } from "../../lib/i18n";
 import { isCloudTag } from "../../lib/ollama-cloud";
@@ -22,9 +29,12 @@ import { Button, Input, Modal } from "../common";
 import { WELCOME_COMPLETED_PREF } from "../dialogs/FirstRunOnboardingDialog";
 import { OllamaRow } from "../onboarding/OllamaRow";
 import { PullBar } from "../onboarding/PullBar";
+import { ModelContextRow } from "./ModelContextRow";
 
 /** Main answers a second concurrent pull with this status: the single download slot is taken. */
 const PULL_BUSY_STATUS = "busy";
+/** Several models can change at once (an env cap, a dropped queue); one re-list covers them. */
+const CONTEXT_RELIST_DELAY_MS = 150;
 
 /** What `ollama pull` accepts as a tag: no whitespace, no option-looking prefix, bounded length, never a cloud model. */
 export function normalizePullTag(input: string): string | null {
@@ -67,6 +77,12 @@ export function ProvidersWindow() {
 	/** The tag this window is downloading; null when idle or after its own cancel. */
 	const pullingTag = useRef<string | null>(null);
 	const statusVersion = useRef(0);
+	const [contextList, setContextList] = useState<ContextFitList | null>(null);
+	const [contextError, setContextError] = useState<string | null>(null);
+	const contextVersion = useRef(0);
+	/** Whether a re-list would be shown: the window is open and Ollama answers. */
+	const contextVisible = useRef(false);
+	const relistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const loadStatus = useCallback(async (): Promise<void> => {
 		const version = ++statusVersion.current;
@@ -88,6 +104,45 @@ export function ProvidersWindow() {
 		setRemedyHint(null);
 		void loadStatus();
 	}, [open, loadStatus]);
+
+	const loadContext = useCallback(async (): Promise<void> => {
+		const version = ++contextVersion.current;
+		try {
+			const next = await window.omp.ollama.contextList();
+			if (version !== contextVersion.current) return;
+			setContextList(next);
+			setContextError(null);
+		} catch (cause) {
+			if (version === contextVersion.current) setContextError(messageOf(cause));
+		}
+	}, []);
+
+	// Every status read (open, Refresh, after a pull or remedy) re-reads the
+	// context rows too, so a newly installed model gets its row.
+	const ollamaOk = status?.state === "ok";
+	useEffect(() => {
+		contextVisible.current = open && ollamaOk;
+	}, [open, ollamaOk]);
+	useEffect(() => {
+		if (open && status?.state === "ok") void loadContext();
+	}, [open, status, loadContext]);
+
+	// Main announces every model whose context changed; progress events only
+	// drive each row's inline line, so they never re-list.
+	useEffect(() => {
+		const unsubscribe = window.omp.ollama.onContextChanged(() => {
+			if (!contextVisible.current || relistTimer.current !== null) return;
+			relistTimer.current = setTimeout(() => {
+				relistTimer.current = null;
+				if (contextVisible.current) void loadContext();
+			}, CONTEXT_RELIST_DELAY_MS);
+		});
+		return () => {
+			unsubscribe();
+			if (relistTimer.current !== null) clearTimeout(relistTimer.current);
+			relistTimer.current = null;
+		};
+	}, [loadContext]);
 
 	// Subscribed for the component's lifetime, not just while open: closing the
 	// window does not stop a download, and reopening must still show it. Frames
@@ -220,6 +275,11 @@ export function ProvidersWindow() {
 		}
 		setProgress(null);
 		setTagInput("");
+		// A request from this window counts as a manual one: main holds a "pulled"
+		// model until the welcome screen completes, which may never happen here.
+		window.omp.ollama.measureContext(tag).catch(cause => {
+			console.warn("[providers] could not queue a context measurement:", messageOf(cause));
+		});
 		await loadStatus();
 		if (sidecarReady) {
 			// The picker reads the catalog again whenever it opens, so a failed
@@ -241,6 +301,9 @@ export function ProvidersWindow() {
 	const pullTag = normalizePullTag(tagInput);
 	const cloudRefused = isCloudTag(tagInput);
 	const installed = status?.installedTags ?? [];
+	const contextRows = ollamaOk ? (contextList?.rows ?? []) : [];
+	const contextRowOf = (tag: string) =>
+		contextRows.find(row => row.tag === tag) ?? contextRows.find(row => row.tag.toLowerCase() === tag.toLowerCase());
 
 	return (
 		<Modal open={open} onClose={close} title={t("ollama.settings.title")} size="lg">
@@ -303,6 +366,21 @@ export function ProvidersWindow() {
 					<span className="text-omp-sm font-semibold uppercase tracking-wider text-(--omp-muted)">
 						{t("ollama.settings.models")}
 					</span>
+					{ollamaOk && contextList?.reason === "remote-host" && (
+						<p className="text-omp-sm text-(--omp-muted)" data-context-notice="remote-host">
+							{t("ollama.context.remoteHost")}
+						</p>
+					)}
+					{ollamaOk && contextList?.reason === "configured-provider" && (
+						<p className="text-omp-sm text-(--omp-warning)" data-context-notice="configured-provider">
+							{t("ollama.context.configuredProvider")}
+						</p>
+					)}
+					{ollamaOk && contextError && (
+						<p className="text-omp-sm text-(--omp-warning)" data-context-error-list role="alert">
+							{t("ollama.context.listFailed", { error: contextError })}
+						</p>
+					)}
 					{status && installed.length === 0 && (
 						<div className="rounded-md border border-(--omp-border-muted) px-3 py-4 text-center text-omp-md text-(--omp-dim)">
 							{t("ollama.settings.noModels")}
@@ -311,33 +389,45 @@ export function ProvidersWindow() {
 					{installed.map(tag => {
 						const isCurrent = current?.provider === "ollama" && current.id === tag;
 						const cloud = isCloudTag(tag);
+						const contextRow = cloud ? undefined : contextRowOf(tag);
 						return (
 							<div
-								className="flex items-center gap-3 rounded-lg border border-(--omp-border-muted) px-3 py-2.5"
+								className="flex flex-col gap-2 rounded-lg border border-(--omp-border-muted) px-3 py-2.5"
 								data-installed-tag={tag}
 								key={tag}
 							>
-								<span className="min-w-0 flex-1 truncate font-mono text-omp-md text-(--omp-text)">{tag}</span>
-								{isCurrent ? (
-									<Check aria-hidden="true" className="shrink-0 text-(--omp-accent)" size={16} />
-								) : (
-									<Button
-										data-action="use-as-default"
-										disabled={cloud || !sidecarReady || defaultBusy !== null}
-										loading={defaultBusy === tag}
-										onClick={() => void makeDefault(tag)}
-										size="sm"
-										title={
-											cloud
-												? t("ollama.settings.cloudRefused")
-												: !sidecarReady
-													? t("modelPicker.notConnected")
-													: undefined
-										}
-										variant="secondary"
-									>
-										{t("ollama.settings.useAsDefault")}
-									</Button>
+								<div className="flex items-center gap-3">
+									<span className="min-w-0 flex-1 truncate font-mono text-omp-md text-(--omp-text)">
+										{tag}
+									</span>
+									{isCurrent ? (
+										<Check aria-hidden="true" className="shrink-0 text-(--omp-accent)" size={16} />
+									) : (
+										<Button
+											data-action="use-as-default"
+											disabled={cloud || !sidecarReady || defaultBusy !== null}
+											loading={defaultBusy === tag}
+											onClick={() => void makeDefault(tag)}
+											size="sm"
+											title={
+												cloud
+													? t("ollama.settings.cloudRefused")
+													: !sidecarReady
+														? t("modelPicker.notConnected")
+														: undefined
+											}
+											variant="secondary"
+										>
+											{t("ollama.settings.useAsDefault")}
+										</Button>
+									)}
+								</div>
+								{contextRow && (
+									<ModelContextRow
+										limitsInactive={contextList?.reason === "configured-provider"}
+										onRefresh={() => void loadContext()}
+										row={contextRow}
+									/>
 								)}
 							</div>
 						);
