@@ -4,7 +4,7 @@
 
 ### Added
 
-- **A context size for each local model**: Sai ATLAS measures the largest context each installed Ollama model can use while it stays entirely in graphics memory (or, without a graphics card, within system memory), up to 128k, and uses it for that model. It measures new models at startup and right after a download, and measures again when the computer's memory or graphics card changes, never while a reply is being written. The Ollama window shows each model's size, lets you lower it and has **Measure again**. A lower size applies from the next reply without a restart, and a conversation that no longer fits is compacted.
+- **A context size for each local model**: Sai ATLAS measures the largest context each installed Ollama model can use while it stays entirely in graphics memory (or, without a graphics card, within system memory), up to 128k, and uses it for that model. It measures new models at startup and right after a download, and measures again when the computer's memory or graphics card changes, never while a reply is being written. The Ollama window shows each model's size, lets you lower it and has **Measure again**. A lower size applies from the next reply without a restart, and a conversation that no longer fits is compacted, or trimmed by the agent at the next reply when it is too short to compact.
 
 ### Changed
 
@@ -36,6 +36,7 @@
 - A context size is never measured above 128k, or above `OLLAMA_CONTEXT_LENGTH` when you set it. After raising or removing `OLLAMA_CONTEXT_LENGTH`, choose **Measure again**.
 - The graphics-memory check assumes one graphics card.
 - A new graphics card or more memory is noticed at the next launch.
+- A `/compact` you run yourself does not count as busy for the context measurement; a measurement that runs into it is discarded and queued again.
 
 ## [0.9.16] - 2026-10-04
 

@@ -37,6 +37,7 @@ import {
 	type IpcTabStatusPayload,
 	type IpcTabWorktree,
 } from "../shared/ipc-types";
+import { timeoutForCommand } from "../shared/rpc-client";
 import {
 	type AgentSessionEvent,
 	type AvailableCommand,
@@ -477,7 +478,22 @@ export class SidecarPool {
 		const entry = this.#byTabId.get(tabId);
 		if (!entry || entry.running || entry.compacting === true || entry.status !== "ready") return null;
 		const client = entry.sidecar.rpcClient;
-		return client ? await client.command(command) : null;
+		if (!client) return null;
+		const timeout = timeoutForCommand(command);
+		if (command.type !== "compact") return await client.command(command, timeout);
+		// A compaction keeps the tab busy until it answers, exactly like an
+		// automatic one, so nothing else is sent to the session meanwhile.
+		entry.compacting = true;
+		forwardToWindow(entry.win, IPC_EVENTS.TAB_STATUS, tabStatusPayload(entry));
+		try {
+			return await client.command(command, timeout);
+		} finally {
+			// A restart in between already reset the flag; leave that alone.
+			if (entry.compacting === true) {
+				entry.compacting = false;
+				forwardToWindow(entry.win, IPC_EVENTS.TAB_STATUS, tabStatusPayload(entry));
+			}
+		}
 	}
 
 	/** Tabs in any window that are ready and neither running nor compacting right now. */

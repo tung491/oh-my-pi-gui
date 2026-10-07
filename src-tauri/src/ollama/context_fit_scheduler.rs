@@ -748,6 +748,15 @@ fn response_data(response: Option<Value>) -> Option<Value> {
     response.get("data").cloned().filter(Value::is_object)
 }
 
+/// Why a `compact` response failed, with the sidecar's error text; `None` on success.
+fn compact_failure(response: Option<Value>) -> Option<String> {
+    let Some(response) = response else { return Some("the session is no longer idle".to_string()) };
+    if response.get("success") == Some(&Value::Bool(true)) {
+        return None;
+    }
+    Some(response.get("error").and_then(Value::as_str).unwrap_or("no error text").to_string())
+}
+
 /// After `tag`'s window dropped to `window`: for each idle session on
 /// `ollama/<tag>`, wait (bounded) until it runs at the new window, then compact
 /// it when its last context usage no longer fits, since Ollama would cut its
@@ -766,8 +775,11 @@ pub(crate) async fn compact_after_drop(host: &dyn SchedulerHost, tag: &str, wind
             }
             if model.and_then(|m| m.get("contextWindow")).and_then(Value::as_u64).is_some_and(|reported| reported <= window) {
                 let tokens = state.pointer("/contextUsage/tokens").and_then(Value::as_u64).unwrap_or(0);
-                if tokens > window && response_data(host.session_command(&session, json!({ "type": "compact" })).await).is_none() {
-                    note(format!("compacting a session on {tag} after its context dropped to {window} did not succeed"));
+                if tokens > window {
+                    let response = host.session_command(&session, json!({ "type": "compact" })).await;
+                    if let Some(failure) = compact_failure(response) {
+                        note(format!("compacting a session on {tag} after its context dropped to {window} did not succeed: {failure}"));
+                    }
                 }
                 break;
             }

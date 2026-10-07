@@ -542,7 +542,18 @@ export class ContextFitScheduler {
 			if (model?.provider !== "ollama" || model.id !== tag) return;
 			if (typeof model.contextWindow === "number" && model.contextWindow <= window) {
 				const tokens = state.contextUsage?.tokens ?? 0;
-				if (tokens > window) await session.command({ type: "compact" });
+				if (tokens > window) {
+					const failure = await session.command({ type: "compact" }).then(
+						response =>
+							response === null ? "the session is no longer idle" : response.success ? null : response.error,
+						(error: unknown) => errorText(error),
+					);
+					if (failure !== null) {
+						console.warn(
+							`[ollama] compacting a session on ${tag} after its context dropped to ${window} did not succeed: ${failure}`,
+						);
+					}
+				}
 				return;
 			}
 			if (Date.now() >= deadline) {
