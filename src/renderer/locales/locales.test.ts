@@ -114,6 +114,13 @@ describe("locale parity", () => {
 		}
 	});
 
+	it("never glues an English plural suffix onto a Vietnamese word", () => {
+		// Callers fill {plural} with "s" or "es"; Vietnamese nouns do not inflect.
+		for (const [key, value] of Object.entries(vi)) {
+			expect(value, `vi["${key}"] appends {plural} to a word`).not.toMatch(/\S\{plural\}/);
+		}
+	});
+
 	it("translates the switcher-wave namespaces into real Vietnamese", () => {
 		for (const key of Object.keys(en)) {
 			if (!TRANSLATED_NAMESPACES.some(ns => key.startsWith(ns))) continue;
