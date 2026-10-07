@@ -81,7 +81,8 @@ Open the DMG and drag **Sai ATLAS** into **Applications**. The build is ad-hoc s
 
 Sai ATLAS runs its models locally through [Ollama](https://ollama.com), so install Ollama first. On the first launch a welcome screen shows this machine's memory and graphics, whether Ollama is running, and up to three Gemma 4 models (E2B, E4B and 26B A4B, labelled minimal, recommended and maximum) picked to fit this machine.
 
-- **Ollama not running or not installed:** on Linux the screen shows the exact command and runs it after the system password prompt, either **Start Ollama** (`systemctl start ollama.service`) or **Install Ollama** (the official `ollama.com/install.sh` installer). On macOS it links to ollama.com/download; start Ollama, then choose **Check again**.
+- **Ollama not running or not installed:** on Linux the screen shows the exact command and runs it after the system password prompt, either **Start Ollama** (restarts `ollama.service`) or **Install Ollama** (the official `ollama.com/install.sh` installer). On macOS it links to ollama.com/download; start Ollama, then choose **Check again**.
+- **Ollama stays offline:** on Linux, installing or starting Ollama from the welcome screen also sets `OLLAMA_NO_CLOUD=1` for the Ollama service (in `/etc/systemd/system/ollama.service.d/sai-atlas.conf`), which turns off Ollama's cloud models and its background check with ollama.com. To do the same for an Ollama that is already running, run `sudo systemctl edit ollama.service`, add `Environment="OLLAMA_NO_CLOUD=1"` under `[Service]`, then run `sudo systemctl restart ollama.service`.
 - **Download** a model on its card and watch the progress bar. **Cancel** stops the download, and a later **Download** resumes it.
 - **Get started** makes the chosen model the default for this and new sessions. **Set up later** closes the screen until the next launch; **Run setup again** in the Ollama window reopens it.
 

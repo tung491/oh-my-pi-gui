@@ -26,6 +26,29 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 /// asks for authorisation.
 pub const INSTALL_LINE: &str = "curl -fsSL https://ollama.com/install.sh | sh";
 
+/// Turns off Ollama's online features (`OLLAMA_NO_CLOUD=1`) for its systemd
+/// service through a drop-in Sai ATLAS owns (`sai-atlas.conf`, written only
+/// when missing or different; no other drop-in and never the unit itself),
+/// then reloads systemd and (re)starts the service so the setting takes
+/// effect. Each step runs only when the one before it succeeded. The renderer
+/// shows the same text from `OLLAMA_REMEDY_COMMANDS` in `src/shared/ollama-types.ts`.
+const NO_CLOUD_STEPS: &str = concat!(
+    "mkdir -p /etc/systemd/system/ollama.service.d &&\n",
+    "f=/etc/systemd/system/ollama.service.d/sai-atlas.conf &&\n",
+    "s=$(printf '[Service]\\nEnvironment=\"OLLAMA_NO_CLOUD=1\"') &&\n",
+    "{ [ \"$(cat \"$f\" 2>/dev/null)\" = \"$s\" ] || printf '%s\\n' \"$s\" > \"$f\"; } &&\n",
+    "systemctl daemon-reload &&\n",
+    "systemctl restart ollama.service",
+);
+
+/// The fixed root script of a remedy, exactly as the screen shows it.
+fn remedy_script(id: OllamaRemedyId) -> String {
+    match id {
+        OllamaRemedyId::LinuxStart => NO_CLOUD_STEPS.to_string(),
+        OllamaRemedyId::LinuxInstall => format!("{INSTALL_LINE} &&\n{NO_CLOUD_STEPS}"),
+    }
+}
+
 #[derive(Clone, Debug)]
 struct RemedyCommand {
     file: &'static str,
@@ -33,18 +56,14 @@ struct RemedyCommand {
     timeout: Duration,
 }
 
-/// The only commands a remedy can run. Timeouts include time spent in the polkit dialog.
+/// The only commands a remedy can run: the fixed script, as one root shell
+/// behind one polkit prompt. Timeouts include time spent in the polkit dialog.
 fn remedy_command(id: OllamaRemedyId) -> RemedyCommand {
-    match id {
-        OllamaRemedyId::LinuxStart => RemedyCommand {
-            file: "pkexec",
-            args: vec!["systemctl".to_string(), "start".to_string(), "ollama.service".to_string()],
-            timeout: Duration::from_secs(120),
-        },
-        OllamaRemedyId::LinuxInstall => {
-            RemedyCommand { file: "pkexec", args: vec!["sh".to_string(), "-c".to_string(), INSTALL_LINE.to_string()], timeout: Duration::from_secs(900) }
-        }
-    }
+    let timeout = match id {
+        OllamaRemedyId::LinuxStart => Duration::from_secs(120),
+        OllamaRemedyId::LinuxInstall => Duration::from_secs(900),
+    };
+    RemedyCommand { file: "pkexec", args: vec!["sh".to_string(), "-c".to_string(), remedy_script(id)], timeout }
 }
 
 pub fn is_remedy_id(value: Option<&str>) -> bool {
@@ -607,37 +626,58 @@ mod tests {
     }
 
     fn test_command(timeout: Duration) -> RemedyCommand {
-        RemedyCommand { file: "pkexec", args: vec!["systemctl".to_string(), "start".to_string(), "ollama.service".to_string()], timeout }
+        RemedyCommand { timeout, ..remedy_command(OllamaRemedyId::LinuxStart) }
     }
 
     fn install_command(timeout: Duration) -> RemedyCommand {
-        RemedyCommand { file: "pkexec", args: vec!["sh".to_string(), "-c".to_string(), INSTALL_LINE.to_string()], timeout }
+        RemedyCommand { timeout, ..remedy_command(OllamaRemedyId::LinuxInstall) }
     }
 
+    fn sh_c(script: String) -> Vec<String> {
+        vec!["sh".to_string(), "-c".to_string(), script]
+    }
+
+    /// The no-cloud steps both remedies end with, as the screen shows them.
+    const NO_CLOUD_SCRIPT: &str = "mkdir -p /etc/systemd/system/ollama.service.d &&
+f=/etc/systemd/system/ollama.service.d/sai-atlas.conf &&
+s=$(printf '[Service]\\nEnvironment=\"OLLAMA_NO_CLOUD=1\"') &&
+{ [ \"$(cat \"$f\" 2>/dev/null)\" = \"$s\" ] || printf '%s\\n' \"$s\" > \"$f\"; } &&
+systemctl daemon-reload &&
+systemctl restart ollama.service";
+
     #[tokio::test]
-    async fn runs_systemctl_start_through_pkexec_and_waits_for_the_daemon_to_answer() {
+    async fn runs_the_start_script_as_one_pkexec_sh_c_and_waits_for_the_daemon_to_answer() {
         let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
         let (probe, _) = probe_sequence(vec![OllamaState::Stopped, OllamaState::Stopped, OllamaState::Ok]);
         let settle_options = SettleOptions { interval: Duration::ZERO, attempts: 5 };
         let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, settle_options, None).await.expect("the remedy runs");
-        assert_eq!(*lock(&calls), vec![("pkexec", vec!["systemctl".to_string(), "start".to_string(), "ollama.service".to_string()])]);
+        assert_eq!(*lock(&calls), vec![("pkexec", sh_c(remedy_script(OllamaRemedyId::LinuxStart)))]);
         assert_eq!(result, OllamaRemedyResult { outcome: OllamaRemedyOutcome::Applied, status: status(OllamaState::Ok), fault: None });
     }
 
     #[tokio::test]
-    async fn runs_the_fixed_install_line_through_pkexec_sh_c() {
+    async fn runs_the_install_line_and_the_no_cloud_steps_as_one_pkexec_sh_c() {
         let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
         let (probe, _) = probe_sequence(vec![OllamaState::Ok]);
         run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
             .await
             .expect("the remedy runs");
-        assert_eq!(*lock(&calls), vec![("pkexec", vec!["sh".to_string(), "-c".to_string(), INSTALL_LINE.to_string()])]);
+        assert_eq!(*lock(&calls), vec![("pkexec", sh_c(remedy_script(OllamaRemedyId::LinuxInstall)))]);
     }
 
     #[test]
     fn runs_exactly_the_command_the_screen_shows_the_user() {
-        let command = remedy_command(OllamaRemedyId::LinuxInstall);
-        assert_eq!(command.args, vec!["sh".to_string(), "-c".to_string(), INSTALL_LINE.to_string()]);
+        for id in [OllamaRemedyId::LinuxStart, OllamaRemedyId::LinuxInstall] {
+            let command = remedy_command(id);
+            assert_eq!(command.file, "pkexec");
+            assert_eq!(command.args, sh_c(remedy_script(id)));
+        }
+    }
+
+    #[test]
+    fn spells_out_the_privileged_scripts_word_for_word() {
+        assert_eq!(remedy_script(OllamaRemedyId::LinuxStart), NO_CLOUD_SCRIPT);
+        assert_eq!(remedy_script(OllamaRemedyId::LinuxInstall), format!("curl -fsSL https://ollama.com/install.sh | sh &&\n{NO_CLOUD_SCRIPT}"));
     }
 
     #[tokio::test]
@@ -972,6 +1012,127 @@ mod tests {
         let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
         run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
         assert!(lock(&frames).is_empty());
+    }
+
+    const DROP_IN_DIR: &str = "/etc/systemd/system/ollama.service.d";
+    const DROP_IN: &str = "[Service]\nEnvironment=\"OLLAMA_NO_CLOUD=1\"\n";
+
+    /// A scratch directory standing in for the drop-in directory, with fake
+    /// `systemctl` and `curl` that only log their arguments. PATH holds nothing
+    /// else, so the script under test can reach neither the real systemctl nor /etc.
+    #[cfg(unix)]
+    struct Sandbox {
+        root: tempfile::TempDir,
+    }
+
+    #[cfg(unix)]
+    impl Sandbox {
+        fn new() -> Self {
+            use std::os::unix::fs::PermissionsExt as _;
+            let root = tempfile::Builder::new().prefix("sai-atlas-remedy-").tempdir().expect("a scratch dir");
+            let bin = root.path().join("bin");
+            std::fs::create_dir(&bin).expect("bin dir");
+            for tool in ["sh", "cat", "mkdir"] {
+                let real = ["/bin", "/usr/bin"].iter().map(|dir| std::path::Path::new(dir).join(tool)).find(|file| file.exists()).expect("tool on the host");
+                std::os::unix::fs::symlink(real, bin.join(tool)).expect("link the tool");
+            }
+            for (name, body) in [
+                ("systemctl", "#!/bin/sh\necho \"systemctl $*\" >> \"$CALLS\"\n"),
+                ("curl", "#!/bin/sh\necho \"curl $*\" >> \"$CALLS\"\necho \"exit $INSTALLER_STATUS\"\n"),
+            ] {
+                std::fs::write(bin.join(name), body).expect("write a fake");
+                std::fs::set_permissions(bin.join(name), std::fs::Permissions::from_mode(0o755)).expect("make it executable");
+            }
+            Sandbox { root }
+        }
+
+        fn drop_in_dir(&self) -> std::path::PathBuf {
+            self.root.path().join("ollama.service.d")
+        }
+
+        fn run(&self, id: OllamaRemedyId, installer_status: i32) -> (Option<i32>, Vec<String>) {
+            let dir = self.drop_in_dir().to_str().expect("a UTF-8 path").to_string();
+            assert!(dir.chars().all(|c| c.is_ascii_alphanumeric() || "/._-".contains(c)), "unquotable scratch path {dir}");
+            let script = remedy_script(id).replace(DROP_IN_DIR, &dir);
+            assert!(!script.contains("/etc/"));
+            let bin = self.root.path().join("bin");
+            let log = self.root.path().join("calls.log");
+            let output = std::process::Command::new(bin.join("sh"))
+                .args(["-c", &script])
+                .env_clear()
+                .env("PATH", &bin)
+                .env("CALLS", &log)
+                .env("INSTALLER_STATUS", installer_status.to_string())
+                .output()
+                .expect("run the script");
+            let calls = std::fs::read_to_string(&log).map(|text| text.trim().lines().map(str::to_string).collect()).unwrap_or_default();
+            (output.status.code(), calls)
+        }
+    }
+
+    #[cfg(unix)]
+    fn entries(dir: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir).expect("read the dir").map(|entry| entry.expect("an entry").file_name().to_string_lossy().into_owned()).collect();
+        names.sort();
+        names
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn writes_exactly_the_no_cloud_drop_in_and_reloads_systemd_before_restarting_ollama() {
+        for id in [OllamaRemedyId::LinuxStart, OllamaRemedyId::LinuxInstall] {
+            let sandbox = Sandbox::new();
+            let (code, calls) = sandbox.run(id, 0);
+            assert_eq!(code, Some(0));
+            assert_eq!(entries(&sandbox.drop_in_dir()), vec!["sai-atlas.conf"]);
+            assert_eq!(std::fs::read_to_string(sandbox.drop_in_dir().join("sai-atlas.conf")).expect("the drop-in"), DROP_IN);
+            let mut expected: Vec<String> = if id == OllamaRemedyId::LinuxInstall { vec!["curl -fsSL https://ollama.com/install.sh".to_string()] } else { vec![] };
+            expected.extend(["systemctl daemon-reload".to_string(), "systemctl restart ollama.service".to_string()]);
+            assert_eq!(calls, expected);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leaves_other_drop_ins_and_an_identical_drop_in_untouched() {
+        let past = std::time::UNIX_EPOCH + Duration::from_secs(1_577_836_800);
+        let set_mtime = |path: &std::path::Path| std::fs::File::options().write(true).open(path).expect("open").set_modified(past).expect("set mtime");
+        let mtime = |path: &std::path::Path| std::fs::metadata(path).expect("stat").modified().expect("mtime");
+        for id in [OllamaRemedyId::LinuxStart, OllamaRemedyId::LinuxInstall] {
+            let sandbox = Sandbox::new();
+            std::fs::create_dir(sandbox.drop_in_dir()).expect("drop-in dir");
+            let other = sandbox.drop_in_dir().join("override.conf");
+            let ours = sandbox.drop_in_dir().join("sai-atlas.conf");
+            std::fs::write(&other, "[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\"\n").expect("write override");
+            std::fs::write(&ours, DROP_IN).expect("write ours");
+            set_mtime(&other);
+            set_mtime(&ours);
+            assert_eq!(sandbox.run(id, 0).0, Some(0));
+            assert_eq!(std::fs::read_to_string(&other).expect("override"), "[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\"\n");
+            assert_eq!(mtime(&other), past);
+            assert_eq!(mtime(&ours), past);
+            assert_eq!(entries(&sandbox.drop_in_dir()), vec!["override.conf", "sai-atlas.conf"]);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rewrites_a_sai_atlas_drop_in_whose_content_differs() {
+        let sandbox = Sandbox::new();
+        std::fs::create_dir(sandbox.drop_in_dir()).expect("drop-in dir");
+        std::fs::write(sandbox.drop_in_dir().join("sai-atlas.conf"), "[Service]\n").expect("write a stale drop-in");
+        assert_eq!(sandbox.run(OllamaRemedyId::LinuxStart, 0).0, Some(0));
+        assert_eq!(std::fs::read_to_string(sandbox.drop_in_dir().join("sai-atlas.conf")).expect("the drop-in"), DROP_IN);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn touches_neither_the_drop_in_nor_systemd_when_the_installer_fails() {
+        let sandbox = Sandbox::new();
+        let (code, calls) = sandbox.run(OllamaRemedyId::LinuxInstall, 3);
+        assert_eq!(code, Some(3));
+        assert!(!sandbox.drop_in_dir().exists());
+        assert_eq!(calls, vec!["curl -fsSL https://ollama.com/install.sh".to_string()]);
     }
 
     #[test]
