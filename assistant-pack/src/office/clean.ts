@@ -1,20 +1,23 @@
 // Spreadsheet path -> a tidy copy (.xlsx). The input file is only ever read.
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 import ExcelJS from "exceljs";
 import { countOf } from "./markdown";
 import { PlainError, throwIfStopped } from "./output";
 
 export type Decimal = "comma" | "dot";
 
-/** Runs a program from an argv array (never a shell string); rejects on failure or timeout. */
-export type RunFile = (file: string, args: readonly string[], options: { timeout: number }) => Promise<unknown>;
+/** Runs a program from an argv array (never a shell string); rejects on failure, timeout or abort. */
+export type RunFile = (
+	file: string,
+	args: readonly string[],
+	options: { timeout: number; signal?: AbortSignal },
+) => Promise<unknown>;
 
 export interface CleanOptions {
 	/** Clean only this sheet; every sheet when absent. */
@@ -120,7 +123,59 @@ interface SheetReport {
 	totals: boolean;
 }
 
-const defaultRun: RunFile = (file, args, options) => promisify(execFile)(file, [...args], options);
+/**
+ * Runs `file` in a process group of its own and, on timeout or abort, kills the whole
+ * group. LibreOffice's launcher (`oosplash`) starts `soffice.bin` as a child; killing
+ * only the launcher can leave a stuck `soffice.bin` behind and the call never settles.
+ */
+export function runInGroup(
+	file: string,
+	args: readonly string[],
+	options: { timeout: number; signal?: AbortSignal },
+	kill: (pid: number, signal: NodeJS.Signals) => void = (pid, signal) => process.kill(pid, signal),
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		if (options.signal?.aborted) {
+			reject(new Error("aborted"));
+			return;
+		}
+		let child: ReturnType<typeof spawn>;
+		try {
+			child = spawn(file, [...args], { detached: true, stdio: "ignore" });
+		} catch (error) {
+			reject(error);
+			return;
+		}
+		let settled = false;
+		const finish = (error?: unknown) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			options.signal?.removeEventListener("abort", onAbort);
+			if (error) reject(error);
+			else resolve();
+		};
+		const killGroup = (reason: string) => {
+			if (child.pid !== undefined) {
+				try {
+					kill(-child.pid, "SIGKILL");
+				} catch {
+					// The group is already gone.
+				}
+			}
+			finish(new Error(reason));
+		};
+		const onAbort = () => killGroup("aborted");
+		const timer = setTimeout(() => killGroup(`timed out after ${options.timeout} ms`), options.timeout);
+		options.signal?.addEventListener("abort", onAbort, { once: true });
+		child.once("error", finish);
+		child.once("exit", (code, signal) => {
+			finish(code === 0 ? undefined : new Error(`${file} exited with ${signal ?? `code ${code}`}`));
+		});
+	});
+}
+
+const defaultRun: RunFile = (file, args, options) => runInGroup(file, args, options);
 
 function isEnoent(error: unknown): boolean {
 	return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
@@ -130,7 +185,10 @@ function isEnoent(error: unknown): boolean {
  * Converts an .xls or .ods file to .xlsx inside `tmpDir` with LibreOffice, using a
  * private profile so a running LibreOffice does not block the conversion.
  */
-export async function convertLegacy(path: string, options: { run: RunFile; tmpDir: string }): Promise<string> {
+export async function convertLegacy(
+	path: string,
+	options: { run: RunFile; tmpDir: string; signal?: AbortSignal },
+): Promise<string> {
 	const args = [
 		"--headless",
 		`-env:UserInstallation=${pathToFileURL(join(options.tmpDir, "lo-profile")).href}`,
@@ -142,8 +200,9 @@ export async function convertLegacy(path: string, options: { run: RunFile; tmpDi
 	];
 	for (const command of ["soffice", "libreoffice"]) {
 		try {
-			await options.run(command, args, { timeout: CONVERT_TIMEOUT_MS });
+			await options.run(command, args, { timeout: CONVERT_TIMEOUT_MS, signal: options.signal });
 		} catch (error) {
+			throwIfStopped(options.signal);
 			if (isEnoent(error)) continue;
 			throw new PlainError(SAVE_AS_XLSX);
 		}
@@ -182,7 +241,7 @@ async function readCsv(path: string): Promise<ExcelJS.Workbook> {
 	return workbook;
 }
 
-async function readWorkbook(inPath: string, run: RunFile): Promise<ExcelJS.Workbook> {
+async function readWorkbook(inPath: string, run: RunFile, signal: AbortSignal | undefined): Promise<ExcelJS.Workbook> {
 	if (!existsSync(inPath) || !statSync(inPath).isFile()) throw new PlainError("I could not find that file.");
 	const ext = extname(inPath).toLowerCase();
 	if (![".xlsx", ".xls", ".ods", ".csv"].includes(ext)) {
@@ -192,7 +251,7 @@ async function readWorkbook(inPath: string, run: RunFile): Promise<ExcelJS.Workb
 	if (ext === ".xls" || ext === ".ods") {
 		const tmpDir = mkdtempSync(join(tmpdir(), "sai-atlas-convert-"));
 		try {
-			return await readXlsx(await convertLegacy(inPath, { run, tmpDir }));
+			return await readXlsx(await convertLegacy(inPath, { run, tmpDir, signal }));
 		} finally {
 			rmSync(tmpDir, { recursive: true, force: true });
 		}
@@ -500,7 +559,7 @@ export async function cleanWorkbook(inPath: string, options: CleanOptions): Prom
 	const labels = options.lang === "vi" ? LABELS.vi : LABELS.en;
 	const decimal = options.decimal ?? (options.lang === "vi" ? "comma" : "dot");
 	throwIfStopped(options.signal);
-	const source = await readWorkbook(inPath, options.convert ?? defaultRun);
+	const source = await readWorkbook(inPath, options.convert ?? defaultRun, options.signal);
 	const sheets = options.sheet ? source.worksheets.filter(ws => ws.name === options.sheet) : source.worksheets;
 	if (sheets.length === 0) {
 		throw new PlainError(options.sheet ? "This file has no sheet with that name." : "This file has no sheets.");

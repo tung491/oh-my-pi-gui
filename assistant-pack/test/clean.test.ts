@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import ExcelJS from "exceljs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type CleanOptions, cleanWorkbook, convertLegacy, type RunFile } from "../src/office/clean";
+import { type CleanOptions, cleanWorkbook, convertLegacy, type RunFile, runInGroup } from "../src/office/clean";
 import { zipEntry } from "./zip-helpers";
 
 let tmp: string;
@@ -378,5 +378,93 @@ describe("legacy formats", () => {
 			throw enoent(file);
 		};
 		await expect(cleanWorkbook(input, { lang: "en", convert })).rejects.toThrow(SAVE_AS_SENTENCE);
+	});
+});
+
+describe("running the converter", () => {
+	/** A launcher that starts a long-running child and waits for it, as LibreOffice's oosplash does. */
+	function launcher(pidFile: string): [string, string[]] {
+		return ["sh", ["-c", `sleep 30 & echo $! > '${pidFile}'; wait`]];
+	}
+
+	/** True once `pid` has exited (a zombie counts as exited). */
+	function gone(pid: number): boolean {
+		try {
+			process.kill(pid, 0);
+		} catch {
+			return true;
+		}
+		const stat = `/proc/${pid}/stat`;
+		return existsSync(stat) && readFileSync(stat, "utf8").split(") ")[1]?.startsWith("Z") === true;
+	}
+
+	async function waitGone(pid: number): Promise<boolean> {
+		for (let attempt = 0; attempt < 60 && !gone(pid); attempt++) await new Promise(r => setTimeout(r, 50));
+		return gone(pid);
+	}
+
+	async function childPid(pidFile: string): Promise<number> {
+		for (let attempt = 0; attempt < 60 && !existsSync(pidFile); attempt++) await new Promise(r => setTimeout(r, 50));
+		return Number(readFileSync(pidFile, "utf8").trim());
+	}
+
+	function recordingKill() {
+		const calls: [number, NodeJS.Signals][] = [];
+		const kill = (pid: number, signal: NodeJS.Signals) => {
+			calls.push([pid, signal]);
+			process.kill(pid, signal);
+		};
+		return { calls, kill };
+	}
+
+	it("kills the whole process group on timeout, the launcher's child included", async () => {
+		const pidFile = join(tmp, "child.pid");
+		const [file, args] = launcher(pidFile);
+		const { calls, kill } = recordingKill();
+		const run = runInGroup(file, args, { timeout: 500 }, kill);
+		const grandchild = await childPid(pidFile);
+		await expect(run).rejects.toThrow("timed out after 500 ms");
+		expect(calls).toHaveLength(1);
+		expect(calls[0][0]).toBeLessThan(0);
+		expect(calls[0][1]).toBe("SIGKILL");
+		expect(await waitGone(grandchild)).toBe(true);
+	});
+
+	it("kills the whole process group when the clean-up is stopped", async () => {
+		const pidFile = join(tmp, "child.pid");
+		const [file, args] = launcher(pidFile);
+		const { calls, kill } = recordingKill();
+		const stop = new AbortController();
+		const run = runInGroup(file, args, { timeout: 30_000, signal: stop.signal }, kill);
+		const grandchild = await childPid(pidFile);
+		stop.abort();
+		await expect(run).rejects.toThrow("aborted");
+		expect(calls).toEqual([[calls[0][0], "SIGKILL"]]);
+		expect(calls[0][0]).toBeLessThan(0);
+		expect(await waitGone(grandchild)).toBe(true);
+	});
+
+	it("resolves on success, rejects on a failed exit and keeps ENOENT for a missing program", async () => {
+		const { calls, kill } = recordingKill();
+		await expect(runInGroup("true", [], { timeout: 5_000 }, kill)).resolves.toBeUndefined();
+		await expect(runInGroup("false", [], { timeout: 5_000 }, kill)).rejects.toThrow("code 1");
+		await expect(runInGroup("sai-atlas-no-such-program", [], { timeout: 5_000 }, kill)).rejects.toMatchObject({
+			code: "ENOENT",
+		});
+		expect(calls).toEqual([]);
+	});
+
+	it("passes the stop signal to the converter and reports a stop, not a format problem", async () => {
+		const input = join(tmp, "old.xls");
+		writeFileSync(input, "xls bytes");
+		const stop = new AbortController();
+		const seen: (AbortSignal | undefined)[] = [];
+		const run: RunFile = async (_file, _args, options) => {
+			seen.push(options.signal);
+			stop.abort();
+			throw new Error("aborted");
+		};
+		await expect(convertLegacy(input, { run, tmpDir: tmp, signal: stop.signal })).rejects.toThrow(STOPPED_SENTENCE);
+		expect(seen).toEqual([stop.signal]);
 	});
 });
