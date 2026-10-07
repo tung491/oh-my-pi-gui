@@ -155,3 +155,34 @@ export interface ProviderConfigCleanupResult {
 	/** Provider ids removed from `models.yml`. */
 	removed: string[];
 }
+
+/** Where a measured model runs: wholly on the GPU, or from system memory (always so on unified memory). */
+export type ContextPool = "gpu" | "ram";
+/** `spills`/`exceeds-ram`: even the smallest context tried did not fit, so `maxContext` is that floor and runs slowly. */
+export type ContextVerdict = "fits" | "spills" | "exceeds-ram";
+
+export interface ContextFitResult {
+	/** The largest `num_ctx` that fits the pool, or the floor when none did. */
+	maxContext: number;
+	/** The model's trained context; 131072 when Ollama reports none or an implausible one. */
+	trainedContext: number;
+	pool: ContextPool;
+	verdict: ContextVerdict;
+}
+
+/**
+ * How a measurement ended. `interrupted` (a sidecar became busy, or another
+ * model shared the daemon) is retried later and never recorded as a failure;
+ * `error` is a failed attempt.
+ */
+export type MeasureOutcome =
+	| { kind: "measured"; result: ContextFitResult }
+	| { kind: "interrupted" }
+	| { kind: "error"; message: string };
+
+export interface ContextFitProgress {
+	tag: string;
+	state: "running" | "done" | "error";
+	/** The context being loaded while `running`. */
+	numCtx?: number;
+}

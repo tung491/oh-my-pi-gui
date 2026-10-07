@@ -95,7 +95,8 @@ export function needBytes(sizeBytes: number): number {
 	return Math.ceil((sizeBytes * OVERHEAD_NUM) / OVERHEAD_DEN) + FIXED_OVERHEAD_BYTES;
 }
 
-function ramReserve(ramBytes: number): number {
+/** RAM held back for the system and other apps: a quarter of RAM, never less than 4 GiB. */
+export function ramReserve(ramBytes: number): number {
 	const quarter = Math.floor(ramBytes / RAM_RESERVE_DIVISOR);
 	return quarter > RAM_RESERVE_FLOOR_BYTES ? quarter : RAM_RESERVE_FLOOR_BYTES;
 }
@@ -126,7 +127,7 @@ export function speedOf(fit: ModelFit, activeParams: number, threads: number): M
  * Case-insensitive; an exact `name:tag` matches, a bare name matches any tag
  * of it at the `:` boundary, and blank input matches nothing.
  */
-function installedName(installedTags: readonly string[], tag: string): string | null {
+export function installedName(installedTags: readonly string[], tag: string): string | null {
 	const want = tag.trim().toLowerCase();
 	if (want === "") return null;
 	for (const name of installedTags) {
@@ -141,7 +142,7 @@ export function isInstalled(installedTags: readonly string[], tag: string): bool
 }
 
 /** `ref` with `:latest` appended when its last path segment carries no tag, as Ollama lists a fresh pull. */
-function withDefaultTag(ref: string): string {
+export function withDefaultTag(ref: string): string {
 	const name = ref.slice(ref.lastIndexOf("/") + 1);
 	return name.includes(":") ? ref : `${ref}:latest`;
 }

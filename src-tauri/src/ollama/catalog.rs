@@ -176,7 +176,8 @@ pub fn need_bytes(size_bytes: u64) -> u64 {
     size_bytes.saturating_mul(OVERHEAD_NUM).div_ceil(OVERHEAD_DEN) + FIXED_OVERHEAD_BYTES
 }
 
-fn ram_reserve(ram_bytes: u64) -> u64 {
+/// RAM held back for the system and other apps: a quarter of RAM, never less than 4 GiB.
+pub fn ram_reserve(ram_bytes: u64) -> u64 {
     let quarter = ram_bytes / RAM_RESERVE_DIVISOR;
     quarter.max(RAM_RESERVE_FLOOR_BYTES)
 }
@@ -214,7 +215,7 @@ pub fn speed_of(fit: ModelFit, active_params: f64, threads: u32) -> ModelSpeed {
 /// The name Ollama lists for `tag`, or `None` when it is not installed.
 /// Case-insensitive; an exact `name:tag` matches, a bare name matches any tag
 /// of it at the `:` boundary, and blank input matches nothing.
-fn installed_name(installed_tags: &[String], tag: &str) -> Option<String> {
+pub fn installed_name(installed_tags: &[String], tag: &str) -> Option<String> {
     let want = tag.trim().to_lowercase();
     if want.is_empty() {
         return None;
@@ -234,7 +235,7 @@ pub fn is_installed(installed_tags: &[String], tag: &str) -> bool {
 }
 
 /// `ref` with `:latest` appended when its last path segment carries no tag, as Ollama lists a fresh pull.
-fn with_default_tag(ref_: &str) -> String {
+pub fn with_default_tag(ref_: &str) -> String {
     let name = ref_.rsplit('/').next().unwrap_or(ref_);
     if name.contains(':') {
         ref_.to_string()

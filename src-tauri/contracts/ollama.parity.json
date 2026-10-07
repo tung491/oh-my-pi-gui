@@ -4,6 +4,10 @@
     "rust": "src-tauri/src/ollama/base_url.rs"
   },
   {
+    "ts": "src/main/ollama/context-fit.test.ts",
+    "rust": "src-tauri/src/ollama/context_fit.rs"
+  },
+  {
     "ts": "src/main/ollama/hardware.test.ts",
     "rust": "src-tauri/src/ollama/hardware.rs"
   },
@@ -30,5 +34,9 @@
   {
     "ts": "src/shared/ollama-catalog.test.ts",
     "rust": "src-tauri/src/ollama/catalog.rs"
+  },
+  {
+    "ts": "src/shared/ollama-local.test.ts",
+    "rust": "src-tauri/src/ollama/local.rs"
   }
 ]

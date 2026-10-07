@@ -5,8 +5,13 @@ pub mod ipc;
 
 mod base_url;
 mod catalog;
+// No production caller yet: the context-fit scheduler is built on these.
+#[cfg_attr(not(test), allow(dead_code))]
+mod context_fit;
 mod hardware;
 mod install_progress;
+#[cfg_attr(not(test), allow(dead_code))]
+mod local;
 mod probe;
 mod pull;
 mod remedy;
