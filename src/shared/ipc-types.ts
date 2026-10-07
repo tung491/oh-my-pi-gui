@@ -5,6 +5,10 @@
 
 import type { LaunchProfile } from "./launch-profile";
 import type {
+	ContextFitChanged,
+	ContextFitEntry,
+	ContextFitList,
+	ContextFitProgress,
 	ModelScreen,
 	OllamaInstallProgress,
 	OllamaRemedyId,
@@ -100,6 +104,10 @@ export const IPC_EVENTS = {
 	OLLAMA_PULL_PROGRESS: "ollama:pull-progress",
 	/** Main → every window: progress of the running Linux Ollama install (OllamaInstallProgress) */
 	OLLAMA_INSTALL_PROGRESS: "ollama:install-progress",
+	/** Main → every window: the context-fit queue and measurement (ContextFitProgress) */
+	OLLAMA_CONTEXT_PROGRESS: "ollama:context-progress",
+	/** Main → every window: a model's remembered context changed (ContextFitChanged) */
+	OLLAMA_CONTEXT_CHANGED: "ollama:context-changed",
 } as const;
 
 // ============================================================================
@@ -176,6 +184,12 @@ export const IPC_COMMANDS = {
 	OLLAMA_REMEDY: "ollama:remedy",
 	/** Open the Ollama download page in the browser */
 	OLLAMA_OPEN_DOWNLOAD: "ollama:open-download",
+	/** Every installed local model with its measured and effective context (ContextFitList) */
+	OLLAMA_CONTEXT_LIST: "ollama:context-list",
+	/** Queue a context measurement of one model (IpcOllamaContextMeasurePayload) */
+	OLLAMA_CONTEXT_MEASURE: "ollama:context-measure",
+	/** Set or clear the user's context limit of a measured model (IpcOllamaContextSetCapPayload) */
+	OLLAMA_CONTEXT_SET_CAP: "ollama:context-set-cap",
 	/** Back up models.yml and remove every non-Ollama provider from it */
 	PROVIDER_CLEANUP_CONFIG: "provider-cleanup:config",
 	/** List workspace files as a tree (main-process readdir, no sidecar needed) */
@@ -449,6 +463,17 @@ export interface TrayState {
 // ============================================================================
 // IPC Payload Types
 // ============================================================================
+
+export interface IpcOllamaContextMeasurePayload {
+	tag: string;
+	/** Defaults to `manual`; `pulled` waits for the welcome dialog to close. */
+	reason?: "manual" | "pulled";
+}
+
+export interface IpcOllamaContextSetCapPayload {
+	tag: string;
+	cap: number | null;
+}
 
 export interface IpcRpcCommandPayload {
 	command: RpcCommand;
@@ -1278,6 +1303,13 @@ export interface OmpApi {
 		onPullProgress(callback: (progress: PullProgress) => void): () => void;
 		/** Frames of the Linux install remedy; every window receives the same run. */
 		onInstallProgress(callback: (progress: OllamaInstallProgress) => void): () => void;
+		contextList(): Promise<ContextFitList>;
+		/** `pulled` waits for the welcome dialog; main refuses any other reason. */
+		measureContext(tag: string, reason?: IpcOllamaContextMeasurePayload["reason"]): Promise<{ queued: true }>;
+		/** Null clears the limit; main rejects a value outside the measured range. */
+		setContextCap(tag: string, cap: number | null): Promise<ContextFitEntry>;
+		onContextProgress(callback: (progress: ContextFitProgress) => void): () => void;
+		onContextChanged(callback: (change: ContextFitChanged) => void): () => void;
 	};
 	providerCleanup: {
 		cleanConfig(): Promise<ProviderConfigCleanupResult>;

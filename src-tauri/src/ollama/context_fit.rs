@@ -67,9 +67,11 @@ pub enum MeasureOutcome {
     Error { message: String },
 }
 
+/// `Running` comes from the engine; the scheduler reports `Queued`, `Done` and `Error`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ContextFitState {
+    Queued,
     Running,
     Done,
     Error,
@@ -116,6 +118,9 @@ pub struct MeasureContextFitInput<'a> {
     /// The model's `/api/tags` row; `name` is the tag measured.
     pub row: &'a OllamaTagRow,
     pub machine: &'a MachineFacts,
+    /// The largest context the sidecar can send for this model (its global cap);
+    /// no rung above it is loaded. `trained_context` is still reported unchanged.
+    pub max_context: Option<u64>,
     /// Re-checked before every load; true ends the run as `Interrupted`.
     pub is_busy: &'a (dyn Fn() -> bool + Send + Sync),
     pub on_progress: &'a (dyn Fn(ContextFitProgress) + Send + Sync),
@@ -205,6 +210,14 @@ struct PsEntry {
 struct Probe {
     size: f64,
     size_vram: f64,
+    /// The context Ollama actually loaded; below the requested one when it clamped at the trained context.
+    context_length: u64,
+}
+
+/// One probe's reading: whether it fits, and the context Ollama clamped to, if it did.
+struct Reading {
+    fits: bool,
+    clamped_at: Option<u64>,
 }
 
 enum LoadResult {
@@ -317,10 +330,13 @@ impl Daemon<'_> {
         let (Some(size), Some(size_vram)) = (entry.size, entry.size_vram) else {
             return Err(Stop::Discarded("/api/ps did not report the model's size".into()));
         };
-        if entry.context_length != Some(num_ctx) {
-            return Err(Stop::Discarded(format!("Ollama loaded a different context than {num_ctx}")));
-        }
-        Ok(LoadResult::Loaded(Probe { size, size_vram }))
+        // A smaller context is Ollama's silent clamp at the trained context and is
+        // measured as loaded; a larger or missing one cannot be explained.
+        let context_length = match entry.context_length {
+            Some(context) if context <= num_ctx && context > 0 => context,
+            _ => return Err(Stop::Discarded(format!("Ollama loaded a different context than {num_ctx}"))),
+        };
+        Ok(LoadResult::Loaded(Probe { size, size_vram, context_length }))
     }
 
     /// Ask Ollama to drop the model now; failures are logged, never returned.
@@ -358,7 +374,7 @@ struct Walk<'a> {
 }
 
 impl Walk<'_> {
-    async fn probe(&mut self, n: u64) -> Result<bool, Stop> {
+    async fn probe(&mut self, n: u64) -> Result<Reading, Stop> {
         if (self.input.is_busy)() {
             return Err(Stop::Discarded("a session became busy".into()));
         }
@@ -373,7 +389,7 @@ impl Walk<'_> {
             LoadResult::Refused => {
                 // Ollama refuses a load beyond system memory; with no pool seen yet, that pool is RAM.
                 self.pool.get_or_insert(ContextPool::Ram);
-                return Ok(false);
+                return Ok(Reading { fits: false, clamped_at: None });
             }
             LoadResult::Loaded(probe) => probe,
         };
@@ -383,15 +399,18 @@ impl Walk<'_> {
             ContextPool::Ram => probe.size <= self.ram_budget,
         };
         if fits {
-            self.fitting.push((n as f64, probe.size));
+            self.fitting.push((probe.context_length as f64, probe.size));
         }
-        Ok(fits)
+        Ok(Reading { fits, clamped_at: (probe.context_length < n).then_some(probe.context_length) })
     }
 
     async fn run(&mut self) -> Result<ContextFitResult, Stop> {
         let show = self.daemon.show().await?;
         let trained_context = trained_context_of(&show).unwrap_or(UNKNOWN_TRAINED_CONTEXT);
-        let ceiling = modelfile_num_ctx(&show).map_or(trained_context, |n| n.min(trained_context));
+        let mut ceiling = modelfile_num_ctx(&show).map_or(trained_context, |n| n.min(trained_context));
+        if let Some(cap) = self.input.max_context.filter(|cap| *cap > 0) {
+            ceiling = ceiling.min(cap);
+        }
         let ladder = context_ladder(ceiling);
         let floor = ladder.first().copied().unwrap_or(ceiling);
 
@@ -407,13 +426,20 @@ impl Walk<'_> {
                     break;
                 }
             }
-            let mut fits = self.probe(n).await?;
-            if !fits && !failed_once {
+            let mut reading = self.probe(n).await?;
+            if !reading.fits && !failed_once {
                 failed_once = true;
                 self.daemon.unload_and_settle().await?;
-                fits = self.probe(n).await?;
+                reading = self.probe(n).await?;
             }
-            if !fits {
+            if let Some(clamped) = reading.clamped_at {
+                // Ollama will never load more than this context: it is the ceiling.
+                if reading.fits && best.is_none_or(|b| clamped > b) {
+                    best = Some(clamped);
+                }
+                break;
+            }
+            if !reading.fits {
                 break;
             }
             best = Some(n);
@@ -511,6 +537,8 @@ mod tests {
         foreign_runner: bool,
         /// Ollama silently clamps `num_ctx` to this.
         clamp_context_at: Option<u64>,
+        /// `/api/ps` never lists the loaded model.
+        hide_from_ps: bool,
         /// The first load at `.0` finds `.1` bytes less VRAM free (another process held it).
         transient_shortfall: Option<(u64, f64)>,
     }
@@ -528,6 +556,7 @@ mod tests {
             ps_status: None,
             foreign_runner: false,
             clamp_context_at: None,
+            hide_from_ps: false,
             transient_shortfall: None,
         }
     }
@@ -618,7 +647,7 @@ mod tests {
                     return send_json(json!({ "error": "boom" }), status);
                 }
                 let mut models = Vec::new();
-                if let Some((size, size_vram, context)) = state.loaded {
+                if let Some((size, size_vram, context)) = state.loaded.filter(|_| !options.hide_from_ps) {
                     models.push(json!({
                         "name": TAG, "model": TAG, "size": size, "size_vram": size_vram, "context_length": context,
                     }));
@@ -665,6 +694,7 @@ mod tests {
         row: OllamaTagRow,
         machine: MachineFacts,
         is_busy: &'a (dyn Fn() -> bool + Send + Sync),
+        max_context: Option<u64>,
         progress: Arc<Mutex<Vec<ContextFitProgress>>>,
     }
 
@@ -679,6 +709,7 @@ mod tests {
                 row: tag_row(TAG),
                 machine: machine(),
                 is_busy: &not_busy,
+                max_context: None,
                 progress: Arc::new(Mutex::new(Vec::new())),
             }
         }
@@ -692,6 +723,7 @@ mod tests {
                 base_url: self.base_url,
                 row: &self.row,
                 machine: &self.machine,
+                max_context: self.max_context,
                 is_busy: self.is_busy,
                 on_progress: &on_progress,
                 timing: ContextFitTiming { unload_wait_ms: 200, unload_poll_ms: 5, ..ContextFitTiming::default() },
@@ -918,13 +950,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn discards_a_probe_whose_context_length_differs() {
+    async fn caps_the_ceiling_at_the_global_cap() {
+        let (sim, fake) = simulate(sim_options(2.0 * GIB, kv(0.01), Some(8.0 * GIB))).await;
+        let mut run = Run::new(&fake.url);
+        run.max_context = Some(32_768);
+        assert_eq!(run.go().await, measured(32_768, 131_072, ContextPool::Gpu, ContextVerdict::Fits));
+        assert_eq!(sim.loads(), vec![16_384, 32_768]);
+        fake.close().await;
+    }
+
+    #[tokio::test]
+    async fn stops_at_a_clamped_context_length_and_keeps_it_as_the_ceiling() {
         let (sim, fake) =
-            simulate(SimOptions { clamp_context_at: Some(32_768), ..sim_options(2.0 * GIB, kv(0.01), Some(8.0 * GIB)) })
+            simulate(SimOptions { clamp_context_at: Some(40_000), ..sim_options(2.0 * GIB, kv(0.01), Some(8.0 * GIB)) })
                 .await;
-        assert_eq!(Run::new(&fake.url).go().await, MeasureOutcome::Interrupted);
+        assert_eq!(Run::new(&fake.url).go().await, measured(40_000, 131_072, ContextPool::Gpu, ContextVerdict::Fits));
         assert_eq!(sim.loads(), vec![16_384, 32_768, 65_536]);
         assert!(!sim.resident());
+        fake.close().await;
+    }
+
+    #[tokio::test]
+    async fn discards_a_probe_whose_model_is_not_listed() {
+        let (sim, fake) =
+            simulate(SimOptions { hide_from_ps: true, ..sim_options(2.0 * GIB, kv(0.01), Some(8.0 * GIB)) }).await;
+        assert_eq!(Run::new(&fake.url).go().await, MeasureOutcome::Interrupted);
+        assert_eq!(sim.loads(), vec![16_384]);
+        assert!(is_unload(sim.last_request()));
         fake.close().await;
     }
 

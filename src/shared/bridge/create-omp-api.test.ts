@@ -129,6 +129,34 @@ describe("createOmpApi", () => {
 		expect(listenerCount(IPC_EVENTS.EVENTS_BATCH)).toBe(0);
 	});
 
+	it("sends the context-fit requests as payload objects and streams their events", async () => {
+		const { port, invokes, emit, listenerCount } = fakePort();
+		const api = createOmpApi(port, "linux");
+		await api.ollama.contextList();
+		await api.ollama.measureContext("qwen3:8b");
+		await api.ollama.measureContext("qwen3", "pulled");
+		await api.ollama.setContextCap("qwen3:8b", 32_768);
+		await api.ollama.setContextCap("qwen3:8b", null);
+		expect(invokes).toEqual([
+			{ channel: IPC_COMMANDS.OLLAMA_CONTEXT_LIST, args: [] },
+			{ channel: IPC_COMMANDS.OLLAMA_CONTEXT_MEASURE, args: [{ tag: "qwen3:8b" }] },
+			{ channel: IPC_COMMANDS.OLLAMA_CONTEXT_MEASURE, args: [{ tag: "qwen3", reason: "pulled" }] },
+			{ channel: IPC_COMMANDS.OLLAMA_CONTEXT_SET_CAP, args: [{ tag: "qwen3:8b", cap: 32_768 }] },
+			{ channel: IPC_COMMANDS.OLLAMA_CONTEXT_SET_CAP, args: [{ tag: "qwen3:8b", cap: null }] },
+		]);
+
+		const seen: unknown[] = [];
+		const stopProgress = api.ollama.onContextProgress(progress => seen.push(progress));
+		const stopChanged = api.ollama.onContextChanged(change => seen.push(change));
+		emit(IPC_EVENTS.OLLAMA_CONTEXT_PROGRESS, { tag: "qwen3:8b", state: "running", numCtx: 16_384 });
+		emit(IPC_EVENTS.OLLAMA_CONTEXT_CHANGED, { tag: "qwen3:8b" });
+		stopProgress();
+		stopChanged();
+		expect(seen).toEqual([{ tag: "qwen3:8b", state: "running", numCtx: 16_384 }, { tag: "qwen3:8b" }]);
+		expect(listenerCount(IPC_EVENTS.OLLAMA_CONTEXT_PROGRESS)).toBe(0);
+		expect(listenerCount(IPC_EVENTS.OLLAMA_CONTEXT_CHANGED)).toBe(0);
+	});
+
 	it("holds a cold-start deep link for the first subscriber but never a quick-entry nudge", () => {
 		const { port, emit } = fakePort();
 		const api = createOmpApi(port, "linux");

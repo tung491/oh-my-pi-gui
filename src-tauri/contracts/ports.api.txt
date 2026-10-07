@@ -41,6 +41,9 @@ pub fn sai_atlas_lib::desktop::Desktop::set_cwd(&self, sai_atlas_lib::ports::Win
 pub fn sai_atlas_lib::desktop::Desktop::set_run_progress(&self, sai_atlas_lib::ports::RunProgressState)
 pub fn sai_atlas_lib::desktop::Desktop::spawn_window(&self, core::option::Option<alloc::string::String>, core::option::Option<alloc::string::String>, core::option::Option<sai_atlas_lib::ports::SessionKind>) -> core::option::Option<sai_atlas_lib::ports::WindowId>
 pub fn sai_atlas_lib::desktop::Desktop::target_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
+pub fn sai_atlas_lib::ollama::ipc::ollama_context_list(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_context_measure(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
+pub fn sai_atlas_lib::ollama::ipc::ollama_context_set_cap(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub fn sai_atlas_lib::ollama::ipc::ollama_model_screen(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub fn sai_atlas_lib::ollama::ipc::ollama_open_download(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
 pub fn sai_atlas_lib::ollama::ipc::ollama_pull(&alloc::rcs::arc::Arc<sai_atlas_lib::ctx::AppCtx>, sai_atlas_lib::ports::Caller, alloc::vec::Vec<serde_json::value::Value>) -> sai_atlas_lib::bridge::Reply
@@ -802,6 +805,7 @@ pub trait sai_atlas_lib::ports::TabsPort: core::marker::Send + core::marker::Syn
 pub fn sai_atlas_lib::ports::TabsPort::acquire(&self, sai_atlas_lib::ports::AcquireOptions) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::ports::TabsPort::active_tab_for_window(&self, sai_atlas_lib::ports::WindowId) -> core::option::Option<alloc::string::String>
 pub fn sai_atlas_lib::ports::TabsPort::adopt_session_cwd(&self, &str, &str) -> bool
+pub fn sai_atlas_lib::ports::TabsPort::any_in_flight(&self) -> bool
 pub fn sai_atlas_lib::ports::TabsPort::as_any(&self) -> &dyn core::any::Any
 pub fn sai_atlas_lib::ports::TabsPort::at_cap(&self) -> bool
 pub fn sai_atlas_lib::ports::TabsPort::command_for_idle_session(&self, &str, serde_json::value::Value) -> futures_core::future::BoxFuture<'static, core::option::Option<serde_json::value::Value>>

@@ -941,6 +941,13 @@ impl SidecarPool {
         })
     }
 
+    /// Whether any tab in any window, the quick-entry bar's included, has an
+    /// agent run or a compaction in flight. User `bash`/`eval` commands do not
+    /// count: they never touch the model.
+    pub(crate) fn any_in_flight(&self) -> bool {
+        self.read(|state| state.entries.iter().any(Entry::in_flight))
+    }
+
     /// Count a user `bash` or `eval` request of `tab_id` as running work until
     /// the returned guard drops; `None` when the tab is unknown. Take it before
     /// the request is sent and hold it until its response settles.
@@ -2080,6 +2087,7 @@ mod tests {
                 { "windowId": 2, "tabId": "tab-c", "inFlight": false },
             ])
         );
+        assert!(!h.tabs().any_in_flight());
 
         // A background window's run counts the same as the active one's, and an automatic compaction is work too.
         agent_events(&a, &["agent_start"]);
@@ -2093,6 +2101,7 @@ mod tests {
                 WindowTabFact { window_id: second, tab_id: "tab-c".into(), in_flight: true },
             ]
         );
+        assert!(h.tabs().any_in_flight());
 
         // A closed tab leaves the inventory.
         agent_events(&b, &["agent_end"]);
@@ -2100,6 +2109,12 @@ mod tests {
         assert!(h.tabs().release_tab("tab-b"));
         let ids: Vec<String> = h.tabs().tab_inventory().into_iter().map(|fact| fact.tab_id).collect();
         assert_eq!(ids, ["tab-a", "tab-c"]);
+
+        // Every window idle again: nothing is in flight anywhere.
+        agent_events(&a, &["agent_end"]);
+        agent_events(&c, &["auto_compaction_end"]);
+        settle().await;
+        assert!(!h.tabs().any_in_flight());
     }
 
     // -- factory, health check, shutdown -------------------------------------------

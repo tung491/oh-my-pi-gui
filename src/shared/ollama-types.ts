@@ -182,7 +182,76 @@ export type MeasureOutcome =
 
 export interface ContextFitProgress {
 	tag: string;
-	state: "running" | "done" | "error";
+	/** `queued` and the outcome come from the scheduler; `running` from the measurement itself. */
+	state: "queued" | "running" | "done" | "error";
 	/** The context being loaded while `running`. */
 	numCtx?: number;
+}
+
+/**
+ * The context the sidecar sends for an Ollama model nothing else limits (its
+ * global `OLLAMA_CONTEXT_LENGTH` default). A per-model limit can only lower it,
+ * so no measurement climbs above it.
+ */
+export const SIDECAR_DEFAULT_OLLAMA_CONTEXT = 131_072;
+
+/** The smallest context worth running the agent at: its first request already needs about this much. */
+export const CONTEXT_FLOOR = 16_384;
+
+/** The machine facts a measurement depends on; a change makes the measurement stale. */
+export type MachineFingerprint = Pick<MachineFacts, "ramBytes" | "vramBytes" | "gpuName" | "unifiedMemory">;
+
+/** What is remembered about one model's context, keyed by its exact `/api/tags` id. */
+export interface ContextFitEntry {
+	/** The measured maximum; null until a measurement succeeded. */
+	maxContext: number | null;
+	trainedContext: number | null;
+	pool: ContextPool | null;
+	verdict: ContextVerdict | null;
+	/** ISO time of the last successful measurement. */
+	measuredAt: string | null;
+	/** The machine at the last attempt, successful or not. */
+	fingerprint: MachineFingerprint;
+	/** The user's lower limit; null means the measured maximum. */
+	userCap: number | null;
+	/** Failed attempts so far. */
+	attempts: number;
+	lastError: string | null;
+	lastAttemptAt: string | null;
+}
+
+/** The `ollamaContextFit` preference: one key for every model, because tags contain dots. */
+export interface ContextFitStore {
+	version: 1;
+	models: Record<string, ContextFitEntry>;
+}
+
+/** What can ask for a measurement. `stale` is the startup pass and never comes from the renderer. */
+export type ContextMeasureReason = "manual" | "pulled" | "stale";
+
+export interface ContextFitRow {
+	tag: string;
+	entry: ContextFitEntry | null;
+	/** The context the sidecar uses for this model, or null when it falls back to the global default. */
+	effective: number | null;
+	/** The machine changed since the last attempt. */
+	stale: boolean;
+	/** The user's own `OLLAMA_CONTEXT_LENGTH`, which caps every model. */
+	envCap: number | null;
+	state: "idle" | "queued" | "running";
+}
+
+export interface ContextFitList {
+	/** Installed local models only. */
+	rows: ContextFitRow[];
+	/**
+	 * `remote-host`: Ollama is not on this computer, so nothing is measured.
+	 * `configured-provider`: the user's own `ollama` provider replaces the
+	 * built-in one, so the limits have no effect.
+	 */
+	reason?: "remote-host" | "configured-provider";
+}
+
+export interface ContextFitChanged {
+	tag: string;
 }

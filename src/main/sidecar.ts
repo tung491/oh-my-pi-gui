@@ -4,11 +4,13 @@
  */
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import Store from "electron-store";
+import { emptyContextFitStore, overlayYaml } from "../shared/context-fit-store";
 import { allowedLaunchFlags, parseLaunchProfile, profileToFlags } from "../shared/launch-profile";
+import { SIDECAR_DEFAULT_OLLAMA_CONTEXT } from "../shared/ollama-types";
 import { PRODUCT_NAME } from "../shared/product";
 import type {
 	AgentSessionEvent,
@@ -129,6 +131,11 @@ export interface SidecarOptions {
 	packSearchFrom?: readonly string[];
 	/** Records a start refused for an install problem (missing binary or pack). */
 	reportStartRefusal?: (report: SidecarStartRefusalReport) => void;
+	/**
+	 * The per-model Ollama context limits file (`<userData>/ollama-context-limits.yml`),
+	 * loaded after the pack's config so the sidecar applies every rewrite live.
+	 */
+	contextLimitsOverlay?: string;
 	/** The app language at spawn, handed to the pack's tools; `en` when absent. */
 	language?: () => AssistantPackLanguage;
 	/** When set, spawn the workspace source CLI via bun instead of the installed binary. */
@@ -192,6 +199,22 @@ function loadLaunchProfileFlags(cwd: string): string[] {
 		return profileToFlags(parseLaunchProfile(profiles[cwd]));
 	} catch {
 		return [];
+	}
+}
+
+/**
+ * Create the context limits overlay when it is missing, so the sidecar's
+ * settings watcher has a file to watch. True when the file is there to load.
+ */
+function ensureContextLimitsOverlay(file: string): boolean {
+	try {
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(file, overlayYaml(emptyContextFitStore(), null), { flag: "wx" });
+		return true;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "EEXIST") return true;
+		console.error(`[sidecar] cannot create ${file}: ${error instanceof Error ? error.message : String(error)}`);
+		return false;
 	}
 }
 
@@ -361,6 +384,8 @@ export class SidecarManager extends EventEmitter {
 		if (this.#resumeSessionPath) args.push("--session", this.#resumeSessionPath);
 		else if (this.#freshLaunchPending) args.push("--no-auto-resume");
 		args.push(...assistantPackFlags(this.#packDir, process.platform));
+		const overlay = this.#options.contextLimitsOverlay;
+		if (overlay && ensureContextLimitsOverlay(overlay)) args.push("--config", overlay);
 		// User-controllable flags ride the extraFlags seam + the launch profile.
 		// Only the allowlisted flags of BOTH are appended: neither can override
 		// the code-controlled argv above, while a --session-dir value that merely
@@ -376,9 +401,9 @@ export class SidecarManager extends EventEmitter {
 		console.log(`[sidecar] spawning ${sourceCli ? "source" : "bundled"} omp (${args.length} args, cwd: ${cwd})`);
 
 		const env: NodeJS.ProcessEnv = {
-			// The window sent as `num_ctx` (capped at the model's trained context);
-			// a user-set value, inherited or from the login shell, wins.
-			OLLAMA_CONTEXT_LENGTH: "131072",
+			// The window sent as `num_ctx` for a model with no measured limit (capped at
+			// its trained context); a user-set value, inherited or from the login shell, wins.
+			OLLAMA_CONTEXT_LENGTH: String(SIDECAR_DEFAULT_OLLAMA_CONTEXT),
 			...process.env,
 			// Login-shell PATH first so the GUI proxy pref (and inherited
 			// proxy env) keeps precedence over rc-file proxy exports.

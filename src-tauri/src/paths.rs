@@ -148,6 +148,24 @@ pub fn agent_dir() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".omp").join("agent")
 }
 
+/// The `OLLAMA_CONTEXT_LENGTH` every sidecar gets unless the user exported their
+/// own: the context an unmeasured Ollama model runs at, and the ceiling of every
+/// measurement, since a per-model limit can only lower it.
+pub const SIDECAR_DEFAULT_OLLAMA_CONTEXT: u64 = 131_072;
+
+/// The sidecar settings overlay that carries each measured model's context
+/// limit (`ollama.contextLimits`); every sidecar loads it after the pack config
+/// and reloads it live when it changes.
+pub const CONTEXT_LIMITS_OVERLAY_FILE: &str = "ollama-context-limits.yml";
+
+/// The overlay's contents while no model has a limit.
+pub const EMPTY_CONTEXT_LIMITS_OVERLAY: &str = "ollama:\n  contextLimits: {}\n";
+
+/// `<user_data>/ollama-context-limits.yml`.
+pub fn context_limits_overlay_path(user_data: &Path) -> PathBuf {
+    user_data.join(CONTEXT_LIMITS_OVERLAY_FILE)
+}
+
 /// Filename of the bundled omp sidecar on this platform.
 pub fn bundled_omp_filename() -> &'static str {
     if cfg!(windows) {

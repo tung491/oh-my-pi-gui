@@ -378,6 +378,7 @@ pub struct FakeTabs {
     pub idle_responses: Mutex<Vec<Option<Value>>>,
     pub tabs: Mutex<HashMap<WindowId, Vec<IpcTabInfo>>>,
     pub inventory: Mutex<Vec<WindowTabFact>>,
+    pub any_in_flight: Mutex<bool>,
     pub layouts: Mutex<HashMap<WindowId, PersistedTabLayout>>,
     pub cwds: Mutex<HashMap<WindowId, String>>,
     pub listeners: Mutex<Vec<WindowTabsChangedListener>>,
@@ -488,6 +489,10 @@ impl TabsPort for FakeTabs {
 
     fn tab_inventory(&self) -> Vec<WindowTabFact> {
         lock(&self.inventory).clone()
+    }
+
+    fn any_in_flight(&self) -> bool {
+        *lock(&self.any_in_flight)
     }
 
     fn tab_layout_for_window(&self, win_id: WindowId) -> Option<PersistedTabLayout> {

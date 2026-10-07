@@ -27,6 +27,8 @@ interface SimOptions {
 	psStatus?: number;
 	/** Another model stays loaded throughout. */
 	foreignRunner?: boolean;
+	/** `/api/ps` never lists the loaded model. */
+	unlisted?: boolean;
 	/** Ollama silently clamps `num_ctx` to this. */
 	clampContextAt?: number;
 	/** The first load at `numCtx` finds `bytes` less VRAM free (another process held it). */
@@ -93,7 +95,7 @@ async function simulate(options: SimOptions): Promise<Sim> {
 		if (path === "/api/ps") {
 			if (options.psStatus) return sendJson(res, { error: "boom" }, options.psStatus);
 			const models: unknown[] = [];
-			if (loaded) {
+			if (loaded && !options.unlisted) {
 				models.push({
 					name: TAG,
 					model: TAG,
@@ -132,6 +134,7 @@ interface RunOptions {
 	row?: OllamaTagRow;
 	baseUrl?: string;
 	machine?: MachineFacts;
+	maxContext?: number;
 	isBusy?: () => boolean;
 	progress?: ContextFitProgress[];
 }
@@ -141,6 +144,7 @@ function run(options: RunOptions = {}): Promise<MeasureOutcome> {
 		baseUrl: options.baseUrl ?? fake?.url ?? "http://127.0.0.1:1",
 		row: options.row ?? { name: TAG, model: TAG, size: 5 * GiB },
 		machine: options.machine ?? machine(),
+		maxContext: options.maxContext,
 		isBusy: options.isBusy ?? (() => false),
 		onProgress: progress => options.progress?.push(progress),
 		timing: { unloadWaitMs: 200, unloadPollMs: 5 },
@@ -191,6 +195,16 @@ describe("measureContextFit", () => {
 		});
 		const outcome = await run();
 		expect(outcome).toMatchObject({ kind: "measured", result: { maxContext: 32_768, trainedContext: 131_072 } });
+		expect(sim.loads).toEqual([16_384, 32_768]);
+	});
+
+	it("caps the ceiling at the global cap", async () => {
+		const sim = await simulate({ weights: 2 * GiB, kvPerToken: kv(0.01), gpuBytes: 8 * GiB });
+		const outcome = await run({ maxContext: 32_768 });
+		expect(outcome).toEqual({
+			kind: "measured",
+			result: { maxContext: 32_768, trainedContext: 131_072, pool: "gpu", verdict: "fits" },
+		});
 		expect(sim.loads).toEqual([16_384, 32_768]);
 	});
 
@@ -320,11 +334,22 @@ describe("measureContextFit", () => {
 		expect(sim.resident()).toBe(false);
 	});
 
-	it("discards a probe whose context_length differs", async () => {
-		const sim = await simulate({ weights: 2 * GiB, kvPerToken: kv(0.01), gpuBytes: 8 * GiB, clampContextAt: 32_768 });
-		expect(await run()).toEqual({ kind: "interrupted" });
+	it("stops at a clamped context_length and keeps it as the ceiling", async () => {
+		// Ollama reports a trained context of 128k but clamps every load to 40k.
+		const sim = await simulate({ weights: 2 * GiB, kvPerToken: kv(0.01), gpuBytes: 8 * GiB, clampContextAt: 40_960 });
+		expect(await run()).toEqual({
+			kind: "measured",
+			result: { maxContext: 40_960, trainedContext: 131_072, pool: "gpu", verdict: "fits" },
+		});
 		expect(sim.loads).toEqual([16_384, 32_768, 65_536]);
 		expect(sim.resident()).toBe(false);
+	});
+
+	it("discards a probe whose model is not listed", async () => {
+		const sim = await simulate({ weights: 2 * GiB, kvPerToken: kv(0.01), gpuBytes: 8 * GiB, unlisted: true });
+		expect(await run()).toEqual({ kind: "interrupted" });
+		expect(sim.loads).toEqual([16_384]);
+		expect(lastRequest(sim)?.body).toMatchObject({ model: TAG, keep_alive: 0 });
 	});
 
 	it("aborts as interrupted when a sidecar becomes busy", async () => {

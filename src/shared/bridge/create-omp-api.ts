@@ -12,6 +12,8 @@ import type {
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
 	IpcFsReadResult,
+	IpcOllamaContextMeasurePayload,
+	IpcOllamaContextSetCapPayload,
 	IpcOpenPathResult,
 	IpcSessionOpenNewWindowPayload,
 	IpcSessionOpenNewWindowResult,
@@ -40,6 +42,10 @@ import type {
 } from "../ipc-types";
 import { IPC_COMMANDS, IPC_EVENTS } from "../ipc-types";
 import type {
+	ContextFitChanged,
+	ContextFitEntry,
+	ContextFitList,
+	ContextFitProgress,
 	ModelScreen,
 	OllamaInstallProgress,
 	OllamaRemedyId,
@@ -334,6 +340,21 @@ export function createOmpApi(port: IpcPort, platform: OmpApi["platform"], homeDi
 				subscribe<PullProgress>(IPC_EVENTS.OLLAMA_PULL_PROGRESS, callback),
 			onInstallProgress: (callback: (progress: OllamaInstallProgress) => void) =>
 				subscribe<OllamaInstallProgress>(IPC_EVENTS.OLLAMA_INSTALL_PROGRESS, callback),
+			contextList: () => port.invoke(IPC_COMMANDS.OLLAMA_CONTEXT_LIST) as Promise<ContextFitList>,
+			measureContext: (tag: string, reason?: IpcOllamaContextMeasurePayload["reason"]) =>
+				port.invoke(IPC_COMMANDS.OLLAMA_CONTEXT_MEASURE, {
+					tag,
+					...(reason && { reason }),
+				} satisfies IpcOllamaContextMeasurePayload) as Promise<{ queued: true }>,
+			setContextCap: (tag: string, cap: number | null) =>
+				port.invoke(IPC_COMMANDS.OLLAMA_CONTEXT_SET_CAP, {
+					tag,
+					cap,
+				} satisfies IpcOllamaContextSetCapPayload) as Promise<ContextFitEntry>,
+			onContextProgress: (callback: (progress: ContextFitProgress) => void) =>
+				subscribe<ContextFitProgress>(IPC_EVENTS.OLLAMA_CONTEXT_PROGRESS, callback),
+			onContextChanged: (callback: (change: ContextFitChanged) => void) =>
+				subscribe<ContextFitChanged>(IPC_EVENTS.OLLAMA_CONTEXT_CHANGED, callback),
 		},
 
 		providerCleanup: {

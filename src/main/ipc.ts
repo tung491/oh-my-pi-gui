@@ -912,7 +912,7 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 
 	ipcMain.handle(IPC_COMMANDS.SIDECAR_DEFAULT_WORKSPACE, () => ensureDefaultWorkspace());
 
-	registerOllamaIpc();
+	registerOllamaIpc({ sidecarPool });
 	registerProviderCleanupIpc(ipcMain);
 
 	ipcMain.handle(IPC_COMMANDS.MODELS_PROVIDERS_LIST, () => {

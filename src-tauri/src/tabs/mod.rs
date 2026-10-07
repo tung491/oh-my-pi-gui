@@ -200,6 +200,10 @@ impl TabsPort for Tabs {
         self.pool.tab_inventory()
     }
 
+    fn any_in_flight(&self) -> bool {
+        self.pool.any_in_flight()
+    }
+
     fn tab_layout_for_window(&self, win_id: WindowId) -> Option<PersistedTabLayout> {
         self.pool.tab_layout_for_window(win_id)
     }

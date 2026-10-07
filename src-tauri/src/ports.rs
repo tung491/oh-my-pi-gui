@@ -584,6 +584,8 @@ pub trait TabsPort: Send + Sync {
     fn route_side_channel(&self, id: &str, frame: Value, is_final: bool) -> bool;
     fn tabs_for_window(&self, win_id: WindowId) -> Vec<IpcTabInfo>;
     fn tab_inventory(&self) -> Vec<WindowTabFact>;
+    /// Whether any tab in any window has an agent run or a compaction in flight.
+    fn any_in_flight(&self) -> bool;
     fn tab_layout_for_window(&self, win_id: WindowId) -> Option<PersistedTabLayout>;
     /// Recreate a window's tabs from a saved layout; the number of tabs restored.
     fn restore_layout(&self, win_id: WindowId, layout: PersistedTabLayout) -> usize;

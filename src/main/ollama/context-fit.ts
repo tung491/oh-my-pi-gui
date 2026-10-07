@@ -11,17 +11,17 @@
  */
 import { ramReserve } from "../../shared/ollama-catalog";
 import { isLocalOllamaRow, isLoopbackBaseUrl, type OllamaTagRow } from "../../shared/ollama-local";
-import type {
-	ContextFitProgress,
-	ContextPool,
-	ContextVerdict,
-	MachineFacts,
-	MeasureOutcome,
+import {
+	CONTEXT_FLOOR,
+	type ContextFitProgress,
+	type ContextPool,
+	type ContextVerdict,
+	type MachineFacts,
+	type MeasureOutcome,
 } from "../../shared/ollama-types";
 import { isValidModelTag } from "./pull";
 
-/** The smallest context worth running the agent at: its first request already needs about this much. */
-export const CONTEXT_FLOOR = 16_384;
+export { CONTEXT_FLOOR };
 /** The ceiling assumed when Ollama reports no plausible trained context. */
 export const UNKNOWN_TRAINED_CONTEXT = 131_072;
 /** A trained context above this (16M tokens) is treated as unknown. */
@@ -57,6 +57,11 @@ export interface MeasureContextFitInput {
 	/** The model's `/api/tags` row; `name` is the tag measured. */
 	row: OllamaTagRow;
 	machine: MachineFacts;
+	/**
+	 * The most the sidecar can send for this model (its global cap); no rung
+	 * above it is tried. `trainedContext` is still reported unchanged.
+	 */
+	maxContext?: number;
 	/** Re-checked before every load; true ends the run as `interrupted`. */
 	isBusy(): boolean;
 	onProgress?(progress: ContextFitProgress): void;
@@ -132,6 +137,8 @@ interface PsEntry {
 interface Probe {
 	size: number;
 	sizeVram: number;
+	/** The context Ollama loaded: the one asked for, or less when it clamped to the trained context. */
+	context: number;
 }
 
 type LoadResult = { kind: "loaded"; probe: Probe } | { kind: "refused" };
@@ -227,8 +234,12 @@ class Daemon {
 		const size = byteCount(entry.size);
 		const sizeVram = byteCount(entry.size_vram);
 		if (size === null || sizeVram === null) throw new ProbeDiscarded("/api/ps did not report the model's size");
-		if (entry.context_length !== numCtx) throw new ProbeDiscarded(`Ollama loaded a different context than ${numCtx}`);
-		return { kind: "loaded", probe: { size, sizeVram } };
+		// Ollama silently clamps a `num_ctx` above the model's trained context; a smaller context is that clamp.
+		const context = plausibleContext(entry.context_length);
+		if (context === null || context > numCtx) {
+			throw new ProbeDiscarded(`Ollama loaded a different context than ${numCtx}`);
+		}
+		return { kind: "loaded", probe: { size, sizeVram, context } };
 	}
 
 	/** Ask Ollama to drop the model now; failures are logged, never thrown. */
@@ -283,8 +294,8 @@ export async function measureContextFit(input: MeasureContextFitInput): Promise<
 		const show = await daemon.show();
 		const trained = trainedContextOf(show);
 		const trainedContext = trained ?? UNKNOWN_TRAINED_CONTEXT;
-		const modelfile = modelfileNumCtx(show);
-		const ceiling = modelfile === null ? trainedContext : Math.min(trainedContext, modelfile);
+		const limits = [trainedContext, modelfileNumCtx(show), plausibleContext(input.maxContext)];
+		const ceiling = Math.min(...limits.filter((limit): limit is number => limit !== null));
 		const ladder = contextLadder(ceiling);
 		const floor = ladder[0];
 
@@ -292,8 +303,12 @@ export async function measureContextFit(input: MeasureContextFitInput): Promise<
 		const firstTimeoutMs =
 			timing.probeTimeoutMs + Math.floor(modelBytes / timing.probeSizeUnitBytes) * timing.probeMsPerSizeUnit;
 
-		// Written by `probe`; an object so the walk below reads the latest pool, not a narrowed copy.
-		const seen: { pool: ContextPool | null } = { pool: machine.unifiedMemory ? "ram" : null };
+		// Written by `probe`; an object so the walk below reads the latest values, not narrowed copies.
+		// `clamped` is the context Ollama clamped a rung to: the real ceiling, so the walk ends there.
+		const seen: { pool: ContextPool | null; clamped: number | null } = {
+			pool: machine.unifiedMemory ? "ram" : null,
+			clamped: null,
+		};
 		let best: number | null = null;
 		let failedOnce = false;
 		const fitting: [number, number][] = [];
@@ -309,10 +324,11 @@ export async function measureContextFit(input: MeasureContextFitInput): Promise<
 				seen.pool ??= "ram";
 				return false;
 			}
-			const { size, sizeVram } = result.probe;
+			const { size, sizeVram, context } = result.probe;
 			seen.pool ??= sizeVram > 0 ? "gpu" : "ram";
 			const fits = seen.pool === "gpu" ? sizeVram >= size : size <= ramBudget;
-			if (fits) fitting.push([n, size]);
+			if (context < n) seen.clamped = context;
+			else if (fits) fitting.push([n, size]);
 			return fits;
 		};
 
@@ -322,10 +338,14 @@ export async function measureContextFit(input: MeasureContextFitInput): Promise<
 			if (predicted !== null && budget !== null && predicted > budget * PREDICTION_SLACK) break;
 
 			let fits = await probe(n);
-			if (!fits && !failedOnce) {
+			if (!fits && seen.clamped === null && !failedOnce) {
 				failedOnce = true;
 				await daemon.unloadAndSettle();
 				fits = await probe(n);
+			}
+			if (seen.clamped !== null) {
+				if (fits && (best === null || seen.clamped > best)) best = seen.clamped;
+				break;
 			}
 			if (!fits) break;
 			best = n;
@@ -333,9 +353,10 @@ export async function measureContextFit(input: MeasureContextFitInput): Promise<
 
 		const resolvedPool: ContextPool = seen.pool ?? "ram";
 		const verdict: ContextVerdict = best !== null ? "fits" : resolvedPool === "gpu" ? "spills" : "exceeds-ram";
+		const fallback = seen.clamped === null ? floor : Math.min(floor, seen.clamped);
 		return {
 			kind: "measured",
-			result: { maxContext: best ?? floor, trainedContext, pool: resolvedPool, verdict },
+			result: { maxContext: best ?? fallback, trainedContext, pool: resolvedPool, verdict },
 		};
 	} catch (error) {
 		if (error instanceof ProbeDiscarded) {

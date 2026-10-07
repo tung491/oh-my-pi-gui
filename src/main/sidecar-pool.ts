@@ -469,10 +469,32 @@ export class SidecarPool {
 	/** Send a command to the idle tab attached to `sessionPath`. */
 	async commandForIdleSession(sessionPath: string, command: RpcCommand): Promise<RpcResponse | null> {
 		const owner = this.#sessionOwners.get(sessionPath);
-		const entry = owner ? this.#byTabId.get(owner.tabId) : undefined;
+		return owner ? await this.commandForIdleTab(owner.tabId, command) : null;
+	}
+
+	/** Send a command to `tabId` while it is ready and neither running nor compacting; null otherwise. */
+	async commandForIdleTab(tabId: string, command: RpcCommand): Promise<RpcResponse | null> {
+		const entry = this.#byTabId.get(tabId);
 		if (!entry || entry.running || entry.compacting === true || entry.status !== "ready") return null;
 		const client = entry.sidecar.rpcClient;
 		return client ? await client.command(command) : null;
+	}
+
+	/** Tabs in any window that are ready and neither running nor compacting right now. */
+	idleTabIds(): string[] {
+		const ids: string[] = [];
+		for (const entry of this.#entries) {
+			if (!entry.running && entry.compacting !== true && entry.status === "ready") ids.push(entry.tabId);
+		}
+		return ids;
+	}
+
+	/** A run or an automatic compaction is in flight in any window. */
+	anyInFlight(): boolean {
+		for (const entry of this.#entries) {
+			if (entry.running || entry.compacting === true) return true;
+		}
+		return false;
 	}
 
 	/** Make `tabId` the window's active tab (moves full event forwarding). False when unknown/foreign. */
