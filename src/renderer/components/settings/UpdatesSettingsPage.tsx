@@ -1,10 +1,7 @@
 import { CheckCircle2, Download, FolderOpen, RefreshCw, RotateCcw, ServerCog } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { UpdateStatus } from "../../../shared/ipc-types";
-import type { RpcOmpUpdateResult } from "../../../shared/rpc-types";
 import { useT } from "../../lib/i18n";
-import { useTabRpc } from "../../lib/tab-rpc";
-import { useSessionStore } from "../../stores/session";
 import { useUpdaterStore } from "../../stores/updater";
 import { Button, Spinner } from "../common";
 import { updateErrorText } from "../layout/UpdateBanner";
@@ -20,72 +17,43 @@ function appUpdateAvailable(status: UpdateStatus): boolean {
 	return status.state === "available" || status.state === "downloading" || status.state === "downloaded";
 }
 
-/** Derive the honest aggregate state shown by the updates header. */
-export function updateOverviewState(
-	status: UpdateStatus,
-	core: RpcOmpUpdateResult | undefined,
-	coreError: string | undefined,
-	checking: boolean,
-): UpdateOverviewState {
+/**
+ * Derive the honest aggregate state shown by the updates header. The app's own
+ * release feed is the only source: the bundled agent ships inside the app and
+ * updates with it, so its package registry is never consulted.
+ */
+export function updateOverviewState(status: UpdateStatus, checking: boolean): UpdateOverviewState {
 	if (checking || status.state === "idle" || status.state === "checking") return "checking";
-	if (status.state === "error" || coreError) return "error";
-	if (!core) return "checking";
-	if (appUpdateAvailable(status) || core.updateAvailable) return "attention";
+	if (status.state === "error") return "error";
+	if (appUpdateAvailable(status)) return "attention";
 	return "healthy";
 }
 
 export function UpdatesSettingsPage() {
-	const tabRpc = useTabRpc();
 	const t = useT();
-	const sidecarReady = useSessionStore(state => state.status) === "ready";
 	const status = useUpdaterStore(state => state.status);
 	const setStatus = useUpdaterStore(state => state.setStatus);
 	const [guiVersion, setGuiVersion] = useState<string>();
-	const [core, setCore] = useState<RpcOmpUpdateResult>();
 	const [checking, setChecking] = useState(false);
-	const [coreError, setCoreError] = useState<string>();
 
 	const check = useCallback(async () => {
 		setChecking(true);
-		setCoreError(undefined);
-		const [appResult, coreResult] = await Promise.allSettled([
-			window.omp.updater.check(),
-			sidecarReady ? tabRpc.getOmpUpdate() : Promise.resolve(null),
-		]);
-		setStatus(
-			appResult.status === "fulfilled"
-				? appResult.value
-				: {
-						state: "error",
-						message: appResult.reason instanceof Error ? appResult.reason.message : String(appResult.reason),
-					},
-		);
-		if (coreResult.status === "fulfilled" && coreResult.value !== null && coreResult.value.success) {
-			setCore(coreResult.value.data as RpcOmpUpdateResult);
-		} else {
-			setCoreError(
-				!sidecarReady
-					? t("common.notConnected")
-					: coreResult.status === "rejected"
-						? String(coreResult.reason)
-						: coreResult.value === null || coreResult.value.success
-							? t("updates.core.checkFailed")
-							: coreResult.value.error,
-			);
+		try {
+			setStatus(await window.omp.updater.check());
+		} catch (error) {
+			setStatus({ state: "error", message: error instanceof Error ? error.message : String(error) });
+		} finally {
+			setChecking(false);
 		}
-		setChecking(false);
-	}, [setStatus, sidecarReady, t, tabRpc.getOmpUpdate]);
+	}, [setStatus]);
 
 	useEffect(() => {
 		void window.omp.updater.version().then(setGuiVersion);
 		void check();
 	}, [check]);
 
-	const coreUpdateAvailable = core?.updateAvailable === true;
-	const overview = updateOverviewState(status, core, coreError, checking);
-	const errorMessage = [status.state === "error" ? updateErrorText(t, status) : undefined, coreError]
-		.filter(Boolean)
-		.join(" · ");
+	const overview = updateOverviewState(status, checking);
+	const errorMessage = status.state === "error" ? updateErrorText(t, status) : undefined;
 
 	return (
 		<div>
@@ -186,43 +154,6 @@ export function UpdatesSettingsPage() {
 						{status.state === "not-available" && (
 							<span className="text-omp-sm text-(--omp-success)">{t("updates.upToDate")}</span>
 						)}
-					</div>
-				</section>
-
-				<section className="updates-row items-center gap-3 px-4 py-3">
-					<div className="updates-icon flex size-8 items-center justify-center text-(--omp-muted)">
-						<ServerCog size={15} />
-					</div>
-					<div className="updates-copy min-w-0">
-						<h3 className="text-omp-md font-semibold text-(--omp-text)">{t("updates.core.name")}</h3>
-						<p className="mt-0.5 text-omp-xs text-(--omp-dim)">{t("updates.core.description")}</p>
-					</div>
-					<div className="updates-current">
-						<div className="text-omp-xxs uppercase tracking-wider text-(--omp-dim)">{t("updates.current")}</div>
-						<div className="mt-1 font-mono text-omp-sm text-(--omp-text)">{core?.currentVersion ?? "—"}</div>
-					</div>
-					<div className="updates-latest">
-						<div className="text-omp-xxs uppercase tracking-wider text-(--omp-dim)">{t("updates.latest")}</div>
-						<div className="mt-1 font-mono text-omp-sm text-(--omp-text)">{core?.latestVersion ?? "—"}</div>
-					</div>
-					<div
-						className={`updates-action justify-self-end text-omp-sm ${
-							coreError
-								? "text-(--omp-error)"
-								: !core || checking
-									? "text-(--omp-muted)"
-									: coreUpdateAvailable
-										? "text-(--omp-warning)"
-										: "text-(--omp-success)"
-						}`}
-					>
-						{coreError
-							? t("updates.checkFailed")
-							: !core || checking
-								? t("updates.checking")
-								: coreUpdateAvailable
-									? t("updates.coreBundledPending")
-									: t("updates.upToDate")}
 					</div>
 				</section>
 			</div>

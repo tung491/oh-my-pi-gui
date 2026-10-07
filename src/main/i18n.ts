@@ -58,7 +58,7 @@ const TEXT: Record<MainTextKey, Record<MainLanguage, string>> = {
 	"menu.commandCenter": { en: "Command Center", vi: "Trung tâm lệnh" },
 	"menu.capabilities": { en: "Capabilities", vi: "Khả năng" },
 	"menu.modelPicker": { en: "Select Model", vi: "Chọn mô hình" },
-	"menu.restartCore": { en: "Restart OMP Core", vi: "Khởi động lại OMP Core" },
+	"menu.restartCore": { en: "Restart the assistant", vi: "Khởi động lại trợ lý" },
 	"menu.documentation": { en: "Documentation", vi: "Tài liệu" },
 	"menu.edit": { en: "Edit", vi: "Chỉnh sửa" },
 	"menu.exportHtml": { en: "Export HTML", vi: "Xuất HTML" },

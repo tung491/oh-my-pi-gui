@@ -93,7 +93,6 @@ export type RpcCommand =
 	| { id?: string; type: "get_security_dashboard" }
 	| { id?: string; type: "get_security_scan"; scanId: string }
 	| { id?: string; type: "get_ssh_hosts" }
-	| { id?: string; type: "get_omp_update" }
 
 	// Session reports (structured TUI /context /share /jobs parity; /tools rides get_active_tools)
 	| { id?: string; type: "get_context_report" }
@@ -898,14 +897,6 @@ export interface RpcSshTestResult {
 	compatShell?: RpcSshHostInfo["compatShell"];
 	transferShell?: RpcSshHostInfo["transferShell"];
 	error?: string;
-}
-export interface RpcOmpUpdateResult {
-	currentVersion: string;
-	latestVersion: string;
-	updateAvailable: boolean;
-	checkedAt: string;
-	distribution: "bundled";
-	installStrategy: "gui-update";
 }
 
 /** A node in the session's branch tree (visual session navigation). */

@@ -11,7 +11,6 @@ import type { SettingEntry } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
 import { useUiStore } from "../../stores/ui";
 import { Toggle } from "./editors/Toggle";
-import { CapabilitiesHome } from "./pages/CapabilitiesHome";
 import { LaunchProfileSection } from "./pages/LaunchProfileSection";
 import {
 	groupSchemaEntries,
@@ -49,56 +48,6 @@ describe("Toggle", () => {
 		expect(html).toContain('aria-checked="false"');
 		expect(html).not.toContain("Saved");
 	});
-});
-
-describe("CapabilitiesHome", () => {
-	it("leads with OMP-specific workflows and exposes a direct action for each", () => {
-		const noop = () => {};
-		const html = renderToStaticMarkup(
-			<I18nProvider>
-				<CapabilitiesHome
-					advisorActive={false}
-					advisorEnabled
-					memoryBackend="local"
-					onConfigureAdvisor={noop}
-					onConfigureTtsr={noop}
-					onOpenAgents={noop}
-					onOpenMemory={noop}
-					onOpenTools={noop}
-					onOpenCommandCenter={noop}
-					onOpenTarget={noop}
-					ready
-					ttsrEnabled
-				/>
-			</I18nProvider>,
-		);
-
-		expect(html).toContain("Start with what makes OMP different");
-		expect(html.indexOf("Mid-stream correction · TTSR")).toBeLessThan(html.indexOf("Parallel helpers"));
-		expect(html).toContain("Configure rules");
-		expect(html).toContain("Open Agent Hub");
-		expect(html).toContain("Advisor settings");
-		expect(html).toContain("Configure memory");
-		expect(html).toContain("Configure tool access");
-		expect(html).toContain("Backend: local");
-		expect(html).toContain("Switch Model");
-		expect(html).toContain("Side Question");
-		expect(html).toContain("Export HTML");
-		expect(html).toContain("Updates");
-		for (const removed of [
-			"Debug Tools",
-			"Collab Session",
-			"MCP Servers",
-			"Plugin Marketplace",
-			"Goal mode",
-			"Loop mode",
-		])
-			expect(html).not.toContain(removed);
-	});
-
-	// (The pending-toggle lock test was removed with the toggle buttons —
-	// capability cards are now discovery + navigation only; the values live in
-	// their schema tabs.)
 });
 
 describe("groupSchemaEntries", () => {
