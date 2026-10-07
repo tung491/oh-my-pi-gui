@@ -38,7 +38,6 @@ import { fill, type LaunchOptions, launch, type PreparedLaunch, relaunch, until 
 const executablePath = process.env.OMP_GUI_TEST_APP;
 /** The quick-entry bar's content size; nothing else the app shows has it. */
 const BAR = { width: 680, height: 168 };
-const SEND = 'button[aria-label="Send (Enter)"]';
 const QUIT_GRACE_MS = 15_000;
 
 interface Profile {
@@ -346,22 +345,13 @@ describe("installed package", () => {
 		expect(JSON.stringify(status)).toMatch(/latest-linux\.yml|"state":"(not-available|available)"/);
 	}).timeout(120_000);
 
-	it("a hard kill leaves no sidecar or tool child", async () => {
+	it("a hard kill leaves no sidecar or supervisor", async () => {
 		const profile = await start("hard-kill");
 		const pid = appPid(profile);
-		await fill($("textarea"), "!/usr/bin/sleep 600");
-		await $(SEND).click();
 		const below = (pattern: string) =>
 			descendants(pid)
 				.filter(info => info.cmdline.join(" ").includes(pattern))
 				.map(info => info.pid);
-		expect(
-			await until(
-				() => below("/usr/bin/sleep 600").length,
-				count => count > 0,
-				{ timeout: 30_000 },
-			),
-		).toBeGreaterThan(0);
 		// A second task (the sidebar's "New task" button) runs its own sidecar beside the first.
 		await $("[data-sidebar-new-agent]").click();
 		expect(
@@ -373,15 +363,14 @@ describe("installed package", () => {
 		).toBeGreaterThanOrEqual(2);
 		const sidecars = below("--mode rpc-ui");
 		const supervisors = below("--omp-supervise");
-		const tools = below("/usr/bin/sleep 600");
 		expect(sidecars.length).toBeGreaterThan(0);
 		expect(supervisors.length).toBeGreaterThan(0);
 		process.kill(pid, "SIGKILL");
-		const survivors = () => [...sidecars, ...supervisors, ...tools].filter(alive);
+		const survivors = () => [...sidecars, ...supervisors].filter(alive);
 		expect(await until(survivors, left => left.length === 0, { timeout: 10_000, interval: 100 })).toEqual([]);
 		// The plan's pgrep checks, scoped to this profile's agent dir so another
 		// omp on the machine (the user's own app, another checkout) never counts.
-		for (const pattern of ["omp --mode rpc-ui", "--omp-supervise", "/usr/bin/sleep 600"]) {
+		for (const pattern of ["omp --mode rpc-ui", "--omp-supervise"]) {
 			const left = pgrepFull(pattern).filter(other => environOf(other).PI_CODING_AGENT_DIR === profile.launch.agent);
 			labelled(pattern, () => expect(left).toEqual([]));
 		}

@@ -25,7 +25,7 @@ const TAURI_ONLY: ReadonlySet<string> = new Set(["csp.e2e.ts"]);
  * corrects for its window decoration itself (Electron's `setBounds` did not need to).
  */
 const TAURI_ONLY_TESTS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-	["packaged-smoke.e2e.ts", new Set(["a hard kill leaves no sidecar or tool child"])],
+	["packaged-smoke.e2e.ts", new Set(["a hard kill leaves no sidecar or supervisor"])],
 	[
 		"desktop.e2e.ts",
 		new Set(["a restored window opens at its saved footprint and a restart leaves the saved state unchanged"]),
