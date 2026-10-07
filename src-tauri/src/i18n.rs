@@ -86,7 +86,7 @@ main_text! {
     MenuCapabilities => "menu.capabilities", "Capabilities", "Khả năng";
     MenuCheckForUpdates => "menu.checkForUpdates", "Check for Updates…", "Kiểm tra cập nhật…";
     MenuModelPicker => "menu.modelPicker", "Select Model", "Chọn mô hình";
-    MenuRestartCore => "menu.restartCore", "Restart OMP Core", "Khởi động lại OMP Core";
+    MenuRestartCore => "menu.restartCore", "Restart the assistant", "Khởi động lại trợ lý";
     MenuDocumentation => "menu.documentation", "Documentation", "Tài liệu";
     MenuEdit => "menu.edit", "Edit", "Chỉnh sửa";
     MenuExportHtml => "menu.exportHtml", "Export HTML", "Xuất HTML";
