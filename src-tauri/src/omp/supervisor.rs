@@ -5,7 +5,9 @@
 //! control channel the GUI passed as fd 3. It spawns omp in its own process
 //! group with the GUI's stdio pipes inherited (no frame relay), reports omp's
 //! pid on the control channel once, and then waits for omp to exit, SIGTERM,
-//! or control-channel EOF (the GUI is gone). The shutdown sequence is SIGTERM
+//! or control-channel EOF (the GUI is gone). While omp runs, every orphan
+//! reparented to the supervisor is reaped as it exits, so none lingers as a
+//! zombie until the app quits. The shutdown sequence is SIGTERM
 //! omp, a 5 s grace, SIGKILL of omp's process group, then a sweep of every
 //! process reparented to the supervisor, and it exits with omp's status.
 //!
@@ -179,6 +181,7 @@ mod unix {
             }
             _ = async { match sigterm.as_mut() { Some(signal) => { signal.recv().await; } None => std::future::pending().await } } => {}
             _ = async { match stream.as_mut() { Some(stream) => wait_for_eof(stream).await, None => std::future::pending().await } } => {}
+            _ = reap_orphans_while_running(omp) => {}
         }
         let _ = kill(omp, Signal::SIGTERM);
         let status = match tokio::time::timeout(TERM_GRACE, child.wait()).await {
@@ -253,6 +256,42 @@ mod unix {
             reap();
         }
     }
+
+    /// Reap each orphan reparented to this subreaper as it exits, for as long
+    /// as omp runs; never resolves. omp itself is left for `child.wait()`.
+    async fn reap_orphans_while_running(omp: Pid) {
+        let Ok(mut sigchld) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::child()) else {
+            warn("could not listen for SIGCHLD; orphans are reaped at shutdown");
+            return std::future::pending().await;
+        };
+        loop {
+            if sigchld.recv().await.is_none() {
+                return std::future::pending().await;
+            }
+            reap_orphans(omp);
+        }
+    }
+
+    /// Collect every exited child except omp without blocking. `WNOWAIT` peeks
+    /// first, because collecting omp here would take its status from `child.wait()`.
+    #[cfg(target_os = "linux")]
+    fn reap_orphans(omp: Pid) {
+        use nix::sys::wait::{waitid, Id};
+        loop {
+            let peeked = waitid(Id::All, WaitPidFlag::WEXITED | WaitPidFlag::WNOHANG | WaitPidFlag::WNOWAIT);
+            match peeked.ok().and_then(|status| status.pid()) {
+                Some(pid) if pid != omp => {
+                    let _ = waitpid(pid, Some(WaitPidFlag::WNOHANG));
+                }
+                // Nothing has exited, or omp has: `child.wait()` collects omp and the sweep the rest.
+                _ => return,
+            }
+        }
+    }
+
+    /// macOS orphans are collected by the shutdown sweep.
+    #[cfg(not(target_os = "linux"))]
+    fn reap_orphans(_omp: Pid) {}
 
     /// Collect every exited child without blocking.
     fn reap() {
@@ -365,6 +404,44 @@ mod tests {
         // sleep died on SIGKILL after the grace period would have been needed for a
         // stand-in that ignores SIGTERM; plain sleep exits on SIGTERM at once.
         assert_eq!(status.code(), Some(143));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_orphan_that_exits_is_reaped_while_omp_runs() {
+        // The subshell exits at once, so its `sleep 1` is reparented to the supervisor.
+        let args = vec!["-c".to_string(), "(/usr/bin/sleep 1 &); exec /usr/bin/sleep 600".to_string()];
+        let mut supervised = spawn_supervised(Path::new("bash"), &args, |command| {
+            command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit());
+        })
+        .unwrap();
+        let omp = read_pid_line(&mut supervised.control_read).await.expect("pid line");
+        let supervisor = supervised.child.id().expect("supervisor pid");
+        let orphan_of_supervisor = || {
+            std::fs::read_dir("/proc")
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|entry| entry.file_name().to_string_lossy().parse::<u32>().ok())
+                .find(|pid| ppid(*pid) == Some(supervisor) && cmdline(*pid) == [SLEEP_BIN, "1"])
+        };
+        let mut orphan = None;
+        assert!(
+            wait_until(Duration::from_secs(5), || {
+                orphan = orphan_of_supervisor();
+                orphan.is_some()
+            })
+            .await,
+            "the orphan was never reparented to the supervisor"
+        );
+        let orphan = orphan.unwrap();
+        let reaped = wait_until(Duration::from_secs(5), || !Path::new(&format!("/proc/{orphan}")).exists()).await;
+        assert!(reaped, "the exited orphan is still in the process table: {:?}", std::fs::read_to_string(format!("/proc/{orphan}/stat")));
+        assert!(alive(omp), "omp must keep running");
+
+        // omp's own status still reaches the supervisor's exit code.
+        let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(omp as i32), nix::sys::signal::Signal::SIGKILL);
+        let status = tokio::time::timeout(Duration::from_secs(10), supervised.child.wait()).await.expect("supervisor exits").unwrap();
+        assert_eq!(status.code(), Some(137));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
