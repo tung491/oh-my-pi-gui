@@ -3,8 +3,8 @@
  * `select` extension-UI request with exactly ["Approve", "Deny"] options and
  * a title of the form "Allow tool: <name>\n[Reason: <reason>\n]<details>".
  * This component leads with one plain sentence saying what will happen, then
- * the tool name with its capability tier, and keeps the raw request one click
- * down. Deny (or closing the dialog) answers confirmed:false.
+ * the capability tier (with the tool name when the sentence has no plain words
+ * for the tool), and keeps the raw request one click down. Deny (or closing the dialog) answers confirmed:false.
  */
 
 import { ShieldAlert, ShieldCheck } from "lucide-react";
@@ -13,6 +13,7 @@ import type { ExtensionUIRequest } from "../../../shared/rpc-types";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { Badge, type BadgeVariant, Button, Modal } from "../common";
+import { isOfficeTool, OFFICE_TOOL_TEXT } from "../tools/office-tools";
 
 const APPROVAL_TITLE_PREFIX = "Allow tool: ";
 const REASON_PREFIX = "Reason: ";
@@ -74,13 +75,6 @@ const WRITE_TOOLS = new Set([
 
 /** Tools whose request carries a reason the pack writes in the session language. */
 const REASON_TOOLS = new Set(["open_item", "os_setting"]);
-
-/** Locale keys of the office tools' action phrases. */
-const OFFICE_ACTION_KEYS: Record<string, string> = {
-	office_report: "approval.action.officeReport",
-	office_slides: "approval.action.officeSlides",
-	office_clean: "approval.action.officeClean",
-};
 
 export interface ParsedApprovalTitle {
 	toolName: string;
@@ -177,22 +171,36 @@ export function resolveWritePath(details: string, where: WriteLocation): string 
 
 type Translate = (key: string, params?: Record<string, string>) => string;
 
+interface ApprovalSentence {
+	text: string;
+	warning: boolean;
+	/**
+	 * The sentence says in plain words what will happen, so the tool id adds
+	 * nothing and is left out. Otherwise the sentence names the tool or warns,
+	 * and the id is shown beside the tier.
+	 */
+	plain: boolean;
+}
+
 function approvalSentence(
 	parsed: ParsedApprovalTitle,
 	toolName: string,
 	where: WriteLocation,
 	t: Translate,
-): { text: string; warning: boolean } {
+): ApprovalSentence {
 	const reason = parsed.reason?.trim();
-	if (REASON_TOOLS.has(parsed.toolName) && reason) return { text: reason, warning: false };
+	if (REASON_TOOLS.has(parsed.toolName) && reason) return { text: reason, warning: false, plain: true };
 	if (parsed.toolName === "write") {
 		const path = resolveWritePath(parsed.details, where);
 		return path
-			? { text: t("approval.sentence.write", { path }), warning: false }
-			: { text: t("approval.sentence.writeUnclear"), warning: true };
+			? { text: t("approval.sentence.write", { path }), warning: false, plain: true }
+			: { text: t("approval.sentence.writeUnclear"), warning: true, plain: false };
 	}
-	const actionKey = OFFICE_ACTION_KEYS[parsed.toolName];
-	return { text: t("approval.sentence.generic", { action: actionKey ? t(actionKey) : toolName }), warning: false };
+	if (isOfficeTool(parsed.toolName)) {
+		const action = t(OFFICE_TOOL_TEXT[parsed.toolName].action);
+		return { text: t("approval.sentence.generic", { action }), warning: false, plain: true };
+	}
+	return { text: t("approval.sentence.generic", { action: toolName }), warning: false, plain: false };
 }
 
 /** Tier badge: read=green, write=yellow, exec=red (default tier is exec). */
@@ -238,7 +246,16 @@ export function ApprovalDialog({
 				</p>
 				<div className="mt-3 flex items-center gap-2.5">
 					<ShieldAlert className="shrink-0 text-(--omp-warning)" size={16} />
-					<span className="min-w-0 flex-1 truncate font-mono text-omp-sm text-(--omp-muted)">{toolName}</span>
+					{sentence.plain ? (
+						<span className="flex-1" />
+					) : (
+						<span
+							data-approval-tool-name
+							className="min-w-0 flex-1 truncate font-mono text-omp-sm text-(--omp-muted)"
+						>
+							{toolName}
+						</span>
+					)}
 					<Badge dot variant={tier.variant}>
 						{t(tier.key)}
 					</Badge>

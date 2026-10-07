@@ -93,3 +93,57 @@ describe("ToolCard terminal states", () => {
 		ticker.mockRestore();
 	});
 });
+
+describe("ToolCard title", () => {
+	const realLocalStorage = globals.localStorage;
+
+	function setLanguage(lang: "en" | "vi"): void {
+		globals.localStorage = {
+			getItem: (key: string) => (key === "omp.lang" ? lang : null),
+			setItem: () => {},
+			removeItem: () => {},
+		};
+	}
+
+	async function headerOf(toolName: string): Promise<{ title: string; root: Root }> {
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		await act(async () => {
+			root.render(
+				<I18nProvider>
+					<ToolCard toolCallId={`${toolName}-call`} toolName={toolName} args={{}} />
+				</I18nProvider>,
+			);
+		});
+		return { title: container.querySelector(".omp-tool-name")?.textContent ?? "", root };
+	}
+
+	afterEach(() => {
+		globals.localStorage = realLocalStorage;
+	});
+
+	it.each([
+		["office_report", "Word report", "Báo cáo Word"],
+		["office_clean", "Cleaned spreadsheet", "Bảng tính đã làm sạch"],
+		["office_slides", "Slide deck", "Bản trình chiếu"],
+	])("titles an %s card in plain words in either language", async (toolName, english, vietnamese) => {
+		setLanguage("en");
+		const en = await headerOf(toolName);
+		expect(en.title).toBe(english);
+		await act(async () => en.root.unmount());
+
+		setLanguage("vi");
+		const vi = await headerOf(toolName);
+		expect(vi.title).toBe(vietnamese);
+		expect(document.body.innerHTML).not.toContain(toolName);
+		await act(async () => vi.root.unmount());
+	});
+
+	it("keeps the tool id as the title of any other tool", async () => {
+		setLanguage("en");
+		const card = await headerOf("diagnose");
+		expect(card.title).toBe("diagnose");
+		await act(async () => card.root.unmount());
+	});
+});

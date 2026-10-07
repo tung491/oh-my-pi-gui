@@ -7,7 +7,7 @@ import { useToolsStore } from "../../stores/tools";
 import { useUiStore } from "../../stores/ui";
 import { GenericRenderer } from "./GenericRenderer";
 import { getToolRenderer, getToolSummary } from "./index";
-import { isOfficeTool } from "./office-tools";
+import { isOfficeTool, OFFICE_TOOL_TEXT } from "./office-tools";
 
 export interface ToolRendererProps {
 	args: Record<string, unknown>;
@@ -42,15 +42,17 @@ export function ToolCard({ toolCallId, toolName, args, runningIndicator = "spinn
 	const t = useT();
 	const entry = useToolsStore(s => s.activeTools.get(toolCallId));
 	const expandAll = useUiStore(s => s.toolsExpandAll);
+	const officeTool = isOfficeTool(toolName);
+	// An office job is titled in plain words; every other tool shows its id.
+	const title = officeTool ? t(OFFICE_TOOL_TEXT[toolName].title) : toolName;
 	// An office job's card holds the Open button for its finished file, so it
 	// is open from the start and collapse-all leaves it open.
-	const openByDefault = isOfficeTool(toolName);
-	const [expanded, setExpanded] = useState(expandAll.expanded || openByDefault);
+	const [expanded, setExpanded] = useState(expandAll.expanded || officeTool);
 
 	// ⌃O expand/collapse-all: every card snaps to the latest shared target.
 	useEffect(() => {
-		setExpanded(expandAll.expanded || openByDefault);
-	}, [expandAll, openByDefault]);
+		setExpanded(expandAll.expanded || officeTool);
+	}, [expandAll, officeTool]);
 
 	const entryStatus = entry?.status ?? "running";
 	// "pending" (args still streaming) is a live sub-state: spinner, not a check.
@@ -131,8 +133,13 @@ export function ToolCard({ toolCallId, toolName, args, runningIndicator = "spinn
 						<Check size={12} className="omp-tool-status-icon shrink-0 text-[var(--omp-success)]" />
 					)}
 				</span>
-				<span className="omp-tool-name shrink-0 font-mono text-omp-md font-semibold tracking-tight text-[var(--omp-text)]">
-					{toolName}
+				<span
+					className={cx(
+						"omp-tool-name shrink-0 text-omp-md font-semibold tracking-tight text-[var(--omp-text)]",
+						!officeTool && "font-mono",
+					)}
+				>
+					{title}
 				</span>
 				{summary && (
 					<span className="omp-tool-summary min-w-0 flex-1 truncate font-mono text-omp-sm text-[var(--omp-tool-output)]">

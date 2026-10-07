@@ -281,3 +281,31 @@ describe("ApprovalDialog sentence", () => {
 		);
 	});
 });
+
+describe("ApprovalDialog tool name", () => {
+	it.each([
+		["office_report", "Sai ATLAS muốn tạo báo cáo Word. Cho phép không?"],
+		["office_slides", "Sai ATLAS muốn tạo bộ slide. Cho phép không?"],
+		["office_clean", "Sai ATLAS muốn tạo bản sao đã dọn dẹp của bảng tính. Cho phép không?"],
+	])("asks about %s with only the plain sentence", async (toolName, sentence) => {
+		setLanguage("vi");
+		expect(await showApproval(`Allow tool: ${toolName}`)).toBe(sentence);
+		expect(document.querySelector("[data-approval-tool-name]")).toBeNull();
+		expect(document.body.textContent).not.toContain(toolName);
+	});
+
+	it("leaves the tool name out of a file save it can name in plain words", async () => {
+		setLanguage("en");
+		await showApproval(WRITE_TITLE);
+		expect(document.querySelector("[data-approval-tool-name]")).toBeNull();
+	});
+
+	it.each([
+		["a tool without plain words", "Allow tool: diagnose\ncheck: disk", "diagnose"],
+		["a file save it cannot read without doubt", "Allow tool: write\nPath: /a/b.md\n../../c\nContent:\nx", "write"],
+	])("shows the tool name for %s", async (_label, title, toolName) => {
+		setLanguage("en");
+		await showApproval(title);
+		expect(document.querySelector("[data-approval-tool-name]")?.textContent).toBe(toolName);
+	});
+});
