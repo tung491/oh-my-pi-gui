@@ -1487,7 +1487,7 @@ export const vi: Record<string, string> = {
 	"ollama.context.error": "Không đo được: {error}",
 	"ollama.context.setSuccess": "Đã đặt ngữ cảnh của {model} thành {size}. Áp dụng từ phản hồi tiếp theo.",
 	"ollama.context.setFailed": "Không đổi được ngữ cảnh của {model}: {error}",
-	"ollama.context.measureFailed": "Không xếp hàng đo được {model}: {error}",
+	"ollama.context.measureFailed": "Không thể xếp hàng đo {model}: {error}",
 	"ollama.context.listFailed": "Không đọc được kích thước ngữ cảnh của các mô hình: {error}",
 	"ollama.context.remoteHost": "Chỉ có thể định cỡ ngữ cảnh cho Ollama trên máy tính này",
 	"ollama.context.configuredProvider":
