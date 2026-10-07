@@ -375,8 +375,9 @@ describe("Linux package", () => {
 	});
 
 	it("deb turns off Ollama's online features with the same drop-in the welcome screen writes", () => {
-		// A vendor drop-in applies to the ollama.service the official installer writes to /etc, at its next
-		// start; one in /etc with the same name (the welcome screen's) overrides it with the same content.
+		// A vendor drop-in applies to the ollama.service the official installer writes to /etc once systemd
+		// reloads (a reboot; the package runs no script); one in /etc with the same name (the welcome
+		// screen's) overrides it with the same content.
 		const files = platform("linux").bundle?.linux?.deb?.files ?? {};
 		expect(files["/usr/lib/systemd/system/ollama.service.d/sai-atlas.conf"]).toBe("linux/ollama-no-cloud.conf");
 		const dropIn = fs.readFileSync(path.join(TAURI, "linux/ollama-no-cloud.conf"), "utf8");
