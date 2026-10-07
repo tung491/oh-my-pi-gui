@@ -1,0 +1,566 @@
+From f71500ed189cd46548d3660c853376ec85cc2bcc Mon Sep 17 00:00:00 2001
+From: Tung Son Do <dosontung007@gmail.com>
+Date: Wed, 7 Oct 2026 20:40:11 +0900
+Subject: [PATCH] feat(ollama): add a live per-model context limit setting
+
+ollama.contextLimits maps an Ollama model id, exactly as /api/tags names
+it, to the largest context window the session requests for it. Every
+ollama model on the native ollama-chat api is capped at its entry after
+modelOverrides, so an override cannot raise it, and the native api sends
+the capped window as num_ctx. A model without an entry keeps the
+OLLAMA_CONTEXT_LENGTH cap. An entry that is not a positive integer up to
+2^24, or a value that is not a record, is ignored instead of failing
+discovery.
+
+The session listens to the setting like extendedContext: a change,
+including an edit to a watched --config overlay, rebuilds the catalog and
+rebinds the active model in place. The rebind does not switch models or
+reset provider sessions, and a turn in flight finishes undisturbed; the
+next request carries the new num_ctx.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ docs/models.md                                |  12 +
+ docs/settings.md                              |   2 +
+ .../coding-agent/src/config/model-registry.ts |  12 +-
+ .../coding-agent/src/config/model-settings.ts |  15 +
+ .../src/config/ollama-context-limits.ts       |  47 +++
+ .../coding-agent/src/session/agent-session.ts |  14 +-
+ .../test/ollama-context-limits.test.ts        | 336 ++++++++++++++++++
+ 7 files changed, 431 insertions(+), 7 deletions(-)
+ create mode 100644 packages/coding-agent/src/config/ollama-context-limits.ts
+ create mode 100644 packages/coding-agent/test/ollama-context-limits.test.ts
+
+diff --git a/docs/models.md b/docs/models.md
+index 65d5cb755f..c070c2dc1f 100644
+--- a/docs/models.md
++++ b/docs/models.md
+@@ -389,6 +389,18 @@ available without credentials, with context size, reasoning, image input, and to
+ from bridge metadata. Ineligible devices, disabled Apple Intelligence, and builds without the
+ bridge yield no models. Its internal API is `apple-foundation-models`; no HTTP endpoint is used.
+ 
++### Ollama context limits per model
++
++The `ollama.contextLimits` setting lowers, per model, the window of an `ollama` model on the native `ollama-chat` api (see [Implicit Ollama discovery](#implicit-ollama-discovery)). Keys are model ids exactly as `/api/tags` names them (`qwen3:8b`, `gemma4:latest`; `gemma4` does not match `gemma4:latest`), values are token counts:
++
++```yaml
++ollama:
++  contextLimits:
++    "qwen3:8b": 32768
++```
++
++A listed model's window becomes the smaller of its window and its limit, and its `maxTokens` follows. The limit applies to every `ollama` model on `ollama-chat`, after `modelOverrides`, so an override cannot raise a model past it; it never raises a window. An entry that is not a positive integer up to 2^24 is ignored. A change, including an edit to a `--config` overlay file, applies to running sessions without a restart: the active model's window is updated in place and the next request carries the new `num_ctx`.
++
+ ### LiteLLM provider discovery
+ 
+ When `litellm` is active (for example through `LITELLM_API_KEY` or stored auth), runtime discovery uses the LiteLLM proxy:
+diff --git a/docs/settings.md b/docs/settings.md
+index ba2948e481..f0b0ecfccc 100644
+--- a/docs/settings.md
++++ b/docs/settings.md
+@@ -451,6 +451,8 @@ Existing configs are migrated automatically when loaded. Retired backend selecto
+ | `disabledProviders`    | array   | `[]`                        | Disabled model/discovery providers; supports [path-scoped entries](#path-scoped-arrays). See [above](#provider-and-source-disabling).                                                                                                                                                                                                                                                                             |
+ | `includeModelInPrompt` | boolean | `true`                      | Include the active model name in the system prompt.                                                                                                                                                                                                                                                                                                                                                              |
+ 
++`ollama.contextLimits` (record, default `{}`) maps a local Ollama model id to the largest context window, in tokens, the session requests for it over the native `ollama-chat` api. It applies live, including from a watched `--config` overlay. See [Ollama context limits per model](./models.md#ollama-context-limits-per-model).
++
+ See [Models](./models.md) for the `models.yml` schema and custom-provider definitions.
+ 
+ ### Advisor
+diff --git a/packages/coding-agent/src/config/model-registry.ts b/packages/coding-agent/src/config/model-registry.ts
+index d5d799a64d..d03a4caf03 100644
+--- a/packages/coding-agent/src/config/model-registry.ts
++++ b/packages/coding-agent/src/config/model-registry.ts
+@@ -133,6 +133,8 @@ import { type Settings, settings } from "./settings";
+ import { cfgDisabledProviders } from "./model-settings";
+ import { cfgExtendedContext } from "../session/context-settings";
+ 
++import { applyOllamaContextLimits, readOllamaContextLimits } from "./ollama-context-limits";
++
+ // DeviceCheck attestation (`x-oai-attestation`) for ChatGPT-OAuth Codex
+ // requests; the pi-ai provider resolves it just-in-time per request.
+ setCodexAttestationProvider(generateCodexAttestation);
+@@ -2352,7 +2354,10 @@ export class ModelRegistry {
+ 	// are not request roots, while custom transports own their URL suffixes.
+ 	#applyDiscoveryPolicies(models: Model<Api>[]): Model<Api>[] {
+ 		const providers = new Map(this.#discoverableProviders.map(config => [config.provider, config.discovery.type]));
+-		return models.map(model => {
++		// Every composition applies model overrides before this point, so a
++		// per-model Ollama limit also caps an overridden window.
++		const limited = applyOllamaContextLimits(models, readOllamaContextLimits(this.#settings));
++		return limited.map(model => {
+ 			const providerType = providers.get(model.provider);
+ 			if (providerType !== "llama.cpp") return model;
+ 			const spec = toModelSpec(model);
+@@ -3245,7 +3250,10 @@ export class ModelRegistry {
+ 						return this.#applyProviderTransportOverrideToModel(model, runtimeTransportOverride);
+ 					})
+ 				: nextModels;
+-			this.#unprojectedModels = this.#applyProviderBedrockOverrides(nextModelsWithTransport);
++			this.#unprojectedModels = applyOllamaContextLimits(
++				this.#applyProviderBedrockOverrides(nextModelsWithTransport),
++				readOllamaContextLimits(this.#settings),
++			);
+ 
+ 			this.#models = this.#withCatalogMetrics(this.#applyRuntimeModelModifiers(this.#unprojectedModels));
+ 			this.#invalidateProviderModelCache(providerName);
+diff --git a/packages/coding-agent/src/config/model-settings.ts b/packages/coding-agent/src/config/model-settings.ts
+index d2688b9839..098234d231 100644
+--- a/packages/coding-agent/src/config/model-settings.ts
++++ b/packages/coding-agent/src/config/model-settings.ts
+@@ -120,3 +120,18 @@ export const cfgModelTags = register({ id: "modelTags", type: "record", default:
+ export const cfgModelProviderOrder = register({ id: "modelProviderOrder", type: "array", default: EMPTY_STRING_ARRAY });
+ 
+ export const cfgCycleOrder = register({ id: "cycleOrder", type: "array", default: DEFAULT_CYCLE_ORDER });
++
++const EMPTY_OLLAMA_CONTEXT_LIMITS: Record<string, number> = {};
++
++/**
++ * `ollama.contextLimits`: the largest context window, in tokens, per local Ollama
++ * model id (exactly as `/api/tags` names it, e.g. `qwen3:8b` or `gemma4:latest`).
++ * Caps `ollama` models on the native `ollama-chat` api, which send the window as
++ * `num_ctx`; after `modelOverrides`, so an override cannot raise it. An entry that
++ * is not a positive integer up to 2^24 is ignored. Applied live when it changes.
++ */
++export const cfgOllamaContextLimits = register({
++	id: "ollama.contextLimits",
++	type: "record",
++	default: EMPTY_OLLAMA_CONTEXT_LIMITS,
++});
+diff --git a/packages/coding-agent/src/config/ollama-context-limits.ts b/packages/coding-agent/src/config/ollama-context-limits.ts
+new file mode 100644
+index 0000000000..0d55962a9b
+--- /dev/null
++++ b/packages/coding-agent/src/config/ollama-context-limits.ts
+@@ -0,0 +1,47 @@
++import type { Api, Model } from "@oh-my-pi/pi-ai/types";
++import { isRecord } from "@oh-my-pi/pi-utils";
++import { cfgOllamaContextLimits } from "./model-settings";
++import { type Settings, settings } from "./settings";
++
++/** Largest limit an `ollama.contextLimits` entry may carry (16M tokens, far above any trained context). */
++const MAX_OLLAMA_CONTEXT_LIMIT = 2 ** 24;
++
++/**
++ * The valid `ollama.contextLimits` entries, by exact model id. A malformed entry
++ * (not a positive safe integer, or above 2^24) or a malformed record is dropped,
++ * never an error: a bad limit must not break model discovery.
++ */
++export function readOllamaContextLimits(settingsInstance?: Settings): ReadonlyMap<string, number> {
++	let raw: unknown;
++	try {
++		raw = cfgOllamaContextLimits.get(settingsInstance ?? settings);
++	} catch {
++		return new Map();
++	}
++	const limits = new Map<string, number>();
++	if (!isRecord(raw)) return limits;
++	for (const [id, value] of Object.entries(raw)) {
++		if (typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= MAX_OLLAMA_CONTEXT_LIMIT) {
++			limits.set(id, value);
++		}
++	}
++	return limits;
++}
++
++/**
++ * Cap each local Ollama model on the native api at its `ollama.contextLimits`
++ * entry. That api sends the window as `num_ctx`, so the cap is what the server
++ * allocates. A model without an entry keeps its window.
++ */
++export function applyOllamaContextLimits(models: Model<Api>[], limits: ReadonlyMap<string, number>): Model<Api>[] {
++	if (limits.size === 0) return models;
++	return models.map(model => {
++		if (model.provider !== "ollama" || model.api !== "ollama-chat") return model;
++		const limit = limits.get(model.id);
++		if (limit === undefined) return model;
++		const contextWindow = model.contextWindow === null ? limit : Math.min(model.contextWindow, limit);
++		const maxTokens = Math.min(model.maxTokens ?? contextWindow, contextWindow);
++		if (contextWindow === model.contextWindow && maxTokens === model.maxTokens) return model;
++		return { ...model, contextWindow, maxTokens };
++	});
++}
+diff --git a/packages/coding-agent/src/session/agent-session.ts b/packages/coding-agent/src/session/agent-session.ts
+index a26097ca49..92d40e32a7 100644
+--- a/packages/coding-agent/src/session/agent-session.ts
++++ b/packages/coding-agent/src/session/agent-session.ts
+@@ -462,7 +462,7 @@ import { type AnthropicSlowModeController, anthropicSlowModeLanes } from "./anth
+ import { cfgInterruptMode } from "../modes/settings";
+ import { cfgFollowUpMode } from "../modes/settings";
+ import { cfgSteeringMode } from "../modes/settings";
+-import { cfgDisabledProviders, cfgModelRoles } from "../config/model-settings";
++import { cfgDisabledProviders, cfgModelRoles, cfgOllamaContextLimits } from "../config/model-settings";
+ import { cfgEvalToolsEnabled } from "../eval/settings";
+ import { cfgExtensions, type SkillsSettings } from "../extensibility/settings";
+ import {
+@@ -2317,6 +2317,9 @@ export class AgentSession implements SettingsScope {
+ 		// restores) premium long-context windows, and the live model object must
+ 		// follow so compaction thresholds and context display react immediately.
+ 		cfgExtendedContext.listen(this, () => this.#reapplyExtendedContextPolicy());
++		// Per-model Ollama limits (`--config` overlays are watched) re-cap the
++		// active model's window the same way, without a restart.
++		cfgOllamaContextLimits.listen(this, () => this.#reapplyExtendedContextPolicy());
+ 		cfgBrowserEnabled.listen(this, enabled => this.#reconcileEvalPreludeSetting("browser.enabled", enabled));
+ 		cfgComputerEnabled.listen(this, enabled => this.#reconcileEvalPreludeSetting("computer.enabled", enabled));
+ 		cfgRatchetEnabled.listen(this, enabled => this.#reconcileEvalPreludeSetting("ratchet.enabled", enabled));
+@@ -10509,10 +10512,11 @@ export class AgentSession implements SettingsScope {
+ 	}
+ 
+ 	/**
+-	 * Rebuild the model catalog after an `extendedContext` toggle and rebind the
+-	 * active model when its effective context window changed. Same-model rebinds
+-	 * skip provider-session resets (`modelsAreEqual` sees no change), so this
+-	 * only refreshes metadata consumers (compaction thresholds, context display).
++	 * Rebuild the model catalog after an `extendedContext` toggle or an
++	 * `ollama.contextLimits` change and rebind the active model when its
++	 * effective context window changed. Same-model rebinds skip provider-session
++	 * resets (`modelsAreEqual` sees no change), so this only refreshes metadata
++	 * consumers (compaction thresholds, context display).
+ 	 */
+ 	async #reapplyExtendedContextPolicy(): Promise<void> {
+ 		try {
+diff --git a/packages/coding-agent/test/ollama-context-limits.test.ts b/packages/coding-agent/test/ollama-context-limits.test.ts
+new file mode 100644
+index 0000000000..6d42d3ab9b
+--- /dev/null
++++ b/packages/coding-agent/test/ollama-context-limits.test.ts
+@@ -0,0 +1,336 @@
++import { afterEach, beforeEach, describe, expect, test } from "bun:test";
++import * as fs from "node:fs";
++import * as path from "node:path";
++import { Agent } from "@oh-my-pi/pi-agent-core";
++import type { AssistantMessage, Context, FetchImpl, Model } from "@oh-my-pi/pi-ai";
++import { streamOllama } from "@oh-my-pi/pi-ai/providers/ollama";
++import { AssistantMessageEventStream } from "@oh-my-pi/pi-ai/utils/event-stream";
++import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
++import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
++import { AgentSession, type AgentSessionEvent } from "@oh-my-pi/pi-coding-agent/session/agent-session";
++import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
++import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
++import { TempDir } from "@oh-my-pi/pi-utils";
++import { YAML } from "bun";
++import { beginSettingsTest, restoreSettingsTestState, type SettingsTestState } from "./helpers/settings-test-state";
++
++const ENDPOINT = "http://127.0.0.1:11434";
++const TRAINED_CONTEXT = 262_144;
++const GLOBAL_CAP = 131_072;
++
++/** An Ollama server with `names` installed, each trained on `trainedContext` tokens. */
++function mockOllama(names: string[], trainedContext = TRAINED_CONTEXT): FetchImpl {
++	return async input => {
++		const url = String(input);
++		if (url === `${ENDPOINT}/api/tags`) return Response.json({ models: names.map(name => ({ name })) });
++		if (url === `${ENDPOINT}/api/show`) {
++			return Response.json({
++				capabilities: ["completion", "tools"],
++				model_info: { "llama.context_length": trainedContext },
++			});
++		}
++		throw new Error(`Unexpected URL: ${url}`);
++	};
++}
++
++/** The `options` body an Ollama chat request for `model` carries. */
++async function requestOptions(model: Model): Promise<Record<string, unknown> | undefined> {
++	let options: Record<string, unknown> | undefined;
++	const fetchMock = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
++		options = (JSON.parse(String(init?.body)) as { options?: Record<string, unknown> }).options;
++		return new Response('{"message":{"content":"ok"},"done":true,"prompt_eval_count":1,"eval_count":1}\n');
++	};
++	const context: Context = { messages: [{ role: "user", content: "hi", timestamp: 0 }] };
++	await streamOllama(model as Model<"ollama-chat">, context, { apiKey: "test-key", fetch: fetchMock }).result();
++	return options;
++}
++
++describe("ollama.contextLimits", () => {
++	let state: SettingsTestState;
++	let tempDir: TempDir;
++	let modelsPath: string;
++	let authStorage: AuthStorage;
++
++	beforeEach(async () => {
++		state = beginSettingsTest();
++		for (const name of ["OLLAMA_BASE_URL", "OLLAMA_HOST", "OLLAMA_CONTEXT_LENGTH", "LLAMA_CPP_BASE_URL"]) {
++			delete Bun.env[name];
++		}
++		// The native api is the one that sends the window as `num_ctx`; the GUI
++		// sets this global cap for every model.
++		Bun.env.PI_OLLAMA_API = "ollama-chat";
++		Bun.env.OLLAMA_CONTEXT_LENGTH = String(GLOBAL_CAP);
++		tempDir = TempDir.createSync("@pi-ollama-context-limits-");
++		modelsPath = path.join(tempDir.path(), "models.json");
++		authStorage = await AuthStorage.create(":memory:");
++	});
++
++	afterEach(() => {
++		authStorage.close();
++		tempDir.removeSync();
++		restoreSettingsTestState(state);
++	});
++
++	async function discover(
++		limits: unknown,
++		options: { names?: string[]; trainedContext?: number } = {},
++	): Promise<ModelRegistry> {
++		const registry = new ModelRegistry(authStorage, modelsPath, {
++			fetch: mockOllama(options.names ?? ["m:latest", "other:latest"], options.trainedContext),
++			settings: Settings.isolated({ "ollama.contextLimits": limits }),
++		});
++		await registry.refresh();
++		return registry;
++	}
++
++	test("caps the listed model and sends the cap as num_ctx; other models keep the global cap", async () => {
++		const registry = await discover({ "m:latest": 32_768 });
++
++		const limited = registry.find("ollama", "m:latest");
++		expect(limited?.contextWindow).toBe(32_768);
++		expect(limited?.maxTokens).toBe(32_768);
++		expect((await requestOptions(limited!))?.num_ctx).toBe(32_768);
++		// No entry: the OLLAMA_CONTEXT_LENGTH cap still governs.
++		expect(registry.find("ollama", "other:latest")?.contextWindow).toBe(GLOBAL_CAP);
++	});
++
++	test("matches the id exactly, without :latest aliasing", async () => {
++		const registry = await discover({ m: 8192 });
++
++		expect(registry.find("ollama", "m:latest")?.contextWindow).toBe(GLOBAL_CAP);
++	});
++
++	test("a limit above the trained context leaves the trained context", async () => {
++		const registry = await discover({ "m:latest": 65_536 }, { trainedContext: 8192 });
++
++		expect(registry.find("ollama", "m:latest")?.contextWindow).toBe(8192);
++	});
++
++	/** Register `ids` under the `ollama` provider on the native api, as an extension would. */
++	function registerNativeOllama(registry: ModelRegistry, ids: string[]): void {
++		registry.registerProvider("ollama", {
++			baseUrl: ENDPOINT,
++			api: "ollama-chat",
++			apiKey: "ollama",
++			models: ids.map(id => ({
++				id,
++				name: id,
++				reasoning: false,
++				input: ["text" as const],
++				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
++				contextWindow: GLOBAL_CAP,
++				maxTokens: GLOBAL_CAP,
++			})),
++		});
++	}
++
++	test("caps a model of a provider registered as ollama on the native api", async () => {
++		// models.yml cannot select the native api, so another provider that speaks
++		// it under the `ollama` id comes from a runtime registration.
++		const registry = await discover({ "custom:7b": 32_768 });
++		registerNativeOllama(registry, ["custom:7b"]);
++
++		const model = registry.find("ollama", "custom:7b");
++		expect(model?.api).toBe("ollama-chat");
++		expect(model?.contextWindow).toBe(32_768);
++		expect((await requestOptions(model!))?.num_ctx).toBe(32_768);
++	});
++
++	test("caps a modelOverrides contextWindow above the limit", async () => {
++		const override = { contextWindow: 200_000, maxTokens: 200_000 };
++		fs.writeFileSync(
++			modelsPath,
++			JSON.stringify({ providers: { ollama: { modelOverrides: { "custom:7b": override, "plain:7b": override } } } }),
++		);
++		const registry = await discover({ "custom:7b": 32_768 });
++		registerNativeOllama(registry, ["custom:7b", "plain:7b"]);
++		await registry.refresh();
++
++		const model = registry.find("ollama", "custom:7b");
++		expect(model?.contextWindow).toBe(32_768);
++		expect(model?.maxTokens).toBe(32_768);
++		// The override itself applies to a model without a limit.
++		expect(registry.find("ollama", "plain:7b")?.contextWindow).toBe(200_000);
++	});
++
++	test("ignores malformed entries and keeps the valid ones", async () => {
++		const names = [
++			"str:latest",
++			"float:latest",
++			"neg:latest",
++			"zero:latest",
++			"huge:latest",
++			"obj:latest",
++			"ok:latest",
++		];
++		const registry = await discover(
++			{
++				"str:latest": "8192",
++				"float:latest": 8192.5,
++				"neg:latest": -8192,
++				"zero:latest": 0,
++				"huge:latest": 2 ** 30,
++				"obj:latest": { contextWindow: 8192 },
++				"ok:latest": 8192,
++			},
++			{ names },
++		);
++
++		const windows = Object.fromEntries(names.map(name => [name, registry.find("ollama", name)?.contextWindow]));
++		expect(windows).toEqual({
++			"str:latest": GLOBAL_CAP,
++			"float:latest": GLOBAL_CAP,
++			"neg:latest": GLOBAL_CAP,
++			"zero:latest": GLOBAL_CAP,
++			"huge:latest": GLOBAL_CAP,
++			"obj:latest": GLOBAL_CAP,
++			"ok:latest": 8192,
++		});
++	});
++
++	test("ignores a value that is not a record", async () => {
++		const overlayPath = path.join(tempDir.path(), "limits.yml");
++		await Bun.write(overlayPath, YAML.stringify({ ollama: { contextLimits: [32_768] } }));
++		const settings = await Settings.loadIsolated({
++			cwd: tempDir.path(),
++			agentDir: path.join(tempDir.path(), "agent"),
++			inMemory: true,
++			configFiles: [overlayPath],
++		});
++		const registry = new ModelRegistry(authStorage, modelsPath, { fetch: mockOllama(["m:latest"]), settings });
++		await registry.refresh();
++
++		expect(registry.find("ollama", "m:latest")?.contextWindow).toBe(GLOBAL_CAP);
++	});
++});
++
++describe("ollama.contextLimits live reload", () => {
++	let state: SettingsTestState;
++	let tempDir: TempDir;
++	let authStorage: AuthStorage;
++	let session: AgentSession | undefined;
++	let settings: Settings | undefined;
++
++	beforeEach(async () => {
++		state = beginSettingsTest();
++		for (const name of ["OLLAMA_BASE_URL", "OLLAMA_HOST", "OLLAMA_CONTEXT_LENGTH", "LLAMA_CPP_BASE_URL"]) {
++			delete Bun.env[name];
++		}
++		Bun.env.PI_OLLAMA_API = "ollama-chat";
++		Bun.env.OLLAMA_CONTEXT_LENGTH = "131072";
++		tempDir = TempDir.createSync("@pi-ollama-context-live-");
++		authStorage = await AuthStorage.create(":memory:");
++	});
++
++	afterEach(async () => {
++		await session?.dispose();
++		session = undefined;
++		settings?.stopWatching();
++		settings = undefined;
++		authStorage.close();
++		tempDir.removeSync();
++		restoreSettingsTestState(state);
++	});
++
++	async function waitFor(condition: () => boolean, timeoutMs = 5000): Promise<void> {
++		const deadline = Date.now() + timeoutMs;
++		while (!condition()) {
++			if (Date.now() > deadline) throw new Error("timed out waiting for the overlay reload");
++			await Bun.sleep(25);
++		}
++	}
++
++	function assistantReply(model: Model, text: string): AssistantMessage {
++		return {
++			role: "assistant",
++			content: [{ type: "text", text }],
++			api: model.api,
++			provider: model.provider,
++			model: model.id,
++			usage: {
++				input: 1,
++				output: 1,
++				cacheRead: 0,
++				cacheWrite: 0,
++				totalTokens: 2,
++				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
++			},
++			stopReason: "stop",
++			timestamp: Date.now(),
++		};
++	}
++
++	test("an edited --config overlay re-caps the active model mid-turn without disturbing the turn", async () => {
++		const overlayPath = path.join(tempDir.path(), "ollama-context-limits.yml");
++		await Bun.write(overlayPath, YAML.stringify({ ollama: { contextLimits: { "m:latest": 32_768 } } }));
++		settings = await Settings.init({
++			cwd: tempDir.path(),
++			agentDir: path.join(tempDir.path(), "agent"),
++			configFiles: [overlayPath],
++		});
++		settings.startWatching();
++		const modelRegistry = new ModelRegistry(authStorage, path.join(tempDir.path(), "models.json"), {
++			fetch: mockOllama(["m:latest"]),
++			settings,
++		});
++		await modelRegistry.refresh();
++		const model = modelRegistry.find("ollama", "m:latest");
++		if (!model) throw new Error("Expected the discovered Ollama model");
++		expect(model.contextWindow).toBe(32_768);
++
++		// A turn whose stream stays open until the test releases it.
++		const streamStarted = Promise.withResolvers<void>();
++		const release = Promise.withResolvers<void>();
++		const streamedWindows: (number | null)[] = [];
++		const agent = new Agent({
++			getApiKey: () => "test-key",
++			initialState: { model, systemPrompt: ["Test"], tools: [], messages: [] },
++			streamFn: streamModel => {
++				streamedWindows.push(streamModel.contextWindow);
++				const stream = new AssistantMessageEventStream();
++				void (async () => {
++					const message = assistantReply(streamModel, "first half");
++					stream.push({ type: "start", partial: message });
++					streamStarted.resolve();
++					await release.promise;
++					const done = assistantReply(streamModel, "complete reply");
++					stream.push({ type: "done", reason: "stop", message: done });
++				})();
++				return stream;
++			},
++		});
++		session = new AgentSession({
++			agent,
++			sessionManager: SessionManager.inMemory(),
++			settings,
++			modelRegistry,
++		});
++		const events: AgentSessionEvent["type"][] = [];
++		session.subscribe(event => {
++			events.push(event.type);
++		});
++
++		const turn = session.prompt("hello");
++		await streamStarted.promise;
++
++		await Bun.write(overlayPath, YAML.stringify({ ollama: { contextLimits: { "m:latest": 16_384 } } }));
++		await waitFor(() => session?.model?.contextWindow === 16_384);
++
++		// Same model rebound in place: no model switch, and the open turn is untouched.
++		expect(session.isStreaming).toBe(true);
++		expect(events).not.toContain("model_changed");
++		release.resolve();
++		await turn;
++		await session.waitForIdle();
++
++		expect(streamedWindows).toEqual([32_768]);
++		const last = session.agent.state.messages.at(-1) as AssistantMessage;
++		expect(last.stopReason).toBe("stop");
++		expect(last.content).toEqual([{ type: "text", text: "complete reply" }]);
++
++		// The next turn requests the new window (the native api sends it as num_ctx).
++		await session.prompt("again");
++		await session.waitForIdle();
++		expect(streamedWindows).toEqual([32_768, 16_384]);
++	});
++});
+-- 
+2.53.0
+
