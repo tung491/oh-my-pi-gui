@@ -394,8 +394,14 @@ describe("running the converter", () => {
 		} catch {
 			return true;
 		}
-		const stat = `/proc/${pid}/stat`;
-		return existsSync(stat) && readFileSync(stat, "utf8").split(") ")[1]?.startsWith("Z") === true;
+		// The process can be reaped at any moment, so a missing entry counts as gone too.
+		let stat: string;
+		try {
+			stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+		} catch {
+			return true;
+		}
+		return stat.split(") ")[1]?.startsWith("Z") === true;
 	}
 
 	async function waitGone(pid: number): Promise<boolean> {
