@@ -116,6 +116,11 @@ export function OllamaRow({
 					{OLLAMA_REMEDY_COMMANDS[remedy]}
 				</code>
 			)}
+			{showCommand && (
+				<p className="text-omp-sm text-(--omp-text-secondary)" data-note="no-cloud">
+					{t("welcome.ollama.noCloudNote")}
+				</p>
+			)}
 			{remedy === "linux-install" && (
 				<p className="text-omp-sm text-(--omp-text-secondary)">{t("welcome.ollama.installNote")}</p>
 			)}

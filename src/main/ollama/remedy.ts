@@ -4,20 +4,14 @@
  * Linux only, authorised through polkit (`pkexec`).
  */
 import { spawn } from "node:child_process";
-import type {
-	OllamaInstallProgress,
-	OllamaRemedyId,
-	OllamaRemedyResult,
-	OllamaStatus,
+import {
+	OLLAMA_REMEDY_COMMANDS,
+	type OllamaInstallProgress,
+	type OllamaRemedyId,
+	type OllamaRemedyResult,
+	type OllamaStatus,
 } from "../../shared/ollama-types";
 import { createInstallProgressParser, initialInstallProgress } from "./install-progress";
-
-/**
- * The official installer. It downloads and runs remote code as root; that is
- * the user-chosen behaviour, it is shown verbatim (OLLAMA_REMEDY_COMMANDS)
- * before running, and polkit asks for authorisation.
- */
-export const INSTALL_LINE = "curl -fsSL https://ollama.com/install.sh | sh";
 
 interface RemedyCommand {
 	file: string;
@@ -25,10 +19,18 @@ interface RemedyCommand {
 	timeoutMs: number;
 }
 
-/** The only commands a remedy can run. Timeouts include time spent in the polkit dialog. */
+/**
+ * The only commands a remedy can run: the fixed script the screen shows
+ * (OLLAMA_REMEDY_COMMANDS), as one root shell behind one polkit prompt.
+ * Timeouts include time spent in the polkit dialog.
+ */
 export const REMEDY_COMMANDS: Readonly<Record<OllamaRemedyId, RemedyCommand>> = {
-	"linux-start": { file: "pkexec", args: ["systemctl", "start", "ollama.service"], timeoutMs: 2 * 60_000 },
-	"linux-install": { file: "pkexec", args: ["sh", "-c", INSTALL_LINE], timeoutMs: 15 * 60_000 },
+	"linux-start": { file: "pkexec", args: ["sh", "-c", OLLAMA_REMEDY_COMMANDS["linux-start"]], timeoutMs: 2 * 60_000 },
+	"linux-install": {
+		file: "pkexec",
+		args: ["sh", "-c", OLLAMA_REMEDY_COMMANDS["linux-install"]],
+		timeoutMs: 15 * 60_000,
+	},
 };
 
 export function isRemedyId(value: unknown): value is OllamaRemedyId {

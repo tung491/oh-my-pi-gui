@@ -13,10 +13,38 @@ export type OllamaState = "ok" | "stopped" | "absent";
  */
 export type OllamaRemedyId = "linux-start" | "linux-install";
 
-/** Display text only — what the user is shown before authorizing a remedy. Main never executes these strings. */
+/**
+ * The official installer. It downloads and runs remote code as root; that is
+ * the user-chosen behaviour, shown verbatim before running.
+ */
+const OLLAMA_INSTALL_LINE = "curl -fsSL https://ollama.com/install.sh | sh";
+
+/** The drop-in Sai ATLAS owns; no other drop-in and never the unit file itself is written. */
+const OLLAMA_NO_CLOUD_DROP_IN = "/etc/systemd/system/ollama.service.d/sai-atlas.conf";
+
+/**
+ * Turns off Ollama's online features (`OLLAMA_NO_CLOUD=1`) for its systemd
+ * service, then reloads systemd and (re)starts the service so the setting
+ * takes effect. The drop-in is written only when missing or different. Each
+ * step runs only when the one before it succeeded.
+ */
+const NO_CLOUD_STEPS: readonly string[] = [
+	"mkdir -p /etc/systemd/system/ollama.service.d",
+	`f=${OLLAMA_NO_CLOUD_DROP_IN}`,
+	`s=$(printf '[Service]\\nEnvironment="OLLAMA_NO_CLOUD=1"')`,
+	`{ [ "$(cat "$f" 2>/dev/null)" = "$s" ] || printf '%s\\n' "$s" > "$f"; }`,
+	"systemctl daemon-reload",
+	"systemctl restart ollama.service",
+];
+
+/**
+ * The fixed root script of each remedy: shown verbatim before authorizing it,
+ * and run verbatim by main as one `pkexec sh -c` (one password prompt). The
+ * renderer only names an id; main reads its own copy of these strings.
+ */
 export const OLLAMA_REMEDY_COMMANDS: Readonly<Record<OllamaRemedyId, string>> = {
-	"linux-start": "systemctl start ollama.service",
-	"linux-install": "curl -fsSL https://ollama.com/install.sh | sh",
+	"linux-start": NO_CLOUD_STEPS.join(" &&\n"),
+	"linux-install": [OLLAMA_INSTALL_LINE, ...NO_CLOUD_STEPS].join(" &&\n"),
 };
 
 export interface OllamaStatus {

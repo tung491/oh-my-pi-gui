@@ -3,14 +3,15 @@ import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, type Mock, vi } from "vitest";
 import type { CustomProviderView } from "../../../shared/ipc-types";
-import type {
-	ModelChoice,
-	ModelScreen,
-	OllamaInstallProgress,
-	OllamaRemedyId,
-	OllamaRemedyResult,
-	OllamaStatus,
-	PullProgress,
+import {
+	type ModelChoice,
+	type ModelScreen,
+	OLLAMA_REMEDY_COMMANDS,
+	type OllamaInstallProgress,
+	type OllamaRemedyId,
+	type OllamaRemedyResult,
+	type OllamaStatus,
+	type PullProgress,
 } from "../../../shared/ollama-types";
 import type { ProviderInfo, RpcResponse } from "../../../shared/rpc-types";
 import { I18nProvider } from "../../lib/i18n";
@@ -431,9 +432,7 @@ describe("FirstRunOnboardingDialog", () => {
 		omp.ollama.runRemedy.mockResolvedValue({ outcome: "applied", status: status({ modelCount: 0 }) });
 		await mountReady();
 
-		expect(document.querySelector(".omp-ollama-command")?.textContent).toBe(
-			"curl -fsSL https://ollama.com/install.sh | sh",
-		);
+		expect(document.querySelector(".omp-ollama-command")?.textContent).toBe(OLLAMA_REMEDY_COMMANDS["linux-install"]);
 		await click(action("remedy"));
 		expect(omp.ollama.runRemedy).toHaveBeenCalledWith("linux-install");
 		expect(document.querySelector('.omp-ollama-row[data-state="ok"]')?.textContent).toContain(
@@ -501,9 +500,9 @@ describe("FirstRunOnboardingDialog", () => {
 		omp.ollama.runRemedy.mockResolvedValue({ outcome: "unavailable", status: stopped, fault: "pkexec" });
 		await mountReady();
 		await click(action("remedy"));
-		expect(document.querySelector(".omp-ollama-command")?.textContent).toBe("systemctl start ollama.service");
+		expect(document.querySelector(".omp-ollama-command")?.textContent).toBe(OLLAMA_REMEDY_COMMANDS["linux-start"]);
 		expect(document.querySelector('[data-notice="remedy"]')?.textContent).toContain(
-			"Run the command above in a terminal",
+			"Run the commands above in a terminal",
 		);
 	});
 
@@ -515,7 +514,7 @@ describe("FirstRunOnboardingDialog", () => {
 		await click(action("remedy"));
 		const notice = document.querySelector('[data-notice="remedy"]')?.textContent;
 		expect(notice).toContain("Quit and reopen Sai ATLAS, then try again.");
-		expect(notice).not.toContain("Run the command above in a terminal");
+		expect(notice).not.toContain("Run the commands above in a terminal");
 	});
 
 	it("shows a failed remedy inline", async () => {

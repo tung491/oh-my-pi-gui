@@ -1,3 +1,18 @@
+import { spawnSync } from "node:child_process";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	OLLAMA_REMEDY_COMMANDS,
@@ -9,7 +24,6 @@ import {
 import {
 	createRemedyGate,
 	type ExecError,
-	INSTALL_LINE,
 	isRemedyId,
 	REMEDY_COMMANDS,
 	type RemedyDeps,
@@ -69,6 +83,67 @@ function fakeSpawn(
 	};
 }
 
+/** The no-cloud steps both remedies end with, as the screen shows them. */
+const NO_CLOUD_SCRIPT = [
+	"mkdir -p /etc/systemd/system/ollama.service.d &&",
+	"f=/etc/systemd/system/ollama.service.d/sai-atlas.conf &&",
+	`s=$(printf '[Service]\\nEnvironment="OLLAMA_NO_CLOUD=1"') &&`,
+	`{ [ "$(cat "$f" 2>/dev/null)" = "$s" ] || printf '%s\\n' "$s" > "$f"; } &&`,
+	"systemctl daemon-reload &&",
+	"systemctl restart ollama.service",
+].join("\n");
+
+const DROP_IN_DIR = "/etc/systemd/system/ollama.service.d";
+const DROP_IN = '[Service]\nEnvironment="OLLAMA_NO_CLOUD=1"\n';
+
+interface Sandbox {
+	dropInDir: string;
+	run(id: OllamaRemedyId, installerStatus?: number): { status: number | null; log: string[] };
+}
+
+const sandboxes: string[] = [];
+
+/**
+ * A scratch directory standing in for the drop-in directory, with fake
+ * `systemctl` and `curl` that only log their arguments. PATH holds nothing
+ * else, so the script under test can reach neither the real systemctl nor /etc.
+ */
+function sandbox(): Sandbox {
+	const root = mkdtempSync(path.join(tmpdir(), "sai-atlas-remedy-"));
+	sandboxes.push(root);
+	const bin = path.join(root, "bin");
+	const dropInDir = path.join(root, "ollama.service.d");
+	const log = path.join(root, "calls.log");
+	mkdirSync(bin);
+	for (const tool of ["sh", "cat", "mkdir"]) {
+		const real = ["/bin", "/usr/bin"].map(dir => path.join(dir, tool)).find(file => existsSync(file));
+		if (!real) throw new Error(`${tool} not found`);
+		symlinkSync(real, path.join(bin, tool));
+	}
+	writeFileSync(path.join(bin, "systemctl"), '#!/bin/sh\necho "systemctl $*" >> "$CALLS"\n', { mode: 0o755 });
+	writeFileSync(path.join(bin, "curl"), '#!/bin/sh\necho "curl $*" >> "$CALLS"\necho "exit $INSTALLER_STATUS"\n', {
+		mode: 0o755,
+	});
+	return {
+		dropInDir,
+		run(id, installerStatus = 0) {
+			expect(dropInDir).toMatch(/^[\w/.-]+$/);
+			const script = OLLAMA_REMEDY_COMMANDS[id].replaceAll(DROP_IN_DIR, dropInDir);
+			expect(script).not.toContain("/etc/");
+			const result = spawnSync(path.join(bin, "sh"), ["-c", script], {
+				env: { PATH: bin, CALLS: log, INSTALLER_STATUS: String(installerStatus) },
+				encoding: "utf8",
+			});
+			const calls = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : [];
+			return { status: result.status, log: calls };
+		},
+	};
+}
+
+afterEach(() => {
+	for (const root of sandboxes.splice(0)) rmSync(root, { recursive: true, force: true });
+});
+
 const exitOk: Ending = { code: 0 };
 
 function spawnError(code: string): Ending {
@@ -94,21 +169,30 @@ afterEach(() => {
 });
 
 describe("runRemedy", () => {
-	it("runs systemctl start through pkexec and waits for the daemon to answer", async () => {
+	it("runs the start script as one pkexec sh -c and waits for the daemon to answer", async () => {
 		const exec = fakeSpawn(exitOk);
 		const result = await runRemedy("linux-start", deps(exec.spawn, ["stopped", "stopped", "ok"]));
-		expect(exec.calls).toEqual([{ file: "pkexec", args: ["systemctl", "start", "ollama.service"] }]);
+		expect(exec.calls).toEqual([{ file: "pkexec", args: ["sh", "-c", OLLAMA_REMEDY_COMMANDS["linux-start"]] }]);
 		expect(result).toEqual({ outcome: "applied", status: status("ok") });
 	});
 
-	it("runs the fixed install line through pkexec sh -c", async () => {
+	it("runs the install line and the no-cloud steps as one pkexec sh -c", async () => {
 		const exec = fakeSpawn(exitOk);
 		await runRemedy("linux-install", deps(exec.spawn, ["ok"]));
-		expect(exec.calls).toEqual([{ file: "pkexec", args: ["sh", "-c", INSTALL_LINE] }]);
+		expect(exec.calls).toEqual([{ file: "pkexec", args: ["sh", "-c", OLLAMA_REMEDY_COMMANDS["linux-install"]] }]);
 	});
 
 	it("runs exactly the command the screen shows the user", () => {
-		expect(INSTALL_LINE).toBe(OLLAMA_REMEDY_COMMANDS["linux-install"]);
+		for (const id of ["linux-start", "linux-install"] as const) {
+			expect(REMEDY_COMMANDS[id]).toMatchObject({ file: "pkexec", args: ["sh", "-c", OLLAMA_REMEDY_COMMANDS[id]] });
+		}
+	});
+
+	it("spells out the privileged scripts word for word", () => {
+		expect(OLLAMA_REMEDY_COMMANDS["linux-start"]).toBe(NO_CLOUD_SCRIPT);
+		expect(OLLAMA_REMEDY_COMMANDS["linux-install"]).toBe(
+			`curl -fsSL https://ollama.com/install.sh | sh &&\n${NO_CLOUD_SCRIPT}`,
+		);
 	});
 
 	it("reports failed when the command succeeds but the daemon never comes up", async () => {
@@ -322,6 +406,55 @@ describe("runRemedy install progress", () => {
 		const { frames, onProgress } = record();
 		await runRemedy("linux-start", { ...deps(fakeSpawn(exitOk, installerOutput).spawn, ["ok"]), onProgress });
 		expect(frames).toEqual([]);
+	});
+});
+
+describe("the no-cloud drop-in", () => {
+	it("writes exactly the no-cloud drop-in and reloads systemd before restarting Ollama", () => {
+		for (const id of ["linux-start", "linux-install"] as const) {
+			const box = sandbox();
+			const { status: code, log } = box.run(id);
+			expect(code).toBe(0);
+			expect(readdirSync(box.dropInDir)).toEqual(["sai-atlas.conf"]);
+			expect(readFileSync(path.join(box.dropInDir, "sai-atlas.conf"), "utf8")).toBe(DROP_IN);
+			const installer = id === "linux-install" ? ["curl -fsSL https://ollama.com/install.sh"] : [];
+			expect(log).toEqual([...installer, "systemctl daemon-reload", "systemctl restart ollama.service"]);
+		}
+	});
+
+	it("leaves other drop-ins and an identical drop-in untouched", () => {
+		for (const id of ["linux-start", "linux-install"] as const) {
+			const box = sandbox();
+			mkdirSync(box.dropInDir);
+			const other = path.join(box.dropInDir, "override.conf");
+			const ours = path.join(box.dropInDir, "sai-atlas.conf");
+			writeFileSync(other, '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\n');
+			writeFileSync(ours, DROP_IN);
+			const past = new Date("2020-01-01T00:00:00Z");
+			utimesSync(other, past, past);
+			utimesSync(ours, past, past);
+			expect(box.run(id).status).toBe(0);
+			expect(readFileSync(other, "utf8")).toBe('[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\n');
+			expect(statSync(other).mtime).toEqual(past);
+			expect(statSync(ours).mtime).toEqual(past);
+			expect(readdirSync(box.dropInDir).sort()).toEqual(["override.conf", "sai-atlas.conf"]);
+		}
+	});
+
+	it("rewrites a sai-atlas drop-in whose content differs", () => {
+		const box = sandbox();
+		mkdirSync(box.dropInDir);
+		writeFileSync(path.join(box.dropInDir, "sai-atlas.conf"), "[Service]\n");
+		expect(box.run("linux-start").status).toBe(0);
+		expect(readFileSync(path.join(box.dropInDir, "sai-atlas.conf"), "utf8")).toBe(DROP_IN);
+	});
+
+	it("touches neither the drop-in nor systemd when the installer fails", () => {
+		const box = sandbox();
+		const { status: code, log } = box.run("linux-install", 3);
+		expect(code).toBe(3);
+		expect(existsSync(box.dropInDir)).toBe(false);
+		expect(log).toEqual(["curl -fsSL https://ollama.com/install.sh"]);
 	});
 });
 

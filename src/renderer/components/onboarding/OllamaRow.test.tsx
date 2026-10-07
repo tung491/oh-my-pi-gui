@@ -2,7 +2,12 @@ import { parseHTML } from "linkedom";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import type { OllamaInstallProgress, OllamaRemedyId, OllamaStatus } from "../../../shared/ollama-types";
+import {
+	OLLAMA_REMEDY_COMMANDS,
+	type OllamaInstallProgress,
+	type OllamaRemedyId,
+	type OllamaStatus,
+} from "../../../shared/ollama-types";
 import { I18nProvider } from "../../lib/i18n";
 import { OllamaRow } from "./OllamaRow";
 
@@ -113,7 +118,13 @@ describe("OllamaRow", () => {
 		const calls = await render(status({ state: "stopped", remedy: "linux-start" }));
 		expect(row().getAttribute("data-tone")).toBe("warning");
 		expect(row().textContent).toContain("Starting its service should be enough.");
-		expect(container.querySelector(".omp-ollama-command")?.textContent).toBe("systemctl start ollama.service");
+		const command = container.querySelector(".omp-ollama-command")?.textContent;
+		expect(command).toBe(OLLAMA_REMEDY_COMMANDS["linux-start"]);
+		expect(command).toContain("/etc/systemd/system/ollama.service.d/sai-atlas.conf");
+		expect(command).toContain('Environment="OLLAMA_NO_CLOUD=1"');
+		expect(container.querySelector('[data-note="no-cloud"]')?.textContent).toBe(
+			"Sai ATLAS also turns off Ollama's online features, so Ollama stays on this computer.",
+		);
 		expect(button("remedy")?.textContent).toContain("Start Ollama");
 		await act(async () => button("remedy")?.click());
 		await act(async () => button("check-again")?.click());
@@ -135,9 +146,11 @@ describe("OllamaRow", () => {
 		await render(status({ state: "absent", remedy: "linux-install" }));
 		expect(row().getAttribute("data-tone")).toBe("error");
 		expect(row().textContent).toContain("Ollama is not installed on this machine.");
-		expect(container.querySelector(".omp-ollama-command")?.textContent).toBe(
-			"curl -fsSL https://ollama.com/install.sh | sh",
-		);
+		const command = container.querySelector(".omp-ollama-command")?.textContent;
+		expect(command).toBe(OLLAMA_REMEDY_COMMANDS["linux-install"]);
+		expect(command?.startsWith("curl -fsSL https://ollama.com/install.sh | sh &&\n")).toBe(true);
+		expect(command).toContain('Environment="OLLAMA_NO_CLOUD=1"');
+		expect(container.querySelector('[data-note="no-cloud"]')).not.toBeNull();
 		expect(row().textContent).toContain("as root");
 		expect(button("remedy")?.textContent).toContain("Install Ollama");
 	});
@@ -146,6 +159,7 @@ describe("OllamaRow", () => {
 		await render(status({ state: "stopped", platform: "darwin" }));
 		expect(row().textContent).toContain("Open the Ollama app, then check again.");
 		expect(container.querySelector(".omp-ollama-command")).toBeNull();
+		expect(container.querySelector('[data-note="no-cloud"]')).toBeNull();
 		expect(button("remedy")).toBeNull();
 		expect(button("open-download")?.textContent).toContain("Open ollama.com/download");
 		expect(button("check-again")?.textContent).toContain("Check again");

@@ -81,7 +81,8 @@ Mở tệp DMG và kéo **Sai ATLAS** vào **Applications**. Bản dựng đư�
 
 Sai ATLAS chạy mô hình ngay trên máy qua [Ollama](https://ollama.com), vì vậy hãy cài Ollama trước. Ở lần mở đầu tiên, màn hình chào mừng cho biết bộ nhớ và card đồ họa của máy, Ollama có đang chạy hay không, và tối đa ba mô hình Gemma 4 (E2B, E4B và 26B A4B, ghi là tối thiểu, khuyên dùng và tối đa) được chọn cho vừa với máy này.
 
-- **Ollama chưa chạy hoặc chưa được cài:** trên Linux, màn hình hiện đúng lệnh cần chạy và chạy nó sau khi hỏi mật khẩu hệ thống, hoặc **Khởi động Ollama** (`systemctl start ollama.service`) hoặc **Cài đặt Ollama** (trình cài đặt chính thức `ollama.com/install.sh`). Trên macOS, màn hình dẫn tới ollama.com/download; hãy mở Ollama rồi chọn **Kiểm tra lại**.
+- **Ollama chưa chạy hoặc chưa được cài:** trên Linux, màn hình hiện đúng lệnh cần chạy và chạy nó sau khi hỏi mật khẩu hệ thống, hoặc **Khởi động Ollama** (khởi động lại `ollama.service`) hoặc **Cài đặt Ollama** (trình cài đặt chính thức `ollama.com/install.sh`). Trên macOS, màn hình dẫn tới ollama.com/download; hãy mở Ollama rồi chọn **Kiểm tra lại**.
+- **Ollama không lên mạng:** trên Linux, khi cài hoặc khởi động Ollama từ màn hình chào mừng, Sai ATLAS cũng đặt `OLLAMA_NO_CLOUD=1` cho dịch vụ Ollama (trong `/etc/systemd/system/ollama.service.d/sai-atlas.conf`), để tắt các mô hình đám mây của Ollama và việc Ollama ngầm kiểm tra với ollama.com. Để làm tương tự với một Ollama đang chạy sẵn, hãy chạy `sudo systemctl edit ollama.service`, thêm `Environment="OLLAMA_NO_CLOUD=1"` dưới `[Service]`, rồi chạy `sudo systemctl restart ollama.service`.
 - Bấm nút tải trên thẻ của một mô hình và theo dõi thanh tiến độ. **Hủy** dừng việc tải, và lần tải sau sẽ tải tiếp.
 - **Bắt đầu** đặt mô hình đã chọn làm mặc định cho phiên này và các phiên mới. **Thiết lập sau** đóng màn hình cho tới lần mở sau; **Chạy lại thiết lập** trong cửa sổ Ollama mở lại nó.
 

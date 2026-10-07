@@ -1558,12 +1558,13 @@ export const en: Record<string, string> = {
 	"welcome.ollama.absent": "Ollama is not installed on this machine. It is what runs the local AI model.",
 	"welcome.ollama.installNote":
 		"This downloads and runs Ollama's own installer as root. You will be asked to authorize it.",
+	"welcome.ollama.noCloudNote": "Sai ATLAS also turns off Ollama's online features, so Ollama stays on this computer.",
 	"welcome.ollama.start": "Start Ollama",
 	"welcome.ollama.install": "Install Ollama",
 	"welcome.ollama.checkAgain": "Check again",
 	"welcome.ollama.openDownload": "Open ollama.com/download",
 	"welcome.ollama.remedyUnavailable":
-		"This system can't ask for administrator access here. Run the command above in a terminal, then check again.",
+		"This system can't ask for administrator access here. Run the commands above in a terminal as administrator (after “sudo -s”), then check again.",
 	"welcome.ollama.remedyFailed": "That didn't work: {error}",
 	"welcome.ollama.remedyReopen":
 		"Sai ATLAS can't ask for administrator access in this session. Quit and reopen Sai ATLAS, then try again.",

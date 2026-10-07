@@ -1436,12 +1436,14 @@ export const vi: Record<string, string> = {
 	"welcome.ollama.absent": "Ollama chưa được cài trên máy này. Đây là phần mềm chạy mô hình AI cục bộ.",
 	"welcome.ollama.installNote":
 		"Thao tác này tải và chạy trình cài đặt của Ollama với quyền root. Bạn sẽ được yêu cầu cấp quyền.",
+	"welcome.ollama.noCloudNote":
+		"Sai ATLAS cũng tắt các tính năng trực tuyến của Ollama, để Ollama chỉ hoạt động trên máy tính này.",
 	"welcome.ollama.start": "Khởi động Ollama",
 	"welcome.ollama.install": "Cài đặt Ollama",
 	"welcome.ollama.checkAgain": "Kiểm tra lại",
 	"welcome.ollama.openDownload": "Mở ollama.com/download",
 	"welcome.ollama.remedyUnavailable":
-		"Hệ thống này không thể yêu cầu quyền quản trị tại đây. Hãy chạy lệnh ở trên trong terminal, rồi kiểm tra lại.",
+		"Hệ thống này không thể yêu cầu quyền quản trị tại đây. Hãy chạy các lệnh ở trên trong terminal với quyền quản trị (sau “sudo -s”), rồi kiểm tra lại.",
 	"welcome.ollama.remedyFailed": "Không thành công: {error}",
 	"welcome.ollama.remedyReopen":
 		"Sai ATLAS không thể yêu cầu quyền quản trị trong phiên này. Hãy thoát rồi mở lại Sai ATLAS, sau đó thử lại.",
