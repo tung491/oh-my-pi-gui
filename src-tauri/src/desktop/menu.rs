@@ -10,12 +10,14 @@ use super::windows::{MenuItemModel, PredefinedItem};
 use super::{survive, Desktop, Platform};
 use crate::ctx::AppCtx;
 use crate::i18n::{MainI18n, MainTextKey};
+use crate::ports::WindowId;
 use crate::runtime_log;
 
 const MENU_ACTION_CHANNEL: &str = "menu:action";
 pub(crate) const DOCUMENTATION_URL: &str = "https://github.com/tung491/oh-my-pi-gui";
 
 /// Menu ids: `menu:action:<renderer action>` for actions the renderer handles, and a few the shell owns.
+const APP_MENU_PREFIX: &str = "menu:";
 const ACTION_PREFIX: &str = "menu:action:";
 pub(crate) const ID_NEW_WINDOW: &str = "menu:new-window";
 pub(crate) const ID_CLOSE_WINDOW: &str = "menu:close-window";
@@ -95,7 +97,11 @@ pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuIte
         MenuItemModel::Predefined(PredefinedItem::Minimize),
     ];
     if darwin {
-        window.push(MenuItemModel::Predefined(PredefinedItem::Maximize));
+        window.extend([
+            MenuItemModel::Predefined(PredefinedItem::Maximize),
+            MenuItemModel::Separator,
+            MenuItemModel::Predefined(PredefinedItem::BringAllToFront),
+        ]);
     }
     bar.push(MenuItemModel::submenu(i18n.t(MainTextKey::MenuWindow), window));
     bar.push(MenuItemModel::submenu(
@@ -159,6 +165,11 @@ impl Desktop {
 
     /// A menu item was clicked, in the app menu or the tray menu.
     pub(crate) fn on_menu_id(&self, ctx: &AppCtx, id: &str) {
+        // The quick-entry bar is a panel: app-menu chords must not act on the chat window behind it.
+        // Tray ids (`tray:`) still act: only the app menu's ⌘ chords reach the bar.
+        if self.backend.platform() == Platform::Darwin && id.starts_with(APP_MENU_PREFIX) && self.backend.focused_window() == Some(WindowId::QUICK_ENTRY) {
+            return;
+        }
         if let Some(action) = action_of(id) {
             self.send_menu_action(ctx, action, None, false);
             return;
@@ -254,6 +265,11 @@ fn build_item(app: &tauri::AppHandle, item: &MenuItemModel) -> Result<Box<dyn ta
                 PredefinedItem::Hide => PredefinedMenuItem::hide(app, None),
                 PredefinedItem::HideOthers => PredefinedMenuItem::hide_others(app, None),
                 PredefinedItem::ShowAll => PredefinedMenuItem::show_all(app, None),
+                #[cfg(target_os = "macos")]
+                PredefinedItem::BringAllToFront => PredefinedMenuItem::bring_all_to_front(app, None),
+                // muda has no Bring All to Front off macOS and renders it as a separator.
+                #[cfg(not(target_os = "macos"))]
+                PredefinedItem::BringAllToFront => PredefinedMenuItem::separator(app),
             }
             .map_err(err)?,
         ),
@@ -266,7 +282,6 @@ mod tests {
     use crate::bridge::Envelope;
     use crate::desktop::testing::{attach_recording_sink, harness, DesktopPort as _, Harness};
     use crate::i18n::MainLanguage;
-    use crate::ports::WindowId;
     use crate::prefs::JsonStore;
 
     fn labels(items: &[MenuItemModel]) -> Vec<String> {
@@ -306,6 +321,33 @@ mod tests {
         assert_eq!(labels(&vi)[1], "Tệp");
         assert_eq!(action_of("menu:action:open-jobs"), Some("open-jobs"));
         assert_eq!(action_of(ID_NEW_WINDOW), None);
+    }
+
+    fn window_submenu(items: &[MenuItemModel]) -> &[MenuItemModel] {
+        items
+            .iter()
+            .find_map(|item| match item {
+                MenuItemModel::Submenu { label, items } if label == "Window" => Some(items.as_slice()),
+                _ => None,
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn darwin_window_menu_has_zoom_and_bring_all_to_front() {
+        let dir = tempfile::tempdir().unwrap();
+        let i18n = MainI18n::new(JsonStore::open(dir.path().join("prefs.json")), None);
+        let darwin = build_app_menu(&i18n, Platform::Darwin);
+        let window = window_submenu(&darwin);
+        assert_eq!(
+            window[window.len() - 3..],
+            [MenuItemModel::Predefined(PredefinedItem::Maximize), MenuItemModel::Separator, MenuItemModel::Predefined(PredefinedItem::BringAllToFront)]
+        );
+        let linux = build_app_menu(&i18n, Platform::Linux);
+        let window = window_submenu(&linux);
+        assert!(!window.contains(&MenuItemModel::Predefined(PredefinedItem::Maximize)));
+        assert!(!window.contains(&MenuItemModel::Predefined(PredefinedItem::BringAllToFront)));
+        assert_eq!(window.last(), Some(&MenuItemModel::Predefined(PredefinedItem::Minimize)));
     }
 
     fn menu_actions(items: &[MenuItemModel], out: &mut std::collections::BTreeSet<String>) {
@@ -397,5 +439,41 @@ mod tests {
         assert!(backend.log.calls().iter().any(|call| call.starts_with("close(")));
         desktop.rebuild_menu();
         assert!(backend.app_menu.lock().unwrap().is_some());
+    }
+
+    /// Opens a chat window and the quick-entry bar, focuses the bar or the
+    /// chat window, then fires a window action and a renderer action.
+    /// Returns (the chat window was asked to close, actions it received).
+    fn menu_chords_with_focus(platform: Platform, bar_focused: bool) -> (bool, usize) {
+        use crate::desktop::windows::{Backend as _, QuickEntrySpec};
+        let Harness { ctx, desktop, backend, .. } = harness(platform);
+        let chat = desktop.spawn_window_in(&ctx, None, None, None).unwrap();
+        let sink = attach_recording_sink(&ctx, chat);
+        backend.build_quick_entry_window(QuickEntrySpec { position: None, dark: false }).unwrap();
+        backend.focus(if bar_focused { WindowId::QUICK_ENTRY } else { chat });
+        desktop.on_menu_id(&ctx, "menu:action:open-settings");
+        desktop.on_menu_id(&ctx, ID_CLOSE_WINDOW);
+        let closed = backend.log.calls().contains(&format!("close({chat})"));
+        let actions = sink.sent().iter().filter(|envelope| envelope.channel == "menu:action").count();
+        (closed, actions)
+    }
+
+    #[test]
+    fn app_menu_actions_are_dropped_while_the_bar_is_focused() {
+        assert_eq!(menu_chords_with_focus(Platform::Darwin, true), (false, 0), "macOS with the bar focused");
+        assert_eq!(menu_chords_with_focus(Platform::Darwin, false), (true, 1), "macOS with the chat window focused");
+        assert_eq!(menu_chords_with_focus(Platform::Linux, true), (true, 1), "Linux with the bar focused");
+    }
+
+    #[test]
+    fn tray_actions_pass_while_the_bar_is_focused() {
+        use crate::desktop::windows::{Backend as _, QuickEntrySpec};
+        let Harness { ctx, desktop, backend, .. } = harness(Platform::Darwin);
+        let chat = desktop.spawn_window_in(&ctx, None, None, None).unwrap();
+        let sink = attach_recording_sink(&ctx, chat);
+        backend.build_quick_entry_window(QuickEntrySpec { position: None, dark: false }).unwrap();
+        backend.focus(WindowId::QUICK_ENTRY);
+        desktop.on_menu_id(&ctx, "tray:new-session");
+        assert_eq!(sink.sent().iter().filter(|envelope| envelope.channel == "menu:action").count(), 1);
     }
 }

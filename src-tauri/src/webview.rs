@@ -278,7 +278,20 @@ fn apply_calls<'a>(
             BuilderCall::AlwaysOnTop(on_top) => builder.always_on_top(*on_top),
             BuilderCall::Focused(focused) => builder.focused(*focused),
             BuilderCall::BackgroundColor(color) => builder.background_color(*color),
+            #[cfg(not(target_os = "macos"))]
             BuilderCall::DataDirectory(dir) => builder.data_directory(dir.clone()),
+            // WKWebView ignores the data directory; a per-profile data store
+            // keeps throwaway profiles apart (macOS 14 and later only, below
+            // that every profile shares WebKit's default store).
+            #[cfg(target_os = "macos")]
+            BuilderCall::DataDirectory(dir) => {
+                let builder = builder.data_directory(dir.clone());
+                if crate::paths::macos_major() >= 14 {
+                    builder.data_store_identifier(crate::paths::webview_data_store_id(dir))
+                } else {
+                    builder
+                }
+            }
             BuilderCall::DisableDragDropHandler => builder.disable_drag_drop_handler(),
             BuilderCall::NavigationLock => {
                 let page = spec.url;

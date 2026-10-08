@@ -79,6 +79,7 @@ pub(crate) enum PredefinedItem {
     Hide,
     HideOthers,
     ShowAll,
+    BringAllToFront,
 }
 
 /// A menu as pure data, so the tray and app menus are built and tested without a runtime.
@@ -1039,11 +1040,34 @@ mod tauri_backend {
             }
             #[cfg(target_os = "macos")]
             {
-                // A non-activating panel floats over full-screen apps on every Space.
-                use tauri_nspanel::WebviewWindowExt;
-                if let Ok(panel) = window.to_panel::<super::quick_entry_panel::QuickEntryPanel>() {
-                    let _ = panel.add_style_mask(tauri_nspanel::objc2_app_kit::NSWindowStyleMask::NonactivatingPanel);
+                // AppKit allows the panel conversion, style-mask and collection-behavior
+                // changes on the main thread only, and a summon can arrive from the
+                // single-instance socket task or the settle timer. Queued here, the
+                // conversion runs before the show and focus messages `reveal` sends,
+                // which travel the same queue (inline when already on the main thread).
+                let main_thread = self.main_thread;
+                let scheduled = self.app.run_on_main_thread(move || {
+                    use tauri_nspanel::objc2_app_kit::{NSWindowCollectionBehavior as Behavior, NSWindowStyleMask};
+                    use tauri_nspanel::WebviewWindowExt;
+                    // A non-activating panel floats over full-screen apps on every Space.
+                    let panel = match window.to_panel::<super::quick_entry_panel::QuickEntryPanel>() {
+                        Ok(panel) => panel,
+                        Err(error) => {
+                            runtime_log::note("quick-entry", format!("quick entry panel conversion failed: {error}"), json!({}));
+                            return;
+                        }
+                    };
+                    if let Err(error) = panel.add_style_mask(NSWindowStyleMask::NonactivatingPanel) {
+                        runtime_log::note("quick-entry", format!("quick entry panel style mask refused: {error}"), json!({}));
+                    }
                     panel.set_hides_on_deactivate(false);
+                    // Mission Control and ⌘` skip the bar, and it joins full-screen Spaces.
+                    panel.set_collection_behavior(Behavior::CanJoinAllSpaces | Behavior::Transient | Behavior::IgnoresCycle | Behavior::FullScreenAuxiliary);
+                    runtime_log::note("quick-entry", "quick entry panel configured", json!({ "mainThread": std::thread::current().id() == main_thread }));
+                });
+                if let Err(error) = scheduled {
+                    // Only an event loop that has already stopped refuses the task.
+                    runtime_log::note("quick-entry", format!("quick entry panel not scheduled: {error}"), json!({}));
                 }
             }
             Ok(())
@@ -1082,9 +1106,41 @@ mod tauri_backend {
         }
 
         fn destroy(&self, id: WindowId) {
-            if let Some(window) = self.window(id) {
-                let _ = window.destroy();
+            let Some(window) = self.window(id) else { return };
+            // The bar is class-swapped into a panel; closing it in that state makes
+            // AppKit raise during teardown, so it becomes a plain window first, as
+            // tauri-nspanel's close contract asks, on the main thread like every
+            // other panel call (inline when already there).
+            #[cfg(target_os = "macos")]
+            if id == WindowId::QUICK_ENTRY {
+                use tauri_nspanel::ManagerExt;
+                let app = self.app.clone();
+                let label = id.label();
+                let scheduled = self.app.run_on_main_thread(move || {
+                    if let Ok(panel) = app.get_webview_panel(&label) {
+                        // An Objective-C exception crossing tao's frames would abort the process.
+                        let restored = tauri_nspanel::objc2::exception::catch(std::panic::AssertUnwindSafe(|| {
+                            let released = panel.as_panel().isReleasedWhenClosed();
+                            panel.hide();
+                            (panel.to_window().is_some(), released)
+                        }));
+                        match restored {
+                            Ok((restored, released)) => runtime_log::note(
+                                "quick-entry",
+                                "quick entry panel restored before destroy",
+                                json!({ "restored": restored, "releasedWhenClosed": released }),
+                            ),
+                            Err(exception) => runtime_log::note("quick-entry", format!("quick entry panel restore raised: {exception:?}"), json!({})),
+                        }
+                    }
+                    let _ = window.destroy();
+                });
+                if let Err(error) = scheduled {
+                    runtime_log::note("quick-entry", format!("quick entry destroy not scheduled: {error}"), json!({}));
+                }
+                return;
             }
+            let _ = window.destroy();
         }
 
         fn is_visible(&self, id: WindowId) -> bool {
