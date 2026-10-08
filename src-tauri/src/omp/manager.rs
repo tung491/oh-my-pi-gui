@@ -1103,16 +1103,10 @@ impl SidecarHandle for SidecarManager {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    #[cfg(target_os = "linux")]
     use crate::bridge::Registry;
-    #[cfg(target_os = "linux")]
+    use crate::omp::test_support::{fixture_path, read_env_dump, FIXTURE_ENV_DUMP};
     use crate::testing::{fake_ctx_with, Fakes};
     use std::sync::Weak;
-
-    #[cfg(target_os = "linux")]
-    pub(crate) fn fixture_path() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("e2e").join("sidecar-fixture.ts").canonicalize().unwrap()
-    }
 
     pub(crate) fn fixed_env(pairs: &[(&str, &str)]) -> SpawnEnvProvider {
         let env: HashMap<String, String> = pairs.iter().map(|(key, value)| (key.to_string(), value.to_string())).collect();
@@ -1124,13 +1118,11 @@ pub(crate) mod tests {
     }
 
     /// The pack a fixture sidecar outside the tree resolves through the dev fallback.
-    #[cfg(target_os = "linux")]
     fn dev_pack() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("resources").join("assistant-pack")
     }
 
     /// The `--tools` value of the spawn contract for the platform running the suite.
-    #[cfg(target_os = "linux")]
     fn pack_tools() -> &'static str {
         if cfg!(target_os = "linux") {
             "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean"
@@ -1140,7 +1132,6 @@ pub(crate) mod tests {
     }
 
     /// The pack part of the spawn argv, written out so the test does not restate the code it checks.
-    #[cfg(target_os = "linux")]
     fn expected_pack_flags(pack: &Path) -> Vec<String> {
         vec![
             "--no-extensions".to_string(),
@@ -1161,7 +1152,6 @@ pub(crate) mod tests {
         ]
     }
 
-    #[cfg(target_os = "linux")]
     fn argv(head: &[&str], pack: &Path, tail: &[&str]) -> Vec<String> {
         let mut argv: Vec<String> = head.iter().map(|arg| arg.to_string()).collect();
         argv.extend(expected_pack_flags(pack));
@@ -1193,7 +1183,6 @@ pub(crate) mod tests {
         .expect("sidecar became ready");
     }
 
-    #[cfg(target_os = "linux")]
     async fn wait_for_pid(sidecar: &SidecarManager) -> u32 {
         for _ in 0..200 {
             if let Some(pid) = sidecar.omp_pid() {
@@ -1204,12 +1193,10 @@ pub(crate) mod tests {
         panic!("the supervisor never reported omp's pid");
     }
 
-    /// omp's argv after the fixture path, from `/proc`.
-    #[cfg(target_os = "linux")]
+    /// omp's argv after the fixture path, from the process table.
     async fn launch_argv(sidecar: &SidecarManager) -> Vec<String> {
         let pid = wait_for_pid(sidecar).await;
-        let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap();
-        let args: Vec<String> = cmdline.split(|byte| *byte == 0).filter(|part| !part.is_empty()).map(|part| String::from_utf8_lossy(part).into_owned()).collect();
+        let args = crate::omp::test_support::argv(pid);
         let start = args.iter().position(|arg| arg == "--mode").expect("--mode in argv");
         args[start..].to_vec()
     }
@@ -1305,7 +1292,6 @@ pub(crate) mod tests {
         assert_eq!(launch_profile_to_flags(&profile), vec!["--no-lsp", "--session-dir", "/s"]);
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn passes_the_active_session_path_on_a_manual_restart() {
         let dir = tempfile::tempdir().unwrap();
@@ -1320,10 +1306,11 @@ pub(crate) mod tests {
         assert_eq!(launch, argv(&["--mode", "rpc-ui", "--session", &session_path.to_string_lossy()], &dev_pack(), &[]));
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn spawns_every_sidecar_with_the_assistant_pack_flags_and_never_chat() {
         let dir = tempfile::tempdir().unwrap();
+        let env_dump = dir.path().join("env.json");
+        let env_dump_arg = env_dump.to_string_lossy().into_owned();
         let mut options = options(fixture_path(), dir.path());
         // A tab created as a chat still gets the pack: the chat branch is gone.
         options.kind = SessionKind::Chat;
@@ -1346,18 +1333,14 @@ pub(crate) mod tests {
                 ("OLLAMA_CLOUD_API_KEY", "cloud"),
                 ("OLLAMA_HOST", "127.0.0.1:11434"),
                 ("SAI_ATLAS_LANG", "xx"),
+                (FIXTURE_ENV_DUMP, &env_dump_arg),
             ]),
         );
         sidecar.start();
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
-        let pid = wait_for_pid(&sidecar).await;
-        let environ = std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default();
+        let child_env = read_env_dump(&env_dump).await;
         sidecar.dispose().await;
-        let child_env: HashMap<String, String> = environ
-            .split(|byte| *byte == 0)
-            .filter_map(|entry| String::from_utf8_lossy(entry).split_once('=').map(|(key, value)| (key.to_string(), value.to_string())))
-            .collect();
         assert_eq!(child_env.get("SAI_ATLAS_LANG").map(String::as_str), Some("en"));
         assert_eq!(child_env.get("BASH_ENV"), None);
         assert_eq!(child_env.get("ENV"), None);
@@ -1472,7 +1455,6 @@ process.stdin.resume();"#,
         assert!(!spawned.exists());
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn forces_a_freshly_created_tab_to_bypass_the_cli_auto_resume_setting() {
         let dir = tempfile::tempdir().unwrap();
@@ -1523,7 +1505,6 @@ process.stdin.resume();"#,
         assert_eq!(command_output, Some(json!({ "type": "command_output", "text": "Enabled models" })));
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn appends_the_workspace_launch_profile_flags_at_spawn_denylist_proof() {
         let dir = tempfile::tempdir().unwrap();
@@ -1581,7 +1562,6 @@ process.stdin.resume();"#,
         assert!(!launch.iter().any(|arg| arg == "/x"));
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn passes_the_context_limits_overlay_after_the_pack_config_and_creates_a_missing_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -1611,7 +1591,6 @@ process.stdin.resume();"#,
         assert_eq!(std::fs::read_to_string(&overlay).unwrap(), limits);
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn adoptcwd_re_roots_the_reported_cwd_and_plain_restarts_spawn_there() {
         let dir = tempfile::tempdir().unwrap();
@@ -1626,7 +1605,7 @@ process.stdin.resume();"#,
         sidecar.restart(None, None);
         wait_for_ready(&mut events).await;
         let pid = wait_for_pid(&sidecar).await;
-        let spawn_cwd = std::fs::read_link(format!("/proc/{pid}/cwd")).unwrap();
+        let spawn_cwd = crate::omp::test_support::cwd(pid).expect("omp's cwd");
         let launch = launch_argv(&sidecar).await;
         sidecar.dispose().await;
         assert_eq!(spawn_cwd, adopted_cwd);
@@ -1843,7 +1822,6 @@ setTimeout(() => process.exit(4), 120);"#,
         assert_eq!(report.stderr, vec!["dyld: Library not loaded: pi_natives", "  Referenced by: omp"]);
     }
 
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn dispose_stops_the_supervisor_and_the_fixture() {
         let dir = tempfile::tempdir().unwrap();
@@ -1861,8 +1839,7 @@ setTimeout(() => process.exit(4), 120);"#,
         assert!(!sidecar.has_rpc_client());
         assert_eq!(sidecar.omp_pid(), None);
         for pid in [omp, supervisor] {
-            let alive = std::fs::read_to_string(format!("/proc/{pid}/stat")).map(|stat| !stat.contains(") Z ")).unwrap_or(false);
-            assert!(!alive, "pid {pid} survived dispose");
+            assert!(!crate::omp::test_support::alive(pid), "pid {pid} survived dispose");
         }
     }
 }

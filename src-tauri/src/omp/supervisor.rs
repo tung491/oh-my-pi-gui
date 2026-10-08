@@ -10,6 +10,9 @@
 //! zombie until the app quits. The shutdown sequence is SIGTERM
 //! omp, a 5 s grace, SIGKILL of omp's process group, then a sweep of every
 //! process reparented to the supervisor, and it exits with omp's status.
+//! macOS has neither a subreaper nor a parent-death signal, so there the
+//! supervisor watches the GUI's pid with kqueue and keeps a snapshot of omp's
+//! descendants, whose survivors it SIGKILLs once omp is gone.
 //!
 //! This process runs without `--user-data-dir`, so it never touches the
 //! runtime log; failures go to stderr with a `supervisor:` prefix.
@@ -70,6 +73,7 @@ mod unix {
     use std::time::{Duration, Instant};
 
     use nix::sys::signal::{kill, killpg, Signal};
+    #[cfg(not(target_os = "macos"))]
     use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
     use nix::unistd::Pid;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -80,6 +84,9 @@ mod unix {
     /// How long the orphan sweep keeps making passes.
     const SWEEP_BUDGET: Duration = Duration::from_secs(2);
     const SWEEP_PAUSE: Duration = Duration::from_millis(20);
+    /// How often the macOS descendant snapshot is refreshed while omp runs.
+    #[cfg(target_os = "macos")]
+    const SNAPSHOT_REFRESH: Duration = Duration::from_millis(500);
     /// The status reported when the parent is already gone before omp starts.
     const PARENT_GONE_STATUS: u8 = 143;
 
@@ -114,7 +121,8 @@ mod unix {
         }
         // The parent may have died between fork and prctl: the death signal was
         // not armed yet, and the control channel is already at EOF.
-        if nix::unistd::getppid() == Pid::from_raw(1) || control_at_eof(&control) {
+        let parent = nix::unistd::getppid();
+        if parent == Pid::from_raw(1) || control_at_eof(&control) {
             return PARENT_GONE_STATUS;
         }
         let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
@@ -124,7 +132,11 @@ mod unix {
                 return 1;
             }
         };
-        runtime.block_on(supervise(argv, control))
+        let code = runtime.block_on(supervise(argv, control, parent));
+        // The macOS parent watch blocks a pool thread in `kevent` for as long as
+        // the GUI lives; dropping the runtime normally would wait for it.
+        runtime.shutdown_background();
+        code
     }
 
     /// True when the GUI's end is already closed (a zero-length read is pending).
@@ -147,7 +159,7 @@ mod unix {
         }
     }
 
-    async fn supervise(argv: Vec<OsString>, control: OwnedFd) -> u8 {
+    async fn supervise(argv: Vec<OsString>, control: OwnedFd, parent: Pid) -> u8 {
         let mut command = Command::new(&argv[0]);
         command.args(&argv[1..]).stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).kill_on_drop(false);
         // omp gets its own process group inside the supervisor's session, so a
@@ -174,25 +186,154 @@ mod unix {
         if sigterm.is_none() {
             warn("could not listen for SIGTERM; relying on the control channel");
         }
-        tokio::select! {
-            status = child.wait() => {
-                sweep_orphans().await;
-                return exit_code(status);
-            }
-            _ = async { match sigterm.as_mut() { Some(signal) => { signal.recv().await; } None => std::future::pending().await } } => {}
-            _ = async { match stream.as_mut() { Some(stream) => wait_for_eof(stream).await, None => std::future::pending().await } } => {}
-            _ = reap_orphans_while_running(omp) => {}
-        }
-        let _ = kill(omp, Signal::SIGTERM);
-        let status = match tokio::time::timeout(TERM_GRACE, child.wait()).await {
-            Ok(status) => status,
-            Err(_) => {
-                let _ = killpg(omp, Signal::SIGKILL);
-                child.wait().await
+        #[cfg(target_os = "macos")]
+        let mut snapshot: Vec<Pid> = Vec::new();
+        // The second parent-death signal; Linux has `PR_SET_PDEATHSIG` instead.
+        #[cfg(target_os = "macos")]
+        let parent_watch = watch_parent_and_descendants(parent, omp, &mut snapshot);
+        #[cfg(not(target_os = "macos"))]
+        let parent_watch = {
+            let _ = parent;
+            std::future::pending::<()>()
+        };
+        let exited = tokio::select! {
+            status = child.wait() => Some(status),
+            _ = async { match sigterm.as_mut() { Some(signal) => { signal.recv().await; } None => std::future::pending().await } } => None,
+            _ = async { match stream.as_mut() { Some(stream) => wait_for_eof(stream).await, None => std::future::pending().await } } => None,
+            _ = reap_orphans_while_running(omp) => None,
+            _ = parent_watch => None,
+        };
+        let status = match exited {
+            Some(status) => status,
+            None => {
+                #[cfg(target_os = "macos")]
+                remember_descendants(&mut snapshot, omp);
+                let _ = kill(omp, Signal::SIGTERM);
+                match tokio::time::timeout(TERM_GRACE, child.wait()).await {
+                    Ok(status) => status,
+                    Err(_) => {
+                        #[cfg(target_os = "macos")]
+                        remember_descendants(&mut snapshot, omp);
+                        let _ = killpg(omp, Signal::SIGKILL);
+                        child.wait().await
+                    }
+                }
             }
         };
+        #[cfg(not(target_os = "macos"))]
         sweep_orphans().await;
+        #[cfg(target_os = "macos")]
+        kill_snapshot_survivors(&snapshot).await;
         exit_code(status)
+    }
+
+    /// Resolves when the GUI (`parent`) exits; while it waits, it keeps
+    /// `snapshot` holding omp's descendants, refreshed every 500 ms, so a tool
+    /// that leaves omp's tree before omp exits on its own is still on record.
+    #[cfg(target_os = "macos")]
+    async fn watch_parent_and_descendants(parent: Pid, omp: Pid, snapshot: &mut Vec<Pid>) {
+        let mut refresh = tokio::time::interval(SNAPSHOT_REFRESH);
+        let exited = parent_exit(parent);
+        tokio::pin!(exited);
+        loop {
+            tokio::select! {
+                _ = &mut exited => return,
+                _ = refresh.tick() => remember_descendants(snapshot, omp),
+            }
+        }
+    }
+
+    /// Resolves when `parent` exits, through a kqueue `EVFILT_PROC`/`NOTE_EXIT`
+    /// watch on a blocking thread. A parent already gone resolves at once; a
+    /// watch that cannot be set up never resolves, leaving the control channel.
+    #[cfg(target_os = "macos")]
+    async fn parent_exit(parent: Pid) {
+        use nix::errno::Errno;
+        use nix::sys::event::{EvFlags, EventFilter, FilterFlag, KEvent, Kqueue};
+        let watch = tokio::task::spawn_blocking(move || -> Result<(), Errno> {
+            let kq = Kqueue::new()?;
+            let exit = KEvent::new(parent.as_raw() as usize, EventFilter::EVFILT_PROC, EvFlags::EV_ADD | EvFlags::EV_ONESHOT, FilterFlag::NOTE_EXIT, 0, 0);
+            let now = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+            match kq.kevent(&[exit], &mut [], Some(now)) {
+                Ok(_) => {}
+                Err(Errno::ESRCH) => return Ok(()),
+                Err(error) => return Err(error),
+            }
+            let mut fired = [KEvent::new(0, EventFilter::EVFILT_PROC, EvFlags::empty(), FilterFlag::empty(), 0, 0)];
+            loop {
+                match kq.kevent(&[], &mut fired, None) {
+                    Ok(0) | Err(Errno::EINTR) => {}
+                    Ok(_) => return Ok(()),
+                    Err(error) => return Err(error),
+                }
+            }
+        });
+        match watch.await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                warn(format!("cannot watch the GUI's pid: {error}; relying on the control channel"));
+                std::future::pending::<()>().await;
+            }
+            Err(error) => {
+                warn(format!("the GUI pid watch stopped: {error}; relying on the control channel"));
+                std::future::pending::<()>().await;
+            }
+        }
+    }
+
+    /// Adds omp's current descendants to `snapshot` and drops the pids that
+    /// have exited since, so a recycled pid is never killed at shutdown.
+    #[cfg(target_os = "macos")]
+    fn remember_descendants(snapshot: &mut Vec<Pid>, omp: Pid) {
+        snapshot.retain(|pid| kill(*pid, None).is_ok());
+        for pid in descendants_of(omp) {
+            if !snapshot.contains(&pid) {
+                snapshot.push(pid);
+            }
+        }
+    }
+
+    /// Every descendant of `root`, breadth first, from `proc_listchildpids`.
+    #[cfg(target_os = "macos")]
+    fn descendants_of(root: Pid) -> Vec<Pid> {
+        let mut buffer = vec![0i32; 4096];
+        let byte_len = libc::c_int::try_from(buffer.len() * std::mem::size_of::<i32>()).unwrap_or(libc::c_int::MAX);
+        let mut found: Vec<Pid> = Vec::new();
+        let mut queue = std::collections::VecDeque::from([root]);
+        while let Some(parent) = queue.pop_front() {
+            // SAFETY: `buffer` is a live, writable allocation of exactly
+            // `byte_len` bytes, which is the size passed, so the kernel cannot
+            // write past it. The returned count is clamped to the buffer length
+            // below before any element is read, and a negative (error) count
+            // reads nothing.
+            let count = unsafe { libc::proc_listchildpids(parent.as_raw(), buffer.as_mut_ptr().cast(), byte_len) };
+            let count = usize::try_from(count).unwrap_or(0).min(buffer.len());
+            for &raw in &buffer[..count] {
+                let pid = Pid::from_raw(raw);
+                if raw > 0 && pid != root && !found.contains(&pid) {
+                    found.push(pid);
+                    queue.push_back(pid);
+                }
+            }
+        }
+        found
+    }
+
+    /// SIGKILL every snapshot pid still alive, re-checking every 20 ms until
+    /// none is or the sweep budget is spent.
+    #[cfg(target_os = "macos")]
+    async fn kill_snapshot_survivors(snapshot: &[Pid]) {
+        let started = Instant::now();
+        loop {
+            let survivors: Vec<Pid> = snapshot.iter().copied().filter(|pid| kill(*pid, None).is_ok()).collect();
+            if survivors.is_empty() || started.elapsed() >= SWEEP_BUDGET {
+                return;
+            }
+            for pid in &survivors {
+                let _ = kill(*pid, Signal::SIGKILL);
+            }
+            tokio::time::sleep(SWEEP_PAUSE).await;
+        }
     }
 
     fn control_stream(control: OwnedFd) -> Option<tokio::net::UnixStream> {
@@ -241,6 +382,7 @@ mod unix {
     /// Kill every process reparented to this subreaper, in passes, until a pass
     /// finds nothing or the budget is spent. Tool children a native shell put in
     /// their own process groups land here once omp is gone.
+    #[cfg(not(target_os = "macos"))]
     async fn sweep_orphans() {
         let started = Instant::now();
         loop {
@@ -294,6 +436,7 @@ mod unix {
     fn reap_orphans(_omp: Pid) {}
 
     /// Collect every exited child without blocking.
+    #[cfg(not(target_os = "macos"))]
     fn reap() {
         loop {
             match waitpid(None, Some(WaitPidFlag::WNOHANG)) {
@@ -324,8 +467,9 @@ mod unix {
         children
     }
 
-    /// macOS has no `/proc`; the `proc_listchildpids` snapshot arrives with that OS's cutover.
-    #[cfg(not(target_os = "linux"))]
+    /// No `/proc` and no subreaper here; macOS, whose orphans reparent to
+    /// launchd, relies on the descendant snapshot instead of this sweep.
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     fn live_children_of_self() -> Vec<Pid> {
         Vec::new()
     }
@@ -334,7 +478,7 @@ mod unix {
 /// Plays the supervisor when the test binary is re-executed by the manager:
 /// the test harness owns `main`, so `--omp-supervise` cannot reach `run`.
 /// Every unix test binary needs it, because every supervised spawn in a test
-/// goes through it; the tool-tree tests below stay Linux-only until their port.
+/// goes through it.
 #[cfg(all(test, unix))]
 mod test_role {
     use super::*;
@@ -356,39 +500,25 @@ mod test_role {
     }
 }
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::omp::manager::{read_pid_line, spawn_supervised};
+    use crate::omp::test_support::{alive, argv as cmdline, children_of, ppid};
     use std::path::Path;
     use std::process::Stdio;
     use std::time::{Duration, Instant};
+    use tokio::io::AsyncBufReadExt;
 
+    #[cfg(target_os = "linux")]
     const SLEEP_BIN: &str = "/usr/bin/sleep";
+    #[cfg(not(target_os = "linux"))]
+    const SLEEP_BIN: &str = "/bin/sleep";
     const TREE_LIMIT: Duration = Duration::from_secs(10);
 
-    fn alive(pid: u32) -> bool {
-        std::fs::read_to_string(format!("/proc/{pid}/stat")).map(|stat| !stat.contains(") Z ")).unwrap_or(false)
-    }
-
-    fn cmdline(pid: u32) -> Vec<String> {
-        std::fs::read(format!("/proc/{pid}/cmdline")).unwrap_or_default().split(|byte| *byte == 0).filter(|part| !part.is_empty()).map(|part| String::from_utf8_lossy(part).into_owned()).collect()
-    }
-
-    fn ppid(pid: u32) -> Option<u32> {
-        let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
-        let (_, rest) = stat.rsplit_once(')')?;
-        rest.split_whitespace().nth(1)?.parse().ok()
-    }
-
-    /// Every `/usr/bin/sleep 600` whose parent is `parent`.
+    /// Every `<SLEEP_BIN> 600` whose parent is `parent`.
     fn sleeps_under(parent: u32) -> Vec<u32> {
-        let Ok(entries) = std::fs::read_dir("/proc") else { return Vec::new() };
-        entries
-            .flatten()
-            .filter_map(|entry| entry.file_name().to_string_lossy().parse::<u32>().ok())
-            .filter(|pid| ppid(*pid) == Some(parent) && cmdline(*pid) == [SLEEP_BIN, "600"])
-            .collect()
+        children_of(parent).into_iter().filter(|(_, argv)| argv == &[SLEEP_BIN, "600"]).map(|(pid, _)| pid).collect()
     }
 
     async fn wait_until(limit: Duration, mut condition: impl FnMut() -> bool) -> bool {
@@ -402,9 +532,24 @@ mod tests {
         condition()
     }
 
+    fn sigkill(pid: u32) {
+        let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGKILL);
+    }
+
     /// The tree every test uses: a stand-in omp that `exec`s into sleep after
-    /// leaving a `setsid` sleep behind (a tool that left omp's process group).
+    /// leaving a sleep behind in a process group of its own (a tool that left
+    /// omp's process group). Linux uses the `setsid` binary; macOS has none, so
+    /// job control gives the background sleep its own group.
+    #[cfg(target_os = "linux")]
     const TOOL_TREE: &str = "setsid /usr/bin/sleep 600 & exec /usr/bin/sleep 600";
+    #[cfg(not(target_os = "linux"))]
+    const TOOL_TREE: &str = "set -m; /bin/sleep 600 & exec /bin/sleep 600";
+
+    /// A stand-in omp that leaves the same escaped tool behind and then exits 0 on its own.
+    #[cfg(target_os = "linux")]
+    const ESCAPE_THEN_EXIT: &str = "setsid /usr/bin/sleep 600 & /usr/bin/sleep 1.5; exit 0";
+    #[cfg(not(target_os = "linux"))]
+    const ESCAPE_THEN_EXIT: &str = "set -m; /bin/sleep 600 & /bin/sleep 1.5; exit 0";
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn control_channel_eof_kills_the_child_tree_within_10_s() {
@@ -431,6 +576,8 @@ mod tests {
         assert_eq!(status.code(), Some(143));
     }
 
+    // subreaper-only: macOS reparents orphans to launchd
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn an_orphan_that_exits_is_reaped_while_omp_runs() {
         // The subshell exits at once, so its `sleep 1` is reparented to the supervisor.
@@ -471,8 +618,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn sigterm_runs_the_grace_period_before_the_kill() {
-        let script = r#"trap "sleep 1; exit 143" TERM; /usr/bin/sleep 600 & wait"#;
-        let args = vec!["-c".to_string(), script.to_string()];
+        let script = format!(r#"trap "sleep 1; exit 143" TERM; {SLEEP_BIN} 600 & wait"#);
+        let args = vec!["-c".to_string(), script];
         let mut supervised = spawn_supervised(Path::new("bash"), &args, |command| {
             command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit());
         })
@@ -492,13 +639,13 @@ mod tests {
         assert!(!alive(omp));
     }
 
-    /// The S7b gate: `kill -9` of the GUI leaves no supervisor, no omp and no tool child.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn sigkill_of_the_parent_kills_the_child_tree_within_10_s() {
+    /// Starts the stand-in GUI in `role` and returns it with the pids it reports
+    /// on its `tree …` line.
+    async fn start_stand_in_gui(role: &str) -> (tokio::process::Child, Vec<u32>) {
         let mut gui = tokio::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact", "omp::supervisor::tests::gui_role_helper"])
             .args(TEST_HARNESS_ARGS)
-            .env(TEST_ROLE_ENV, "gui")
+            .env(TEST_ROLE_ENV, role)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -507,7 +654,7 @@ mod tests {
             .unwrap();
         let stdout = gui.stdout.take().unwrap();
         let mut lines = tokio::io::BufReader::new(stdout).lines();
-        let mut pids: Option<(u32, u32)> = None;
+        let mut pids = Vec::new();
         let deadline = tokio::time::sleep(Duration::from_secs(20));
         tokio::pin!(deadline);
         loop {
@@ -515,8 +662,7 @@ mod tests {
                 line = lines.next_line() => match line {
                     Ok(Some(line)) => {
                         if let Some(rest) = line.strip_prefix("tree ") {
-                            let mut parts = rest.split_whitespace().filter_map(|part| part.parse::<u32>().ok());
-                            pids = Some((parts.next().unwrap(), parts.next().unwrap()));
+                            pids = rest.split_whitespace().filter_map(|part| part.parse::<u32>().ok()).collect();
                             break;
                         }
                     }
@@ -525,7 +671,15 @@ mod tests {
                 _ = &mut deadline => break,
             }
         }
-        let (supervisor, omp) = pids.expect("the stand-in GUI reported its tree");
+        assert!(pids.len() >= 2, "the stand-in GUI reported its tree");
+        (gui, pids)
+    }
+
+    /// The S7b gate: `kill -9` of the GUI leaves no supervisor, no omp and no tool child.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn sigkill_of_the_parent_kills_the_child_tree_within_10_s() {
+        let (mut gui, pids) = start_stand_in_gui("gui").await;
+        let (supervisor, omp) = (pids[0], pids[1]);
         assert!(wait_until(Duration::from_secs(5), || !sleeps_under(omp).is_empty()).await, "the tool child never appeared");
         let tool = sleeps_under(omp)[0];
         let gui_pid = gui.id().unwrap();
@@ -540,14 +694,70 @@ mod tests {
         assert!(elapsed < TREE_LIMIT, "took {elapsed:?}");
     }
 
-    use tokio::io::AsyncBufReadExt;
+    /// A process the GUI started holds its end of the control channel open, so
+    /// the supervisor sees no EOF: only the second parent-death signal can end it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_dead_parent_ends_supervision_even_when_the_control_channel_stays_open() {
+        let (mut gui, pids) = start_stand_in_gui("gui-leak").await;
+        assert_eq!(pids.len(), 3, "tree line {pids:?}");
+        let (supervisor, omp, holder) = (pids[0], pids[1], pids[2]);
+        let found = wait_until(Duration::from_secs(5), || !sleeps_under(omp).is_empty()).await;
+        let tool = sleeps_under(omp).first().copied();
+        let gui_pid = gui.id().unwrap();
+
+        let started = Instant::now();
+        nix::sys::signal::kill(nix::unistd::Pid::from_raw(gui_pid as i32), nix::sys::signal::Signal::SIGKILL).unwrap();
+        let _ = gui.wait().await;
+        let gone = wait_until(TREE_LIMIT, || !alive(supervisor) && !alive(omp) && tool.is_none_or(|tool| !alive(tool))).await;
+        let elapsed = started.elapsed();
+        let report = format!("supervisor alive={} omp alive={} tool alive={:?} holder alive={}", alive(supervisor), alive(omp), tool.map(alive), alive(holder));
+        for pid in [Some(holder), Some(omp), tool].into_iter().flatten() {
+            sigkill(pid);
+        }
+        assert!(found, "the tool child never appeared");
+        assert!(gone, "{report}");
+        assert!(elapsed < TREE_LIMIT, "took {elapsed:?}");
+    }
+
+    /// omp exiting by itself runs no kill path, yet the tool it left behind goes too.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_escaped_tool_dies_when_omp_exits_on_its_own() {
+        let args = vec!["-c".to_string(), ESCAPE_THEN_EXIT.to_string()];
+        let mut supervised = spawn_supervised(Path::new("bash"), &args, |command| {
+            command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit());
+        })
+        .unwrap();
+        let omp = read_pid_line(&mut supervised.control_read).await.expect("pid line");
+        let mut tool = None;
+        let found = wait_until(Duration::from_secs(5), || {
+            tool = sleeps_under(omp).first().copied();
+            tool.is_some()
+        })
+        .await;
+        let status = tokio::time::timeout(Duration::from_secs(10), supervised.child.wait()).await;
+        let gone = match tool {
+            Some(tool) => wait_until(TREE_LIMIT, || !alive(tool)).await,
+            None => false,
+        };
+        let survived = tool.is_some_and(alive);
+        if let Some(tool) = tool {
+            sigkill(tool);
+        }
+        assert!(found, "the escaped tool never appeared");
+        let status = status.expect("supervisor exits").unwrap();
+        assert_eq!(status.code(), Some(0));
+        assert!(gone, "the escaped tool survived omp: alive={survived}");
+    }
 
     /// Stand-in GUI for the S7b gate: spawns the tool tree through the manager's
-    /// supervised spawn, reports the pids on stdout and sleeps until killed.
+    /// supervised spawn, reports the pids on stdout and sleeps until killed. In
+    /// the `gui-leak` role it also starts a sleep that inherits its end of the
+    /// control channel and reports that holder's pid third.
     /// Without the role variable (a plain `cargo test`) it only checks its own wiring.
     #[test]
     fn gui_role_helper() {
-        if std::env::var(TEST_ROLE_ENV).as_deref() != Ok("gui") {
+        let role = std::env::var(TEST_ROLE_ENV).unwrap_or_default();
+        if role != "gui" && role != "gui-leak" {
             return;
         }
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
@@ -559,7 +769,18 @@ mod tests {
             .unwrap();
             let omp = read_pid_line(&mut supervised.control_read).await.unwrap();
             let supervisor = supervised.child.id().unwrap();
-            println!("tree {supervisor} {omp}");
+            if role == "gui-leak" {
+                use nix::fcntl::{fcntl, FcntlArg, FdFlag};
+                let control: &tokio::net::UnixStream = supervised.control_write.as_ref();
+                fcntl(control, FcntlArg::F_SETFD(FdFlag::empty())).unwrap();
+                // Never waited for: the holder must outlive this stand-in GUI. The
+                // test SIGKILLs it, and the reparented process is reaped by init.
+                #[allow(clippy::zombie_processes)]
+                let holder = std::process::Command::new(SLEEP_BIN).arg("600").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+                println!("tree {supervisor} {omp} {}", holder.id());
+            } else {
+                println!("tree {supervisor} {omp}");
+            }
             tokio::time::sleep(Duration::from_secs(600)).await;
         });
     }
