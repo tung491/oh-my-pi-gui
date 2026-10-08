@@ -16,3 +16,10 @@ macOS pack check: PASS
 macOS boots a supervised sidecar: PASS
 macOS single instance per profile: PASS
 macOS hard kill leaves nothing: PASS (before the macOS supervisor port; the escaped-tool case is not covered yet)
+## Phase 4
+
+macOS supervisor kill -9 of the GUI ends supervisor, omp and escaped tool (unit): PASS
+macOS supervisor parent watch with the control channel held open (unit): PASS
+macOS escaped tool dies when omp exits on its own (unit): PASS
+macOS system proxy from scutil --proxy (parser): PASS
+macOS GPU name and RAM for Ollama sizing (live on this Mac): PASS

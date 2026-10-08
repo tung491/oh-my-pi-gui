@@ -228,12 +228,10 @@ pub(crate) fn resolve_editor_command(env: &Env, probed: &LoginShellEnv) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(target_os = "linux")]
     use crate::omp::manager::SidecarManager;
-    #[cfg(target_os = "linux")]
+    use crate::omp::test_support::{fixture_path, read_env_dump, FIXTURE_ENV_DUMP};
     use crate::ports::{SessionKind, SidecarEvent, SidecarHandle, SidecarOptions, SidecarStatus};
     use std::path::Path;
-    #[cfg(target_os = "linux")]
     use std::sync::{Arc, Weak};
 
     fn env(pairs: &[(&str, &str)]) -> Env {
@@ -357,18 +355,18 @@ mod tests {
         assert_eq!(resolve_editor_command(&env(&[]), &LoginShellEnv::default()), None);
     }
 
-    /// The real sidecar fixture, which runs under the supervisor exactly like omp.
-    #[cfg(target_os = "linux")]
-    fn fixture_path() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("e2e").join("sidecar-fixture.ts").canonicalize().unwrap()
-    }
-
-    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn injects_the_shellenv_overlay_into_the_spawned_process() {
         let dir = tempfile::tempdir().unwrap();
+        let env_dump = dir.path().join("env.json");
         let inherited_path = std::env::var("PATH").unwrap_or_default();
-        let overlay: HashMap<String, String> = [("PATH".to_string(), format!("/shell-probed:{inherited_path}")), ("PROBED_SHELL_KEY".to_string(), "present".to_string())].into_iter().collect();
+        let overlay: HashMap<String, String> = [
+            ("PATH".to_string(), format!("/shell-probed:{inherited_path}")),
+            ("PROBED_SHELL_KEY".to_string(), "present".to_string()),
+            (FIXTURE_ENV_DUMP.to_string(), env_dump.to_string_lossy().into_owned()),
+        ]
+        .into_iter()
+        .collect();
         let options = SidecarOptions {
             binary_path: fixture_path(),
             cwd: dir.path().to_string_lossy().into_owned(),
@@ -389,18 +387,9 @@ mod tests {
             false
         })
         .await;
-        let pid = sidecar.omp_pid();
-        let environ = pid.map(|pid| std::fs::read(format!("/proc/{pid}/environ")).unwrap_or_default()).unwrap_or_default();
+        let child_env = if ready == Ok(true) { read_env_dump(&env_dump).await } else { HashMap::new() };
         sidecar.dispose().await;
         assert_eq!(ready, Ok(true));
-        let child_env: HashMap<String, String> = environ
-            .split(|byte| *byte == 0)
-            .filter_map(|entry| {
-                let text = String::from_utf8_lossy(entry);
-                let (key, value) = text.split_once('=')?;
-                Some((key.to_string(), value.to_string()))
-            })
-            .collect();
         assert!(child_env.get("PATH").map(|path| path.starts_with("/shell-probed:")).unwrap_or(false), "PATH was {:?}", child_env.get("PATH"));
         assert_eq!(child_env.get("PROBED_SHELL_KEY").map(String::as_str), Some("present"));
     }

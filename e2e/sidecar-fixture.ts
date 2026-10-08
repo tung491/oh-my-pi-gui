@@ -13,6 +13,8 @@ import type {
 } from "../src/shared/rpc-types";
 
 // A local protocol peer. No provider credentials, external network, or user session files.
+// Tests read the spawn environment from this dump: macOS shows no other process's environment.
+if (process.env.OMP_GUI_TEST_ENV_DUMP) fs.writeFileSync(process.env.OMP_GUI_TEST_ENV_DUMP, JSON.stringify(process.env));
 const messages: AgentMessage[] = [];
 const count = Math.min(50_000, Number(process.env.OMP_GUI_TEST_HISTORY ?? 0));
 for (let index = 0; index < count; index++) {

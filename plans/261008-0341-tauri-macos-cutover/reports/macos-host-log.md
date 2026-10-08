@@ -247,3 +247,29 @@ Phase end: `pgrep -fl "omp --mode rpc-ui"` and `pgrep -fl -- "--omp-supervise"`,
 ## Phase 7 Task 7.2b (main worktree)
 
 `cargo test … check_reports_an_available_manual_update_for_this_mac` → `test updater::tests::check_reports_an_available_manual_update_for_this_mac ... ok` (commit 76dbb7d). It sits behind `cfg(all(target_os = "macos", target_arch = "aarch64"))`, because the asset target is the compile-time arm64 Mac target.
+## Phase 4
+
+Lane B, side worktree `tauri_macos-core` (branch `tung491/tauri_macos-core`), own cargo target.
+
+- `set -m` check: under `/bin/bash -c 'set -m; /bin/sleep 600 & exec /bin/sleep 601'` the background sleep had pgid 23167 and the shell 23164, so the macOS `TOOL_TREE` stands in for `setsid`.
+- `proc_listchildpids` found in libc-0.2.189; a C probe on this Mac returned the pid count (3 for 3 children), not bytes. The snapshot clamps the count and skips non-positive entries anyway.
+- `system_profiler SPDisplaysDataType -json` took 0.31–0.37 s (3 runs), so the GPU probe keeps the shared 2 s `HARDWARE_PROBE_TIMEOUT_MS`.
+- Red (Task 4.1): `cargo test … omp::supervisor` → 3 passed, 5 failed: `sigkill_of_the_parent…` (tool alive=true), `a_dead_parent_ends_supervision…` (supervisor, omp, tool all alive), `an_escaped_tool_dies…` (tool alive=true), plus `control_channel_eof…` and `sigterm_runs_the_grace_period…` (tool survived).
+- Green (Task 4.2): 8 passed, including the three named tests; `pgrep -f "/bin/sleep 600" || echo none` → `none`.
+- deviation: `remember_descendants` drops snapshot pids that have exited at each refresh (the plan kept them for the survivor check to skip). A dead pid is never a survivor, and dropping it means a recycled pid in a long session is never SIGKILLed at shutdown.
+- deviation: `run` ends with `runtime.shutdown_background()`, because the kqueue watch blocks a `spawn_blocking` thread for as long as the GUI lives and a plain runtime drop would wait for it.
+- deviation (verify command): `cargo test … omp::manager omp::shell_env` is rejected by cargo (`unexpected argument 'omp::shell_env'`: one positional TESTNAME). Counsel: run `cargo test --manifest-path src-tauri/Cargo.toml --all-features -- omp::manager omp::shell_env` instead → `27 passed; 0 failed`, all eight un-gated tests `ok`. The phase file's Verify line should read that way.
+- Env reads use a fixture dump: `e2e/sidecar-fixture.ts` writes `process.env` as JSON to `$OMP_GUI_TEST_ENV_DUMP`; argv from `ps -ww -o args=`, cwd from `lsof -a -p <pid> -d cwd -Fn` (`src-tauri/src/omp/test_support.rs`).
+ungated: omp::manager::tests::passes_the_active_session_path_on_a_manual_restart
+ungated: omp::manager::tests::spawns_every_sidecar_with_the_assistant_pack_flags_and_never_chat
+ungated: omp::manager::tests::forces_a_freshly_created_tab_to_bypass_the_cli_auto_resume_setting
+ungated: omp::manager::tests::appends_the_workspace_launch_profile_flags_at_spawn_denylist_proof
+ungated: omp::manager::tests::passes_the_context_limits_overlay_after_the_pack_config_and_creates_a_missing_file
+ungated: omp::manager::tests::adoptcwd_re_roots_the_reported_cwd_and_plain_restarts_spawn_there
+ungated: omp::manager::tests::dispose_stops_the_supervisor_and_the_fixture
+ungated: omp::shell_env::tests::injects_the_shellenv_overlay_into_the_spawned_process
+- Proxy (Tasks 4.3/4.4): red `cannot find function scutil_proxy_to_url` / `cannot find type ScutilProxy` (exit 101); green `omp::proxy` 6 passed. This Mac's `scutil --proxy` has no HTTP(S) proxy and no PAC, so the live lookup returns none.
+- GPU and RAM (Tasks 4.5/4.6): red `cannot find function gpu_name_from_system_profiler` / `parse_sysctl_memsize` (exit 101); green `ollama::hardware` 14 passed, including `reads_this_macs_memory_and_gpu` (Apple M1 Pro, `hw.memsize` 34359738368). `grep -rn "is not implemented on this OS" src-tauri/src` prints nothing.
+- Linux branches were not compiled here (no Linux target installed); CI's Linux clippy and `cargo test` are the authority for them.
+- Gate 5 first run: `bunx vitest run` exit 1, only `assistant-pack/test/compiled.test.ts` (`sidecar binary missing: …/tauri_macos-core/resources/omp`). Counsel: copy the sidecar from the plan's build location instead of using `SKIP_COMPILED=1`. Copied `~/WORK/oh-my-pi/packages/gui/resources/omp` → `resources/omp` (gitignored), sha256 `df02386d287ce0c486495228947986bb1d41b5758f536dd4b08dc6f25154df9c`. Re-run: `Test Files 225 passed | 1 skipped (226)`, `Tests 2374 passed | 9 skipped (2383)`, exit 0.
+- Regression gate (Task 4.7): 1 clippy exit 0; 2 `cargo test` 783 passed, 0 failed; 3 parity exit 0; 4 `check-module snapshots: PASS (desktop ollama omp ports services tabs updater)`; 5 vitest exit 0 (above); 6 `check:types` exit 0; 7 `biome check e2e/sidecar-fixture.ts` exit 0. The supervisor tests passed 3 more runs in a row. Lane A was idle during the gate.
