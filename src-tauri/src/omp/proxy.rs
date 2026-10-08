@@ -97,11 +97,61 @@ fn portal_proxy_to_url(answer: &reqwest::Url) -> Option<String> {
     Some(format!("{scheme}://{credentials}{host}:{port}"))
 }
 
-/// Windows (WinHTTP) and macOS (`scutil --proxy`, PAC) lookups arrive when those
-/// OSes switch shells; until then the chain ends without a system proxy.
-#[cfg(not(target_os = "linux"))]
+/// What `scutil --proxy` says about outbound web traffic.
+#[cfg(any(target_os = "macos", test))]
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ScutilProxy {
+    Url(String),
+    /// Only a PAC file is configured, which the agent cannot evaluate.
+    PacOnly,
+    None,
+}
+
+/// The proxy in `scutil --proxy` output (`  Key : value` lines): the HTTPS
+/// proxy first, then the HTTP one. macOS web proxies are HTTP CONNECT
+/// proxies, so the scheme is always `http://`.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn scutil_proxy_to_url(text: &str) -> ScutilProxy {
+    let fields: HashMap<&str, &str> = text.lines().filter_map(|line| line.split_once(" : ")).map(|(key, value)| (key.trim(), value.trim())).collect();
+    let enabled = |key: &str| fields.get(key).copied() == Some("1");
+    for (enable, host, port) in [("HTTPSEnable", "HTTPSProxy", "HTTPSPort"), ("HTTPEnable", "HTTPProxy", "HTTPPort")] {
+        let Some(host) = fields.get(host).copied().filter(|host| enabled(enable) && !host.is_empty()) else { continue };
+        return match fields.get(port).and_then(|port| port.parse::<u16>().ok()).filter(|port| *port > 0) {
+            Some(port) => ScutilProxy::Url(format!("http://{host}:{port}")),
+            None => ScutilProxy::Url(format!("http://{host}")),
+        };
+    }
+    if enabled("ProxyAutoConfigEnable") {
+        ScutilProxy::PacOnly
+    } else {
+        ScutilProxy::None
+    }
+}
+
+/// The System Settings web proxy, from `scutil --proxy`. A PAC-only setup
+/// gets no proxy and one runtime-log line per run.
+#[cfg(target_os = "macos")]
 async fn lookup_system_proxy() -> Option<String> {
-    crate::runtime_log::note("unknown", "system proxy lookup is not implemented on this OS", serde_json::json!({}));
+    const SCUTIL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+    let run = tokio::process::Command::new("/usr/sbin/scutil").arg("--proxy").stdin(std::process::Stdio::null()).stderr(std::process::Stdio::null()).kill_on_drop(true).output();
+    let output = tokio::time::timeout(SCUTIL_TIMEOUT, run).await.ok()?.ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    match scutil_proxy_to_url(&String::from_utf8_lossy(&output.stdout)) {
+        ScutilProxy::Url(url) => Some(url),
+        ScutilProxy::PacOnly => {
+            static LOGGED: std::sync::Once = std::sync::Once::new();
+            LOGGED.call_once(|| crate::runtime_log::note("proxy", "a PAC-only system proxy is not supported; no proxy is used", serde_json::json!({})));
+            None
+        }
+        ScutilProxy::None => None,
+    }
+}
+
+/// Windows (WinHTTP) has no lookup yet: the chain ends without a system proxy.
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+async fn lookup_system_proxy() -> Option<String> {
     None
 }
 
@@ -126,6 +176,21 @@ mod tests {
             Box::pin(std::future::ready(answer.map(str::to_string)))
         });
         (lookup, calls)
+    }
+
+    #[test]
+    fn scutil_answers_map_to_agent_proxy_urls() {
+        let both = "<dictionary> {\n  ExceptionsList : <array> {\n    0 : *.local\n  }\n  HTTPEnable : 1\n  HTTPPort : 80\n  HTTPProxy : other\n  HTTPSEnable : 1\n  HTTPSPort : 8443\n  HTTPSProxy : proxy.corp\n}\n";
+        assert_eq!(scutil_proxy_to_url(both), ScutilProxy::Url("http://proxy.corp:8443".into()));
+        let http_only = "<dictionary> {\n  HTTPEnable : 1\n  HTTPPort : 3128\n  HTTPProxy : 10.0.0.2\n}\n";
+        assert_eq!(scutil_proxy_to_url(http_only), ScutilProxy::Url("http://10.0.0.2:3128".into()));
+        let pac_only = "<dictionary> {\n  ProxyAutoConfigEnable : 1\n  ProxyAutoConfigURLString : http://wpad/wpad.dat\n}\n";
+        assert_eq!(scutil_proxy_to_url(pac_only), ScutilProxy::PacOnly);
+        let off = "<dictionary> {\n  ExceptionsList : <array> {\n    0 : *.local\n  }\n  FTPPassive : 1\n  HTTPEnable : 0\n  HTTPSEnable : 0\n}\n";
+        assert_eq!(scutil_proxy_to_url(off), ScutilProxy::None);
+        assert_eq!(scutil_proxy_to_url(""), ScutilProxy::None);
+        let https_without_host = "<dictionary> {\n  HTTPSEnable : 1\n  HTTPSPort : 8443\n}\n";
+        assert_eq!(scutil_proxy_to_url(https_without_host), ScutilProxy::None);
     }
 
     #[test]
