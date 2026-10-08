@@ -111,8 +111,8 @@ export function infoPlistProblems(info: Record<string, unknown>): string[] {
 	return problems;
 }
 
-// Copied from `ASSISTANT_PACK_FILES` in src-tauri/src/omp/assistant_pack.rs.
-const ASSISTANT_PACK_FILES = [
+// Copied from `ASSISTANT_PACK_FILES` in src-tauri/src/omp/assistant_pack.rs; a test keeps them equal.
+export const ASSISTANT_PACK_FILES = [
 	"package.json",
 	"tools.js",
 	"system-prompt.md",
@@ -128,6 +128,8 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const POLL_MS = 250;
 const BOOT_TIMEOUT_MS = 30_000;
 const STABLE_MS = 10_000;
+/** The supervisor's 5 s TERM grace plus its 2 s sweep, with a margin. */
+const CLEAN_STOP_TIMEOUT_MS = 8_000;
 const HANDOFF_TIMEOUT_MS = 10_000;
 const HARD_KILL_TIMEOUT_MS = 10_000;
 const STOP_GRACE_MS = 5_000;
@@ -272,7 +274,13 @@ class Harness {
 	}
 
 	sidecarEntitlements(): void {
-		this.entitlements(join(this.#macos, "omp"), "omp.entitlements");
+		const omp = join(this.#macos, "omp");
+		// The entitlements bind only under the hardened runtime.
+		const display = run(["codesign", "-dv", omp]);
+		if (display.code !== 0) fail(`codesign -dv exited ${display.code}: ${display.stderr.trim()}`);
+		const { flags } = codesignDetails(`${display.stdout}\n${display.stderr}`);
+		if (!flags.includes("runtime")) fail(`sidecar flags (${flags.join(",")}) lack runtime`);
+		this.entitlements(omp, "omp.entitlements");
 	}
 
 	infoPlist(): void {
@@ -345,7 +353,7 @@ class Harness {
 		const gui = this.launch(this.newProfile());
 		try {
 			const tree = await this.waitForSidecar(gui);
-			const recorded = [tree.supervisor, tree.omp, ...descendantsOf(ps(), gui.pid)].filter(
+			const recorded = [tree.supervisor, tree.omp, ...descendantsOf(ps(), tree.omp)].filter(
 				(pid, index, all) => all.indexOf(pid) === index,
 			);
 			process.kill(gui.pid, "SIGKILL");
@@ -372,11 +380,25 @@ class Harness {
 		await Promise.all(running.map(child => child.exited));
 	}
 
-	/** Stops every launch still running and every sidecar pid seen under one. */
-	async cleanup(): Promise<void> {
+	/**
+	 * Stops every launch still running, gives their sidecars the supervisor's
+	 * shutdown time to exit, then kills any that are still this app's and
+	 * returns them: a sidecar alive after a clean stop is a leak.
+	 */
+	async cleanup(): Promise<number[]> {
 		await this.stop(this.#launched);
-		await sleep(POLL_MS);
-		const leftovers = [...this.#sidecarPids].filter(alive);
+		const deadline = Date.now() + CLEAN_STOP_TIMEOUT_MS;
+		let leftovers = [...this.#sidecarPids].filter(alive);
+		while (leftovers.length > 0 && Date.now() < deadline) {
+			await sleep(POLL_MS);
+			leftovers = leftovers.filter(alive);
+		}
+		const ours = new Set(
+			ps()
+				.filter(row => row.command.startsWith(`${this.#macos}/`))
+				.map(row => row.pid),
+		);
+		leftovers = leftovers.filter(pid => ours.has(pid));
 		for (const pid of leftovers) {
 			try {
 				process.kill(pid, "SIGKILL");
@@ -384,7 +406,7 @@ class Harness {
 				// Already gone.
 			}
 		}
-		if (leftovers.length > 0) console.error(`tauri-mac-smoke: killed leftover sidecar pids ${leftovers.join(", ")}`);
+		return leftovers;
 	}
 }
 
@@ -419,7 +441,13 @@ export async function main(appArg: string): Promise<number> {
 			}
 		}
 	} finally {
-		await harness.cleanup();
+		const leaked = await harness.cleanup();
+		if (leaked.length > 0) {
+			failed++;
+			console.log(
+				`FAIL clean stop: sidecar pids ${leaked.join(", ")} outlived the app by ${CLEAN_STOP_TIMEOUT_MS / 1000} s`,
+			);
+		}
 	}
 	if (failed > 0) {
 		console.error(`tauri-mac-smoke: throwaway profiles kept at ${root}`);

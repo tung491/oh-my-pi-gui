@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+	ASSISTANT_PACK_FILES,
 	codesignDetails,
 	descendantsOf,
 	entitlementKeysFromXml,
@@ -92,5 +93,13 @@ describe("tauri-mac-smoke helpers", () => {
 			"NSMicrophoneUsageDescription is missing",
 		]);
 		expect(infoPlistProblems({})).toHaveLength(3);
+	});
+
+	it("checks the same pack files the Rust core requires", () => {
+		const source = readFileSync(join(repoRoot, "src-tauri", "src", "omp", "assistant_pack.rs"), "utf8");
+		const list = source.match(/const ASSISTANT_PACK_FILES: &\[&str\] = &\[([^\]]*)\];/);
+		expect(list).not.toBeNull();
+		const rust = [...(list?.[1] ?? "").matchAll(/"([^"]+)"/g)].map(match => match[1]);
+		expect(ASSISTANT_PACK_FILES).toEqual(rust);
 	});
 });
