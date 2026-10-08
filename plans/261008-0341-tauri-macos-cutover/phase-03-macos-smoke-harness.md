@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "macOS packaged smoke harness"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [2]

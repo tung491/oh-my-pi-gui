@@ -212,3 +212,34 @@ none
 
 GUI pid 38088 (launched by its relative path, so the path filter above does not list it); supervisor 38167 has ppid 38088, omp 38168 has ppid 38167. `gui-runtime.jsonl` holds 9 lines, none naming `assistant-pack` or `sidecar-restart`. It does show `quick entry registered` (`Control+Shift+Space`) at startup; the chord was not pressed. `pgrep -fl` for the worktree's bundle path printed nothing afterwards.
 - `hdiutil create` prints a deprecation warning on Darwin 27; Apple's replacement is `diskutil image create from --format UDZO --volumeName "Sai ATLAS" <stage> <dmg>`, which exists only on macOS 26+, so `hdiutil` stays until it errors.
+
+## Phase 3
+
+Main worktree, the Phase 2 bundle unchanged (not rebuilt). Harness committed as 5cb1b21.
+
+red: `bunx vitest run scripts/tauri-mac-smoke.test.ts` exit 1 (`Failed to load url ./tauri-mac-smoke`); green: 10 passed. `bunx biome check` on both files exit 0 (one formatter-only line wrap applied first). Extra: a strict ad-hoc `tsc --types bun,node` exit 0, since `scripts/` is in no tsconfig.
+deviation: besides the four required helpers, `sameKeys`, `codesignDetails` and `infoPlistProblems` are exported and unit-tested, so every parse the cases rely on is pure. `ps` runs as `ps -axww -o pid=,ppid=,command=` so long command lines are not cut. The harness refuses an app path under `/Applications` (exit 2).
+
+```
+$ bun scripts/tauri-mac-smoke.ts "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app" 2>&1 | tee "$TMPDIR/smoke-1.txt"
+PASS bundle layout
+PASS app signature
+PASS app entitlements
+PASS sidecar entitlements
+PASS info plist
+PASS pack check
+PASS boots a supervised sidecar
+PASS single instance per profile
+PASS hard kill leaves nothing
+tauri-mac-smoke: PASS
+$ grep -E "^FAIL " "$TMPDIR/smoke-1.txt" | grep -v "hard kill leaves nothing" | wc -l
+       0
+$ pgrep -f "Sai ATLAS.app/Contents/MacOS" || echo none
+none
+```
+
+The run took 29 s (15:46:16 to 15:46:45 KST). No cargo or rustc ran during it: the `pgrep -fl "rustc|cargo"` hits were two `npm exec chrome-devtools-mcp` processes whose PATH names cargo. A second run (`smoke-2.txt`) printed the same nine PASS lines and `tauri-mac-smoke: PASS`.
+
+hard kill: PASS-before-Phase-4. The supervisor sees its control channel close when the GUI dies (that path is not Linux-gated) and ends omp. This does not prove the escaped-tool case (a tool process that left omp's process group); that needs Phase 4's kqueue parent watch and descendant snapshot.
+
+Phase end: `pgrep -fl "omp --mode rpc-ui"` and `pgrep -fl -- "--omp-supervise"`, filtered by this worktree's `src-tauri` path, print nothing. No `tauri-mac-smoke-*` temp root is left. `test -e "$HOME/Library/Application Support/@oh-my-pi/omp-gui"; echo $?` prints 1. Full `bunx vitest run`: 227 files passed, 1 skipped; 2388 tests passed, 9 skipped.
