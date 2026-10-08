@@ -137,3 +137,77 @@ Counsel verdict: GO. Notes for later phases:
 - The bundled sidecar extracts its native addon to `~/.omp/natives/<omp version>/` whatever `PI_CODING_AGENT_DIR` says. It is a cache, but it is user-home state every packaged run touches; Phase 6 Task 6.4 should list it.
 - Until Phase 5 Task 5.3 registers `tauri_nspanel::init()`, opening the quick-entry bar on a macOS build panics (`to_panel` reads unmanaged state). Nothing before Phase 5 may open the bar.
 - Phases 2/7 and 4/5 run as two lanes (plan.md, Phases).
+
+## Phase 2
+
+Lane A, main worktree. Sidecar: the existing `resources/omp` (omp 18.4.8, arm64), not rebuilt.
+
+red: `resolves_the_pack_in_the_app_bundle_resources` failed on its first assertion (left `…/Sai ATLAS.app/Contents/MacOS/assistant-pack`, right `…/Contents/Resources/assistant-pack`); green: `omp::assistant_pack` 11 passed.
+red: `scripts/tauri-packaging-config.test.ts` 6 failed (the renamed externalBin test, the two `["app"]` assertions, the package-script test, the arm64-only script test, the entitlement dict test), 35 passed; green: 41 passed, 1 skipped.
+red: `scripts/finalize-app.test.ts` failed with `Cannot find module '../src-tauri/macos/finalize-app'`; green: 2 passed.
+deviation: the Task 2.4 step 6 grep also lists `scripts/build-bundled-omp.ts:34,74` (a usage comment naming `build:omp:x64`) and `src-tauri/src/paths.rs:210,385` (`sidecar_out_name("darwin","x64")`); neither file is in this phase's ownership, so both are left for their owners (paths.rs: lane B / Phase 5; the build script comment: Phase 7 docs pass).
+deviation: `finalize-app.ts` resolves the repo root with `node:url` `fileURLToPath(import.meta.url)` (as `scripts/stage-tauri-sidecar.ts` does), because vitest runs under Node, where Bun's `import.meta.dir` is undefined.
+note: biome's `files.includes` and tsconfig's `include` both leave out `src-tauri/**`, so gate 7 and `check:types` do not cover `src-tauri/macos/finalize-app.ts`, as for the Linux finalize scripts. Extra checks run: biome over stdin as `scripts/finalize-app.ts` (no changes) and a strict ad-hoc `tsc --types bun` (exit 0).
+note: `hdiutil create` prints `WARNING: 'hdiutil create -volname -format ...' is deprecated` on this host (Darwin 27.0.0); the DMG is still made.
+
+### First bundle
+
+`bun run package:tauri:mac:arm64` → exit 0; one `.app` in `bundle/macos/`, one `Sai ATLAS_0.9.16_aarch64.dmg` in `bundle/dmg/`.
+
+```
+## 2.7 verify
+       1
+       1
+Sai ATLAS_0.9.16_aarch64.dmg
+## 2.8 step 1
+src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/MacOS/omp
+src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/config.yml
+## 2.8 step 2 (omp)
+{
+  "com.apple.security.cs.allow-jit" => true
+  "com.apple.security.cs.allow-unsigned-executable-memory" => true
+  "com.apple.security.cs.disable-library-validation" => true
+}
+## 2.8 step 2 (app)
+{
+  "com.apple.security.device.audio-input" => true
+}
+## 2.8 step 3
+Identifier=vn.io.vif.saiatlas
+CodeDirectory v=20500 size=53043 flags=0x10002(adhoc,runtime) hashes=1647+7 location=embedded
+TeamIdentifier=not set
+## omp flags
+Identifier=omp-555549444c4c447c55553144a138dbd9c49417a3
+CodeDirectory v=20500 size=452205 flags=0x10002(adhoc,runtime) hashes=14120+7 location=embedded
+TeamIdentifier=not set
+## 2.8 step 4
+[{"CFBundleTypeRole":"Editor","CFBundleURLName":"vn.io.vif.saiatlas omp","CFBundleURLSchemes":["omp"]}]
+## verify counts
+audio-input in omp: 0
+identifier: 1
+omp scheme: 1
+## strict verify
+verify=0
+## 2.8 step 5 (tail)
+dotenv  127.0.0.1.attacker.example never contacted
+mcp     user and project MCP servers never started
+PACK LOAD CHECK: PASS
+pack-check=0
+```
+
+### First launch
+
+```
+P=/var/folders/sl/5by2qx2j7cq78wr6yyj1pvsc0000gq/T/tmp.oX5NoRY0Hm
+GUI=38088
+loop broke=yes after 2s
+## process tree
+38167 38088 /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/MacOS/sai-atlas --omp-supervise /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/MacOS/omp --mode rpc-ui --no-extensions --no-rules --no-context-files --extension /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack --tools read,glob,write,ask,office_report,office_slides,office_clean --system-prompt /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/system-prompt.md --append-system-prompt /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/append-system-prompt.md --config /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/config.yml --approval-mode always-ask --config /var/folders/sl/5by2qx2j7cq78wr6yyj1pvsc0000gq/T/tmp.oX5NoRY0Hm/profile/ollama-context-limits.yml
+38168 38167 /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/MacOS/omp --mode rpc-ui --no-extensions --no-rules --no-context-files --extension /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack --tools read,glob,write,ask,office_report,office_slides,office_clean --system-prompt /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/system-prompt.md --append-system-prompt /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/append-system-prompt.md --config /Users/tung491/orca/workspaces/oh-my-pi-gui/tauri_macos/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app/Contents/Resources/assistant-pack/config.yml --approval-mode always-ask --config /var/folders/sl/5by2qx2j7cq78wr6yyj1pvsc0000gq/T/tmp.oX5NoRY0Hm/profile/ollama-context-limits.yml
+## runtime log hits
+0
+## after TERM
+none
+```
+
+GUI pid 38088 (launched by its relative path, so the path filter above does not list it); supervisor 38167 has ppid 38088, omp 38168 has ppid 38167. `gui-runtime.jsonl` holds 9 lines, none naming `assistant-pack` or `sidecar-restart`. It does show `quick entry registered` (`Control+Shift+Space`) at startup; the chord was not pressed. `pgrep -fl` for the worktree's bundle path printed nothing afterwards.
