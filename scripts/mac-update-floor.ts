@@ -1,18 +1,18 @@
 /**
- * The macOS update floor in the release's combined `latest-mac.yml`.
+ * The macOS update floor in the release's `latest-mac.yml`.
  *
- * Electron 44 runs only on macOS 13+, but electron-builder writes
- * `mac.minimumSystemVersion` into Info.plist alone, never into the update
- * metadata. electron-updater skips an update whose `minimumSystemVersion` is
- * above `os.release()` — on macOS the Darwin kernel version — so the field
- * must read `22.0.0` (Darwin 22 = macOS 13), not `13.0`. Without it every
- * macOS 12 install downloads a build it cannot open.
+ * The Tauri app needs macOS 13.3, the first release with Safari 16.4's WebKit
+ * (`bundle.macOS.minimumSystemVersion` in `src-tauri/tauri.macos.conf.json`).
+ * The updater skips an update whose `minimumSystemVersion` is above the Darwin
+ * kernel release, not the macOS version, so the field must read `22.4.0`
+ * (Darwin 22.4 = macOS 13.3), not `13.3`. Without it older Macs download a
+ * build they cannot open.
  */
 
 import { parse } from "yaml";
 
-/** Darwin 22 is macOS 13, the oldest macOS Electron 44 supports. */
-export const MAC_UPDATE_FLOOR = "22.0.0";
+/** Darwin 22.4 is macOS 13.3, the oldest macOS the Tauri app supports. */
+export const MAC_UPDATE_FLOOR = "22.4.0";
 
 function versionParts(version: string): number[] | null {
 	if (!/^\d+(\.\d+)*$/.test(version)) return null;
@@ -44,7 +44,7 @@ export function macUpdateFloorError(yaml: string): string | null {
 	const parts = versionParts(version);
 	const floor = versionParts(MAC_UPDATE_FLOOR) ?? [];
 	if (!parts || compareVersions(parts, floor) < 0) {
-		return `latest-mac.yml minimumSystemVersion is ${version}, below the Darwin floor ${MAC_UPDATE_FLOOR} (macOS 13); it is compared with os.release(), not the macOS version`;
+		return `latest-mac.yml minimumSystemVersion is ${version}, below the Darwin floor ${MAC_UPDATE_FLOOR} (macOS 13.3); it is compared with os.release(), not the macOS version`;
 	}
 	return null;
 }

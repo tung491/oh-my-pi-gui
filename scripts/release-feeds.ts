@@ -2,21 +2,16 @@
  * Turn built Tauri bundles into the release asset set and its update feeds.
  *
  *   bun scripts/release-feeds.ts --version 1.0.0 \
- *     --linux src-tauri/target/x86_64-unknown-linux-gnu/release/bundle \
- *     [--mac-arm64 <bundle dir>] [--mac-x64 <bundle dir>] \
- *     [--electron-mac-feed <dir>/latest-mac.yml] \
+ *     [--linux src-tauri/target/x86_64-unknown-linux-gnu/release/bundle] \
+ *     [--mac-arm64 src-tauri/target/aarch64-apple-darwin/release/bundle] \
  *     [--out dist-release]
  *
  * Output (`dist-release/` by default): the bundles renamed to the asset names
- * every installed updater looks for, the `omp-` bridge copies of the DMGs
- * (0.9.x Macs look only for those names until 1.0.0), and electron-builder
- * style feeds with base64 SHA-512 and size per file: `latest-linux.yml`
- * (AppImage and deb) and `latest-mac.yml` (both DMGs and ZIPs plus the bridge
- * copies, with `minimumSystemVersion`).
- *
- * While macOS still ships Electron builds, pass its electron-builder feed
- * instead of Tauri bundle dirs: the feed and every asset it lists (read from
- * the feed's directory) is copied unchanged.
+ * every installed updater looks for, the `omp-` bridge copy of the DMG (0.9.x
+ * Macs look only for that name until 1.0.0), and electron-builder style feeds
+ * with base64 SHA-512 and size per file: `latest-linux.yml` (AppImage and deb)
+ * and `latest-mac.yml` (the arm64 ZIP, DMG and bridge copy, with
+ * `minimumSystemVersion`). macOS ships the Tauri app for Apple silicon only.
  */
 
 import { spawnSync } from "node:child_process";
@@ -33,14 +28,14 @@ import {
 } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parse, Scalar, stringify } from "yaml";
+import { Scalar, stringify } from "yaml";
 import { macUpdateFloorError } from "./mac-update-floor";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
- * electron-updater compares a feed's `minimumSystemVersion` with
- * `os.release()`, the Darwin kernel version, not the macOS version. Only
+ * The updater (`src-tauri/src/updater/feed.rs`) compares a feed's
+ * `minimumSystemVersion` with the Darwin kernel release, not the macOS version. Only
  * floors this release line has used are listed; add the Darwin release of a
  * new floor here when `tauri.macos.conf.json` changes.
  */
@@ -72,11 +67,8 @@ export function assetNames(version: string) {
 		appImage: `Sai-ATLAS-${version}-x86_64.AppImage`,
 		deb: `sai-atlas_${version}_amd64.deb`,
 		macArm64Dmg: `Sai-ATLAS-${version}-arm64.dmg`,
-		macX64Dmg: `Sai-ATLAS-${version}.dmg`,
 		macArm64Zip: `Sai-ATLAS-${version}-arm64.zip`,
-		macX64Zip: `Sai-ATLAS-${version}.zip`,
 		bridgeArm64Dmg: `omp-${version}-arm64.dmg`,
-		bridgeX64Dmg: `omp-${version}.dmg`,
 	};
 }
 
@@ -84,12 +76,9 @@ export interface ReleaseInputs {
 	version: string;
 	/** Output directory; created when missing. */
 	outDir: string;
-	/** Tauri `bundle/` directories per target. */
+	/** Tauri `bundle/` directories per target; macOS ships arm64 only. */
 	linux?: string;
 	macArm64?: string;
-	macX64?: string;
-	/** The electron-builder feed to merge unchanged while macOS still ships Electron. */
-	electronMacFeed?: string;
 	/** Darwin version for `latest-mac.yml`; defaults to the Tauri macOS floor's. */
 	macMinimumSystemVersion?: string;
 	/** ISO timestamp for the feeds; defaults to now. */
@@ -173,30 +162,10 @@ function writeFeed(
 	writeFileSync(path.join(outDir, fileName), stringify(document, { lineWidth: 0 }));
 }
 
-/** Copy an electron-builder feed and every asset it lists, unchanged. */
-function mergeElectronFeed(feedPath: string, outDir: string, fileName: string): string[] {
-	const raw = readFileSync(feedPath, "utf8");
-	const feed = parse(raw) as { files?: Array<{ url?: unknown }> } | null;
-	const urls = (feed?.files ?? []).map(file => file.url).filter((url): url is string => typeof url === "string");
-	if (urls.length === 0) throw new Error(`${feedPath} lists no files`);
-	const copied: string[] = [];
-	for (const url of urls) {
-		const source = path.join(path.dirname(feedPath), url);
-		if (!existsSync(source)) throw new Error(`${feedPath} lists ${url}, which is not next to it`);
-		copyFileSync(source, path.join(outDir, url));
-		copied.push(url);
-	}
-	writeFileSync(path.join(outDir, fileName), raw);
-	return [...copied, fileName];
-}
-
 /** Build the release set; returns the names written to `outDir`. */
 export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 	const { version, outDir } = inputs;
 	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`invalid version ${version}`);
-	if (inputs.electronMacFeed && (inputs.macArm64 || inputs.macX64)) {
-		throw new Error("pass either the Tauri macOS bundles or the Electron latest-mac.yml, not both");
-	}
 	const names = assetNames(version);
 	const releaseDate = inputs.releaseDate ?? new Date().toISOString();
 	const written: string[] = [];
@@ -219,33 +188,19 @@ export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 		written.push("latest-linux.yml");
 	}
 
-	if (inputs.macArm64 || inputs.macX64) {
-		if (!inputs.macArm64 || !inputs.macX64)
-			throw new Error("latest-mac.yml must list both architectures; pass --mac-arm64 and --mac-x64");
+	if (inputs.macArm64) {
 		place(onlyBundle(path.join(inputs.macArm64, "dmg"), ".dmg", version), names.macArm64Dmg);
-		place(onlyBundle(path.join(inputs.macX64, "dmg"), ".dmg", version), names.macX64Dmg);
 		macZip(inputs.macArm64, version, path.join(outDir, names.macArm64Zip));
-		macZip(inputs.macX64, version, path.join(outDir, names.macX64Zip));
-		written.push(names.macArm64Zip, names.macX64Zip);
-		// Byte-identical bridge copies for 0.9.x Macs, which look only for omp- names.
+		written.push(names.macArm64Zip);
+		// Byte-identical bridge copy for 0.9.x Macs, which look only for omp- names.
 		place(path.join(outDir, names.macArm64Dmg), names.bridgeArm64Dmg);
-		place(path.join(outDir, names.macX64Dmg), names.bridgeX64Dmg);
 		const files: FeedFile[] = [];
-		for (const name of [
-			names.macArm64Zip,
-			names.macArm64Dmg,
-			names.macX64Zip,
-			names.macX64Dmg,
-			names.bridgeArm64Dmg,
-			names.bridgeX64Dmg,
-		]) {
+		for (const name of [names.macArm64Zip, names.macArm64Dmg, names.bridgeArm64Dmg]) {
 			files.push(await feedFile(outDir, name));
 		}
 		const minimumSystemVersion = inputs.macMinimumSystemVersion ?? darwinReleaseFor(tauriMacMinimumSystemVersion());
 		writeFeed(outDir, "latest-mac.yml", version, files, releaseDate, { minimumSystemVersion });
 		written.push("latest-mac.yml");
-	} else if (inputs.electronMacFeed) {
-		written.push(...mergeElectronFeed(inputs.electronMacFeed, outDir, "latest-mac.yml"));
 	}
 
 	// Every macOS feed this script publishes must keep Macs below the floor off builds they cannot open.
@@ -258,7 +213,7 @@ export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 	return written;
 }
 
-function parseArgs(argv: string[]): ReleaseInputs {
+export function parseArgs(argv: string[]): ReleaseInputs {
 	const options: Record<string, string> = {};
 	for (let index = 0; index < argv.length; index += 2) {
 		const flag = argv[index];
@@ -267,7 +222,7 @@ function parseArgs(argv: string[]): ReleaseInputs {
 			throw new Error(`expected --flag value pairs, got ${flag ?? "nothing"}`);
 		options[flag.slice(2)] = value;
 	}
-	const known = ["version", "out", "linux", "mac-arm64", "mac-x64", "electron-mac-feed"];
+	const known = ["version", "out", "linux", "mac-arm64"];
 	for (const key of Object.keys(options)) if (!known.includes(key)) throw new Error(`unknown option --${key}`);
 	if (!options.version) throw new Error("--version is required");
 	return {
@@ -275,8 +230,6 @@ function parseArgs(argv: string[]): ReleaseInputs {
 		outDir: options.out ?? path.join(ROOT, "dist-release"),
 		linux: options.linux,
 		macArm64: options["mac-arm64"],
-		macX64: options["mac-x64"],
-		electronMacFeed: options["electron-mac-feed"],
 	};
 }
 

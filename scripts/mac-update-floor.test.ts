@@ -1,6 +1,6 @@
 /**
  * The update metadata must carry the Darwin version of the macOS floor, or
- * macOS 12 installs download a build Electron 44 cannot run.
+ * Macs below macOS 13.3 download a build the Tauri app cannot run on.
  */
 
 import { describe, expect, it } from "vitest";
@@ -30,8 +30,12 @@ describe("macOS update floor", () => {
 	});
 
 	it("accepts the floor and anything above it", () => {
-		expect(macUpdateFloorError(metadata("minimumSystemVersion: 22.0.0\n"))).toBeNull();
+		expect(macUpdateFloorError(metadata("minimumSystemVersion: 22.4.0\n"))).toBeNull();
 		expect(macUpdateFloorError(metadata("minimumSystemVersion: 23.1.0\n"))).toBeNull();
+	});
+
+	it("rejects macOS 13.0 now that the app needs 13.3", () => {
+		expect(macUpdateFloorError(metadata("minimumSystemVersion: 22.0.0\n"))).not.toBeNull();
 	});
 
 	it("ignores a minimumSystemVersion nested under files", () => {
