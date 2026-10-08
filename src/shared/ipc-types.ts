@@ -110,6 +110,8 @@ export const IPC_EVENTS = {
 	OLLAMA_CONTEXT_PROGRESS: "ollama:context-progress",
 	/** Main → every window: a model's remembered context changed (ContextFitChanged) */
 	OLLAMA_CONTEXT_CHANGED: "ollama:context-changed",
+	/** Main → the window that created the watch: a watched preview file changed and settled (IpcFsPreviewChangedPayload) */
+	FS_PREVIEW_CHANGED: "fs:preview-changed",
 } as const;
 
 // ============================================================================
@@ -206,6 +208,10 @@ export const IPC_COMMANDS = {
 	FS_READ_PDF: "fs:read-pdf",
 	/** Read a document's bytes (PDF, ZIP, OLE or HTML-table signature; bounded by a size cap), or report that it is unchanged since a size and mtime stamp, for the in-app preview */
 	FS_READ_DOCUMENT: "fs:read-document",
+	/** Watch a previewed file (its folder, non-recursively) and push `fs:preview-changed` once changes settle */
+	FS_WATCH_PREVIEW: "fs:watch-preview",
+	/** Stop a preview watch; an unknown id is a no-op */
+	FS_UNWATCH_PREVIEW: "fs:unwatch-preview",
 	/** Open a session (or a fresh window) in a new parallel window with its own sidecar */
 	SESSION_OPEN_NEW_WINDOW: "session:open-new-window",
 	/** Fresh window pulls the session it was opened for (one-shot) */
@@ -829,6 +835,31 @@ export interface IpcFsReadDocumentResult {
 	error?: string;
 }
 
+/** The error codes of `fs:watch-preview`: `fs:read-document`'s path refusals, or no watcher could be made. */
+export type IpcFsWatchPreviewError = "invalid-path" | "no-workspace" | "outside-workspace" | "unavailable";
+
+export interface IpcFsWatchPreviewPayload {
+	/** Absolute, `~/` or workspace-relative path, resolved exactly as `fs:read-document` resolves it. */
+	path: string;
+	tabId?: string;
+}
+
+export interface IpcFsWatchPreviewResult {
+	ok: boolean;
+	/** Opaque id echoed by `fs:preview-changed`; only when `ok`. */
+	watchId?: string;
+	error?: IpcFsWatchPreviewError;
+}
+
+export interface IpcFsUnwatchPreviewPayload {
+	watchId: string;
+}
+
+/** `fs:preview-changed`: the watched file changed and no further change came for the debounce window. */
+export interface IpcFsPreviewChangedPayload {
+	watchId: string;
+}
+
 /** `system:native-drop-paths`: absolute local paths of the files being dragged over the window, in drag order. */
 export interface IpcNativeDropPathsPayload {
 	paths: string[];
@@ -1414,6 +1445,11 @@ export interface OmpApi {
 			path: string,
 			options?: { tabId?: string; ifChanged?: IpcFsReadDocumentStamp },
 		): Promise<IpcFsReadDocumentResult>;
+		/** Watch a previewed file; a refusal or failure resolves `ok: false` and never throws in main. */
+		watchPreview(path: string, options?: { tabId?: string }): Promise<IpcFsWatchPreviewResult>;
+		unwatchPreview(watchId: string): Promise<void>;
+		/** Every settled change of this window's preview watches, by watch id. */
+		onPreviewChanged(listener: (watchId: string) => void): () => void;
 	};
 	editor: {
 		openExternal(content: string): Promise<{

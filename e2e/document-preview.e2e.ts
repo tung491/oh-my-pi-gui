@@ -305,7 +305,7 @@ test.describe("document preview", () => {
 		});
 	});
 
-	test("refreshes the preview after a tool writes the file, and on Reload", async () => {
+	test("refreshes the preview after a tool writes the file, after any rewrite on disk, and on Reload", async () => {
 		await withApp(async ({ page, project, errors }) => {
 			await watchCsp(page);
 			await openFromTree(page, "table.csv");
@@ -314,13 +314,14 @@ test.describe("document preview", () => {
 			await page.evaluate(() => window.omp.rpc.bash("fixture:write-table-csv"));
 			await expect.poll(() => previewTextCount(page, "West"), { timeout: 6_000 }).toBeGreaterThanOrEqual(1);
 
+			// No tool event: main's preview watch sees the rewrite and the preview follows.
 			await fs.writeFile(path.join(project, "table.csv"), "Region,Revenue\nEast,5\n");
-			await page.waitForTimeout(3000);
-			expect(await previewTextCount(page, "East")).toBe(0);
+			await expect.poll(() => previewTextCount(page, "East"), { timeout: 6_000 }).toBeGreaterThanOrEqual(1);
 
+			await fs.writeFile(path.join(project, "table.csv"), "Region,Revenue\nSouth,6\n");
 			await dismissToasts(page);
 			await page.locator('button[aria-label="Reload"]').click();
-			await expect.poll(() => previewTextCount(page, "East"), { timeout: 6_000 }).toBeGreaterThanOrEqual(1);
+			await expect.poll(() => previewTextCount(page, "South"), { timeout: 6_000 }).toBeGreaterThanOrEqual(1);
 			expect(await cspViolations(page)).toEqual([]);
 			expect(errors).toEqual([]);
 		});

@@ -15,6 +15,7 @@ import type {
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
 	IpcFsReadResult,
+	IpcFsWatchPreviewResult,
 	IpcNativeDropPathsPayload,
 	IpcOllamaContextMeasurePayload,
 	IpcOllamaContextSetCapPayload,
@@ -410,6 +411,18 @@ export function createOmpApi(
 					tabId: options.tabId,
 					ifChanged: options.ifChanged,
 				}) as Promise<IpcFsReadDocumentResult>,
+			watchPreview: (path: string, options: { tabId?: string } = {}) =>
+				port.invoke(IPC_COMMANDS.FS_WATCH_PREVIEW, {
+					path,
+					tabId: options.tabId,
+				}) as Promise<IpcFsWatchPreviewResult>,
+			unwatchPreview: (watchId: string) =>
+				port.invoke(IPC_COMMANDS.FS_UNWATCH_PREVIEW, { watchId }) as Promise<void>,
+			onPreviewChanged: (listener: (watchId: string) => void) =>
+				subscribe<unknown>(IPC_EVENTS.FS_PREVIEW_CHANGED, payload => {
+					const watchId = (payload as { watchId?: unknown } | null)?.watchId;
+					if (typeof watchId === "string") listener(watchId);
+				}),
 		},
 
 		editor: {

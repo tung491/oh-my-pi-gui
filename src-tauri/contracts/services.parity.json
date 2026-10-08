@@ -40,6 +40,10 @@
     "rust": "src-tauri/src/services/ipc.rs"
   },
   {
+    "ts": "src/main/preview-watch.test.ts",
+    "rust": "src-tauri/src/services/preview_watch.rs"
+  },
+  {
     "ts": "src/main/external-url.test.ts",
     "rust": "src-tauri/src/services/system.rs"
   },

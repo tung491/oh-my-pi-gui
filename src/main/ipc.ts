@@ -12,6 +12,7 @@ import {
 	Notification,
 	type NotificationConstructorOptions,
 	shell,
+	type WebContents,
 } from "electron";
 import Store from "electron-store";
 import type {
@@ -19,6 +20,7 @@ import type {
 	IpcCloseTabPayload,
 	IpcExtensionUiRespondPayload,
 	IpcFsListPayload,
+	IpcFsPreviewChangedPayload,
 	IpcFsReadDocumentPayload,
 	IpcFsReadDocumentResult,
 	IpcFsReadDocumentStamp,
@@ -28,6 +30,9 @@ import type {
 	IpcFsReadPdfPayload,
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
+	IpcFsUnwatchPreviewPayload,
+	IpcFsWatchPreviewPayload,
+	IpcFsWatchPreviewResult,
 	IpcGetSessionOwnerPayload,
 	IpcHostToolResultPayload,
 	IpcHostToolUpdatePayload,
@@ -65,8 +70,9 @@ import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { listModelsProviders } from "./models-config";
 import { registerOllamaIpc } from "./ollama/register-ipc";
-import { openPathTabId, resolveOpenPath, resolveWithin } from "./open-path-resolve";
+import { type OpenPathEnv, openPathTabId, resolveOpenPath, resolveWithin } from "./open-path-resolve";
 import { openPathTarget } from "./open-path-target";
+import { PreviewWatchRegistry, resolveDocumentPath } from "./preview-watch";
 import { registerProviderCleanupIpc } from "./provider-cleanup";
 import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
@@ -112,6 +118,11 @@ function cwdFor(deps: IpcDeps, event: Electron.IpcMainInvokeEvent, tabId?: strin
 	if (!win) return null;
 	if (tabId) return deps.sidecarPool.sidecarForTab(win, tabId)?.cwd ?? null;
 	return deps.sidecarPool.sidecarForWindow(win)?.cwd ?? deps.windowManager.recordFor(win)?.cwd ?? null;
+}
+
+/** The path environment `fs:read-document` and `fs:watch-preview` resolve against. */
+function documentPathEnv(deps: IpcDeps, event: Electron.IpcMainInvokeEvent): OpenPathEnv {
+	return { homedir: os.homedir(), cwdFor: tabId => cwdFor(deps, event, tabId) };
 }
 
 interface PrefsSchema {
@@ -1094,23 +1105,49 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	ipcMain.handle(
 		IPC_COMMANDS.FS_READ_DOCUMENT,
 		async (event, payload: IpcFsReadDocumentPayload | undefined): Promise<IpcFsReadDocumentResult> => {
-			const fail = (error: string): IpcFsReadDocumentResult => ({ ok: false, size: 0, mtimeMs: 0, error });
-			const raw = payload?.path;
-			if (typeof raw !== "string" || raw.length === 0) return fail("invalid-path");
-			const expanded = raw.startsWith("~/") ? path.join(os.homedir(), raw.slice(2)) : raw;
-			let abs: string;
-			if (path.isAbsolute(expanded)) {
-				abs = path.normalize(expanded);
-			} else {
-				const cwd = cwdFor(deps, event, typeof payload?.tabId === "string" ? payload.tabId : undefined);
-				if (!cwd) return fail("no-workspace");
-				const within = resolveWithin(cwd, expanded);
-				if (!within) return fail("outside-workspace");
-				abs = within;
-			}
-			return readDocumentFile(abs, { ifChanged: validStamp(payload?.ifChanged) });
+			const resolved = resolveDocumentPath(payload?.path, openPathTabId(payload), documentPathEnv(deps, event));
+			if (!resolved.ok) return { ok: false, size: 0, mtimeMs: 0, error: resolved.error };
+			return readDocumentFile(resolved.path, { ifChanged: validStamp(payload?.ifChanged) });
 		},
 	);
+
+	// Preview watches: see preview-watch.ts. A watch belongs to the webContents
+	// that made it, and all of them close when that page navigates (a reload),
+	// crashes or is destroyed.
+	const previewSenders = new Map<number, WebContents>();
+	const previewWatches = new PreviewWatchRegistry({
+		emit: (ownerId, watchId) => {
+			const sender = previewSenders.get(ownerId);
+			if (sender && !sender.isDestroyed()) {
+				sender.send(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId } satisfies IpcFsPreviewChangedPayload);
+			}
+		},
+	});
+	const trackPreviewSender = (sender: WebContents): void => {
+		const id = sender.id;
+		if (previewSenders.has(id)) return;
+		previewSenders.set(id, sender);
+		const release = () => previewWatches.closeOwner(id);
+		// did-navigate: a committed main-frame load, so an iframe never ends the page's watches.
+		sender.on("did-navigate", release);
+		sender.on("render-process-gone", release);
+		sender.once("destroyed", () => {
+			release();
+			previewSenders.delete(id);
+		});
+	};
+
+	ipcMain.handle(
+		IPC_COMMANDS.FS_WATCH_PREVIEW,
+		(event, payload: IpcFsWatchPreviewPayload | undefined): IpcFsWatchPreviewResult => {
+			trackPreviewSender(event.sender);
+			return previewWatches.watch(event.sender.id, payload, documentPathEnv(deps, event));
+		},
+	);
+
+	ipcMain.handle(IPC_COMMANDS.FS_UNWATCH_PREVIEW, (event, payload: IpcFsUnwatchPreviewPayload | undefined) => {
+		previewWatches.unwatch(event.sender.id, payload?.watchId);
+	});
 
 	// Plan-mode document read — deliberately OFF the RPC bus: reading via the
 	// bash RPC injected the plan into the model context and appended

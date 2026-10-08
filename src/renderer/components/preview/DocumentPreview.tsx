@@ -5,11 +5,13 @@
  * `fs:read-document`), checks the signature, bounds ZIP files by their real
  * inflated size, and hands rich kinds to the injectable renderers.
  *
- * Refresh is event-driven: a finished write to this file, or the same target
- * opened again (`recheckToken`), re-reads with the last `ifChanged` stamp and
- * re-renders the same renderer instance in place. Nothing polls; the header's
- * Reload bumps `reloadToken` for a full re-read. At most one read of a target
- * is in flight; requests meanwhile collapse into one follow-up read.
+ * Refresh is event-driven: a finished write to this file, a settled change
+ * main's preview watch reports (`fs:watch-preview`, any writer, about 1.5 s
+ * after the last change), or the same target opened again (`recheckToken`)
+ * re-reads with the last `ifChanged` stamp and re-renders the same renderer
+ * instance in place. Nothing polls; the header's Reload bumps `reloadToken`
+ * for a full re-read. At most one read of a target is in flight; requests
+ * meanwhile collapse into one follow-up read.
  */
 
 import { type ReactElement, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -300,6 +302,38 @@ export function DocumentPreview({
 			if (!writeMatchesPreview(write, { path, tabId }, resolvedPathRef.current)) return;
 			recheck();
 		});
+	}, [path, tabId, kind, recheck]);
+
+	// A settled change on disk from any writer. A refused or failed watch is
+	// silent: write notifications and Reload still refresh the preview.
+	useEffect(() => {
+		if (path === null || kind === "unsupported") return;
+		let disposed = false;
+		let watchId: string | null = null;
+		let stopListening: (() => void) | null = null;
+		const unwatch = (id: string) => {
+			window.omp.fs.unwatchPreview(id).catch(() => undefined);
+		};
+		try {
+			stopListening = window.omp.fs.onPreviewChanged(id => {
+				if (id === watchId) recheck();
+			});
+			window.omp.fs.watchPreview(path, tabId ? { tabId } : undefined).then(
+				result => {
+					if (!result.ok || !result.watchId) return;
+					if (disposed) unwatch(result.watchId);
+					else watchId = result.watchId;
+				},
+				() => undefined,
+			);
+		} catch {
+			// No watch channel in this shell build: refresh stays write-driven.
+		}
+		return () => {
+			disposed = true;
+			stopListening?.();
+			if (watchId !== null) unwatch(watchId);
+		};
 	}, [path, tabId, kind, recheck]);
 
 	// The same target opened again (a card, link or tree item clicked anew).

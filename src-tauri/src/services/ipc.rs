@@ -667,6 +667,18 @@ pub fn fs_read_document(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> 
     }))
 }
 
+/// `fs:watch-preview`: watch a previewed file; `fs:preview-changed` reaches
+/// the calling window once the file settles after a change (see `preview_watch.rs`).
+pub fn fs_watch_preview(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
+    super::preview_watch::watch_reply(ctx, caller, args, super::preview_watches(ctx))
+}
+
+/// `fs:unwatch-preview`: stop a preview watch; an unknown id is a no-op.
+pub fn fs_unwatch_preview(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
+    let _ = caller;
+    super::preview_watch::unwatch_reply(args, super::preview_watches(ctx))
+}
+
 /// The blocking read's result, or `timed-out` once `timeout` passes first.
 async fn settle_document_read(read: tokio::task::JoinHandle<Value>, timeout: Duration) -> Value {
     match tokio::time::timeout(timeout, read).await {

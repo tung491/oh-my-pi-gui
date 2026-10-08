@@ -16,6 +16,7 @@ import type {
 	IpcFsReadDocumentStamp,
 	IpcFsReadImageResult,
 	IpcFsReadResult,
+	IpcFsWatchPreviewResult,
 } from "../../../shared/ipc-types";
 import { I18nProvider } from "../../lib/i18n";
 import type { PreviewTarget } from "../../stores/ui";
@@ -116,13 +117,34 @@ interface FsMock {
 	read: Mock<(path: string, maxBytes?: number, tabId?: string) => Promise<IpcFsReadResult>>;
 	readImage: Mock<(path: string, tabId?: string) => Promise<IpcFsReadImageResult>>;
 	readDocument: ReadDocumentMock;
+	watchPreview: Mock<(path: string, options?: { tabId?: string }) => Promise<IpcFsWatchPreviewResult>>;
+	unwatchPreview: Mock<(watchId: string) => Promise<void>>;
+	onPreviewChanged: Mock<(listener: (watchId: string) => void) => () => void>;
+}
+
+const previewChangeListeners = new Set<(watchId: string) => void>();
+
+/** Main's `fs:preview-changed` for `watchId`, delivered to every subscribed preview. */
+async function emitPreviewChanged(watchId: string): Promise<void> {
+	await act(async () => {
+		for (const listener of [...previewChangeListeners]) listener(watchId);
+	});
 }
 
 function installFs(overrides: Partial<FsMock> = {}): FsMock {
+	let watches = 0;
 	const fs: FsMock = {
 		read: vi.fn(async () => ({ ok: true, content: "", truncated: false, binary: false, size: 0 })),
 		readImage: vi.fn(async () => ({ ok: false, dataUrl: null, mime: null, size: 0, error: "missing" })),
 		readDocument: vi.fn(async () => ({ ok: false, size: 0, mtimeMs: 0, error: "not-a-file" })),
+		watchPreview: vi.fn(async () => ({ ok: true, watchId: `w${++watches}` })),
+		unwatchPreview: vi.fn(async () => undefined),
+		onPreviewChanged: vi.fn(listener => {
+			previewChangeListeners.add(listener);
+			return () => {
+				previewChangeListeners.delete(listener);
+			};
+		}),
 		...overrides,
 	};
 	ompWindow.omp = { fs };
@@ -163,6 +185,7 @@ function stubText(): string | null {
 
 beforeEach(() => {
 	mounts = 0;
+	previewChangeListeners.clear();
 });
 
 describe("DocumentPreview channels", () => {
@@ -554,5 +577,147 @@ describe("DocumentPreview refresh", () => {
 		await flush();
 
 		expect(stubText()).toBe(String(fresh.length));
+	});
+});
+
+describe("DocumentPreview file watch", () => {
+	it("watches a path target with its tab and re-checks with ifChanged on that watch's change only", async () => {
+		const bytes = await zipBytes("b");
+		const readDocument: ReadDocumentMock = vi.fn(async () => documentReply(bytes));
+		const fs = installFs({ readDocument });
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} renderers={stubRenderers} />);
+		await settle(() => stubText() !== null);
+		expect(fs.watchPreview).toHaveBeenCalledWith("a.docx", { tabId: "t0" });
+
+		await emitPreviewChanged("someone-else");
+		await flush();
+		expect(readDocument).toHaveBeenCalledTimes(1);
+
+		readDocument.mockImplementation(async () => ({
+			ok: true,
+			unchanged: true,
+			size: bytes.length,
+			mtimeMs: 100,
+			resolvedPath: "/w/a.docx",
+		}));
+		await emitPreviewChanged("w1");
+		await settle(() => readDocument.mock.calls.length === 2);
+		await flush();
+
+		expect(readDocument.mock.calls[1]).toEqual([
+			"a.docx",
+			{ tabId: "t0", ifChanged: { size: bytes.length, mtimeMs: 100 } },
+		]);
+		expect(stubText()).toBe(String(bytes.length));
+		expect(mounts).toBe(1);
+	});
+
+	it("re-reads a csv in place on its change event", async () => {
+		const fs = installFs({
+			read: vi.fn(async () => ({ ok: true, content: "a,b", truncated: false, binary: false, size: 3 })),
+		});
+		await render(
+			<DocumentPreview target={pathTarget("table.csv", null)} reloadToken={0} renderers={stubRenderers} />,
+		);
+		expect(stubText()).toBe("3:false");
+		expect(fs.watchPreview).toHaveBeenCalledWith("table.csv", undefined);
+
+		fs.read.mockImplementation(async () => ({
+			ok: true,
+			content: "a,b\n1,2",
+			truncated: false,
+			binary: false,
+			size: 7,
+		}));
+		await emitPreviewChanged("w1");
+		await settle(() => stubText() === "7:false");
+
+		expect(stubText()).toBe("7:false");
+		expect(previewState()).toBe("rich");
+		expect(mounts).toBe(1);
+	});
+
+	it("folds change events during a pending read into one follow-up", async () => {
+		const bytes = await zipBytes("b");
+		const readDocument: ReadDocumentMock = vi.fn(async () => documentReply(bytes));
+		installFs({ readDocument });
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} renderers={stubRenderers} />);
+		await settle(() => stubText() !== null);
+
+		const hung = Promise.withResolvers<IpcFsReadDocumentResult>();
+		readDocument.mockImplementationOnce(() => hung.promise);
+		await emitPreviewChanged("w1");
+		await emitPreviewChanged("w1");
+		await emitPreviewChanged("w1");
+		expect(readDocument).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			hung.resolve({ ok: true, unchanged: true, size: bytes.length, mtimeMs: 100, resolvedPath: "/w/a.docx" });
+		});
+		await settle(() => readDocument.mock.calls.length === 3);
+		await flush();
+		await flush();
+		expect(readDocument).toHaveBeenCalledTimes(3);
+	});
+
+	it("unwatches when the target changes and when it unmounts", async () => {
+		const fs = installFs();
+		await render(<DocumentPreview target={pathTarget("a.txt")} reloadToken={0} renderers={stubRenderers} />);
+		await render(<DocumentPreview target={pathTarget("b.txt")} reloadToken={0} renderers={stubRenderers} />);
+		expect(fs.watchPreview.mock.calls).toEqual([
+			["a.txt", { tabId: "t0" }],
+			["b.txt", { tabId: "t0" }],
+		]);
+		expect(fs.unwatchPreview.mock.calls).toEqual([["w1"]]);
+
+		// The old watch's id no longer re-reads anything.
+		const reads = fs.read.mock.calls.length;
+		await emitPreviewChanged("w1");
+		await flush();
+		expect(fs.read).toHaveBeenCalledTimes(reads);
+
+		// An image held in memory has no file to watch.
+		await render(
+			<DocumentPreview
+				target={{ kind: "image", id: 1, dataUrl: "data:image/png;base64,BB==", name: "paste.png" }}
+				reloadToken={0}
+				renderers={stubRenderers}
+			/>,
+		);
+		expect(fs.unwatchPreview.mock.calls).toEqual([["w1"], ["w2"]]);
+		expect(fs.watchPreview).toHaveBeenCalledTimes(2);
+		expect(previewChangeListeners.size).toBe(0);
+	});
+
+	it("closes a watch that resolves after the target moved on", async () => {
+		const late = Promise.withResolvers<IpcFsWatchPreviewResult>();
+		const fs = installFs();
+		fs.watchPreview.mockImplementationOnce(() => late.promise);
+		await render(<DocumentPreview target={pathTarget("a.txt")} reloadToken={0} renderers={stubRenderers} />);
+		await render(<DocumentPreview target={pathTarget("b.txt")} reloadToken={0} renderers={stubRenderers} />);
+		expect(fs.unwatchPreview).not.toHaveBeenCalled();
+
+		await act(async () => {
+			late.resolve({ ok: true, watchId: "late" });
+		});
+		await flush();
+		expect(fs.unwatchPreview.mock.calls).toEqual([["late"]]);
+	});
+
+	it("stays silent when the watch is refused or fails, and still shows the file", async () => {
+		const fs = installFs({
+			read: vi.fn(async () => ({ ok: true, content: "v1", truncated: false, binary: false, size: 2 })),
+			watchPreview: vi.fn(async () => ({ ok: false, error: "unavailable" as const })),
+		});
+		await render(<DocumentPreview target={pathTarget("notes.txt")} reloadToken={0} renderers={stubRenderers} />);
+		expect(document.querySelector("pre")?.textContent).toBe("v1");
+
+		fs.watchPreview.mockImplementation(async () => {
+			throw new Error("ipc down");
+		});
+		await render(<DocumentPreview target={pathTarget("other.txt")} reloadToken={0} renderers={stubRenderers} />);
+		await flush();
+		expect(previewState()).toBe("text");
+		expect(fs.unwatchPreview).not.toHaveBeenCalled();
 	});
 });

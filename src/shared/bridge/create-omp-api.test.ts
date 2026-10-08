@@ -237,6 +237,31 @@ describe("createOmpApi", () => {
 		]);
 	});
 
+	it("watches a preview with its tab, unwatches by id, and streams settled changes by watch id", async () => {
+		const { port, invokes, emit, listenerCount } = fakePort(call =>
+			call.channel === IPC_COMMANDS.FS_WATCH_PREVIEW ? { ok: true, watchId: "w1" } : undefined,
+		);
+		const api = createOmpApi(port, "linux");
+		await expect(api.fs.watchPreview("docs/a.csv", { tabId: "t1" })).resolves.toEqual({ ok: true, watchId: "w1" });
+		await api.fs.watchPreview("/abs/b.csv");
+		await api.fs.unwatchPreview("w1");
+		expect(invokes).toEqual([
+			{ channel: IPC_COMMANDS.FS_WATCH_PREVIEW, args: [{ path: "docs/a.csv", tabId: "t1" }] },
+			{ channel: IPC_COMMANDS.FS_WATCH_PREVIEW, args: [{ path: "/abs/b.csv", tabId: undefined }] },
+			{ channel: IPC_COMMANDS.FS_UNWATCH_PREVIEW, args: [{ watchId: "w1" }] },
+		]);
+
+		const seen: string[] = [];
+		const off = api.fs.onPreviewChanged(id => seen.push(id));
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId: "w1" });
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId: 7 });
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, null);
+		off();
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId: "w2" });
+		expect(seen).toEqual(["w1"]);
+		expect(listenerCount(IPC_EVENTS.FS_PREVIEW_CHANGED)).toBe(0);
+	});
+
 	it("opens a path with the tab it belongs to, and without one as before", async () => {
 		const { port, invokes } = fakePort(() => ({ ok: true, resolvedPath: "/ws/two/a.pdf" }));
 		const api = createOmpApi(port, "linux");

@@ -316,7 +316,7 @@ describe("document preview", () => {
 		expect(await pageErrors(browser)).toEqual([]);
 	}).timeout(120_000);
 
-	it("refreshes the preview after a tool writes the file, and on Reload", async () => {
+	it("refreshes the preview after a tool writes the file, after any rewrite on disk, and on Reload", async () => {
 		const run = await start();
 		await watchCsp();
 		await openFromTree("table.csv");
@@ -336,15 +336,22 @@ describe("document preview", () => {
 			),
 		).toBeGreaterThanOrEqual(1);
 
+		// No tool event: the core's preview watch sees the rewrite and the preview follows.
 		await fsp.writeFile(path.join(run.project, "table.csv"), "Region,Revenue\nEast,5\n");
-		await browser.pause(3000);
-		expect(await exactTextCount("East", "[data-preview-kind]")).toBe(0);
+		expect(
+			await until(
+				() => exactTextCount("East", "[data-preview-kind]"),
+				n => n >= 1,
+				{ timeout: 6_000 },
+			),
+		).toBeGreaterThanOrEqual(1);
 
+		await fsp.writeFile(path.join(run.project, "table.csv"), "Region,Revenue\nSouth,6\n");
 		await dismissToasts();
 		await $('button[aria-label="Reload"]').click();
 		expect(
 			await until(
-				() => exactTextCount("East", "[data-preview-kind]"),
+				() => exactTextCount("South", "[data-preview-kind]"),
 				n => n >= 1,
 				{ timeout: 6_000 },
 			),

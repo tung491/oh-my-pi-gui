@@ -117,7 +117,8 @@ pub enum BuilderCall {
     DisableDragDropHandler,
     NavigationLock,
     NewWindowLock,
-    /// Detach the bridge when a page starts loading, so emits during a reload are kept for the next page.
+    /// Detach the bridge when a page starts loading, so emits during a reload are kept for the next page,
+    /// and close the page's preview watches.
     ReloadDetach,
     /// Route same-origin blob downloads through the save dialog; refuse every other download.
     DownloadHandler,
@@ -313,6 +314,7 @@ fn apply_calls<'a>(
                 builder.on_page_load(move |_window, payload| {
                     if matches!(payload.event(), PageLoadEvent::Started) {
                         ctx.bridge.detach(win_id);
+                        crate::services::page_load_started(&ctx, win_id);
                     }
                 })
             }
