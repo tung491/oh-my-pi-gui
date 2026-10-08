@@ -1,5 +1,5 @@
 /**
- * Finish the .deb tauri-bundler wrote, for the three facts its config cannot express:
+ * Finish the .deb tauri-bundler wrote, for the four facts its config cannot express:
  *
  * - The desktop entry is named after the app id (`vn.io.vif.saiatlas.desktop`,
  *   the Wayland app_id and the name the Electron package installed). The bundler
@@ -15,6 +15,15 @@
  *   Electron install may carry `libappindicator3-1`, which Ubuntu's Ayatana
  *   package conflicts with: a single-package Depends would make the Electron
  *   updater's `apt-get install -f` swap them, or remove this package.
+ * - WebKitGTK carries a version floor, `libwebkit2gtk-4.1-0 (>= 2.52)`. The
+ *   bundled pdf.js (its modern build, shipped without polyfills) calls
+ *   `Map.prototype.getOrInsertComputed`, `Math.sumPrecise` and
+ *   `Uint8Array.fromBase64`, and `getOrInsertComputed` first shipped in
+ *   WebKitGTK 2.52; on an older WebKit the document preview cannot open a PDF.
+ *   tauri-cli always appends the bare package name, and `deb.depends` can only
+ *   add entries, so listing the versioned form there would name it twice.
+ *   `libjavascriptcoregtk-4.1-0` needs no floor of its own: every
+ *   libwebkit2gtk-4.1-0 build depends on the JavaScriptCore of its exact version.
  *
  *   bun src-tauri/linux/finalize-deb.ts <bundle/deb directory>
  *
@@ -64,11 +73,26 @@ export const TRAY_DEPENDENCY = "libayatana-appindicator3-1";
 export const TRAY_ALTERNATION = "libayatana-appindicator3-1 | libappindicator3-1";
 
 /**
- * The finished package's Depends: the configured `deb.depends`, then what
- * tauri-cli appends (the tray library, WebKitGTK, GTK), in the bundler's order.
- * Only what the app cannot start without.
+ * The WebKitGTK package tauri-cli adds to Depends, and the versioned form that
+ * replaces it: 2.52 is the first WebKitGTK with `Map.prototype.getOrInsertComputed`,
+ * which the bundled pdf.js modern build calls unpolyfilled (with `Math.sumPrecise`
+ * and `Uint8Array.fromBase64`). Ubuntu 24.04 carries it in noble-updates.
  */
-export const DEB_DEPENDS = `bubblewrap, xdg-dbus-proxy, ${TRAY_ALTERNATION}, libwebkit2gtk-4.1-0, libgtk-3-0`;
+export const WEBKIT_DEPENDENCY = "libwebkit2gtk-4.1-0";
+export const WEBKIT_REQUIREMENT = "libwebkit2gtk-4.1-0 (>= 2.52)";
+
+/** Each entry tauri-cli writes to Depends that the finished package replaces, with its replacement. */
+export const DEPENDENCY_REWRITES: Readonly<Record<string, string>> = {
+	[TRAY_DEPENDENCY]: TRAY_ALTERNATION,
+	[WEBKIT_DEPENDENCY]: WEBKIT_REQUIREMENT,
+};
+
+/**
+ * The finished package's Depends: the configured `deb.depends`, then what
+ * tauri-cli appends (the tray library, WebKitGTK, GTK), in the bundler's order,
+ * with `DEPENDENCY_REWRITES` applied. Only what the app cannot start without.
+ */
+export const DEB_DEPENDS = `bubblewrap, xdg-dbus-proxy, ${TRAY_ALTERNATION}, ${WEBKIT_REQUIREMENT}, libgtk-3-0`;
 
 /** The finished package's Recommends: the configured `deb.recommends`, which the app runs without. */
 export const DEB_RECOMMENDS = "desktop-file-utils, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-pipewire, libglib2.0-bin";
@@ -90,11 +114,12 @@ function dpkgDebOutput(args: string[]): string {
 }
 
 /**
- * Replace tauri-cli's single tray package in the control file's Depends with
- * `TRAY_ALTERNATION`. Throws unless Depends names it exactly once, so a
- * bundler that stops adding it, or adds another tray package, fails the build.
+ * Replace each bundler entry in the control file's Depends with its
+ * `DEPENDENCY_REWRITES` replacement, in place. Throws unless Depends names
+ * every rewritten entry exactly once, so a bundler that stops adding one, or
+ * adds another tray package, fails the build.
  */
-export function rewriteTrayDependency(control: string): string {
+export function rewriteDependencies(control: string): string {
 	const lines = control.split("\n");
 	const index = lines.findIndex(line => /^Depends:/i.test(line));
 	if (index === -1) throw new Error("the control file has no Depends field");
@@ -102,11 +127,12 @@ export function rewriteTrayDependency(control: string): string {
 		.replace(/^Depends:/i, "")
 		.split(",")
 		.map(entry => entry.trim());
-	const matches = entries.filter(entry => entry === TRAY_DEPENDENCY).length;
-	if (matches !== 1) {
-		throw new Error(`expected Depends to name ${TRAY_DEPENDENCY} once, found: ${entries.join(", ")}`);
+	for (const name of Object.keys(DEPENDENCY_REWRITES)) {
+		if (entries.filter(entry => entry === name).length !== 1) {
+			throw new Error(`expected Depends to name ${name} once, found: ${entries.join(", ")}`);
+		}
 	}
-	lines[index] = `Depends: ${entries.map(entry => (entry === TRAY_DEPENDENCY ? TRAY_ALTERNATION : entry)).join(", ")}`;
+	lines[index] = `Depends: ${entries.map(entry => DEPENDENCY_REWRITES[entry] ?? entry).join(", ")}`;
 	return lines.join("\n");
 }
 
@@ -193,7 +219,7 @@ function mkdirTree(root: string, dir: string): void {
 	}
 }
 
-/** Rewrite `debPath` in place with the app-id desktop entry, the compat symlinks and the tray alternation. */
+/** Rewrite `debPath` in place with the app-id desktop entry, the compat symlinks and the rewritten Depends. */
 export function finalizeDeb(debPath: string): void {
 	const scratch = mkdtempSync(path.join(path.dirname(debPath), ".finalize-"));
 	try {
@@ -202,7 +228,7 @@ export function finalizeDeb(debPath: string): void {
 		assertGlibcFloor(root, debPath);
 
 		const controlFile = path.join(root, "DEBIAN/control");
-		writeFileSync(controlFile, rewriteTrayDependency(readFileSync(controlFile, "utf8")));
+		writeFileSync(controlFile, rewriteDependencies(readFileSync(controlFile, "utf8")));
 
 		const applications = path.join(root, "usr/share/applications");
 		const entries = readdirSync(applications).filter(name => name.endsWith(".desktop"));
