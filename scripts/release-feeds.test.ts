@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { assetNames, buildRelease, darwinReleaseFor, tauriMacMinimumSystemVersion } from "./release-feeds";
+import { assetNames, buildRelease, darwinReleaseFor, parseArgs, tauriMacMinimumSystemVersion } from "./release-feeds";
 
 const VERSION = "1.2.3";
 
@@ -25,17 +25,14 @@ function write(file: string, contents: string): void {
 }
 
 /** A Tauri bundle tree with the bundler's own names and distinct contents per file. */
-function bundles(): { linux: string; macArm64: string; macX64: string } {
+function bundles(): { linux: string; macArm64: string } {
 	const linux = path.join(dir, "linux/bundle");
 	write(path.join(linux, `appimage/Sai ATLAS_${VERSION}_amd64.AppImage`), "appimage bytes");
 	write(path.join(linux, `deb/Sai ATLAS_${VERSION}_amd64.deb`), "deb bytes");
 	const macArm64 = path.join(dir, "arm64/bundle");
 	write(path.join(macArm64, `dmg/Sai ATLAS_${VERSION}_aarch64.dmg`), "arm64 dmg bytes");
 	write(path.join(macArm64, `macos/Sai ATLAS_${VERSION}_aarch64.zip`), "arm64 zip bytes");
-	const macX64 = path.join(dir, "x64/bundle");
-	write(path.join(macX64, `dmg/Sai ATLAS_${VERSION}_x64.dmg`), "x64 dmg bytes");
-	write(path.join(macX64, `macos/Sai ATLAS_${VERSION}_x64.zip`), "x64 zip bytes");
-	return { linux, macArm64, macX64 };
+	return { linux, macArm64 };
 }
 
 function feed(out: string, name: string): Feed {
@@ -60,17 +57,14 @@ describe("release feeds", () => {
 				"Sai-ATLAS-1.2.3-x86_64.AppImage",
 				"sai-atlas_1.2.3_amd64.deb",
 				"Sai-ATLAS-1.2.3-arm64.dmg",
-				"Sai-ATLAS-1.2.3.dmg",
 				"Sai-ATLAS-1.2.3-arm64.zip",
-				"Sai-ATLAS-1.2.3.zip",
 				"omp-1.2.3-arm64.dmg",
-				"omp-1.2.3.dmg",
 				"latest-linux.yml",
 				"latest-mac.yml",
 			].sort(),
 		);
 		expect(readFileSync(path.join(out, names.deb), "utf8")).toBe("deb bytes");
-		expect(readFileSync(path.join(out, names.macX64Zip), "utf8")).toBe("x64 zip bytes");
+		expect(readFileSync(path.join(out, names.macArm64Zip), "utf8")).toBe("arm64 zip bytes");
 		expect(feed(out, "latest-linux.yml").files.map(file => file.url)).toEqual([names.appImage, names.deb]);
 		expect(feed(out, "latest-linux.yml").version).toBe(VERSION);
 	});
@@ -92,18 +86,11 @@ describe("release feeds", () => {
 		expect(readFileSync(path.join(out, "latest-linux.yml"), "utf8")).toMatch(/^releaseDate: '.+'$/m);
 	});
 
-	it("lists every DMG in latest-mac.yml", async () => {
+	it("lists only the arm64 assets in latest-mac.yml", async () => {
 		const out = path.join(dir, "out");
 		await buildRelease({ version: VERSION, outDir: out, ...bundles() });
 		const urls = feed(out, "latest-mac.yml").files.map(file => file.url);
-		expect(urls).toEqual([
-			"Sai-ATLAS-1.2.3-arm64.zip",
-			"Sai-ATLAS-1.2.3-arm64.dmg",
-			"Sai-ATLAS-1.2.3.zip",
-			"Sai-ATLAS-1.2.3.dmg",
-			"omp-1.2.3-arm64.dmg",
-			"omp-1.2.3.dmg",
-		]);
+		expect(urls).toEqual(["Sai-ATLAS-1.2.3-arm64.zip", "Sai-ATLAS-1.2.3-arm64.dmg", "omp-1.2.3-arm64.dmg"]);
 	});
 
 	it("writes minimumSystemVersion", async () => {
@@ -123,36 +110,12 @@ describe("release feeds", () => {
 		expect(readFileSync(path.join(out, names.bridgeArm64Dmg))).toEqual(
 			readFileSync(path.join(out, names.macArm64Dmg)),
 		);
-		expect(readFileSync(path.join(out, names.bridgeX64Dmg))).toEqual(readFileSync(path.join(out, names.macX64Dmg)));
 		const files = feed(out, "latest-mac.yml").files;
 		const sha = (url: string) => files.find(file => file.url === url)?.sha512;
 		expect(sha(names.bridgeArm64Dmg)).toBe(sha(names.macArm64Dmg));
-		expect(sha(names.bridgeX64Dmg)).toBe(sha(names.macX64Dmg));
 	});
 
-	it("merges the Electron macOS feed unchanged while that build still ships", async () => {
-		const out = path.join(dir, "out");
-		const electron = path.join(dir, "electron");
-		const macFeed = `version: ${VERSION}\nfiles:\n  - url: Sai-ATLAS-${VERSION}-arm64.dmg\n    sha512: abc\n    size: 3\nminimumSystemVersion: 22.0.0\npath: Sai-ATLAS-${VERSION}-arm64.dmg\nsha512: abc\nreleaseDate: '2026-10-01T00:00:00.000Z'\n`;
-		write(path.join(electron, "latest-mac.yml"), macFeed);
-		write(path.join(electron, `Sai-ATLAS-${VERSION}-arm64.dmg`), "dmg");
-		const { linux } = bundles();
-		await buildRelease({
-			version: VERSION,
-			outDir: out,
-			linux,
-			electronMacFeed: path.join(electron, "latest-mac.yml"),
-		});
-		expect(readFileSync(path.join(out, "latest-mac.yml"), "utf8")).toBe(macFeed);
-		expect(readFileSync(path.join(out, `Sai-ATLAS-${VERSION}-arm64.dmg`), "utf8")).toBe("dmg");
-		// An Electron feed below the macOS floor is refused, not published.
-		write(path.join(electron, "latest-mac.yml"), macFeed.replace("minimumSystemVersion: 22.0.0\n", ""));
-		await expect(
-			buildRelease({
-				version: VERSION,
-				outDir: path.join(dir, "out2"),
-				electronMacFeed: path.join(electron, "latest-mac.yml"),
-			}),
-		).rejects.toThrow(/minimumSystemVersion/);
+	it("rejects an Intel macOS bundle", () => {
+		expect(() => parseArgs(["--version", VERSION, "--mac-x64", "x"])).toThrow(/unknown option --mac-x64/);
 	});
 });

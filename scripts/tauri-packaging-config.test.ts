@@ -170,12 +170,14 @@ describe("product identity", () => {
 		expect(platform("macos").bundle?.targets).toEqual(["app"]);
 		expect(assetNames("1.0.0")).toMatchObject({
 			macArm64Dmg: "Sai-ATLAS-1.0.0-arm64.dmg",
-			macX64Dmg: "Sai-ATLAS-1.0.0.dmg",
 			macArm64Zip: "Sai-ATLAS-1.0.0-arm64.zip",
-			macX64Zip: "Sai-ATLAS-1.0.0.zip",
 			bridgeArm64Dmg: "omp-1.0.0-arm64.dmg",
-			bridgeX64Dmg: "omp-1.0.0.dmg",
 		});
+		expect(
+			Object.keys(assetNames("1.0.0"))
+				.filter(key => key.startsWith("mac") || key.startsWith("bridge"))
+				.sort(),
+		).toEqual(["bridgeArm64Dmg", "macArm64Dmg", "macArm64Zip"]);
 		// The Rust updater selects the same DMG names.
 		const state = fs.readFileSync(path.join(TAURI, "src/updater/state.rs"), "utf8");
 		expect(state).toContain('"Sai-ATLAS-{version}-arm64.dmg"');

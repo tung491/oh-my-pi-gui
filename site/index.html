@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sai ATLAS — Private, local AI for your everyday work</title>
-<meta name="description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. macOS arm64 / x64 and Linux x64." />
+<meta name="description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. macOS arm64 (Apple silicon) and Linux x64." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -385,9 +385,8 @@
     <div class="hero-cta rise d4">
       <a class="btn btn-primary" data-omp-dmg="arm64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for macOS <span class="btn-sub">Apple Silicon</span>
+        Download for macOS <span class="btn-sub">Apple silicon, macOS 13.3 or later</span>
       </a>
-      <a class="btn btn-ghost" data-omp-dmg="x64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg">Intel build <span class="btn-sub">macOS x64</span></a>
       <a class="btn btn-ghost" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux build <span class="btn-sub">x64 .deb</span></a>
     </div>
     <p class="hero-fine rise d5">No account, no sign-in · models run through Ollama on this computer · <a href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a></p>
@@ -523,16 +522,15 @@
       <div class="cta-row">
         <a class="btn btn-primary" data-omp-dmg="arm64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Apple Silicon <span class="btn-sub">arm64</span>
+          macOS <span class="btn-sub">Apple silicon, macOS 13.3 or later</span>
         </a>
-        <a class="btn btn-ghost" data-omp-dmg="x64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg">Intel <span class="btn-sub">x64</span></a>
         <a class="btn btn-ghost" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 .deb</span></a>
         <a class="btn btn-ghost" data-omp-linux="appimage" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 AppImage</span></a>
         <a class="btn btn-ghost" href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a>
       </div>
       <div class="install-note">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>macOS builds are ad-hoc signed but not notarized: on first launch, macOS may require right-click → <b>Open</b> or System Settings → Privacy &amp; Security → Open Anyway. On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>.</span>
+        <span>The macOS build is ad-hoc signed but not notarized, so macOS blocks its first launch: allow it with <b>Open Anyway</b> in System Settings → Privacy &amp; Security. On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>.</span>
       </div>
     </div>
   </div>
@@ -645,7 +643,7 @@
       document.querySelectorAll("[data-omp-version]").forEach((element) => { element.textContent = release.tag_name; });
       const date = new Date(release.published_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
       document.querySelectorAll("[data-omp-release-date]").forEach((element) => { element.textContent = date; });
-      for (const architecture of ["arm64", "x64"]) {
+      for (const architecture of ["arm64"]) {
         const url = installerUrl(release.assets, release.tag_name, architecture);
         if (!url) continue;
         document.querySelectorAll(`[data-omp-dmg="${architecture}"]`).forEach((element) => { element.href = url; });
