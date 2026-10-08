@@ -57,6 +57,16 @@ export function devPortForWorktree(directoryName: string): number {
 	return WORKTREE_PORTS[module] ?? DEFAULT_PORT;
 }
 
+/** How to ask the OS who listens on `port`: `ss` on Linux, `lsof` on macOS (which has no `ss`). Both print one header line. */
+export function portOwnerProbe(
+	platform: NodeJS.Platform,
+	port: number,
+): { command: string; args: string[]; headerLines: number } {
+	if (platform === "darwin")
+		return { command: "lsof", args: ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], headerLines: 1 };
+	return { command: "ss", args: ["-ltnp", `sport = :${port}`], headerLines: 1 };
+}
+
 function fail(message: string): never {
 	console.error(message);
 	process.exit(1);
@@ -83,12 +93,14 @@ function main(): void {
 	}
 
 	const port = devPortForWorktree(path.basename(ROOT));
-	const owner = spawnSync("ss", ["-ltnp", `sport = :${port}`], { encoding: "utf8" });
+	const portProbe = portOwnerProbe(process.platform, port);
+	// `lsof` exits 1 with no output when nothing listens, which reads as free.
+	const owner = spawnSync(portProbe.command, portProbe.args, { encoding: "utf8" });
 	const busy =
 		owner.status === 0 &&
 		owner.stdout
 			.split("\n")
-			.slice(1)
+			.slice(portProbe.headerLines)
 			.some(line => line.trim().length > 0);
 	if (busy) {
 		fail(
