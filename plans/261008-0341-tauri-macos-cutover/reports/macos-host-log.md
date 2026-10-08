@@ -243,3 +243,7 @@ The run took 29 s (15:46:16 to 15:46:45 KST). No cargo or rustc ran during it: t
 hard kill: PASS-before-Phase-4. The supervisor sees its control channel close when the GUI dies (that path is not Linux-gated) and ends omp. This does not prove the escaped-tool case (a tool process that left omp's process group); that needs Phase 4's kqueue parent watch and descendant snapshot.
 
 Phase end: `pgrep -fl "omp --mode rpc-ui"` and `pgrep -fl -- "--omp-supervise"`, filtered by this worktree's `src-tauri` path, print nothing. No `tauri-mac-smoke-*` temp root is left. `test -e "$HOME/Library/Application Support/@oh-my-pi/omp-gui"; echo $?` prints 1. Full `bunx vitest run`: 227 files passed, 1 skipped; 2388 tests passed, 9 skipped.
+
+## Phase 7 Task 7.2b (main worktree)
+
+`cargo test … check_reports_an_available_manual_update_for_this_mac` → `test updater::tests::check_reports_an_available_manual_update_for_this_mac ... ok` (commit 76dbb7d). It sits behind `cfg(all(target_os = "macos", target_arch = "aarch64"))`, because the asset target is the compile-time arm64 Mac target.
