@@ -20,7 +20,9 @@ export interface AttachmentCardProps {
 function KindTile({ kind }: { kind: FileKind }) {
 	const { icon: Icon, color } = fileKindStyle(kind);
 	return (
-		<div className="flex h-full w-full items-center justify-center bg-(--omp-bg-tertiary)">
+		<div
+			className="flex h-full w-full items-center justify-center bg-(--omp-bg-tertiary)" // surface-ok: type tile inside an elevated card
+		>
 			<Icon size={36} strokeWidth={1.5} aria-hidden style={{ color }} />
 		</div>
 	);
@@ -64,7 +66,7 @@ export function AttachmentCard({ name, kind, path, preview, onRemove, loading }:
 		<figure
 			role="listitem"
 			title={path ?? name}
-			className="group relative m-0 flex h-[140px] w-[186px] shrink-0 flex-col overflow-hidden rounded-xl border border-(--omp-border-muted) bg-(--omp-bg-secondary) shadow-(--omp-shadow-sm)"
+			className="group relative m-0 flex h-[140px] w-[186px] shrink-0 flex-col overflow-hidden rounded-xl border border-(--omp-border-muted) bg-(--omp-bg-secondary) shadow-(--omp-shadow-sm)" // surface-ok: attachment card is elevated chrome
 		>
 			<div className="h-[93px] w-full shrink-0 overflow-hidden border-b border-(--omp-border-muted)">
 				<CardPreview kind={kind} path={path} preview={preview} loading={loading} />

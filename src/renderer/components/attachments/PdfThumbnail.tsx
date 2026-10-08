@@ -54,7 +54,7 @@ export function PreviewSpinner() {
 		<div
 			role="status"
 			aria-label={t("input.attachment.loading")}
-			className="flex h-full w-full items-center justify-center bg-(--omp-bg-tertiary)"
+			className="flex h-full w-full items-center justify-center bg-(--omp-bg-tertiary)" // surface-ok: thumbnail tile inside an elevated card
 		>
 			<Loader2 size={18} aria-hidden className="animate-spin text-(--omp-dim)" />
 		</div>

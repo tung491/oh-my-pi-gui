@@ -1058,7 +1058,7 @@ export function InputArea() {
 						{fileDrag.claimed && fileDrag.depth > 0 && (
 							<div
 								aria-hidden
-								className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-(--omp-accent) bg-(--omp-bg-primary)/85 text-omp-md font-medium text-(--omp-accent)"
+								className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-(--omp-accent) bg-(--omp-bg-primary)/85 text-omp-md font-medium text-(--omp-accent)" // surface-ok: floating drop-hint overlay
 							>
 								{t("input.drop.hint")}
 							</div>
