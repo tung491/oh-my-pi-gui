@@ -8,11 +8,14 @@ import type {
 	DeepLinkPayload,
 	IpcActiveTabEnvelope,
 	IpcFsListResult,
+	IpcFsReadDocumentResult,
+	IpcFsReadDocumentStamp,
 	IpcFsReadImageResult,
 	IpcFsReadPdfResult,
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
 	IpcFsReadResult,
+	IpcFsWatchPreviewResult,
 	IpcNativeDropPathsPayload,
 	IpcOllamaContextMeasurePayload,
 	IpcOllamaContextSetCapPayload,
@@ -307,7 +310,11 @@ export function createOmpApi(
 
 		system: {
 			openExternal: (url: string) => port.invoke(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, url) as Promise<void>,
-			openPath: (path: string) => port.invoke(IPC_COMMANDS.SYSTEM_OPEN_PATH, path) as Promise<IpcOpenPathResult>,
+			// Without a tab the wire stays `[path]`, as before tabs could be named.
+			openPath: (path: string, options: { tabId?: string } = {}) =>
+				(options.tabId
+					? port.invoke(IPC_COMMANDS.SYSTEM_OPEN_PATH, path, { tabId: options.tabId })
+					: port.invoke(IPC_COMMANDS.SYSTEM_OPEN_PATH, path)) as Promise<IpcOpenPathResult>,
 			showSaveDialog: (defaultPath?: string, filters?: { name: string; extensions: string[] }[]) =>
 				port.invoke(IPC_COMMANDS.SYSTEM_SAVE_DIALOG, defaultPath, filters) as Promise<string | null>,
 			showOpenDialog: (filters?: { name: string; extensions: string[] }[], options?: { directory?: boolean }) =>
@@ -398,6 +405,24 @@ export function createOmpApi(
 			readImage: (path: string, tabId?: string) =>
 				port.invoke(IPC_COMMANDS.FS_READ_IMAGE, { path, tabId }) as Promise<IpcFsReadImageResult>,
 			readPdf: (path: string) => port.invoke(IPC_COMMANDS.FS_READ_PDF, { path }) as Promise<IpcFsReadPdfResult>,
+			readDocument: (path: string, options: { tabId?: string; ifChanged?: IpcFsReadDocumentStamp } = {}) =>
+				port.invoke(IPC_COMMANDS.FS_READ_DOCUMENT, {
+					path,
+					tabId: options.tabId,
+					ifChanged: options.ifChanged,
+				}) as Promise<IpcFsReadDocumentResult>,
+			watchPreview: (path: string, options: { tabId?: string } = {}) =>
+				port.invoke(IPC_COMMANDS.FS_WATCH_PREVIEW, {
+					path,
+					tabId: options.tabId,
+				}) as Promise<IpcFsWatchPreviewResult>,
+			unwatchPreview: (watchId: string) =>
+				port.invoke(IPC_COMMANDS.FS_UNWATCH_PREVIEW, { watchId }) as Promise<void>,
+			onPreviewChanged: (listener: (watchId: string) => void) =>
+				subscribe<unknown>(IPC_EVENTS.FS_PREVIEW_CHANGED, payload => {
+					const watchId = (payload as { watchId?: unknown } | null)?.watchId;
+					if (typeof watchId === "string") listener(watchId);
+				}),
 		},
 
 		editor: {

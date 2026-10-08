@@ -1,9 +1,11 @@
-import { ChevronDown, ChevronRight, FilePlus2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, FilePlus2 } from "lucide-react";
 import { useState } from "react";
 import { DiffView } from "../../lib/diff";
 import { basename, cx, dirname, headLines, languageFromPath, resultDetails, resultText } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { PREVIEW_SCROLL_LG } from "../../lib/preview";
+import { useRuntimeTabId } from "../../stores/session-runtime-context";
+import { useUiStore } from "../../stores/ui";
 import { CodeBlock } from "../chat/CodeBlock";
 import { ProtocolWriteRenderer } from "./CoordinationRenderer";
 import { PathLink } from "./PathLink";
@@ -38,6 +40,7 @@ function diffStats(diff: string): { added: number; removed: number } {
 const WRITE_PREVIEW_LINES = 500;
 export function WriteRenderer({ args, result, isError, isPartial, partialResult, interrupted }: ToolRendererProps) {
 	const t = useT();
+	const tabId = useRuntimeTabId();
 	const [open, setOpen] = useState(false);
 	const path = typeof args.path === "string" ? args.path : typeof args.file_path === "string" ? args.file_path : "";
 	const content = typeof args.content === "string" ? args.content : "";
@@ -89,6 +92,20 @@ export function WriteRenderer({ args, result, isError, isPartial, partialResult,
 					<span className="text-[var(--omp-text)]">{basename(path)}</span>
 					<span className="text-[var(--omp-dim)]"> {dirname(path)}</span>
 				</PathLink>
+				{!isPartial && !isError && openPath && (
+					<button
+						type="button"
+						aria-label={t("preview.open", { name: basename(path) })}
+						title={t("preview.open", { name: basename(path) })}
+						onClick={event => {
+							event.stopPropagation();
+							useUiStore.getState().openFilePreview(openPath, tabId);
+						}}
+						className="shrink-0 rounded-sm p-0.5 text-[var(--omp-dim)] hover:text-[var(--omp-accent)]"
+					>
+						<Eye size={12} aria-hidden />
+					</button>
+				)}
 				<span className="ml-auto flex shrink-0 items-center gap-1.5 text-omp-xs text-[var(--omp-dim)]">
 					{stats && (
 						<span className="tabular-nums">

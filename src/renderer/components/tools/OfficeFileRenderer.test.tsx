@@ -4,6 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "../../lib/i18n";
+import { activeTabCommand, SessionRuntimeProvider } from "../../stores/session-runtime-context";
+import { useUiStore } from "../../stores/ui";
 import { GenericRenderer } from "./GenericRenderer";
 import { getToolRenderer } from "./index";
 import type { ToolRendererProps } from "./ToolCard";
@@ -15,6 +17,7 @@ globals.requestAnimationFrame = (callback: () => void) => setTimeout(callback, 0
 
 const windowGlobals = window as unknown as Record<string, unknown>;
 const REPORT = "/home/u/Documents/Sai ATLAS/Quarterly report.docx";
+const RUNTIME_TAB = "tab-office";
 
 let container: Element | null = null;
 let root: Root | null = null;
@@ -61,6 +64,7 @@ afterEach(async () => {
 	container = null;
 	root = null;
 	delete windowGlobals.omp;
+	useUiStore.setState({ filePreview: null, panelVisible: false, panelTab: "files" });
 });
 
 describe("office output card", () => {
@@ -86,6 +90,35 @@ describe("office output card", () => {
 			reveal.dispatchEvent(new Event("click", { bubbles: true }));
 		});
 		expect(opened).toEqual([REPORT, "/home/u/Documents/Sai ATLAS"]);
+	});
+
+	it("previews the file beside the chat, pinned to the card's tab, without opening it externally", async () => {
+		useUiStore.setState({ filePreview: null, panelVisible: false, panelTab: "logs" });
+		const Renderer = getToolRenderer("office_report");
+		const host = await mount(
+			<SessionRuntimeProvider runtime={{ tabId: RUNTIME_TAB, command: activeTabCommand, stores: new Map() }}>
+				<Renderer args={{}} result={reportResult()} />
+			</SessionRuntimeProvider>,
+		);
+		const preview = Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Preview");
+		if (!preview) throw new Error("preview button missing");
+		await act(async () => {
+			preview.dispatchEvent(new Event("click", { bubbles: true }));
+		});
+		const ui = useUiStore.getState();
+		expect(ui.filePreview).toEqual({ kind: "path", path: REPORT, tabId: RUNTIME_TAB });
+		expect(ui.panelVisible).toBe(true);
+		expect(ui.panelTab).toBe("files");
+		expect(opened).toEqual([]);
+	});
+
+	it.each([
+		["a failed job", { isError: true }],
+		["a partial result", { isPartial: true }],
+	])("offers no preview for %s", (_label, overrides) => {
+		const Renderer = getToolRenderer("office_report");
+		const markup = staticMarkup(<Renderer args={{}} result={reportResult()} {...overrides} />);
+		expect(markup).not.toContain(">Preview<");
 	});
 
 	const fallbacks: [string, string, Partial<ToolRendererProps>][] = [

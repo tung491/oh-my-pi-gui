@@ -11,7 +11,18 @@ import * as path from "node:path";
 
 const RENDERER = new URL("../out/renderer/", import.meta.url).pathname;
 /** Vendor chunks (electron.vite.config.ts VENDOR_CHUNK_RULES) that must load on demand. */
-const LAZY_CHUNKS = ["mermaid", "codemirror", "charts", "highlight", "xterm"];
+const LAZY_CHUNKS = [
+	"mermaid",
+	"codemirror",
+	"charts",
+	"highlight",
+	"xterm",
+	"pdfjs",
+	"sheetjs",
+	"docx",
+	"pptx",
+	"jszip",
+];
 const STATIC_IMPORT = /(?:^|[;}\s])(?:import|export)\s*(?:[\w$*{}\s,]+from\s*)?["'](\.\/[^"']+\.js)["']/g;
 
 /** Every renderer page: the chat window and the quick-entry bar. */

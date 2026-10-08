@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "DOCX and PPTX renderers"
-status: pending
+status: completed
 priority: P1
 effort: "5h"
 dependencies: [3]
@@ -40,15 +40,15 @@ bytes arrive.
 | Case | Test file | Red | Green |
 |---|---|---|---|
 | `safeExternalHref` keeps `https://example.com/a`, `http://x.y`, `mailto:a@b.c` (both shells open `mailto:` since Phase 1) <!-- Validation: mailto --> | `safe-links.test.ts` | exit 1 | pass |
-| `safeExternalHref` returns null for `javascript:alert(1)`, `file:///etc/passwd`, `data:text/html,x`, `vbscript:x`, `#frag`, `relative/path` and `` | same | exit 1 | pass |
+| `safeExternalHref` returns null for `javascript:alert(1)`, `file:///etc/passwd`, `data:text/html,x`, `vbscript:x`, `#frag`, `relative/path` and `` <!-- Shipped: `routeDocumentLinkClicks` handles `#id` before this check: it scrolls the target into view inside the shadow root --> | same | exit 1 | pass |
 | `routeDocumentLinkClicks`: a click on an `https` anchor is `defaultPrevented` and `open` is called once with its href | same | exit 1 | pass |
 | A click on a `javascript:` anchor, or a nested `<span>` inside a `file:` anchor, is `defaultPrevented` and `open` is not called | same | exit 1 | pass |
 | A click inside an SVG `<a>` whose link is in `xlink:href` is prevented and routed; an SVG `<a>` with a `javascript:` `href` is prevented and not opened <!-- Red team: R15 --> | same | exit 1 | pass |
 | `auxclick` on an `https` anchor is also routed and prevented | same | exit 1 | pass |
 | The returned disposer removes the listeners (a later click is not prevented) | same | exit 1 | pass |
 | `DOCX_RENDER_OPTIONS` has `renderAltChunks: false`, `useBase64URL: true`, `inWrapper: true` and `className: "docx"` | `office-render-options.test.ts` | exit 1 | pass |
-| `pptxViewerOptions(limits, open)` has `pdfjs: false`, `lazySlides: true`, `lazyMedia: true` and `zipLimits === limits` | same | exit 1 | pass |
-| `pptxViewerOptions(limits, open).onNavigate({ url: "https://a.b" })` calls `open("https://a.b")` once; `{ url: "javascript:x" }` and `{ url: "file:///x" }` call nothing (a pptx shape hyperlink is routed) <!-- Red team: R15 --> | same | exit 1 | pass |
+| `pptxViewerOptions(limits)` is `{ zipLimits, lazySlides: true, lazyMedia: true, pdfjs: false }` <!-- Shipped: 1.3.0's `ViewerOptions` has no `onNavigate` and no `listOptions`; `listOptions` goes to `viewer.open` --> | same | exit 1 | pass |
+| `installPptxNavigation(viewer, open)` replaces the viewer's `handleNavigate`: `{ url: "https://a.b" }` calls `open("https://a.b")` once; `{ url: "javascript:x" }` and `{ url: "file:///x" }` call nothing; `{ slideIndex }` calls `goToSlide` (a pptx shape hyperlink is routed) <!-- Red team: R15 --> <!-- Shipped: replaces the planned `onNavigate` option. A bump-guard test in `office-render-options.test.ts` asserts version 1.3.0, a prototype `handleNavigate`, and that the bundle's only `window.open(` sits inside it --> | same | exit 1 | pass |
 | `PREVIEW_FRAME_CLASS` contains `relative`, `overflow-clip`, `isolate`, `[contain:strict]` and `[transform:translateZ(0)]` (the `:host` injection stays clipped; geometry is checked in Phase 6) <!-- Red team: R6 --> | same | exit 1 | pass |
 | `useShadowMount`: unmounting before a deferred render resolves aborts its signal, and the disposer the render later returns runs exactly once <!-- Red team: R13 --> | `shadow-mount.test.tsx` | exit 1 | pass |
 | `useShadowMount`: a normal unmount runs the disposer once and removes `data-rendered` from the host; `data-rendered="true"` is set only after the render resolves <!-- Red team: R9 --> | same | exit 1 | pass |
@@ -67,7 +67,7 @@ bytes arrive.
      1. Define a handler `(event: Event) => { … }`.
      2. In it, set `path = typeof event.composedPath === "function" ? event.composedPath() : []`. When `path` is empty, walk from `event.target` through `parentNode`.
      3. Find the first `Element` whose `localName === "a"` (HTML `A` and SVG `a` alike) and that has a link: `el.getAttribute("href") ?? el.getAttributeNS("http://www.w3.org/1999/xlink", "href")`. If there is none, return.
-     4. Call `event.preventDefault()` and `event.stopPropagation()`. Then `const safe = safeExternalHref(link)`, and if it is truthy, call `open(safe)`.
+     4. Call `event.preventDefault()` and `event.stopPropagation()`. Then `const safe = safeExternalHref(link)`, and if it is truthy, call `open(safe)`. <!-- Shipped: a link starting with `#` instead scrolls the element with that id (percent-decoded, else raw) into view inside `root` and opens nothing; every other non-web link is swallowed -->
      5. Register it with `root.addEventListener("click", handler, true)` and the same for `"auxclick"`, and return a disposer that removes both.
 - **Success criteria:** All the safe-links cases pass.
 - **Verify:** `bunx vitest run src/renderer/lib/preview/safe-links.test.ts; echo "exit=$?"` ends with `exit=1` before step 2, and with `exit=0` after step 3.
@@ -83,7 +83,7 @@ bytes arrive.
   4. Run `grep -rho "RECOMMENDED_ZIP_LIMITS\|lazySlides\|lazyMedia\|zipLimits\|pdfjs\|onNavigate" node_modules/@aiden0z/pptx-renderer/dist/types | sort -u`. The 1.3.0 package keeps its declarations under `dist/types/` (`package.json` `"types": "./dist/types/index.d.ts"`), not in `dist/`.
   5. Run `grep -rhoE "(static )?(async )?open\(|destroy\(" node_modules/@aiden0z/pptx-renderer/dist/types | sort -u`.
   6. Run `grep -rn "interface [A-Za-z]*Options" node_modules/@aiden0z/pptx-renderer/dist/types/core/Viewer.d.ts` and record the viewer options type name for Task 4.3 step 3.
-  7. Run `grep -n "handleNavigate" -A12 node_modules/@aiden0z/pptx-renderer/dist/aiden0z-pptx-renderer.es.js | head -40` and record whether `handleNavigate` calls a user `onNavigate` **instead of** `window.open`. [UNVERIFIED: the red team found `window.open(e.url, "_blank", …)` in `handleNavigate`; whether a user `onNavigate` replaces it is not known.]
+  7. Run `grep -n "handleNavigate" -A12 node_modules/@aiden0z/pptx-renderer/dist/aiden0z-pptx-renderer.es.js | head -40` and record whether `handleNavigate` calls a user `onNavigate` **instead of** `window.open`. [UNVERIFIED: the red team found `window.open(e.url, "_blank", …)` in `handleNavigate`; whether a user `onNavigate` replaces it is not known.] <!-- Shipped: resolved. 1.3.0 has no `onNavigate` option; every slide renderer is given `s => this.handleNavigate(s)` and the prototype's `handleNavigate` calls `window.open`. The preview replaces `handleNavigate` on the instance (Task 4.3 step 3) -->
   8. Run `ls node_modules/@aiden0z/pptx-renderer/dist | grep -i "\.css$"`. The red team found none; record the result for Task 4.4.
   9. Run `bun pm ls --all 2>/dev/null | grep -E "mtx-decompressor|echarts|zrender|jszip|pako"` and record which transitive packages exist for the chunk rule in Task 4.5.
 - **Success criteria:** Both versions are installed exactly, every name is found, and the pptx library routes shape hyperlinks to a user `onNavigate` without also calling `window.open`.
@@ -91,19 +91,19 @@ bytes arrive.
   - `grep -c '"docx-preview": "0.4.1"' package.json` prints `1`.
   - `grep -c '"@aiden0z/pptx-renderer": "1.3.0"' package.json` prints `1`.
   - Steps 2 and 3 each print one path.
-  - Step 4 prints all six names: `RECOMMENDED_ZIP_LIMITS`, `lazyMedia`, `lazySlides`, `onNavigate`, `pdfjs`, `zipLimits`.
+  - Step 4 prints all six names: `RECOMMENDED_ZIP_LIMITS`, `lazyMedia`, `lazySlides`, `onNavigate`, `pdfjs`, `zipLimits`. <!-- Shipped: `onNavigate` is absent in 1.3.0; the other five are present -->
   - Step 5 prints at least one `open(` and one `destroy(`.
   - Step 6 prints at least one line.
-  - Step 7 shows that a provided `onNavigate` is called and `window.open` is skipped. If `onNavigate` is missing, or `window.open` still runs with it set, apply the Failure Protocol. Do not override `window.open`; the hosts' new-window allowlists (`src/main/window.ts:87-90`, `src-tauri/src/webview.rs:231-234`, http/https only) remain the backstop meanwhile.
+  - Step 7 shows that a provided `onNavigate` is called and `window.open` is skipped. If `onNavigate` is missing, or `window.open` still runs with it set, apply the Failure Protocol. Do not override `window.open`; <!-- Shipped: step 7 found `onNavigate` missing; resolved by replacing the instance's `handleNavigate`, pinned by the bump-guard test, not by the Failure Protocol --> the hosts' new-window allowlists (`src/main/window.ts:87-90`, `src-tauri/src/webview.rs:231-234`, http/https only) remain the backstop meanwhile.
 
 ### Task 4.3 — Red then green: pinned render options, the containment frame and the shadow mount
 <!-- Red team: R6, R9, R13, R15 -->
 - **Goal:** The hardening cannot be removed silently, document CSS cannot escape its frame, and no late render leaks.
-- **Target files and symbols:** `office-render-options.ts`: `DOCX_RENDER_OPTIONS`, `pptxViewerOptions(zipLimits, open)` and `PREVIEW_FRAME_CLASS`. `shadow-mount.ts`: `useShadowMount(render: (mount: HTMLDivElement, root: ShadowRoot, signal: AbortSignal) => Promise<() => void>, deps: unknown[]): RefObject<HTMLDivElement | null>`.
+- **Target files and symbols:** `office-render-options.ts`: `DOCX_RENDER_OPTIONS`, `pptxViewerOptions(zipLimits)`, `installPptxNavigation(viewer, open)` and `PREVIEW_FRAME_CLASS`. `shadow-mount.ts`: `useShadowMount(render: (mount: HTMLDivElement, root: ShadowRoot, signal: AbortSignal) => Promise<() => void>, deps: unknown[]): RefObject<HTMLDivElement | null>`.
 - **Steps:**
   1. Write `office-render-options.test.ts` for its matrix rows, and `shadow-mount.test.tsx` with the linkedom harness: a render that returns a promise the test resolves later with a `vi.fn` disposer. Import only `office-render-options.ts` and `shadow-mount.ts`, neither of which imports a library at runtime. Run them (red).
   2. Implement `DOCX_RENDER_OPTIONS = { className: "docx", inWrapper: true, breakPages: true, renderAltChunks: false, useBase64URL: true, experimental: false } as const`.
-  3. Implement `pptxViewerOptions(zipLimits, open: (href: string) => void)` returning `{ zipLimits, lazySlides: true, lazyMedia: true, listOptions: { windowed: true }, pdfjs: false, onNavigate: ({ url }: { url: string }) => { const safe = safeExternalHref(url); if (safe) open(safe); } }`. Annotate the return type with the options type recorded in Task 4.2 step 6, imported with `import type` only, so `check:types` proves every name.
+  3. Implement `pptxViewerOptions(zipLimits, open: (href: string) => void)` returning `{ zipLimits, lazySlides: true, lazyMedia: true, listOptions: { windowed: true }, pdfjs: false, onNavigate: ({ url }: { url: string }) => { const safe = safeExternalHref(url); if (safe) open(safe); } }`. <!-- Shipped: `pptxViewerOptions(zipLimits: ZipParseLimits): ViewerOptions` returns `{ zipLimits, lazySlides: true, lazyMedia: true, pdfjs: false }`, and `installPptxNavigation(viewer, open)` replaces the viewer instance's `handleNavigate` (slide links call `goToSlide`; a URL opens through `open` only after `safeExternalHref`). `listOptions: { windowed: true }` is passed to `viewer.open` --> Annotate the return type with the options type recorded in Task 4.2 step 6, imported with `import type` only, so `check:types` proves every name.
   4. `export const PREVIEW_FRAME_CLASS = "relative h-full w-full overflow-clip isolate [contain:strict] [transform:translateZ(0)]";`. The transform makes the frame the containing block for a `position: fixed` host, and the clip and containment keep anything a document's `:host` rules do inside the frame.
   5. Implement `useShadowMount`. It keeps a host `ref`. Its effect:
      1. Gets `root = host.shadowRoot ?? host.attachShadow({ mode: "open" })` and calls `root.replaceChildren()`.
@@ -125,7 +125,7 @@ bytes arrive.
      3. Observe `host` with a `ResizeObserver` that calls `fit`, and return `() => observer.disconnect()` as the disposer.
      4. Render `<div className={PREVIEW_FRAME_CLASS} data-preview-frame><div ref={hostRef} className="h-full w-full overflow-auto bg-(--omp-code-bg) p-3" data-preview-host="docx" /></div>`.
   2. **PptxPreview.**
-     1. `useShadowMount(async (mount, _root, signal) => { const lib = await import("@aiden0z/pptx-renderer"); if (signal.aborted) return () => {}; const viewer = await lib.PptxViewer.open(content.bytes.buffer.slice(content.bytes.byteOffset, content.bytes.byteOffset + content.bytes.byteLength), mount, pptxViewerOptions(lib.RECOMMENDED_ZIP_LIMITS, href => void window.omp.system.openExternal(href))); return () => viewer.destroy(); }, [content.bytes])`, with a try/catch that calls `onError`.
+     1. `useShadowMount(async (mount, _root, signal) => { const lib = await import("@aiden0z/pptx-renderer"); if (signal.aborted) return () => {}; const viewer = await lib.PptxViewer.open(content.bytes.buffer.slice(content.bytes.byteOffset, content.bytes.byteOffset + content.bytes.byteLength), mount, pptxViewerOptions(lib.RECOMMENDED_ZIP_LIMITS, href => void window.omp.system.openExternal(href))); return () => viewer.destroy(); }, [content.bytes])`, with a try/catch that calls `onError`. <!-- Shipped: `new PptxViewer(mount, pptxViewerOptions(lib.RECOMMENDED_ZIP_LIMITS))`, then `installPptxNavigation(viewer, openDocumentLink)` (`openDocumentLink` is exported from `shadow-mount.ts`), then `viewer.open(bytes, { renderMode: "list", listOptions: { windowed: true }, signal })` -->
      2. If Task 4.2 step 5 showed a different call shape (for example a constructor plus `open`), use the shape from the `.d.ts`. The options object stays exactly `pptxViewerOptions(...)`.
      3. If Task 4.2 step 8 found a CSS file, import it with `?inline`, and inside the render callback before opening run `const style = document.createElement("style"); style.textContent = css; root.prepend(style);`.
      4. Render the same frame with `data-preview-host="pptx"`.

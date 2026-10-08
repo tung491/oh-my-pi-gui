@@ -223,6 +223,61 @@ describe("createOmpApi", () => {
 		expect(electronApi.system.onNativeDropPaths).toBeUndefined();
 	});
 
+	it("reads a document over its own channel with tab and change stamp", async () => {
+		const { port, invokes } = fakePort(() => ({ ok: true, unchanged: true, size: 3, mtimeMs: 7 }));
+		const api = createOmpApi(port, "linux");
+		await expect(
+			api.fs.readDocument("docs/a.docx", { tabId: "t1", ifChanged: { size: 3, mtimeMs: 7 } }),
+		).resolves.toEqual({ ok: true, unchanged: true, size: 3, mtimeMs: 7 });
+		expect(invokes).toEqual([
+			{
+				channel: IPC_COMMANDS.FS_READ_DOCUMENT,
+				args: [{ path: "docs/a.docx", tabId: "t1", ifChanged: { size: 3, mtimeMs: 7 } }],
+			},
+		]);
+	});
+
+	it("watches a preview with its tab, unwatches by id, and streams settled changes by watch id", async () => {
+		const { port, invokes, emit, listenerCount } = fakePort(call =>
+			call.channel === IPC_COMMANDS.FS_WATCH_PREVIEW ? { ok: true, watchId: "w1" } : undefined,
+		);
+		const api = createOmpApi(port, "linux");
+		await expect(api.fs.watchPreview("docs/a.csv", { tabId: "t1" })).resolves.toEqual({ ok: true, watchId: "w1" });
+		await api.fs.watchPreview("/abs/b.csv");
+		await api.fs.unwatchPreview("w1");
+		expect(invokes).toEqual([
+			{ channel: IPC_COMMANDS.FS_WATCH_PREVIEW, args: [{ path: "docs/a.csv", tabId: "t1" }] },
+			{ channel: IPC_COMMANDS.FS_WATCH_PREVIEW, args: [{ path: "/abs/b.csv", tabId: undefined }] },
+			{ channel: IPC_COMMANDS.FS_UNWATCH_PREVIEW, args: [{ watchId: "w1" }] },
+		]);
+
+		const seen: string[] = [];
+		const off = api.fs.onPreviewChanged(id => seen.push(id));
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId: "w1" });
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId: 7 });
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, null);
+		off();
+		emit(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId: "w2" });
+		expect(seen).toEqual(["w1"]);
+		expect(listenerCount(IPC_EVENTS.FS_PREVIEW_CHANGED)).toBe(0);
+	});
+
+	it("opens a path with the tab it belongs to, and without one as before", async () => {
+		const { port, invokes } = fakePort(() => ({ ok: true, resolvedPath: "/ws/two/a.pdf" }));
+		const api = createOmpApi(port, "linux");
+		await expect(api.system.openPath("a.pdf", { tabId: "t2" })).resolves.toEqual({
+			ok: true,
+			resolvedPath: "/ws/two/a.pdf",
+		});
+		await api.system.openPath("b.md");
+		await api.system.openPath("c.md", {});
+		expect(invokes).toEqual([
+			{ channel: IPC_COMMANDS.SYSTEM_OPEN_PATH, args: ["a.pdf", { tabId: "t2" }] },
+			{ channel: IPC_COMMANDS.SYSTEM_OPEN_PATH, args: ["b.md"] },
+			{ channel: IPC_COMMANDS.SYSTEM_OPEN_PATH, args: ["c.md"] },
+		]);
+	});
+
 	it("delivers native drop paths only when the shell emits them, dropping malformed entries", () => {
 		const { port, emit, listenerCount } = fakePort();
 		expect(createOmpApi(port, "linux").system.onNativeDropPaths).toBeUndefined();

@@ -12,6 +12,7 @@ import {
 	Notification,
 	type NotificationConstructorOptions,
 	shell,
+	type WebContents,
 } from "electron";
 import Store from "electron-store";
 import type {
@@ -19,12 +20,19 @@ import type {
 	IpcCloseTabPayload,
 	IpcExtensionUiRespondPayload,
 	IpcFsListPayload,
+	IpcFsPreviewChangedPayload,
+	IpcFsReadDocumentPayload,
+	IpcFsReadDocumentResult,
+	IpcFsReadDocumentStamp,
 	IpcFsReadImagePayload,
 	IpcFsReadImageResult,
 	IpcFsReadPayload,
 	IpcFsReadPdfPayload,
 	IpcFsReadPlanPayload,
 	IpcFsReadPlanResult,
+	IpcFsUnwatchPreviewPayload,
+	IpcFsWatchPreviewPayload,
+	IpcFsWatchPreviewResult,
 	IpcGetSessionOwnerPayload,
 	IpcHostToolResultPayload,
 	IpcHostToolUpdatePayload,
@@ -54,13 +62,17 @@ import { requestQuit } from "./app-quit";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
+import { sanitizeExternalUrl } from "./external-url";
+import { readDocumentFile } from "./fs-read-document";
 import { readPdfFile } from "./fs-read-pdf";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { listModelsProviders } from "./models-config";
 import { registerOllamaIpc } from "./ollama/register-ipc";
+import { type OpenPathEnv, openPathTabId, resolveOpenPath, resolveWithin } from "./open-path-resolve";
 import { openPathTarget } from "./open-path-target";
+import { PreviewWatchRegistry, resolveDocumentPath } from "./preview-watch";
 import { registerProviderCleanupIpc } from "./provider-cleanup";
 import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
 import { runtimeLogPath, writeRuntimeLog } from "./runtime-log";
@@ -106,6 +118,11 @@ function cwdFor(deps: IpcDeps, event: Electron.IpcMainInvokeEvent, tabId?: strin
 	if (!win) return null;
 	if (tabId) return deps.sidecarPool.sidecarForTab(win, tabId)?.cwd ?? null;
 	return deps.sidecarPool.sidecarForWindow(win)?.cwd ?? deps.windowManager.recordFor(win)?.cwd ?? null;
+}
+
+/** The path environment `fs:read-document` and `fs:watch-preview` resolve against. */
+function documentPathEnv(deps: IpcDeps, event: Electron.IpcMainInvokeEvent): OpenPathEnv {
+	return { homedir: os.homedir(), cwdFor: tabId => cwdFor(deps, event, tabId) };
 }
 
 interface PrefsSchema {
@@ -237,12 +254,13 @@ async function loadIgnoreRules(rootAbs: string): Promise<IgnoreRule[]> {
 	return rules;
 }
 
-/** Resolve `rel` against `root`, refusing escapes outside the workspace. */
-function resolveWithin(root: string, rel: string): string | null {
-	const resolved = path.resolve(root, rel);
-	const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
-	if (resolved !== root && !resolved.startsWith(rootWithSep)) return null;
-	return resolved;
+/** The renderer's change stamp when both fields are finite numbers, else undefined. */
+function validStamp(stamp: unknown): IpcFsReadDocumentStamp | undefined {
+	if (typeof stamp !== "object" || stamp === null) return undefined;
+	const { size, mtimeMs } = stamp as Partial<Record<keyof IpcFsReadDocumentStamp, unknown>>;
+	if (typeof size !== "number" || !Number.isFinite(size)) return undefined;
+	if (typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs)) return undefined;
+	return { size, mtimeMs };
 }
 
 /** `abs` when it exists and is a regular file, else null. */
@@ -730,10 +748,9 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	});
 
 	// System
-	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, async (_event, url: string) => {
-		if (typeof url === "string" && (url.startsWith("https://") || url.startsWith("http://"))) {
-			await shell.openExternal(url);
-		}
+	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, async (_event, url: unknown) => {
+		const target = sanitizeExternalUrl(url);
+		if (target !== null) await shell.openExternal(target);
 	});
 
 	// Tool-card path links — open a file in the system editor. "~" expands,
@@ -745,27 +762,29 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// bundle or any executable file), judged by its requested and its resolved
 	// name, is revealed, never opened: one click on an agent-written link must
 	// not execute it.
-	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_PATH, async (event, target: string): Promise<IpcOpenPathResult> => {
-		if (typeof target !== "string" || !target.trim()) return { ok: false, error: "Empty path" };
-		let resolved = target.startsWith("~/") ? path.join(os.homedir(), target.slice(2)) : target;
-		if (!path.isAbsolute(resolved)) {
-			const rootAbs = cwdFor(deps, event);
-			if (!rootAbs) return { ok: false, error: "No workspace" };
-			const within = resolveWithin(rootAbs, resolved);
-			if (!within) return { ok: false, error: "Path escapes the workspace" };
-			resolved = within;
-		}
-		// A stale tool card can reference a file that no longer exists (or never
-		// did outside the workspace). Both openPath and showItemInFolder fail
-		// silently on missing paths, so detect it here and let the link toast.
-		const decision = await openPathTarget(resolved, launchPlatformOf(process.platform));
-		if (!decision) return { ok: false, error: "File not found" };
-		if (decision.action === "open" && !(await shell.openPath(decision.path))) {
+	// A relative path resolves in the given tab's workspace (an unknown tab
+	// fails), else the calling window's; see open-path-resolve.ts.
+	ipcMain.handle(
+		IPC_COMMANDS.SYSTEM_OPEN_PATH,
+		async (event, target: unknown, options?: unknown): Promise<IpcOpenPathResult> => {
+			const resolution = resolveOpenPath(target, openPathTabId(options), {
+				homedir: os.homedir(),
+				cwdFor: tabId => cwdFor(deps, event, tabId),
+			});
+			if (!resolution.ok) return { ok: false, error: resolution.error };
+			const resolved = resolution.path;
+			// A stale tool card can reference a file that no longer exists (or never
+			// did outside the workspace). Both openPath and showItemInFolder fail
+			// silently on missing paths, so detect it here and let the link toast.
+			const decision = await openPathTarget(resolved, launchPlatformOf(process.platform));
+			if (!decision) return { ok: false, error: "File not found" };
+			if (decision.action === "open" && !(await shell.openPath(decision.path))) {
+				return { ok: true, resolvedPath: resolved };
+			}
+			shell.showItemInFolder(decision.path);
 			return { ok: true, resolvedPath: resolved };
-		}
-		shell.showItemInFolder(decision.path);
-		return { ok: true, resolvedPath: resolved };
-	});
+		},
+	);
 
 	ipcMain.handle(
 		IPC_COMMANDS.SYSTEM_SAVE_DIALOG,
@@ -1079,6 +1098,56 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	ipcMain.handle(IPC_COMMANDS.FS_READ_PDF, (_event, payload: IpcFsReadPdfPayload | undefined) =>
 		readPdfFile(payload?.path),
 	);
+
+	// Document read for the in-app preview; see fs-read-document.ts for the
+	// signature and size rules. Absolute and `~/` paths read as given (like
+	// fs:read-image); relative ones are confined to the tab's workspace.
+	ipcMain.handle(
+		IPC_COMMANDS.FS_READ_DOCUMENT,
+		async (event, payload: IpcFsReadDocumentPayload | undefined): Promise<IpcFsReadDocumentResult> => {
+			const resolved = resolveDocumentPath(payload?.path, openPathTabId(payload), documentPathEnv(deps, event));
+			if (!resolved.ok) return { ok: false, size: 0, mtimeMs: 0, error: resolved.error };
+			return readDocumentFile(resolved.path, { ifChanged: validStamp(payload?.ifChanged) });
+		},
+	);
+
+	// Preview watches: see preview-watch.ts. A watch belongs to the webContents
+	// that made it, and all of them close when that page navigates (a reload),
+	// crashes or is destroyed.
+	const previewSenders = new Map<number, WebContents>();
+	const previewWatches = new PreviewWatchRegistry({
+		emit: (ownerId, watchId) => {
+			const sender = previewSenders.get(ownerId);
+			if (sender && !sender.isDestroyed()) {
+				sender.send(IPC_EVENTS.FS_PREVIEW_CHANGED, { watchId } satisfies IpcFsPreviewChangedPayload);
+			}
+		},
+	});
+	const trackPreviewSender = (sender: WebContents): void => {
+		const id = sender.id;
+		if (previewSenders.has(id)) return;
+		previewSenders.set(id, sender);
+		const release = () => previewWatches.closeOwner(id);
+		// did-navigate: a committed main-frame load, so an iframe never ends the page's watches.
+		sender.on("did-navigate", release);
+		sender.on("render-process-gone", release);
+		sender.once("destroyed", () => {
+			release();
+			previewSenders.delete(id);
+		});
+	};
+
+	ipcMain.handle(
+		IPC_COMMANDS.FS_WATCH_PREVIEW,
+		(event, payload: IpcFsWatchPreviewPayload | undefined): IpcFsWatchPreviewResult => {
+			trackPreviewSender(event.sender);
+			return previewWatches.watch(event.sender.id, payload, documentPathEnv(deps, event));
+		},
+	);
+
+	ipcMain.handle(IPC_COMMANDS.FS_UNWATCH_PREVIEW, (event, payload: IpcFsUnwatchPreviewPayload | undefined) => {
+		previewWatches.unwatch(event.sender.id, payload?.watchId);
+	});
 
 	// Plan-mode document read — deliberately OFF the RPC bus: reading via the
 	// bash RPC injected the plan into the model context and appended

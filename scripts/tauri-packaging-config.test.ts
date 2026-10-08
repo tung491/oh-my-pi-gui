@@ -22,6 +22,8 @@ import {
 	finalizeDeb,
 	TRAY_ALTERNATION,
 	TRAY_DEPENDENCY,
+	WEBKIT_DEPENDENCY,
+	WEBKIT_REQUIREMENT,
 } from "../src-tauri/linux/finalize-deb";
 import { MAC_UPDATE_FLOOR } from "./mac-update-floor";
 import { assetNames, darwinReleaseFor } from "./release-feeds";
@@ -328,10 +330,10 @@ describe("Linux package", () => {
 		// so every hard dependency is a way to lose the app. WebKit treats a missing bwrap
 		// as fatal once its web-process sandbox is on, and needs xdg-dbus-proxy for it.
 		// The bundler appends the tray's appindicator, libwebkit2gtk-4.1-0 and libgtk-3-0
-		// itself, so listing them here would duplicate them.
+		// itself, so listing them here would duplicate them; finalize-deb versions WebKitGTK.
 		expect(depends()).toEqual(["bubblewrap", "xdg-dbus-proxy"]);
 		expect([...depends(), TRAY_DEPENDENCY, "libwebkit2gtk-4.1-0", "libgtk-3-0"].join(", ")).toBe(
-			DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY),
+			DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY).replace(WEBKIT_REQUIREMENT, WEBKIT_DEPENDENCY),
 		);
 	});
 
@@ -359,8 +361,17 @@ describe("Linux package", () => {
 		// force a swap during the update.
 		expect(TRAY_ALTERNATION).toBe("libayatana-appindicator3-1 | libappindicator3-1");
 		expect(DEB_DEPENDS).toBe(
-			"bubblewrap, xdg-dbus-proxy, libayatana-appindicator3-1 | libappindicator3-1, libwebkit2gtk-4.1-0, libgtk-3-0",
+			"bubblewrap, xdg-dbus-proxy, libayatana-appindicator3-1 | libappindicator3-1, libwebkit2gtk-4.1-0 (>= 2.52), libgtk-3-0",
 		);
+	});
+
+	it("deb requires WebKitGTK 2.52 for the pdf.js modern build", () => {
+		// The bundled pdf.js calls Map.prototype.getOrInsertComputed (first in WebKitGTK 2.52),
+		// Math.sumPrecise and Uint8Array.fromBase64 without polyfills. Ubuntu 24.04 noble-updates
+		// ships 2.52, so an updated noble satisfies it.
+		expect(WEBKIT_REQUIREMENT).toBe("libwebkit2gtk-4.1-0 (>= 2.52)");
+		expect(DEB_DEPENDS.split(", ")).toContain(WEBKIT_REQUIREMENT);
+		expect(DEB_DEPENDS.split(", ")).not.toContain(WEBKIT_DEPENDENCY);
 	});
 
 	it("deb does not depend on gstreamer1.0-plugins-bad", () => {
@@ -411,7 +422,7 @@ describe("Linux package", () => {
 					"Version: 1.0.0",
 					"Architecture: amd64",
 					"Maintainer: test",
-					`Depends: ${DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY)}`,
+					`Depends: ${DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY).replace(WEBKIT_REQUIREMENT, WEBKIT_DEPENDENCY)}`,
 					`Recommends: ${DEB_RECOMMENDS}`,
 					"Description: test",
 					"",

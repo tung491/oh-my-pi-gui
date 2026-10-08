@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use base64::Engine;
 use serde_json::{json, Value};
@@ -19,7 +20,7 @@ pub(super) fn expand_home(path: &str) -> String {
     expand_home_in(path, dirs::home_dir().as_deref())
 }
 
-fn expand_home_in(path: &str, home: Option<&Path>) -> String {
+pub(super) fn expand_home_in(path: &str, home: Option<&Path>) -> String {
     match (path.strip_prefix("~/"), home) {
         (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
         _ => path.to_string(),
@@ -206,21 +207,28 @@ pub fn session_consume_pending(ctx: &Arc<AppCtx>, caller: Caller, _args: Vec<Val
 /// `system:open-external`
 pub fn system_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
     if let Some(url) = args.into_iter().next().and_then(|value| value.as_str().map(str::to_string)) {
-        if super::system::allowed_external_url(&url) {
-            let _ = ctx.host.open_url(&url);
+        if let Some(target) = super::system::sanitize_external_url(&url) {
+            let _ = ctx.host.open_url(&target);
         }
     }
     Reply::ok(Value::Null)
 }
 
-/// `system:open-path`
+/// `system:open-path`: `[path, { tabId }?]`. A non-empty `tabId` resolves a
+/// relative path in that tab's workspace (an unknown tab fails); without one
+/// the calling window's workspace is used, as before tabs could be named.
 pub fn system_open_path(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let Some(target) = args.into_iter().next().and_then(|value| value.as_str().map(str::to_string)) else {
+    let mut args = args.into_iter();
+    let Some(target) = args.next().and_then(|value| value.as_str().map(str::to_string)) else {
         return Reply::ok(json!({ "ok": false, "error": "Empty path" }));
     };
+    let tab_id = args
+        .next()
+        .and_then(|options| options.get("tabId").and_then(Value::as_str).map(str::to_string))
+        .filter(|tab_id| !tab_id.is_empty());
     let ctx = ctx.clone();
     Reply::Later(Box::pin(async move {
-        match super::system::open_path(&ctx, caller, &target).await {
+        match super::system::open_path(&ctx, caller, &target, tab_id.as_deref()).await {
             Ok(outcome) => Ok(json!({ "ok": true, "resolvedPath": outcome.resolved_path })),
             Err(error) => Ok(json!({ "ok": false, "error": error.message() })),
         }
@@ -612,6 +620,162 @@ fn read_pdf_bytes(reader: &mut impl std::io::Read, size: u64, max_bytes: u64) ->
     Ok(bytes)
 }
 
+/// Size cap for `fs:read-document`, matching the Electron handler.
+const FS_DOCUMENT_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+/// How long `fs:read-document` waits for a blocking read (a hung network
+/// mount) before answering `timed-out`; the blocking thread may stay stuck,
+/// but the window's call queue moves on.
+const DOCUMENT_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// `fs:read-document`: a document's bytes (PDF, ZIP, OLE or HTML-table
+/// signature, bounded by a size cap) for the in-app preview, or `unchanged`
+/// without bytes when `ifChanged` still matches its size and mtime. Relative
+/// paths stay workspace-confined; absolute and `~/` paths are read as given
+/// (see `fs.rs`'s trust-contract note). The read runs on a blocking thread
+/// with a timeout so a slow mount never holds up the window's other calls.
+pub fn fs_read_document(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.into_iter().next().unwrap_or(Value::Null);
+    let Some(path) = payload.get("path").and_then(Value::as_str).filter(|path| !path.is_empty()) else {
+        return Reply::ok(document_failure("invalid-path"));
+    };
+    let raw = expand_home(path);
+    let cwd = if Path::new(&raw).is_absolute() {
+        None
+    } else {
+        let tab_id = payload.get("tabId").and_then(Value::as_str);
+        match ctx.tabs.cwd_for(caller, tab_id) {
+            Some(cwd) => Some(cwd),
+            None => return Reply::ok(document_failure("no-workspace")),
+        }
+    };
+    let if_changed = payload.get("ifChanged").and_then(|stamp| {
+        Some((stamp.get("size").and_then(Value::as_u64)?, stamp.get("mtimeMs").and_then(Value::as_u64)?))
+    });
+    Reply::Later(Box::pin(async move {
+        let read = tokio::task::spawn_blocking(move || {
+            let abs = match cwd {
+                None => PathBuf::from(&raw),
+                Some(cwd) => match workspace_fs::resolve_within(Path::new(&cwd), &raw) {
+                    Some(within) => within,
+                    None => return document_failure("outside-workspace"),
+                },
+            };
+            read_document_file(&abs, FS_DOCUMENT_MAX_BYTES, if_changed)
+        });
+        Ok(settle_document_read(read, DOCUMENT_READ_TIMEOUT).await)
+    }))
+}
+
+/// `fs:watch-preview`: watch a previewed file; `fs:preview-changed` reaches
+/// the calling window once the file settles after a change (see `preview_watch.rs`).
+pub fn fs_watch_preview(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
+    super::preview_watch::watch_reply(ctx, caller, args, super::preview_watches(ctx))
+}
+
+/// `fs:unwatch-preview`: stop a preview watch; an unknown id is a no-op.
+pub fn fs_unwatch_preview(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
+    let _ = caller;
+    super::preview_watch::unwatch_reply(args, super::preview_watches(ctx))
+}
+
+/// The blocking read's result, or `timed-out` once `timeout` passes first.
+async fn settle_document_read(read: tokio::task::JoinHandle<Value>, timeout: Duration) -> Value {
+    match tokio::time::timeout(timeout, read).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => document_failure(&error.to_string()),
+        Err(_) => document_failure("timed-out"),
+    }
+}
+
+/// A failure before the path resolved to a file: no stamp, no `resolvedPath`.
+fn document_failure(error: &str) -> Value {
+    json!({ "ok": false, "size": 0, "mtimeMs": 0, "error": error })
+}
+
+/// The document kind a file's leading bytes declare; images return `None`
+/// (they are read through `fs:read-image`).
+fn document_signature(header: &[u8]) -> Option<&'static str> {
+    if header.starts_with(PDF_SIGNATURE) {
+        return Some("pdf");
+    }
+    if header.starts_with(&[0x50, 0x4b, 0x03, 0x04]) {
+        return Some("zip");
+    }
+    if header.starts_with(&[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]) {
+        return Some("ole");
+    }
+    let text = header.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(header);
+    let start = text.iter().position(|byte| !byte.is_ascii_whitespace()).unwrap_or(text.len());
+    let text = &text[start..];
+    let starts_with_tag = |tag: &[u8]| text.len() >= tag.len() && text[..tag.len()].eq_ignore_ascii_case(tag);
+    if starts_with_tag(b"<!doctype html") || starts_with_tag(b"<html") || starts_with_tag(b"<table") {
+        return Some("html");
+    }
+    None
+}
+
+/// Reads `abs` after lexically normalizing it (`.` and `..` segments, as
+/// Node's `path.normalize` does), so `resolvedPath` matches the Electron shell.
+fn read_document_file(abs: &Path, max_bytes: u64, if_changed: Option<(u64, u64)>) -> Value {
+    read_document_with(&workspace_fs::normalize(abs), max_bytes, if_changed, || {})
+}
+
+/// One handle for the stamp, the cap and the read, reading at most one byte
+/// past the cap so a file that grows after `fstat` is refused rather than
+/// read whole. `after_open` runs between `fstat` and the read (tests use it
+/// to grow the file).
+fn read_document_with(abs: &Path, max_bytes: u64, if_changed: Option<(u64, u64)>, after_open: impl FnOnce()) -> Value {
+    use std::io::Read;
+    let resolved = abs.to_string_lossy();
+    let failure = |size: u64, mtime_ms: u64, error: &str| {
+        json!({ "ok": false, "size": size, "mtimeMs": mtime_ms, "resolvedPath": resolved, "error": error })
+    };
+    let file = match open_for_sniff(abs) {
+        Ok(file) => file,
+        Err(error) => return document_failure(&error.to_string()),
+    };
+    let metadata = match file.metadata() {
+        Ok(metadata) => metadata,
+        Err(error) => return document_failure(&error.to_string()),
+    };
+    if !metadata.is_file() {
+        return failure(0, 0, "not-a-file");
+    }
+    let size = metadata.len();
+    let mtime_ms = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |since| u64::try_from(since.as_millis()).unwrap_or(u64::MAX));
+    if if_changed == Some((size, mtime_ms)) {
+        return json!({ "ok": true, "unchanged": true, "size": size, "mtimeMs": mtime_ms, "resolvedPath": resolved });
+    }
+    if size > max_bytes {
+        return failure(size, mtime_ms, "too-large");
+    }
+    after_open();
+    let mut bytes = Vec::with_capacity(usize::try_from(size).unwrap_or(0));
+    if let Err(error) = file.take(max_bytes + 1).read_to_end(&mut bytes) {
+        return document_failure(&error.to_string());
+    }
+    let read = bytes.len() as u64;
+    if read > max_bytes {
+        return failure(read, mtime_ms, "too-large");
+    }
+    let Some(signature) = document_signature(&bytes[..bytes.len().min(512)]) else {
+        return failure(size, mtime_ms, "unsupported");
+    };
+    json!({
+        "ok": true,
+        "data": base64::engine::general_purpose::STANDARD.encode(&bytes),
+        "size": read,
+        "mtimeMs": mtime_ms,
+        "resolvedPath": resolved,
+        "signature": signature,
+    })
+}
+
 /// `editor:open-external`
 pub fn editor_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
     let payload = args.into_iter().next().unwrap_or(Value::Null);
@@ -888,6 +1052,177 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(reply, json!({ "ok": false, "size": 0, "error": "Path must be absolute" }));
+    }
+
+    const DOC_ZIP: &[u8] = &[0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0];
+    const DOC_OLE: &[u8] = &[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0];
+    const DOC_HTML: &str = "\u{feff}  <html><body><table><tr><td>a</td></tr></table></body></html>";
+    const DOC_PDF: &[u8] = b"%PDF-1.7\n%\xe2\xe3\n";
+    const DOC_PNG: &[u8] = &[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52];
+
+    /// `(size, mtimeMs)` as both shells report them: whole milliseconds, floored.
+    fn doc_stamp(path: &std::path::Path) -> (u64, u64) {
+        let metadata = std::fs::metadata(path).unwrap();
+        let mtime_ms = metadata.modified().unwrap().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        (metadata.len(), mtime_ms)
+    }
+
+    fn write_doc(dir: &tempfile::TempDir, name: &str, bytes: &[u8]) -> std::path::PathBuf {
+        let file = dir.path().join(name);
+        std::fs::write(&file, bytes).unwrap();
+        file
+    }
+
+    fn read_doc(path: &std::path::Path) -> serde_json::Value {
+        super::read_document_file(path, super::FS_DOCUMENT_MAX_BYTES, None)
+    }
+
+    fn full_read(path: &std::path::Path, bytes: &[u8], signature: &str) -> serde_json::Value {
+        let (size, mtime_ms) = doc_stamp(path);
+        json!({
+            "ok": true,
+            "data": base64(bytes),
+            "size": size,
+            "mtimeMs": mtime_ms,
+            "resolvedPath": path.to_str().unwrap(),
+            "signature": signature,
+        })
+    }
+
+    #[test]
+    fn document_read_returns_a_docx_as_base64_with_the_zip_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.docx", DOC_ZIP);
+        assert_eq!(read_doc(&file), full_read(&file, DOC_ZIP, "zip"));
+    }
+
+    #[test]
+    fn document_read_returns_a_legacy_xls_with_the_ole_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.xls", DOC_OLE);
+        assert_eq!(read_doc(&file), full_read(&file, DOC_OLE, "ole"));
+    }
+
+    #[test]
+    fn document_read_returns_an_html_spreadsheet_export_with_the_html_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.xls", DOC_HTML.as_bytes());
+        assert_eq!(read_doc(&file), full_read(&file, DOC_HTML.as_bytes(), "html"));
+    }
+
+    #[test]
+    fn document_read_returns_a_pdf_with_the_pdf_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.pdf", DOC_PDF);
+        assert_eq!(read_doc(&file), full_read(&file, DOC_PDF, "pdf"));
+    }
+
+    #[test]
+    fn document_read_rejects_bytes_with_no_known_signature_as_unsupported() {
+        let dir = tempfile::tempdir().unwrap();
+        for file in [write_doc(&dir, "a.png", DOC_PNG), write_doc(&dir, "a.docx", b"hello")] {
+            let (size, mtime_ms) = doc_stamp(&file);
+            assert_eq!(
+                read_doc(&file),
+                json!({ "ok": false, "size": size, "mtimeMs": mtime_ms, "resolvedPath": file.to_str().unwrap(), "error": "unsupported" })
+            );
+        }
+    }
+
+    #[test]
+    fn document_read_rejects_a_file_over_the_size_cap_as_too_large() {
+        assert_eq!(super::FS_DOCUMENT_MAX_BYTES, 32 * 1024 * 1024);
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "big.docx", &[DOC_ZIP, &[0, 0]].concat());
+        let (_, mtime_ms) = doc_stamp(&file);
+        assert_eq!(
+            super::read_document_file(&file, 4, None),
+            json!({ "ok": false, "size": 10, "mtimeMs": mtime_ms, "resolvedPath": file.to_str().unwrap(), "error": "too-large" })
+        );
+    }
+
+    #[test]
+    fn document_read_refuses_a_file_that_grows_past_the_cap_after_it_was_opened() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "growing.docx", &DOC_ZIP[..4]);
+        let appended = file.clone();
+        let result = super::read_document_with(&file, 8, None, move || {
+            use std::io::Write;
+            let mut handle = std::fs::OpenOptions::new().append(true).open(&appended).unwrap();
+            handle.write_all(&[0u8; 16]).unwrap();
+        });
+        assert_eq!(result["ok"], json!(false));
+        assert_eq!(result["error"], json!("too-large"));
+        assert!(result.get("data").is_none());
+    }
+
+    #[test]
+    fn document_read_returns_unchanged_without_data_when_the_stamp_matches() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.docx", DOC_ZIP);
+        let (size, mtime_ms) = doc_stamp(&file);
+        let result = super::read_document_file(&file, super::FS_DOCUMENT_MAX_BYTES, Some((size, mtime_ms)));
+        assert_eq!(
+            result,
+            json!({ "ok": true, "unchanged": true, "size": size, "mtimeMs": mtime_ms, "resolvedPath": file.to_str().unwrap() })
+        );
+        assert!(result.get("data").is_none());
+    }
+
+    #[test]
+    fn document_read_returns_the_bytes_when_the_stamp_is_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.docx", DOC_ZIP);
+        let (size, mtime_ms) = doc_stamp(&file);
+        let result = super::read_document_file(&file, super::FS_DOCUMENT_MAX_BYTES, Some((size + 1, mtime_ms)));
+        assert_eq!(result, full_read(&file, DOC_ZIP, "zip"));
+    }
+
+    #[test]
+    fn document_read_rejects_a_directory_as_not_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            read_doc(dir.path()),
+            json!({ "ok": false, "size": 0, "mtimeMs": 0, "resolvedPath": dir.path().to_str().unwrap(), "error": "not-a-file" })
+        );
+    }
+
+    #[test]
+    fn document_read_normalizes_an_absolute_path_with_dot_segments() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.pdf", DOC_PDF);
+        let dotted = dir.path().join(".").join("sub").join("..").join("a.pdf");
+        assert_eq!(read_doc(&dotted), full_read(&file, DOC_PDF, "pdf"));
+    }
+
+    #[test]
+    fn document_read_reports_a_missing_file_as_not_ok() {
+        let dir = tempfile::tempdir().unwrap();
+        let result = read_doc(&dir.path().join("missing.docx"));
+        assert_eq!(result["ok"], json!(false));
+        assert_eq!(result["size"], json!(0));
+        assert!(result["error"].as_str().is_some_and(|error| !error.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn document_read_answers_timed_out_when_the_read_outlasts_the_timeout() {
+        assert_eq!(super::DOCUMENT_READ_TIMEOUT, std::time::Duration::from_secs(30));
+        let (release, stalled) = std::sync::mpsc::channel::<()>();
+        let read = tokio::task::spawn_blocking(move || {
+            let _ = stalled.recv();
+            json!({ "ok": true })
+        });
+        let result = super::settle_document_read(read, std::time::Duration::from_millis(10)).await;
+        assert_eq!(result, json!({ "ok": false, "size": 0, "mtimeMs": 0, "error": "timed-out" }));
+        release.send(()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn dispatches_fs_read_document_as_a_deferred_reply() {
+        let fakes = Fakes::default();
+        let ctx = ctx(&fakes);
+        let reply = super::fs_read_document(&ctx, Caller::main(WindowId(1)), vec![json!({ "path": "/nonexistent/a.docx" })]);
+        assert!(matches!(reply, crate::bridge::Reply::Later(_)));
     }
 
     #[tokio::test]

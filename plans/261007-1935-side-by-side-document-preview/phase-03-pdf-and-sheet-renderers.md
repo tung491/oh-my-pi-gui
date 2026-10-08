@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "PDF and sheet renderers"
-status: pending
+status: completed
 priority: P1
 effort: "7h"
 dependencies: [2]
@@ -120,8 +120,8 @@ in their own chunks, and pdf.js gets self-hosted cmaps and standard fonts.
      - `pdfDocumentOptions(bytes, baseUri)` returns `{ data: bytes, useWasm: false, enableXfa: false, cMapUrl: new URL("pdfjs/cmaps/", baseUri).href, cMapPacked: true, standardFontDataUrl: new URL("pdfjs/standard_fonts/", baseUri).href }`.
      - `createPdfOpener({ load, createPort })` returns `open(bytes, { timeoutMs = PDF_OPEN_TIMEOUT_MS } = {}): PdfDocumentHandle`, synchronously:
        1. Copy the input once: `const data = bytes.slice()`.
-       2. `promise` = `(async () => { const pdfjs = await load(); if (destroyed) throw cancelled; port = createPort(); worker = new pdfjs.PDFWorker({ port }); task = pdfjs.getDocument({ ...pdfDocumentOptions(data, document.baseURI), worker }); return task.promise; })()`, raced against a timer that rejects with `new Error("The PDF took too long to open")` and calls `destroy()`.
-       3. `destroy()` is idempotent (`destroyed` flag, one shared promise): clear the timer, then `await task?.destroy()`, `worker?.destroy()`, `port?.terminate()`, each once. A `destroy()` before `load()` resolves makes step 2 throw and create nothing.
+       2. `promise` = `(async () => { const pdfjs = await load(); if (destroyed) throw cancelled; port = createPort(); worker = new pdfjs.PDFWorker({ port }); <!-- Shipped: `PDFWorker.create({ port })`. The 6.4.299 typings forbid `port` in the constructor, and `create` on a fresh port finds no cached worker, so it builds a private one --> task = pdfjs.getDocument({ ...pdfDocumentOptions(data, document.baseURI), worker }); return task.promise; })()`, raced against a timer that rejects with `new Error("The PDF took too long to open")` and calls `destroy()`.
+       3. `destroy()` is idempotent (`destroyed` flag, one shared promise): clear the timer, then `await task?.destroy()`, `worker?.destroy()`, `port?.terminate()`, each once. A `destroy()` before `load()` resolves makes step 2 throw and create nothing. <!-- Shipped: `destroy()` waits at most 1 s (`DESTROY_GRACE_MS`) for pdf.js to release the task, then destroys the worker and terminates the port regardless, and never rejects; callers fire it from cleanups without awaiting, and the thumbnail does not await it (`void handle.destroy()`) -->
      - `openPdfDocument = createPdfOpener({ load: loadPdfJs, createPort: () => new Worker(new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url), { type: "module" }) }).open`.
      - Use only `import type` for pdf.js types at the top level.
   3. In `pdf-thumbnail.ts`, add `import { openPdfDocument } from "./pdfjs";` and `import { decodeBase64 } from "./preview/document-bytes";`. `drawFirstPage` takes `Promise<PDFDocumentProxy>` instead of the task. `rasterizeFirstPage` becomes `const handle = openPdfDocument(bytes); …same RENDER_TIMEOUT_MS race over drawFirstPage(handle.promise, pixelWidth)…; finally { clearTimeout(timer); await handle.destroy(); }`. The 20 s bound and its comment stay.
@@ -157,7 +157,7 @@ in their own chunks, and pdf.js gets self-hosted cmaps and standard fonts.
 - **Steps:**
   1. Write `sheet-model.test.ts`, covering the matrix rows. Read `e2e/fixtures/document-preview/table.xlsx` with `readFileSync`. Build the 600×60 sheet, the biff8 file, the HTML file (`bookType: "html"`) and the ods file with `XLSX.utils.aoa_to_sheet` and `XLSX.write(wb, { bookType, type: "array" })` (`type: "string"` for html, then `TextEncoder`). Run it (red).
   2. Implement `workbookToSheets`:
-     1. Options: `{ dense: true, cellDates: true, cellNF: true, cellFormula: true, sheetStubs: true, sheetRows: SHEET_MAX_ROWS + 1 }`, plus `type: "string"` for a string and `type: "array"` for bytes. A string is passed to SheetJS as is; bytes are never decoded to text first.
+     1. Options: `{ dense: true, cellDates: true, cellNF: true, cellFormula: true, sheetStubs: true, sheetRows: SHEET_MAX_ROWS + 1 }` <!-- Shipped: the read also sets `cellHTML: false` -->, plus `type: "string"` for a string and `type: "array"` for bytes. A string is passed to SheetJS as is; bytes are never decoded to text first.
      2. Skip sheets whose `wb.Workbook?.Sheets?.[i]?.Hidden` is truthy.
      3. For each remaining sheet, decode `sheet["!fullref"] ?? sheet["!ref"]` with `utils.decode_range` (`sheetRows` shortens `!ref` and keeps the original range in `!fullref`). Set `totalRows = e.r - s.r + 1` and `totalCols = e.c - s.c + 1`.
      4. Build `rows` for the first `min(totalRows, 500)` rows and the first `min(totalCols, 50)` columns. A cell with `f` and either `t === "z"` or no `v` renders as `` `=${cell.f}` `` and adds `"r:c"` to `formulaCells`; any other cell renders `cell.w ?? (cell.v === undefined ? "" : String(cell.v))`.

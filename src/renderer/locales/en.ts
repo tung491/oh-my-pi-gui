@@ -1144,6 +1144,18 @@ export const en: Record<string, string> = {
 	"filesPanel.insertMention": "Insert @mention",
 	"filesPanel.reading": "Reading file…",
 	"filesPanel.truncated": "… truncated at {kb}KB …",
+	"preview.failed": "This file could not be shown here. Use Open externally to see it.",
+	"preview.unsupported": "Preview is not available for this type of file. Use Open externally to see it.",
+	"preview.tooLarge": "This file is too large to preview here. Use Open externally to see it.",
+	"preview.reload": "Reload",
+	"preview.pagesNotShown": "Pages not shown here: {count}. Open the file to see them.",
+	"preview.pageSkipped": "Page {page} is too large to show here.",
+	"preview.sheetTruncated": "Showing the first {rows} rows and {cols} columns.",
+	"preview.fileTruncated": "Only the first 2 MB of this file is shown.",
+	"preview.sheets": "Sheets",
+	"preview.formula": "Formula without a saved value",
+	"preview.openButton": "Preview",
+	"preview.open": "Preview {name}",
 
 	// Plan panel
 	"dock.resizeHeight": "Drag to resize; ArrowUp/ArrowDown also work",

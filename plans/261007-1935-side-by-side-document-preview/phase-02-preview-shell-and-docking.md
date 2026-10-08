@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Preview shell, refresh and docking"
-status: pending
+status: completed
 priority: P1
 effort: "9h"
 dependencies: [1]
@@ -60,7 +60,7 @@ two panes of a split keeps the preview open and pinned to its tab.
 | `inspectZip` accepts a real zip, refuses more than 5000 entries, refuses more than 64 MiB declared, refuses ZIP64 markers, and refuses a truncated buffer as corrupt | `zip-guard.test.ts` | exit 1 | pass |
 | `inspectZip` refuses a zip whose entry declares 1 KiB but inflates to 1 MiB (lying sizes) as too-large, after inflating no more than 1 KiB + 1 byte of it <!-- Red team: R3 --> | same | exit 1 | pass |
 | `writtenPathOf` returns `details.resolvedPath` (else `args.path`) for `write`, the parsed `file` for `office_report`/`office_slides`/`office_clean`, and null for errors and other tools | `file-writes.test.ts` | exit 1 | pass |
-| `writeMatchesPreview`: equal absolute paths match; a relative preview path matches an absolute write ending in `/<path>` from the same tab only; `./a.csv` matches `a.csv` | same | exit 1 | pass |
+| `writeMatchesPreview`: equal absolute paths match; a relative preview path matches an absolute write ending in `/<path>` from the same tab only; `./a.csv` matches `a.csv` <!-- Shipped: `.`, `..` and `//` are normalized lexically; equal relative paths match only within the same tab; an absolute write matches a relative preview by tail only when no `resolvedPath` is known --> | same | exit 1 | pass |
 | A finished `write` tool call in the event stream notifies subscribers with its tab and path; an errored one does not | `use-rpc-events.test.tsx` | exit 1 | pass |
 | Markdown path: calls `fs.read(path, 200_000, tabId)` and renders `h1` (the existing behaviour) | `DocumentPreview.test.tsx` | exit 1 | pass |
 | docx path with a stub renderer: calls `readDocument(path, { tabId })`, and the stub receives `content.bytes.length` | same | exit 1 | pass |
@@ -171,7 +171,7 @@ two panes of a split keeps the preview open and pinned to its tab.
 - **Steps:**
   1. **Red.** Write `file-writes.test.ts` for the `writtenPathOf` and `writeMatchesPreview` rows. In `use-rpc-events.test.tsx`, add a case with the existing `installTabRoutedMockOmp()` harness: emit `tool_execution_start` (`toolName: "write"`, `args: { path: "table.csv" }`) and then `tool_execution_end` (`isError: false`, `result: { content: [{ type: "text", text: "ok" }], details: { resolvedPath: "/w/table.csv" } }`) for tab `t1`; a `subscribeFileWrites` spy must receive `{ tabId: "t1", path: "/w/table.csv" }` once. A second call pair with `isError: true` must not notify. Run (red).
   2. **Green, `writtenPathOf`.** `write`: `resultDetails(result)?.resolvedPath` when it is a string, else `args.path` when it is a string (`resultDetails` is `src/renderer/lib/format.ts:269`). Office tools (`isOfficeTool`, `src/renderer/components/tools/office-tools.ts:16`): `parseOfficeResult(resultText(result), OFFICE_TOOL_KINDS[name])?.file` (`OfficeFileRenderer.tsx:30`, `format.ts:239`). Anything else: `null`.
-  3. **Green, `writeMatchesPreview`.** Normalize both paths (drop a leading `./`, collapse `//`). Match when the write path equals `resolvedPath` or the target path, or when the target path is relative, `write.tabId === target.tabId`, and the absolute write path ends with `/${targetPath}`.
+  3. **Green, `writeMatchesPreview`.** Normalize both paths (drop a leading `./`, collapse `//`). Match when the write path equals `resolvedPath` or the target path, or when the target path is relative, `write.tabId === target.tabId`, and the absolute write path ends with `/${targetPath}`. <!-- Shipped: `normalizePath` also folds `.`, `..` and `//`. Equal relative paths match only from the preview's own tab. An absolute write matches a relative preview by its tail only when `resolvedPath` is null; once the read has resolved, only an equal resolved path matches. -->
   4. **Green, the bus.** A module-level `Set` of listeners; `notifyFileWritten` calls each inside a try/catch.
   5. **Green, `use-rpc-events.ts`.** Keep a `Map<string, Record<string, unknown>>` of `args` keyed by `` `${tabId}:${toolCallId}` `` in the effect closure, filled on `tool_execution_start` when `toolName === "write" || isOfficeTool(toolName)`. On `tool_execution_end`, take and delete that entry; when `!event.isError`, compute `writtenPathOf(event.toolName, args, event.result)` and, if non-null, call `notifyFileWritten(tabId, path)`. The existing `todo` handling in that case is unchanged.
 - **Success criteria:** All the new cases pass and the rest of `use-rpc-events.test.tsx` stays green.
@@ -218,7 +218,7 @@ two panes of a split keeps the preview open and pinned to its tab.
         - When `kind` is `docx` or `sheet` and `bytes.length > PREVIEW_PARSE_MAX_BYTES` → error `too-large` (these parse on the main thread).
         - When the signature is `zip` and `await inspectZip(bytes)` is not ok → error `too-large` or `failed`, matching its `reason`.
         - Otherwise store the stamp `{ size, mtimeMs }` and `resolvedPath`, and set state `rich` with `content = { bytes }`.
-     4. Effects: `load("full")` keyed on `[previewTargetKey(target), reloadToken]`, with state `loading` first. A second effect subscribes with `subscribeFileWrites`; when `writeMatchesPreview(write, target, resolvedPath)` holds it calls `load("ifChanged")` for byte kinds and `load("full")` without the loading state for text, markdown and csv. It never sets a timer.
+     4. Effects: `load("full")` keyed on `[previewTargetKey(target), reloadToken]`, with state `loading` first. A second effect subscribes with `subscribeFileWrites`; when `writeMatchesPreview(write, target, resolvedPath)` holds it calls `load("ifChanged")` for byte kinds and `load("full")` without the loading state for text, markdown and csv. It never sets a timer. <!-- Shipped: at most one read per target is in flight; a write, Reload or re-open that arrives meanwhile folds into one follow-up read, full if any folded request was full. Re-opening the same path and tab (`openFilePreview`) bumps `filePreviewRecheck`, which re-checks in place with `ifChanged`. -->
      5. Render into a root `<div className="h-full min-h-0 overflow-auto" data-preview-kind={kind} data-preview-state={state.status}>`. The root is the scroll container and is never keyed, so scroll survives an in-place refresh:
 
         | State | Renders |
@@ -234,7 +234,7 @@ two panes of a split keeps the preview open and pinned to its tab.
      1. Delete `PREVIEW_MAX_BYTES`, `PreviewState`, the `preview` state, `previewVersion`, `openPreview`, the `filePreviewPath` effect, `activePreview` and `previewIsMarkdown`.
      2. Read `filePreview` from the store. Tree clicks call `openFilePreview(id.slice(5), tabId)` with the panel's existing `useRuntimeTabId()` value (`FilesPanel.tsx:53`).
      3. Header for a path target: back, path, **Open externally** `PathLink`, a new **Reload** `IconButton` (`RotateCw` from `lucide-react`, label `t("preview.reload")`) that increments a local `reloadToken` state, and insert mention, otherwise unchanged. For an image target: back and the name only.
-     4. Body: `<div className="min-h-0 flex-1 overflow-hidden bg-(--omp-code-bg)"><DocumentPreview target={filePreview} reloadToken={reloadToken} /></div>`.
+     4. Body: `<div className="min-h-0 flex-1 overflow-hidden bg-(--omp-code-bg)"><DocumentPreview target={filePreview} reloadToken={reloadToken} /></div>`. <!-- Shipped: the body also passes `recheckToken`. `PanelContainer` keeps the Files tree mounted but `hidden` while previewing, so its scroll and expansion survive, and the preview sits in its own `PanelErrorBoundary`. Closing the pinned tab (`tabs.ts`) closes the preview. Insert mention from the preview goes to the pinned tab. -->
      5. Remove the imports that are now unused (`MarkdownRenderer`, and `Spinner` if unused).
   3. Update the `PanelContainer.test.tsx` lines that set `filePreviewPath` (`:66`, `:154`, `:182`, `:191`) to set `filePreview` (`null`, or `{ kind: "path", path: "docs/report.md", tabId: null }`).
   4. Run the tests.

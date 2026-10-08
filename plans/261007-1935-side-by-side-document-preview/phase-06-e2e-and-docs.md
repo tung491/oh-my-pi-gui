@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "End-to-end in both shells, packaged pdf.js check and docs"
-status: pending
+status: completed
 priority: P1
 effort: "5h"
 dependencies: [5]
@@ -41,7 +41,7 @@ render path were already asserted by the unit tests in Phases 1–5.
 | `previews office files, PDFs, sheets and images beside the chat` | yes | yes | `check-twins` exit 1 while only one twin exists | the spec passes |
 | `keeps the preview docked in a narrow window and gives the sidebar back on close` <!-- Red team: K3, K10 --> | yes | yes | same | pass |
 | `shows a way out for a file that is not what its name says` | yes | yes | same | pass |
-| `refreshes the preview after a tool writes the file, and on Reload` <!-- Validation: refresh --> | yes | yes | same | pass |
+| `refreshes the preview after a tool writes the file, after any rewrite on disk, and on Reload` <!-- Shipped: auto-refresh --> <!-- Validation: refresh --> | yes | yes | same | pass |
 | `keeps a document's injected styles inside the preview` <!-- Red team: R6 --> | yes | yes | same | pass |
 | `loads pdf.js character maps and fonts from the app` <!-- Red team: K9 --> | yes | yes | same | pass |
 | The packaged app's WebKitGTK has `Map.prototype.getOrInsertComputed`, `Math.sumPrecise`, `Uint8Array.fromBase64`, `Promise.withResolvers` and `URL.parse` <!-- Validation: pdf.js build --> | `packaged-smoke.e2e.ts` | no change | (container run) | the smoke passes |
@@ -50,7 +50,7 @@ render path were already asserted by the unit tests in Phases 1–5.
 
 ### Task 6.1 — Fixture write command and the Tauri spec
 <!-- Red team: R9, R11, K10 --> <!-- Validation: refresh -->
-- **Goal:** Real renders under the real CSP on WebKitGTK, with assertions that cannot pass before a renderer has drawn.
+- **Goal:** Real renders under the real CSP on WebKitGTK, with assertions that cannot pass before a renderer has drawn. <!-- Shipped: the specs (both shells) dismiss the toasts before clicking header controls, because the fixture sidecar's non-local-model warning covers them; the body-children count excludes the toast stack (`[aria-live="polite"]`), and it is asserted unchanged after closing the docx and the pptx preview; the narrow-window test also asserts the composer `textarea` is enabled. The e2e found that PdfPreview canvases must start at 0×0 until drawn (an unsized canvas holds a 300×150 bitmap, so `width > 0` counted undrawn pages); fixed in the PDF renderer. -->
 - **Target files and symbols:** `e2e/sidecar-fixture.ts`; `e2e-tauri/document-preview.e2e.ts`. The spec imports `launch`, `awaitBridge`, `collectPageErrors`, `pageErrors`, `until`, `lastExactText` and `exactTextCount` from `./session` (`e2e-tauri/session.ts:178,225,465,480,430,374,359`).
 - **Steps:**
   1. In `sidecar-fixture.ts`, inside the `bash` case before the `fixture:security:` branch, add: when `command.command === "fixture:write-table-csv"`, write `"Region,Revenue\nWest,77\n"` to `path.join(process.cwd(), "table.csv")` (the sidecar runs in the workspace), then `write({ type: "tool_execution_start", toolCallId: "write-table-csv", toolName: "write", args: { path: "table.csv" } })`, `write({ type: "tool_execution_end", toolCallId: "write-table-csv", toolName: "write", result: { content: [{ type: "text", text: "Wrote table.csv" }], details: { resolvedPath: <that absolute path> } }, isError: false })`, `ok()` and `break`.
@@ -94,9 +94,9 @@ render path were already asserted by the unit tests in Phases 1–5.
      - `!document.querySelector("aside.omp-session-sidebar")`.
      Then click `Back to files` and expect `aside.omp-session-sidebar` to exist again.
   7. **`shows a way out for a file that is not what its name says`:** `openFromTree("not-a-docx.docx")`, then expect `[data-preview-state="error"]`, the text `This file could not be shown here. Use Open externally to see it.`, and a header button whose text is `Open externally`.
-  8. **`refreshes the preview after a tool writes the file, and on Reload`:** `openFromTree("table.csv")`. Then:
+  8. **`refreshes the preview after a tool writes the file, after any rewrite on disk, and on Reload` <!-- Shipped: auto-refresh -->:** `openFromTree("table.csv")`. Then:
      1. `await browser.execute(() => window.omp.rpc.bash("fixture:write-table-csv"))`, and expect `await until(() => exactTextCount("West", "[data-preview-kind]"), n => n >= 1, { timeout: 6_000 })` to be at least 1.
-     2. `await fsp.writeFile(path.join(run.project, "table.csv"), "Region,Revenue\nEast,5\n")` (no tool event), `await browser.pause(3000)`, and expect `await exactTextCount("East", "[data-preview-kind]")` to be `0`: nothing polls.
+     2. `await fsp.writeFile(path.join(run.project, "table.csv"), "Region,Revenue\nEast,5\n")` (no tool event), and expect a `td` with `East` within 6000 ms with no tool event (file watch). <!-- Shipped: auto-refresh -->
      3. Click `$('button[aria-label="Reload"]')`, and expect `await until(() => exactTextCount("East", "[data-preview-kind]"), n => n >= 1, { timeout: 6_000 })` to be at least 1.
   9. **`keeps a document's injected styles inside the preview`:** `openFromTree("injected-font.docx")`, wait for `rendered("docx")`. Expect the shadow root's style text to contain `:host{position:fixed` (`browser.execute(() => [...(document.querySelector('[data-preview-host="docx"]')?.shadowRoot?.querySelectorAll("style") ?? [])].some(s => s.textContent?.includes(":host{position:fixed")))` is `true`, which proves the fixture really injects; if it is `false`, apply the Failure Protocol). Then expect the host's `getBoundingClientRect()` to lie inside `[data-preview-frame]`'s rect (±1 px), and `!document.elementFromPoint(5, 5)?.closest("[data-preview-host]")`.
   10. **`loads pdf.js character maps and fonts from the app`:** `openFromTree("cjk.pdf")` and expect a `canvas` with `width > 0`. Then probe the same loader pdf.js uses for non-http URLs (`XMLHttpRequest`, `pdf.mjs:1255-1264`): `browser.execute(() => { const get = (u: string) => new Promise<number>(r => { const x = new XMLHttpRequest(); x.open("GET", new URL(u, document.baseURI).href); x.responseType = "arraybuffer"; x.onloadend = () => r(x.status === 200 || x.status === 0 ? (x.response as ArrayBuffer | null)?.byteLength ?? 0 : 0); x.send(); }); return Promise.all([get("pdfjs/cmaps/UniJIS-UCS2-H.bcmap"), get("pdfjs/standard_fonts/FoxitSerif.pfb")]); })` (the W3C execute command settles a returned promise, as `e2e-tauri/test-hooks.ts:71` notes; both files exist in `node_modules/pdfjs-dist/`), and expect both sizes to be greater than 0. Expect `pageErrors` to equal `[]`.

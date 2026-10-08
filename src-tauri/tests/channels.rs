@@ -11,7 +11,7 @@ use sai_atlas_lib::bridge::{Registry, Scope};
 use sai_atlas_lib::{desktop, ollama, omp, services, tabs, updater};
 
 const IPC_TYPES_TS: &str = include_str!("../../src/shared/ipc-types.ts");
-const EXPECTED_CHANNEL_COUNT: usize = 97;
+const EXPECTED_CHANNEL_COUNT: usize = 101;
 
 fn block(name: &str) -> &'static str {
     let start = IPC_TYPES_TS.find(&format!("export const {name} = {{")).unwrap_or_else(|| panic!("{name} block missing"));

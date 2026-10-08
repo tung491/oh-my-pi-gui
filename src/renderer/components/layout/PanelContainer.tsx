@@ -8,13 +8,13 @@ import { useTabsStore } from "../../stores/tabs";
 import type { PanelTab } from "../../stores/ui";
 import { useUiStore } from "../../stores/ui";
 import { IconButton, PanelErrorBoundary } from "../common";
-import { FilesPanel } from "../panels/FilesPanel";
+import { FilePreviewPanel, FilesPanel } from "../panels/FilesPanel";
 import { LogPanel } from "../panels/LogPanel";
 
 const MIN_WIDTH = 360;
 const MAX_WIDTH = 840;
 const PANEL_WIDTH_PREF = "gui.panelWidth";
-/** Below this the inspector overlays instead of docking (see PanelContainer). */
+/** Below this the inspector overlays instead of docking, unless it previews a file. */
 const COMPACT_QUERY = "(max-width: 1000px)";
 
 function defaultPanelWidth(): number {
@@ -32,12 +32,18 @@ const TABS: { id: PanelTab; labelKey: string; icon: typeof FolderTree }[] = [
  * files or logs without shrinking the core chat. Live execution
  * state (todos, plan, subagents, queue) renders in the center dock above
  * the composer instead — see chat/dock/WorkspaceDock.
+ *
+ * While a file is previewed the drawer always docks beside the chat (split
+ * workspace and narrow windows included) at a derived width that is never
+ * saved; in a narrow window it also hides the session sidebar until it closes.
  */
 export function PanelContainer() {
 	const t = useT();
 	const panelTab = useUiStore(s => s.panelTab);
 	const setPanelTab = useUiStore(s => s.setPanelTab);
 	const togglePanel = useUiStore(s => s.togglePanel);
+	const filePreview = useUiStore(s => s.filePreview);
+	const previewing = panelTab === "files" && filePreview !== null;
 	const activeTabId = useTabsStore(s => s.activeTabId);
 	const split = useTabsStore(s => s.split);
 	const routeReady = useActiveTabRouteReady();
@@ -56,6 +62,7 @@ export function PanelContainer() {
 	}, []);
 
 	const [width, setWidth] = useState(defaultPanelWidth);
+	const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
 	const [widthHydrated, setWidthHydrated] = useState(false);
 	const dragging = useRef(false);
 
@@ -97,6 +104,7 @@ export function PanelContainer() {
 		const clampToViewport = () => {
 			const viewportLimit = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, window.innerWidth - 56));
 			setWidth(current => Math.min(current, viewportLimit));
+			setViewportWidth(window.innerWidth);
 		};
 		window.addEventListener("resize", clampToViewport);
 		return () => window.removeEventListener("resize", clampToViewport);
@@ -119,15 +127,49 @@ export function PanelContainer() {
 		dragging.current = false;
 	}, []);
 
+	// The preview widens the drawer to 40 % of the window. Derived only: just
+	// drags and keys go through `setWidth`, so `gui.panelWidth` keeps the
+	// user's own width. Narrow windows dock at 50vw through global.css.
+	const effectiveWidth =
+		previewing && !compact
+			? Math.max(
+					width,
+					Math.min(MAX_WIDTH, Math.round(viewportWidth * 0.4), Math.max(MIN_WIDTH, viewportWidth - 56)),
+				)
+			: width;
+
+	// A narrow window docks the preview beside the chat, so the sidebar makes
+	// room. The cleanup gives it back when the preview closes, the window
+	// widens or the drawer unmounts (hiding the panel) — only a sidebar this
+	// effect hid, and only if the user has not reopened it meanwhile.
+	const hidSidebar = useRef(false);
+	useEffect(() => {
+		if (!compact || !previewing) return;
+		const ui = useUiStore.getState();
+		if (ui.sidebarVisible) {
+			ui.toggleSidebar();
+			hidSidebar.current = true;
+		}
+		return () => {
+			if (!hidSidebar.current) return;
+			hidSidebar.current = false;
+			const current = useUiStore.getState();
+			if (!current.sidebarVisible) current.toggleSidebar();
+		};
+	}, [compact, previewing]);
+
 	return (
 		<aside
 			aria-busy={!routeReady}
 			className={cx(
 				"omp-inspector relative flex h-full flex-col border-l border-[var(--omp-border-muted)] bg-(--omp-bg-elevated)",
-				compact || split ? "absolute inset-y-0 right-0 z-30 shadow-[var(--omp-shadow-lg)]" : "shrink-0",
+				(compact || split) && !previewing
+					? "absolute inset-y-0 right-0 z-30 shadow-[var(--omp-shadow-lg)]"
+					: "shrink-0",
 				!routeReady && "pointer-events-none",
 			)}
-			style={{ width }}
+			data-docked-preview={previewing ? "" : undefined}
+			style={{ width: effectiveWidth }}
 		>
 			<div className="flex shrink-0 items-start gap-3 px-4 pt-3.5">
 				<div className="min-w-0 flex-1">
@@ -163,17 +205,36 @@ export function PanelContainer() {
 				</div>
 			</div>
 			<div className="min-h-0 flex-1 overflow-hidden">
-				<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:${panelTab}`}>
-					{panelTab === "files" && <FilesPanel />}
-					{panelTab === "logs" && <LogPanel />}
-				</PanelErrorBoundary>
+				{panelTab === "files" && (
+					<>
+						{/* The tree stays mounted under a preview, so Back finds its folders,
+						    search and listing as they were. */}
+						<div className="h-full" hidden={previewing}>
+							<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:files`}>
+								<FilesPanel />
+							</PanelErrorBoundary>
+						</div>
+						{/* A preview is pinned to its own tab: a pane-focus change must not
+						    remount it. Its renderer boundary keys on the target inside. */}
+						{previewing && (
+							<PanelErrorBoundary key="preview">
+								<FilePreviewPanel />
+							</PanelErrorBoundary>
+						)}
+					</>
+				)}
+				{panelTab === "logs" && (
+					<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:logs`}>
+						<LogPanel />
+					</PanelErrorBoundary>
+				)}
 			</div>
 			<div
 				role="separator"
 				aria-orientation="vertical"
 				aria-valuemin={MIN_WIDTH}
 				aria-valuemax={MAX_WIDTH}
-				aria-valuenow={Math.round(width)}
+				aria-valuenow={Math.round(effectiveWidth)}
 				tabIndex={0}
 				onPointerDown={startDrag}
 				onPointerMove={onDrag}
@@ -183,13 +244,15 @@ export function PanelContainer() {
 					event.preventDefault();
 					const viewportLimit = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, window.innerWidth - 56));
 					const max = Math.min(MAX_WIDTH, viewportLimit);
-					setWidth(current =>
-						event.key === "Home"
+					// Step from what the aside shows: a preview's derived width, if wider.
+					setWidth(current => {
+						const from = previewing ? Math.max(current, effectiveWidth) : current;
+						return event.key === "Home"
 							? MIN_WIDTH
 							: event.key === "End"
 								? max
-								: Math.min(max, Math.max(MIN_WIDTH, current + (event.key === "ArrowLeft" ? 24 : -24))),
-					);
+								: Math.min(max, Math.max(MIN_WIDTH, from + (event.key === "ArrowLeft" ? 24 : -24)));
+					});
 				}}
 				className="absolute inset-y-0 left-0 z-10 w-1 -translate-x-1/2 cursor-col-resize transition-colors hover:bg-[var(--omp-accent)]/40 active:bg-[var(--omp-accent)] max-[1000px]:hidden"
 			/>

@@ -174,6 +174,9 @@ function filePathFromHref(href: string): string | null {
 }
 
 function ExternalLink({ href, children, ...props }: ComponentPropsWithoutRef<"a">) {
+	// The tab whose transcript holds the link: a relative path resolves against
+	// its workspace even after focus moves to the other pane of a split.
+	const tabId = useRuntimeTabId();
 	return (
 		<a
 			{...props}
@@ -182,7 +185,7 @@ function ExternalLink({ href, children, ...props }: ComponentPropsWithoutRef<"a"
 				if (!href || href.startsWith("#")) return;
 				e.preventDefault();
 				const filePath = filePathFromHref(href);
-				if (filePath) useUiStore.getState().openFilePreview(filePath);
+				if (filePath) useUiStore.getState().openFilePreview(filePath, tabId);
 				else window.omp.system.openExternal(href);
 			}}
 			className="text-[var(--omp-md-link)] underline decoration-[var(--omp-md-link-url)] hover:decoration-[var(--omp-md-link)]"

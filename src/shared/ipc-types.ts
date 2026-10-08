@@ -110,6 +110,8 @@ export const IPC_EVENTS = {
 	OLLAMA_CONTEXT_PROGRESS: "ollama:context-progress",
 	/** Main → every window: a model's remembered context changed (ContextFitChanged) */
 	OLLAMA_CONTEXT_CHANGED: "ollama:context-changed",
+	/** Main → the window that created the watch: a watched preview file changed and settled (IpcFsPreviewChangedPayload) */
+	FS_PREVIEW_CHANGED: "fs:preview-changed",
 } as const;
 
 // ============================================================================
@@ -204,6 +206,12 @@ export const IPC_COMMANDS = {
 	FS_READ_IMAGE: "fs:read-image",
 	/** Read a PDF (absolute or `~` path) as base64 for a local page-1 thumbnail (PDF sniff, size cap) */
 	FS_READ_PDF: "fs:read-pdf",
+	/** Read a document's bytes (PDF, ZIP, OLE or HTML-table signature; bounded by a size cap), or report that it is unchanged since a size and mtime stamp, for the in-app preview */
+	FS_READ_DOCUMENT: "fs:read-document",
+	/** Watch a previewed file (its folder, non-recursively) and push `fs:preview-changed` once changes settle */
+	FS_WATCH_PREVIEW: "fs:watch-preview",
+	/** Stop a preview watch; an unknown id is a no-op */
+	FS_UNWATCH_PREVIEW: "fs:unwatch-preview",
 	/** Open a session (or a fresh window) in a new parallel window with its own sidecar */
 	SESSION_OPEN_NEW_WINDOW: "session:open-new-window",
 	/** Fresh window pulls the session it was opened for (one-shot) */
@@ -783,6 +791,75 @@ export interface IpcFsReadPdfResult {
 	error?: string;
 }
 
+/** The leading-bytes signature of a document `fs:read-document` accepts. */
+export type IpcDocumentSignature = "pdf" | "zip" | "ole" | "html";
+
+/** The fixed error codes of `fs:read-document`; an OS error message may appear instead. */
+export type IpcFsReadDocumentError =
+	| "invalid-path"
+	| "no-workspace"
+	| "outside-workspace"
+	| "not-a-file"
+	| "too-large"
+	| "unsupported"
+	| "timed-out";
+
+/** A file's size and whole-millisecond mtime, used to skip re-reading an unchanged document. */
+export interface IpcFsReadDocumentStamp {
+	size: number;
+	mtimeMs: number;
+}
+
+export interface IpcFsReadDocumentPayload {
+	/** Absolute, `~/` or workspace-relative path (relative resolves against the tab's cwd). */
+	path: string;
+	tabId?: string;
+	/** When the file still has this size and mtime, the reply is `unchanged` without bytes. */
+	ifChanged?: IpcFsReadDocumentStamp;
+}
+
+export interface IpcFsReadDocumentResult {
+	ok: boolean;
+	/** Bytes on disk (or bytes read); 0 when unknown. */
+	size: number;
+	/** `Math.floor` of the mtime in ms since the epoch; 0 when unknown. */
+	mtimeMs: number;
+	/** The absolute path read; absent when the path never resolved. */
+	resolvedPath?: string;
+	/** `ifChanged` matched size and mtime; no data. */
+	unchanged?: true;
+	/** Base64 of the whole file; only on a full successful read. */
+	data?: string;
+	signature?: IpcDocumentSignature;
+	/** An {@link IpcFsReadDocumentError} code, or an OS error message. */
+	error?: string;
+}
+
+/** The error codes of `fs:watch-preview`: `fs:read-document`'s path refusals, or no watcher could be made. */
+export type IpcFsWatchPreviewError = "invalid-path" | "no-workspace" | "outside-workspace" | "unavailable";
+
+export interface IpcFsWatchPreviewPayload {
+	/** Absolute, `~/` or workspace-relative path, resolved exactly as `fs:read-document` resolves it. */
+	path: string;
+	tabId?: string;
+}
+
+export interface IpcFsWatchPreviewResult {
+	ok: boolean;
+	/** Opaque id echoed by `fs:preview-changed`; only when `ok`. */
+	watchId?: string;
+	error?: IpcFsWatchPreviewError;
+}
+
+export interface IpcFsUnwatchPreviewPayload {
+	watchId: string;
+}
+
+/** `fs:preview-changed`: the watched file changed and no further change came for the debounce window. */
+export interface IpcFsPreviewChangedPayload {
+	watchId: string;
+}
+
 /** `system:native-drop-paths`: absolute local paths of the files being dragged over the window, in drag order. */
 export interface IpcNativeDropPathsPayload {
 	paths: string[];
@@ -1286,8 +1363,12 @@ export interface OmpApi {
 	};
 	system: {
 		openExternal(url: string): Promise<void>;
-		/** Open a file in the system editor; relative paths resolve against the workspace. */
-		openPath(path: string): Promise<IpcOpenPathResult>;
+		/**
+		 * Open a file in the system editor; relative paths resolve against the
+		 * workspace of `options.tabId` when given (an unknown tab fails with
+		 * "No workspace"), else the calling window's.
+		 */
+		openPath(path: string, options?: { tabId?: string }): Promise<IpcOpenPathResult>;
 		showSaveDialog(defaultPath?: string, filters?: { name: string; extensions: string[] }[]): Promise<string | null>;
 		showOpenDialog(
 			filters?: { name: string; extensions: string[] }[],
@@ -1360,6 +1441,15 @@ export interface OmpApi {
 		readPlan(payload: IpcFsReadPlanPayload): Promise<IpcFsReadPlanResult>;
 		readImage(path: string, tabId?: string): Promise<IpcFsReadImageResult>;
 		readPdf(path: string): Promise<IpcFsReadPdfResult>;
+		readDocument(
+			path: string,
+			options?: { tabId?: string; ifChanged?: IpcFsReadDocumentStamp },
+		): Promise<IpcFsReadDocumentResult>;
+		/** Watch a previewed file; a refusal or failure resolves `ok: false` and never throws in main. */
+		watchPreview(path: string, options?: { tabId?: string }): Promise<IpcFsWatchPreviewResult>;
+		unwatchPreview(watchId: string): Promise<void>;
+		/** Every settled change of this window's preview watches, by watch id. */
+		onPreviewChanged(listener: (watchId: string) => void): () => void;
 	};
 	editor: {
 		openExternal(content: string): Promise<{

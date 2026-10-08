@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /// <reference types="bun" />
 import * as fs from "node:fs";
+import * as path from "node:path";
 import { createInterface } from "node:readline";
 import { RPC_MAX_FRAME_BYTES, RPC_MAX_REASSEMBLED_BYTES } from "../src/main/rpc-bridge";
 import type {
@@ -554,6 +555,21 @@ lines.on("line", line => {
 					type: "tool_execution_end",
 					...tool,
 					result: { content: [{ type: "text", text: "bounded output line\n".repeat(25000) }] },
+					isError: false,
+				});
+				ok();
+				break;
+			}
+			if (command.command === "fixture:write-table-csv") {
+				// The sidecar runs in the workspace; a real `write` call ends the same way.
+				const resolvedPath = path.join(process.cwd(), "table.csv");
+				fs.writeFileSync(resolvedPath, "Region,Revenue\nWest,77\n");
+				const tool = { toolCallId: "write-table-csv", toolName: "write" };
+				write({ type: "tool_execution_start", ...tool, args: { path: "table.csv" } });
+				write({
+					type: "tool_execution_end",
+					...tool,
+					result: { content: [{ type: "text", text: "Wrote table.csv" }], details: { resolvedPath } },
 					isError: false,
 				});
 				ok();

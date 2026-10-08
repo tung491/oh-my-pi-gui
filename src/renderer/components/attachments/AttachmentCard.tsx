@@ -15,12 +15,16 @@ export interface AttachmentCardProps {
 	onRemove?: () => void;
 	/** The file is still being read: the preview area shows a spinner. */
 	loading?: boolean;
+	/** Opens the file beside the chat; ignored while `loading`. */
+	onOpen?: () => void;
 }
 
 function KindTile({ kind }: { kind: FileKind }) {
 	const { icon: Icon, color } = fileKindStyle(kind);
 	return (
-		<div className="flex h-full w-full items-center justify-center bg-(--omp-bg-tertiary)">
+		<div
+			className="flex h-full w-full items-center justify-center bg-(--omp-bg-tertiary)" // surface-ok: type tile inside an elevated card
+		>
 			<Icon size={36} strokeWidth={1.5} aria-hidden style={{ color }} />
 		</div>
 	);
@@ -58,13 +62,21 @@ function CardPreview({
 }
 
 /** One attached file: a preview above a footer with its type badge and name. */
-export function AttachmentCard({ name, kind, path, preview, onRemove, loading }: AttachmentCardProps): ReactElement {
+export function AttachmentCard({
+	name,
+	kind,
+	path,
+	preview,
+	onRemove,
+	loading,
+	onOpen,
+}: AttachmentCardProps): ReactElement {
 	const t = useT();
 	return (
 		<figure
 			role="listitem"
 			title={path ?? name}
-			className="group relative m-0 flex h-[140px] w-[186px] shrink-0 flex-col overflow-hidden rounded-xl border border-(--omp-border-muted) bg-(--omp-bg-secondary) shadow-(--omp-shadow-sm)"
+			className="group relative m-0 flex h-[140px] w-[186px] shrink-0 flex-col overflow-hidden rounded-xl border border-(--omp-border-muted) bg-(--omp-bg-secondary) shadow-(--omp-shadow-sm)" // surface-ok: attachment card is elevated chrome
 		>
 			<div className="h-[93px] w-full shrink-0 overflow-hidden border-b border-(--omp-border-muted)">
 				<CardPreview kind={kind} path={path} preview={preview} loading={loading} />
@@ -73,6 +85,18 @@ export function AttachmentCard({ name, kind, path, preview, onRemove, loading }:
 				<KindBadge kind={kind} />
 				<span className="min-w-0 flex-1 truncate text-omp-sm text-(--omp-text)">{name}</span>
 			</figcaption>
+			{onOpen && !loading && (
+				// A sibling that covers the card rather than a wrapper: the figcaption
+				// stays a child of the figure, and the remove button below stacks above
+				// it instead of nesting inside it. The focus ring is inset because the
+				// figure clips everything outside its border.
+				<button
+					type="button"
+					aria-label={t("preview.open", { name })}
+					onClick={onOpen}
+					className="absolute inset-0 cursor-pointer focus-visible:shadow-[inset_0_0_0_2px_var(--omp-accent)]"
+				/>
+			)}
 			{onRemove && (
 				<button
 					type="button"

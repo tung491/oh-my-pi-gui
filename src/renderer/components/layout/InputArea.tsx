@@ -1058,7 +1058,7 @@ export function InputArea() {
 						{fileDrag.claimed && fileDrag.depth > 0 && (
 							<div
 								aria-hidden
-								className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-(--omp-accent) bg-(--omp-bg-primary)/85 text-omp-md font-medium text-(--omp-accent)"
+								className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl border-2 border-dashed border-(--omp-accent) bg-(--omp-bg-primary)/85 text-omp-md font-medium text-(--omp-accent)" // surface-ok: floating drop-hint overlay
 							>
 								{t("input.drop.hint")}
 							</div>
@@ -1082,18 +1082,27 @@ export function InputArea() {
 							{attachmentCount > 0 && (
 								<div className="mb-3">
 									<AttachmentStrip>
-										{images.map((image, index) => (
-											<AttachmentCard
-												key={`image:${index}`}
-												name={image.name ?? t("input.attachmentAlt", { index: index + 1 })}
-												kind="image"
-												path={image.path}
-												preview={image.preview}
-												onRemove={() =>
-													setImages(previous => previous.filter((_, itemIndex) => itemIndex !== index))
-												}
-											/>
-										))}
+										{images.map((image, index) => {
+											const name = image.name ?? t("input.attachmentAlt", { index: index + 1 });
+											return (
+												<AttachmentCard
+													key={`image:${index}`}
+													name={name}
+													kind="image"
+													path={image.path}
+													preview={image.preview}
+													onOpen={() => {
+														const ui = useUiStore.getState();
+														// Pasted images have no file on disk; their data URL is the preview.
+														if (image.path) ui.openFilePreview(image.path, runtimeTabId);
+														else ui.openImagePreview(image.preview, name);
+													}}
+													onRemove={() =>
+														setImages(previous => previous.filter((_, itemIndex) => itemIndex !== index))
+													}
+												/>
+											);
+										})}
 										{visiblePendingImages.map(entry => (
 											<AttachmentCard
 												key={`pending:${entry.path}`}
@@ -1111,6 +1120,7 @@ export function InputArea() {
 												name={document.name}
 												kind={fileKindOf(document.name)}
 												path={document.path}
+												onOpen={() => useUiStore.getState().openFilePreview(document.path, runtimeTabId)}
 												onRemove={() =>
 													setDocuments(previous => previous.filter(item => item.path !== document.path))
 												}

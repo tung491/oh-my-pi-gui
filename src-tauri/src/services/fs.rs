@@ -164,7 +164,7 @@ pub fn resolve_within(root: &Path, rel: &str) -> Option<PathBuf> {
 }
 
 /// Lexically normalize (Node's `path.resolve` semantics: no symlink resolution).
-fn normalize(path: &Path) -> PathBuf {
+pub(crate) fn normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for component in path.components() {
         match component {

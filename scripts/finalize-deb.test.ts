@@ -10,13 +10,18 @@ import {
 	DEB_RECOMMENDS,
 	finalizeDeb,
 	parseControlFields,
-	rewriteTrayDependency,
+	rewriteDependencies,
 	TRAY_ALTERNATION,
 	TRAY_DEPENDENCY,
+	WEBKIT_DEPENDENCY,
+	WEBKIT_REQUIREMENT,
 } from "../src-tauri/linux/finalize-deb";
 
 /** Depends as tauri-cli writes it: the configured entries, then the tray library, WebKitGTK and GTK. */
-const BUNDLER_DEPENDS = DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY);
+const BUNDLER_DEPENDS = DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY).replace(
+	WEBKIT_REQUIREMENT,
+	WEBKIT_DEPENDENCY,
+);
 
 function control(depends = BUNDLER_DEPENDS, extra: string[] = [`Recommends: ${DEB_RECOMMENDS}`]): string {
 	return [
@@ -34,31 +39,45 @@ function control(depends = BUNDLER_DEPENDS, extra: string[] = [`Recommends: ${DE
 
 const fields = (text: string) => parseControlFields(text);
 
-describe("rewriteTrayDependency", () => {
-	it("replaces the bundler's tray package with the alternation and keeps the rest in order", () => {
-		const rewritten = rewriteTrayDependency(control());
+describe("rewriteDependencies", () => {
+	it("replaces the bundler's tray and WebKitGTK packages and keeps the rest in order", () => {
+		const rewritten = rewriteDependencies(control());
 		expect(fields(rewritten).get("depends")).toBe(DEB_DEPENDS);
 		expect(rewritten.replace(DEB_DEPENDS, BUNDLER_DEPENDS)).toBe(control());
 	});
 
 	it("leaves Recommends and every other field alone", () => {
-		const rewritten = fields(rewriteTrayDependency(control(BUNDLER_DEPENDS, [`Recommends: ${TRAY_DEPENDENCY}-dev`])));
+		const rewritten = fields(rewriteDependencies(control(BUNDLER_DEPENDS, [`Recommends: ${TRAY_DEPENDENCY}-dev`])));
 		expect(rewritten.get("recommends")).toBe(`${TRAY_DEPENDENCY}-dev`);
 		expect(rewritten.get("package")).toBe("sai-atlas");
 	});
 
 	it("refuses a control file without Depends", () => {
-		expect(() => rewriteTrayDependency("Package: sai-atlas\nDescription: test\n")).toThrow(/no Depends/);
+		expect(() => rewriteDependencies("Package: sai-atlas\nDescription: test\n")).toThrow(/no Depends/);
 	});
 
 	it("refuses a Depends that does not name the Ayatana package exactly once", () => {
 		// A build host with only libappindicator makes tauri-cli add libappindicator3-1 instead.
-		expect(() => rewriteTrayDependency(control("bubblewrap, libappindicator3-1, libgtk-3-0"))).toThrow(
+		expect(() => rewriteDependencies(control("bubblewrap, libappindicator3-1, libgtk-3-0"))).toThrow(
 			/name libayatana-appindicator3-1 once, found: bubblewrap, libappindicator3-1, libgtk-3-0/,
 		);
-		expect(() => rewriteTrayDependency(control(`${TRAY_DEPENDENCY}, ${TRAY_DEPENDENCY}`))).toThrow(/once/);
+		expect(() => rewriteDependencies(control(`${TRAY_DEPENDENCY}, ${TRAY_DEPENDENCY}`))).toThrow(/once/);
 		// Already rewritten: the alternation is not the bundler's token.
-		expect(() => rewriteTrayDependency(control(DEB_DEPENDS))).toThrow(/once/);
+		expect(() => rewriteDependencies(control(DEB_DEPENDS))).toThrow(/once/);
+	});
+
+	it("puts the 2.52 floor on WebKitGTK and refuses a Depends without the bare package exactly once", () => {
+		expect(WEBKIT_REQUIREMENT).toBe("libwebkit2gtk-4.1-0 (>= 2.52)");
+		expect(fields(rewriteDependencies(control())).get("depends")).toContain(", libwebkit2gtk-4.1-0 (>= 2.52), ");
+		const withoutWebkit = `bubblewrap, ${TRAY_DEPENDENCY}, libgtk-3-0`;
+		expect(() => rewriteDependencies(control(withoutWebkit))).toThrow(
+			/name libwebkit2gtk-4\.1-0 once, found: bubblewrap, libayatana-appindicator3-1, libgtk-3-0/,
+		);
+		const twice = `${BUNDLER_DEPENDS}, ${WEBKIT_DEPENDENCY}`;
+		expect(() => rewriteDependencies(control(twice))).toThrow(/name libwebkit2gtk-4\.1-0 once/);
+		// A versioned entry from deb.depends is not the bundler's token, so it is not rewritten twice.
+		const versioned = BUNDLER_DEPENDS.replace(WEBKIT_DEPENDENCY, WEBKIT_REQUIREMENT);
+		expect(() => rewriteDependencies(control(versioned))).toThrow(/name libwebkit2gtk-4\.1-0 once/);
 	});
 });
 
@@ -72,7 +91,7 @@ describe("parseControlFields", () => {
 });
 
 describe("assertPackageControl", () => {
-	const finished = () => fields(rewriteTrayDependency(control()));
+	const finished = () => fields(rewriteDependencies(control()));
 
 	it("accepts the expected Depends and Recommends with only control and md5sums", () => {
 		expect(CONTROL_MEMBERS).toEqual(["control", "md5sums"]);

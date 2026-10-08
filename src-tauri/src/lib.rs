@@ -206,11 +206,12 @@ impl Host for TauriHost {
     }
 
     fn open_url(&self, url: &str) -> Result<(), HostError> {
-        let lower = url.to_ascii_lowercase();
-        if !(lower.starts_with("http://") || lower.starts_with("https://")) {
-            return Err(HostError::Failed(format!("refused to open a non-http URL: {url}")));
-        }
-        self.app.opener().open_url(url, None::<&str>).map_err(|error| HostError::Failed(error.to_string()))
+        // Checked again here, whoever asks: only http, https and a mailto
+        // link reduced to its address, subject, body, cc and bcc reach the OS.
+        let Some(target) = services::system::sanitize_external_url(url) else {
+            return Err(HostError::Failed(format!("refused to open a URL that is not http, https or mailto: {url}")));
+        };
+        self.app.opener().open_url(target, None::<&str>).map_err(|error| HostError::Failed(error.to_string()))
     }
 
     fn open_path(&self, path: &Path) -> Result<(), HostError> {

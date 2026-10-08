@@ -27,6 +27,13 @@ globals.IS_REACT_ACT_ENVIRONMENT = true;
 globals.requestAnimationFrame = (callback: () => void) => setTimeout(callback, 0);
 const ompWindow = window as unknown as { omp?: unknown };
 const initialOmp = ompWindow.omp;
+type MatchMedia = (query: string) => {
+	matches: boolean;
+	addEventListener: (type: string, listener: () => void) => void;
+	removeEventListener: (type: string, listener: () => void) => void;
+};
+const mediaWindow = window as unknown as { matchMedia?: MatchMedia };
+const initialMatchMedia = mediaWindow.matchMedia;
 
 interface TestElement {
 	textContent: string | null;
@@ -63,9 +70,12 @@ afterEach(async () => {
 	container?.remove();
 	useSessionStore.getState().reset();
 	useTabsStore.getState().reset();
-	useUiStore.setState({ panelTab: "files", panelVisible: true, filePreviewPath: null });
+	useUiStore.setState({ panelTab: "files", panelVisible: true, filePreview: null, sidebarVisible: true });
 	if (initialOmp === undefined) delete ompWindow.omp;
 	else ompWindow.omp = initialOmp;
+	if (initialMatchMedia === undefined) delete mediaWindow.matchMedia;
+	else mediaWindow.matchMedia = initialMatchMedia;
+	vi.useRealTimers();
 	Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
 });
 
@@ -98,6 +108,11 @@ function FileLinkHarness({ content = "[report](docs/report.md)" }: { content?: s
 			{panelVisible && <PanelContainer />}
 		</>
 	);
+}
+
+function DrawerHarness() {
+	const panelVisible = useUiStore(s => s.panelVisible);
+	return panelVisible ? <PanelContainer /> : null;
 }
 
 describe("PanelContainer drawer tabs", () => {
@@ -151,7 +166,7 @@ describe("PanelContainer drawer tabs", () => {
 
 	it("opens a local markdown link inside the Files drawer", async () => {
 		seedActiveTab("agent");
-		useUiStore.setState({ panelVisible: false, filePreviewPath: null });
+		useUiStore.setState({ panelVisible: false, filePreview: null });
 		const read = vi.fn(async () => ({
 			ok: true,
 			content: "# Preview heading\n\nRendered body.",
@@ -179,7 +194,7 @@ describe("PanelContainer drawer tabs", () => {
 		expect(useUiStore.getState()).toMatchObject({
 			panelVisible: true,
 			panelTab: "files",
-			filePreviewPath: "docs/report.md",
+			filePreview: { kind: "path", path: "docs/report.md", tabId: null },
 		});
 		expect(read).toHaveBeenCalledWith("docs/report.md", 200_000);
 		expect(document.querySelector("aside h1")?.textContent).toBe("Preview heading");
@@ -188,7 +203,7 @@ describe("PanelContainer drawer tabs", () => {
 
 	it("decodes an absolute file URL and renders non-Markdown text as code", async () => {
 		seedActiveTab("agent");
-		useUiStore.setState({ panelVisible: false, filePreviewPath: null });
+		useUiStore.setState({ panelVisible: false, filePreview: null });
 		const read = vi.fn(async () => ({
 			ok: true,
 			content: "SELECT 1;",
@@ -217,6 +232,43 @@ describe("PanelContainer drawer tabs", () => {
 		expect(document.querySelector("aside pre")?.textContent).toContain("SELECT 1;");
 	});
 
+	it("opens a local Word document link in the side-by-side preview", async () => {
+		seedActiveTab("agent");
+		useUiStore.setState({ panelVisible: false, filePreview: null });
+		const readDocument = vi.fn(async (_path: string, _options?: { tabId?: string }) => ({
+			ok: false,
+			size: 0,
+			mtimeMs: 0,
+			error: "unsupported",
+		}));
+		ompWindow.omp = {
+			fs: {
+				list: vi.fn(async () => ({ ok: true, entries: [], truncated: false })),
+				read: vi.fn(async () => ({ ok: false, error: "not text" })),
+				readDocument,
+			},
+			system: {
+				openExternal: vi.fn(async () => {}),
+				openPath: vi.fn(async () => ({ ok: true })),
+			},
+		};
+		const path = "/home/u/Documents/Sai ATLAS/r.docx";
+		await mount(<FileLinkHarness content="[r](file:///home/u/Documents/Sai%20ATLAS/r.docx)" />);
+
+		await act(async () => {
+			document.querySelector("a")?.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		const deadline = Date.now() + 2_000;
+		while (readDocument.mock.calls.length === 0 && Date.now() < deadline) await flush();
+
+		expect(useUiStore.getState()).toMatchObject({
+			panelVisible: true,
+			filePreview: { kind: "path", path },
+		});
+		expect(readDocument).toHaveBeenCalled();
+		expect(readDocument.mock.calls[0]?.[0]).toBe(path);
+	});
+
 	it("keeps the workspace heading and a named close control", async () => {
 		seedActiveTab("agent");
 		useUiStore.setState({ panelTab: "files", panelVisible: true });
@@ -238,5 +290,233 @@ describe("PanelContainer drawer tabs", () => {
 			close?.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
 		});
 		expect(useUiStore.getState().panelVisible).toBe(false);
+	});
+});
+
+function seedSplitTabs(): void {
+	useTabsStore.setState({
+		tabs: [
+			{ id: "t0", cwd: "/work", status: "ready", kind: "agent", unreadDone: false },
+			{ id: "t1", cwd: "/other", status: "ready", kind: "agent", unreadDone: false },
+		],
+		activeTabId: "t0",
+		bundles: new Map(),
+		split: { axis: "columns", firstTabId: "t0", secondTabId: "t1", ratio: 0.5 },
+	});
+}
+
+function installPreviewOmp(prefsWidth: number | null = null) {
+	const readDocument = vi.fn(async (_path: string, _options?: { tabId?: string }) => ({
+		ok: false,
+		size: 0,
+		mtimeMs: 0,
+		error: "not-a-file",
+	}));
+	const prefsSet = vi.fn(async (_key: string, _value: unknown) => {});
+	ompWindow.omp = {
+		fs: {
+			list: vi.fn(async () => ({ ok: true, entries: [], truncated: false })),
+			read: vi.fn(async () => ({ ok: true, content: "# Report", truncated: false, binary: false, size: 8 })),
+			readImage: vi.fn(async () => ({ ok: false, dataUrl: null, mime: null, size: 0, error: "missing" })),
+			readDocument,
+		},
+		prefs: {
+			get: vi.fn(async (key: string) => (key === "gui.panelWidth" ? prefsWidth : undefined)),
+			set: prefsSet,
+		},
+		system: {
+			openExternal: vi.fn(async () => {}),
+			openPath: vi.fn(async () => ({ ok: true })),
+		},
+	};
+	return { readDocument, prefsSet };
+}
+
+function compactViewport(): void {
+	mediaWindow.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
+}
+
+function aside(): HTMLElement {
+	return document.querySelector("aside") as HTMLElement;
+}
+
+function click(selector: string): void {
+	const element = document.querySelector(selector);
+	if (!element) throw new Error(`${selector} not rendered`);
+	element.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+}
+
+describe("PanelContainer file tree across a preview", () => {
+	it("keeps expanded folders and the listing when a previewed file goes Back to the tree", async () => {
+		seedActiveTab("agent");
+		installPreviewOmp();
+		const list = vi.fn(async () => ({
+			ok: true,
+			entries: [
+				{ kind: "dir", name: "src", path: "src", children: [{ kind: "file", name: "a.md", path: "src/a.md" }] },
+			],
+			truncated: false,
+		}));
+		(ompWindow.omp as { fs: { list: unknown } }).fs.list = list;
+		await mount(<PanelContainer />);
+
+		await act(async () => click('[data-tree-id="dir:src"]'));
+		expect(document.querySelector('[data-tree-id="file:src/a.md"]')).not.toBeNull();
+
+		await act(async () => click('[data-tree-id="file:src/a.md"]'));
+		await flush();
+		expect(useUiStore.getState().filePreview).toMatchObject({ kind: "path", path: "src/a.md" });
+		expect(document.querySelector("aside h1")?.textContent).toBe("Report");
+
+		await act(async () => click('button[aria-label="Back to files"]'));
+		await flush();
+
+		expect(useUiStore.getState().filePreview).toBeNull();
+		expect(document.querySelector('[data-tree-id="file:src/a.md"]')).not.toBeNull();
+		expect(list).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("PanelContainer docking beside the chat", () => {
+	it("keeps the preview mounted and pinned to its tab when focus moves to the other pane", async () => {
+		seedSplitTabs();
+		const { readDocument } = installPreviewOmp();
+		useUiStore.getState().openFilePreview("a.pdf", "t0");
+		await mount(<PanelContainer />);
+
+		await act(async () => {
+			useTabsStore.setState({ activeTabId: "t1" });
+		});
+		await flush();
+
+		expect(readDocument).toHaveBeenCalledTimes(1);
+		expect(readDocument.mock.calls[0]?.[1]).toMatchObject({ tabId: "t0" });
+	});
+
+	it("docks the preview in a split workspace instead of overlaying the chat", async () => {
+		seedSplitTabs();
+		installPreviewOmp();
+		useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		await mount(<PanelContainer />);
+
+		expect(aside().className).not.toContain("absolute");
+		expect(aside().hasAttribute("data-docked-preview")).toBe(true);
+	});
+
+	it("still overlays a split workspace when nothing is previewed", async () => {
+		seedSplitTabs();
+		installPreviewOmp();
+		await mount(<PanelContainer />);
+
+		expect(aside().className).toContain("absolute");
+		expect(aside().hasAttribute("data-docked-preview")).toBe(false);
+	});
+
+	it("widens for a preview without saving the derived width", async () => {
+		Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+		seedActiveTab("agent");
+		const { prefsSet } = installPreviewOmp(403);
+		await mount(<PanelContainer />);
+		expect(aside().style.width).toBe("403px");
+
+		vi.useFakeTimers();
+		await act(async () => {
+			useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		});
+		expect(aside().style.width).toBe("576px");
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1000);
+		});
+
+		expect(prefsSet.mock.calls.some(([key, value]) => key === "gui.panelWidth" && value === 576)).toBe(false);
+	});
+
+	it("hides the sidebar while docked in a narrow window and gives it back on close", async () => {
+		compactViewport();
+		seedActiveTab("agent");
+		installPreviewOmp();
+		useUiStore.setState({ sidebarVisible: true });
+		useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		await mount(<PanelContainer />);
+
+		expect(useUiStore.getState().sidebarVisible).toBe(false);
+		expect(aside().hasAttribute("data-docked-preview")).toBe(true);
+
+		await act(async () => {
+			useUiStore.getState().closeFilePreview();
+		});
+
+		expect(useUiStore.getState().sidebarVisible).toBe(true);
+		expect(aside().hasAttribute("data-docked-preview")).toBe(false);
+	});
+
+	it("gives the sidebar back when the drawer is hidden while previewing", async () => {
+		compactViewport();
+		seedActiveTab("agent");
+		installPreviewOmp();
+		useUiStore.setState({ sidebarVisible: true, panelVisible: true });
+		useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		await mount(<DrawerHarness />);
+		expect(useUiStore.getState().sidebarVisible).toBe(false);
+
+		await act(async () => {
+			useUiStore.getState().togglePanel();
+		});
+
+		expect(document.querySelector("aside")).toBeNull();
+		expect(useUiStore.getState().filePreview).not.toBeNull();
+		expect(useUiStore.getState().sidebarVisible).toBe(true);
+	});
+
+	it("respects a sidebar the user reopened during the preview", async () => {
+		compactViewport();
+		seedActiveTab("agent");
+		installPreviewOmp();
+		useUiStore.setState({ sidebarVisible: true });
+		useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		await mount(<PanelContainer />);
+		expect(useUiStore.getState().sidebarVisible).toBe(false);
+
+		await act(async () => {
+			useUiStore.getState().toggleSidebar();
+		});
+		await act(async () => {
+			useUiStore.getState().closeFilePreview();
+		});
+
+		expect(useUiStore.getState().sidebarVisible).toBe(true);
+	});
+
+	it("steps the keyboard resize from the preview's derived width", async () => {
+		Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+		seedActiveTab("agent");
+		installPreviewOmp(403);
+		useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		await mount(<PanelContainer />);
+		expect(aside().style.width).toBe("576px");
+
+		const separator = document.querySelector('[role="separator"]') as HTMLElement;
+		await act(async () => {
+			const event = new Event("keydown", { bubbles: true, cancelable: true });
+			Object.defineProperty(event, "key", { value: "ArrowLeft" });
+			separator.dispatchEvent(event);
+		});
+
+		expect(aside().style.width).toBe("600px");
+	});
+
+	it("leaves an already hidden sidebar hidden after the preview closes", async () => {
+		compactViewport();
+		seedActiveTab("agent");
+		installPreviewOmp();
+		useUiStore.setState({ sidebarVisible: false });
+		useUiStore.getState().openFilePreview("docs/report.md", "t0");
+		await mount(<PanelContainer />);
+
+		await act(async () => {
+			useUiStore.getState().closeFilePreview();
+		});
+
+		expect(useUiStore.getState().sidebarVisible).toBe(false);
 	});
 });

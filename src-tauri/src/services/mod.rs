@@ -12,10 +12,11 @@ mod legacy_storage;
 mod log_watcher;
 mod models_config;
 mod open_path_target;
+mod preview_watch;
 mod provider_cleanup;
 mod session_cache;
 mod session_index;
-mod system;
+pub(crate) mod system;
 
 use std::path::PathBuf;
 use std::any::Any;
@@ -27,8 +28,9 @@ use tauri::AppHandle;
 
 use crate::bridge::{Registry, Scope};
 use crate::ctx::AppCtx;
-use crate::ports::{CtxRef, Caller, ServiceError, ServicesPort, SessionInfo, SessionKind, SessionScope};
+use crate::ports::{CtxRef, Caller, ServiceError, ServicesPort, SessionInfo, SessionKind, SessionScope, WindowId};
 use log_watcher::LogWatcher;
+use preview_watch::PreviewWatches;
 use session_index::SessionIndex;
 
 pub const CHANNELS: &[(&str, Scope)] = &[
@@ -56,12 +58,17 @@ pub const CHANNELS: &[(&str, Scope)] = &[
     ("fs:read-plan", Scope::Main),
     ("fs:read-image", Scope::Main),
     ("fs:read-pdf", Scope::Main),
+    ("fs:read-document", Scope::Main),
+    ("fs:watch-preview", Scope::Main),
+    ("fs:unwatch-preview", Scope::Main),
     ("editor:open-external", Scope::Main),
 ];
 
 pub const EMITS: &[&str] = &[
     "sessions:changed",
     "log:line",
+    // Sent only to the window that asked for the watch (`fs:watch-preview`).
+    "fs:preview-changed",
     // Emitted by the WebKitGTK drag observer in `webview.rs`.
     "system:native-drop-paths",
 ];
@@ -91,6 +98,9 @@ pub fn register(reg: &mut Registry) {
     reg.register("fs:read-plan", Scope::Main, ipc::fs_read_plan);
     reg.register("fs:read-image", Scope::Main, ipc::fs_read_image);
     reg.register("fs:read-pdf", Scope::Main, ipc::fs_read_pdf);
+    reg.register("fs:read-document", Scope::Main, ipc::fs_read_document);
+    reg.register("fs:watch-preview", Scope::Main, ipc::fs_watch_preview);
+    reg.register("fs:unwatch-preview", Scope::Main, ipc::fs_unwatch_preview);
     reg.register("editor:open-external", Scope::Main, ipc::editor_open_external);
 }
 
@@ -101,6 +111,7 @@ pub struct Services {
     pub(crate) log_watcher: Arc<LogWatcher>,
     pub(crate) dialog_memory: dialogs::DialogMemory,
     pub(crate) notify_dedupe: system::NotifyDedupe,
+    pub(crate) preview_watches: Arc<PreviewWatches>,
 }
 
 impl Services {
@@ -111,12 +122,19 @@ impl Services {
         // Almost every caller passes its own cwd (`ctx.tabs.cwd_for`); this is
         // only the fallback for a "local" scope query with no caller cwd at all.
         let default_cwd = String::new();
+        let weak_ctx = ctx.clone();
+        let preview_changed: preview_watch::ChangeListener = Arc::new(move |win_id, watch_id| {
+            if let Some(ctx) = weak_ctx.upgrade() {
+                ctx.bridge.emit_to_window(win_id, "fs:preview-changed", serde_json::json!({ "watchId": watch_id }));
+            }
+        });
         Self {
             ctx,
             index: Arc::new(SessionIndex::new(sessions_dir, default_cwd)),
             log_watcher: Arc::new(LogWatcher::new(logs_dir)),
             dialog_memory: dialogs::DialogMemory::new(),
             notify_dedupe: system::NotifyDedupe::new(),
+            preview_watches: Arc::new(PreviewWatches::new(preview_watch::PREVIEW_DEBOUNCE, preview_changed)),
         }
     }
 
@@ -177,6 +195,7 @@ impl ServicesPort for Services {
         let _ = self.ctx();
         self.index.stop();
         self.log_watcher.stop();
+        self.preview_watches.stop();
         Box::pin(std::future::ready(()))
     }
 }
@@ -203,10 +222,24 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
         if let Some(ctx) = weak_ctx.upgrade() {
             if let Some(services) = ctx.services.as_any().downcast_ref::<Services>() {
                 services.dialog_memory.forget(record.id);
+                services.preview_watches.close_window(record.id);
             }
         }
     }));
     Ok(())
+}
+
+/// The production preview watches, or `None` under a test services port.
+pub(crate) fn preview_watches(ctx: &AppCtx) -> Option<Arc<PreviewWatches>> {
+    ctx.services.as_any().downcast_ref::<Services>().map(|services| services.preview_watches.clone())
+}
+
+/// A window's page started loading (a reload, crash recovery or Ctrl+R): the
+/// previews that asked for its watches are gone, so the watches close too.
+pub(crate) fn page_load_started(ctx: &AppCtx, win_id: WindowId) {
+    if let Some(watches) = preview_watches(ctx) {
+        watches.close_window(win_id);
+    }
 }
 
 /// Wires the log watcher's flush callback to broadcast `log:line` on `weak_ctx`'s
@@ -235,6 +268,42 @@ mod tests {
         let mut reg = Registry::new();
         register(&mut reg);
         reg
+    }
+
+    async fn watch_from(ctx: &Arc<AppCtx>, win: u32, path: &std::path::Path) -> String {
+        let args = vec![serde_json::json!({ "path": path.to_string_lossy() })];
+        let result = match ipc::fs_watch_preview(ctx, Caller::main(WindowId(win)), args) {
+            crate::bridge::Reply::Later(future) => future.await.unwrap(),
+            crate::bridge::Reply::Ready(result) => result.unwrap(),
+        };
+        result["watchId"].as_str().expect("watch id").to_string()
+    }
+
+    /// The production wiring: `fs:preview-changed` reaches only the window
+    /// that asked for the watch, and a page load closes that window's watches.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn preview_changed_reaches_only_the_calling_window_and_closes_on_page_load() {
+        let fakes = Fakes::default();
+        let ctx = testing::fake_ctx_cyclic(&fakes, registry(), |ctx, ports| ports.services = Some(Arc::new(Services::new(ctx.clone()))));
+        let first = Arc::new(RecordingSink::default());
+        let second = Arc::new(RecordingSink::default());
+        ctx.bridge.attach(&ctx, Caller::main(WindowId(1)), "g1".to_string(), first.clone());
+        ctx.bridge.attach(&ctx, Caller::main(WindowId(2)), "g2".to_string(), second.clone());
+        let file = fakes.dir.path().join("report.docx");
+        std::fs::write(&file, "v0").unwrap();
+        let watch_id = watch_from(&ctx, 1, &file).await;
+        let reloaded_id = watch_from(&ctx, 2, &file).await;
+        page_load_started(&ctx, WindowId(2));
+
+        std::fs::write(&file, "v1").unwrap();
+        let changed = |sink: &RecordingSink| sink.sent().into_iter().filter(|envelope| envelope.channel == "fs:preview-changed").collect::<Vec<_>>();
+        let deadline = Instant::now() + preview_watch::PREVIEW_DEBOUNCE + Duration::from_secs(5);
+        while changed(&first).is_empty() && Instant::now() < deadline {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(changed(&first).iter().map(|envelope| envelope.payload.clone()).collect::<Vec<_>>(), vec![serde_json::json!({ "watchId": watch_id })]);
+        assert!(changed(&second).is_empty(), "the reloaded window's watch {reloaded_id} was closed");
+        ctx.services.shutdown().await;
     }
 
     /// Reproduces `log_watcher.rs`'s `callback_may_reenter_snapshot_and_stop_returns`

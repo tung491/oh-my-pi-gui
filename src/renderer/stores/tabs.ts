@@ -451,8 +451,11 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		const version = ++switchVersion;
 		ensureTabRuntime(id);
 		beginTabRoute(state.activeTabId, id);
+		// Focus moving between the two panes of a split keeps the file preview:
+		// it is pinned to the tab that opened it, which is still on screen.
+		const paneFocus = state.split !== null && (state.split.firstTabId === id || state.split.secondTabId === id);
 		const ui = useUiStore.getState();
-		ui.closeSessionOverlays();
+		ui.closeSessionOverlays({ keepFilePreview: paneFocus });
 		const split = replaceFocusedSplitTab(state.split, state.activeTabId, id);
 		const outgoingStreaming = useSessionStore.getState().isStreaming;
 		set({
@@ -580,6 +583,10 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		if (state.tabs.length <= 1) return;
 		const index = state.tabs.findIndex(tab => tab.id === id);
 		if (index === -1) return;
+		// A path preview resolves against its pinned tab's workspace; once that
+		// tab is gone, Reload and Open externally could only fail.
+		const preview = useUiStore.getState().filePreview;
+		if (preview?.kind === "path" && preview.tabId === id) useUiStore.getState().closeFilePreview();
 		const splitSurvivor = state.split
 			? state.split.firstTabId === id
 				? state.split.secondTabId
