@@ -352,5 +352,35 @@
     "callee": "omp",
     "ts": "src/main/editor.ts:34",
     "method": "spawn_env"
+  },
+  {
+    "caller": "ollama",
+    "callee": "tabs",
+    "ts": "src/main/ollama/register-ipc.ts:94",
+    "method": "any_in_flight"
+  },
+  {
+    "caller": "ollama",
+    "callee": "tabs",
+    "ts": "src/main/ollama/register-ipc.ts:104",
+    "method": "tab_inventory"
+  },
+  {
+    "caller": "ollama",
+    "callee": "tabs",
+    "ts": "src/main/ollama/register-ipc.ts:104",
+    "method": "tabs_for_window"
+  },
+  {
+    "caller": "ollama",
+    "callee": "tabs",
+    "ts": "src/main/ollama/register-ipc.ts:104",
+    "method": "command_for_idle_session"
+  },
+  {
+    "caller": "ollama",
+    "callee": "omp",
+    "ts": "src/main/ollama/register-ipc.ts:107",
+    "method": "spawn_env"
   }
 ]

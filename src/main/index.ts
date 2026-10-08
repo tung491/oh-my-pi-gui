@@ -22,6 +22,7 @@ import { registerIpcHandlers } from "./ipc";
 import { launchArguments, parseLaunchArgv } from "./launch-argv";
 import { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
+import { contextLimitsOverlayPath } from "./ollama/register-ipc";
 import { QuickEntryController } from "./quick-entry";
 import { QuickEntryShortcut } from "./quick-entry-shortcut";
 import { writeRuntimeLog } from "./runtime-log";
@@ -356,6 +357,7 @@ app.whenReady().then(() => {
 		!app.isPackaged || (bundledOmp !== null && process.env.OMP_BUNDLED_OMP === bundledOmp)
 			? [app.getAppPath(), process.cwd()]
 			: [];
+	const contextLimitsOverlay = contextLimitsOverlayPath();
 	sidecarPool = new SidecarPool((cwd, kind, fresh) => {
 		const sc = new SidecarManager({
 			binaryPath: bundledOmp ?? "",
@@ -365,6 +367,7 @@ app.whenReady().then(() => {
 			kind,
 			fresh,
 			packSearchFrom,
+			contextLimitsOverlay,
 			language: getMainLanguage,
 			proxyEnv: resolveProxyEnvForSpawn,
 			shellEnv: shellSpawnEnv,

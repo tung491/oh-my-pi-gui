@@ -2,13 +2,17 @@
  * The Ollama window behind `openProviders`: it shows the daemon status and the
  * endpoint read-only, makes an installed model the default through set_model,
  * downloads a tag with live progress, treats a held download slot as a notice,
- * resolves remedies by outcome, and offers no sign-in or custom-provider path.
+ * resolves remedies by outcome, offers no sign-in or custom-provider path, and
+ * shows a context row for each installed local model.
  */
 import { parseHTML } from "linkedom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import type {
+	ContextFitChanged,
+	ContextFitList,
+	ContextFitProgress,
 	OllamaInstallProgress,
 	OllamaRemedyResult,
 	OllamaStatus,
@@ -59,17 +63,39 @@ let ollama: {
 	openDownload: Mock<() => Promise<void>>;
 	onPullProgress: Mock<(callback: (progress: PullProgress) => void) => () => void>;
 	onInstallProgress: Mock<(callback: (progress: OllamaInstallProgress) => void) => () => void>;
+	contextList: Mock<() => Promise<ContextFitList>>;
+	measureContext: Mock<(tag: string, reason?: string) => Promise<{ queued: true }>>;
+	setContextCap: Mock;
+	onContextProgress: Mock<(callback: (progress: ContextFitProgress) => void) => () => void>;
+	onContextChanged: Mock<(callback: (change: ContextFitChanged) => void) => () => void>;
 };
 let rpc: Record<string, Mock>;
 let prefs: { get: Mock; set: Mock<(key: string, value: unknown) => Promise<void>> };
 let emitProgress: (progress: PullProgress) => void;
 let emitInstall: (progress: OllamaInstallProgress) => void;
+let emitChanged: (change: ContextFitChanged) => void;
+
+/** Context rows for the default installed models, both unmeasured. */
+function contextList(overrides: Partial<ContextFitList> = {}): ContextFitList {
+	return {
+		rows: ["qwen3:8b", "gemma3:4b"].map(tag => ({
+			tag,
+			entry: null,
+			effective: null,
+			stale: false,
+			envCap: null,
+			state: "idle" as const,
+		})),
+		...overrides,
+	};
+}
 
 const ok = (data?: unknown): RpcResponse => ({ type: "response", command: "x", success: true, data });
 
 beforeEach(() => {
 	emitProgress = () => {};
 	emitInstall = () => {};
+	emitChanged = () => {};
 	ollama = {
 		status: vi.fn(async () => ollamaStatus()),
 		pull: vi.fn(),
@@ -86,6 +112,16 @@ beforeEach(() => {
 			emitInstall = callback;
 			return () => {
 				emitInstall = () => {};
+			};
+		}),
+		contextList: vi.fn(async () => contextList()),
+		measureContext: vi.fn(async () => ({ queued: true as const })),
+		setContextCap: vi.fn(),
+		onContextProgress: vi.fn(() => () => {}),
+		onContextChanged: vi.fn(callback => {
+			emitChanged = callback;
+			return () => {
+				emitChanged = () => {};
 			};
 		}),
 	};
@@ -362,6 +398,9 @@ describe("ProvidersWindow (Ollama)", () => {
 		await settle();
 
 		expect(ollama.status.mock.calls.length).toBe(statusCalls + 1);
+		// A manual request: a pulled one would wait for the welcome screen, which may never complete here.
+		expect(ollama.measureContext).toHaveBeenCalledTimes(1);
+		expect(ollama.measureContext).toHaveBeenCalledWith("llama3.2:3b");
 		expect(installedRow("llama3.2:3b")).not.toBeNull();
 		expect(document.body.querySelector('[role="progressbar"]')).toBeNull();
 		expect(rpc.getAvailableModels).toHaveBeenCalled();
@@ -407,6 +446,7 @@ describe("ProvidersWindow (Ollama)", () => {
 		await settle();
 
 		expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("file does not exist");
+		expect(ollama.measureContext).not.toHaveBeenCalled();
 	});
 
 	it("clears its own progress on cancel and ignores the pull's late answer", async () => {
@@ -590,5 +630,72 @@ describe("ProvidersWindow (Ollama)", () => {
 
 		expect(useUiStore.getState().providersOpen).toBe(false);
 		expect(useUiStore.getState().welcomeOpen).toBe(true);
+	});
+});
+
+describe("ProvidersWindow context rows", () => {
+	function contextRow(tag: string): Element | null {
+		return installedRow(tag)?.querySelector(`[data-context-row="${tag}"]`) ?? null;
+	}
+
+	it("gives each local model a context row and cloud or remote copies none", async () => {
+		ollama.status.mockResolvedValue(
+			ollamaStatus({ installedTags: ["gemma3:4b", "x:cloud", "remote:7b"], modelCount: 3 }),
+		);
+		ollama.contextList.mockResolvedValue({
+			rows: [{ tag: "gemma3:4b", entry: null, effective: null, stale: false, envCap: null, state: "idle" }],
+		});
+		await mountOpen();
+		expect(contextRow("gemma3:4b")).not.toBeNull();
+		expect(contextRow("x:cloud")).toBeNull();
+		expect(contextRow("remote:7b")).toBeNull();
+		expect(document.body.querySelector("[data-context-notice]")).toBeNull();
+	});
+
+	it("shows one notice and no rows when Ollama is on another computer", async () => {
+		ollama.contextList.mockResolvedValue({ rows: [], reason: "remote-host" });
+		await mountOpen();
+		const notices = document.body.querySelectorAll("[data-context-notice]");
+		expect(notices.length).toBe(1);
+		expect(notices[0]?.textContent).toBe(translate("ollama.context.remoteHost"));
+		expect(document.body.querySelector("[data-context-row]")).toBeNull();
+	});
+
+	it("explains that a configured ollama provider turns the limits off but keeps Measure", async () => {
+		ollama.contextList.mockResolvedValue(contextList({ reason: "configured-provider" }));
+		await mountOpen();
+		expect(document.body.querySelector('[data-context-notice="configured-provider"]')?.textContent).toBe(
+			translate("ollama.context.configuredProvider"),
+		);
+		const measure = contextRow("qwen3:8b")?.querySelector('[data-action="measure-context"]') as HTMLButtonElement;
+		expect(measure?.disabled).toBe(false);
+	});
+
+	it("renders no context rows unless Ollama answers", async () => {
+		ollama.status.mockResolvedValue(STOPPED);
+		await mountOpen();
+		expect(ollama.contextList).not.toHaveBeenCalled();
+		expect(document.body.querySelector("[data-context-row]")).toBeNull();
+	});
+
+	it("re-reads the rows once for a burst of context changes", async () => {
+		await mountOpen();
+		const lists = ollama.contextList.mock.calls.length;
+		await act(async () => {
+			emitChanged({ tag: "qwen3:8b" });
+			emitChanged({ tag: "gemma3:4b" });
+		});
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 200));
+		});
+		expect(ollama.contextList.mock.calls.length).toBe(lists + 1);
+	});
+
+	it("shows a failed context read instead of the rows", async () => {
+		ollama.contextList.mockRejectedValue(new Error("ipc closed"));
+		await mountOpen();
+		expect(document.body.querySelector("[data-context-error-list]")?.textContent).toBe(
+			translate("ollama.context.listFailed", { error: "ipc closed" }),
+		);
 	});
 });

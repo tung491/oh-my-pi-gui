@@ -52,6 +52,7 @@ interface FakeOllama {
 	openDownload: Mock<() => Promise<void>>;
 	onPullProgress: Mock<(callback: (progress: PullProgress) => void) => () => void>;
 	onInstallProgress: Mock<(callback: (progress: OllamaInstallProgress) => void) => () => void>;
+	measureContext: Mock<(tag: string, reason?: "manual" | "pulled") => Promise<{ queued: true }>>;
 	/** Push a progress frame as main would. */
 	emit: (frame: PullProgress) => void;
 	/** Push an install progress frame as main would. */
@@ -156,6 +157,7 @@ function installFakeOmp(options: FakeOptions = {}): FakeOmp {
 			installListeners.add(callback);
 			return () => installListeners.delete(callback);
 		}),
+		measureContext: vi.fn(async () => ({ queued: true as const })),
 		emit: frame => {
 			for (const listener of listeners) listener(frame);
 		},
@@ -669,6 +671,45 @@ describe("FirstRunOnboardingDialog", () => {
 		await click(action("download-model", card("qwen3:14b")));
 		expect(omp.ollama.pull).toHaveBeenCalledTimes(2);
 		expect(card("qwen3:14b").querySelector('[role="progressbar"]')).not.toBeNull();
+	});
+
+	it("asks for a pulled-model context measurement once its download succeeds", async () => {
+		const omp = installFakeOmp();
+		await mountReady();
+		await click(action("download-model", card("qwen3:14b")));
+		expect(omp.ollama.measureContext).not.toHaveBeenCalled();
+		await act(async () => {
+			omp.ollama.finishPull({
+				tag: "qwen3:14b",
+				status: "success",
+				completed: 4,
+				total: 4,
+				percent: 100,
+				done: true,
+			});
+		});
+		await flush();
+		expect(omp.ollama.measureContext).toHaveBeenCalledTimes(1);
+		expect(omp.ollama.measureContext).toHaveBeenCalledWith("qwen3:14b", "pulled");
+	});
+
+	it("asks for no context measurement when a download fails", async () => {
+		const omp = installFakeOmp();
+		await mountReady();
+		await click(action("download-model", card("qwen3:14b")));
+		await act(async () => {
+			omp.ollama.finishPull({
+				tag: "qwen3:14b",
+				status: "error",
+				completed: 0,
+				total: 0,
+				percent: -1,
+				done: true,
+				error: "disk full",
+			});
+		});
+		await flush();
+		expect(omp.ollama.measureContext).not.toHaveBeenCalled();
 	});
 
 	it("shows a refused pull as a notice on the card", async () => {

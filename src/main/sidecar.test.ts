@@ -183,6 +183,46 @@ describe("SidecarManager", () => {
 		}
 	});
 
+	it("passes the context limits overlay after the pack config and creates a missing file", async () => {
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-overlay-"));
+		const logPath = path.join(tempDir, "argv.json");
+		const binaryPath = path.join(tempDir, "fake-sidecar.ts");
+		const overlay = path.join(tempDir, "user-data", "ollama-context-limits.yml");
+		await fs.writeFile(
+			binaryPath,
+			`#!/usr/bin/env bun\nimport * as fs from "node:fs/promises";\nawait fs.writeFile(${JSON.stringify(logPath)}, JSON.stringify({ argv: process.argv.slice(2), ollamaContext: process.env.OLLAMA_CONTEXT_LENGTH ?? null }));\nprocess.stdout.write(JSON.stringify({ type: "ready", protocolVersion: 1, supportedProtocolVersions: [1] }) + "\\n");\nprocess.stdin.resume();\n`,
+		);
+		await fs.chmod(binaryPath, 0o755);
+		const pack = await makePackFixture(tempDir);
+
+		const sidecar = new SidecarManager({ binaryPath, cwd: tempDir, contextLimitsOverlay: overlay });
+		vi.stubEnv("OLLAMA_CONTEXT_LENGTH", undefined);
+		try {
+			const ready = waitForReady(sidecar);
+			sidecar.start();
+			await ready;
+
+			const launch = JSON.parse(await fs.readFile(logPath, "utf8")) as { argv: string[]; ollamaContext: string };
+			expect(launch.argv).toEqual(["--mode", "rpc-ui", ...packFlags(pack), "--config", overlay]);
+			expect(launch.argv.indexOf(overlay)).toBeGreaterThan(launch.argv.indexOf(path.join(pack, "config.yml")));
+			expect(await fs.readFile(overlay, "utf8")).toBe("ollama:\n  contextLimits: {}\n");
+			// Models with no measured limit keep the global default.
+			expect(launch.ollamaContext).toBe("131072");
+
+			// An existing overlay is loaded as it is, never reset.
+			const limits = 'ollama:\n  contextLimits:\n    "qwen3:8b": 32768\n';
+			await fs.writeFile(overlay, limits);
+			const restarted = waitForReady(sidecar);
+			sidecar.restart();
+			await restarted;
+			expect(await fs.readFile(overlay, "utf8")).toBe(limits);
+		} finally {
+			vi.unstubAllEnvs();
+			sidecar.dispose();
+			await fs.rm(tempDir, { recursive: true, force: true });
+		}
+	});
+
 	it("surfaces a reinstall instruction when a pack file is missing", async () => {
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-gui-sidecar-nopack-"));
 		const spawnedPath = path.join(tempDir, "spawned");

@@ -15,6 +15,8 @@ class FakeSidecar extends EventEmitter {
 	/** Side-channel frames written via sendSideChannel (F-UI-ORIGIN assertions). */
 	sentFrames: object[] = [];
 	rpcCommands: RpcCommand[] = [];
+	/** The per-call timeout each rpcClient command was sent with. */
+	rpcTimeouts: Array<number | undefined> = [];
 	constructor(public cwd: string) {
 		super();
 	}
@@ -32,8 +34,9 @@ class FakeSidecar extends EventEmitter {
 	 */
 	currentStatus: SidecarStatus = "asleep";
 	readonly rpcClient = {
-		command: async (command: RpcCommand): Promise<RpcResponse> => {
+		command: async (command: RpcCommand, timeoutMs?: number): Promise<RpcResponse> => {
 			this.rpcCommands.push(command);
+			this.rpcTimeouts.push(timeoutMs);
 			return { type: "response", command: command.type, success: true, data: { cancelled: false } };
 		},
 	};
@@ -719,6 +722,39 @@ describe("SidecarPool session ownership (F-OWN)", () => {
 		expect(await pool.commandForIdleSession("/sessions/s.jsonl", { type: "drop_session" })).toMatchObject({
 			success: true,
 		});
+	});
+
+	it("treats a compact sent to an idle tab as compacting until it answers", async () => {
+		const { pool, sidecars } = fakePool();
+		const fw = fakeWindow(1);
+		pool.acquire("/a", fw.win, "tab-a", "/sessions/s.jsonl");
+		const [sidecar] = sidecars;
+		sidecar?.emitStatus("ready");
+		const before = fw.sentTo(IPC_EVENTS.TAB_STATUS).length;
+
+		// Not awaited yet: the compaction is still waiting for its answer.
+		const pending = pool.commandForIdleTab("tab-a", { type: "compact" });
+		expect(pool.tabsForWindow(fw.win)[0]?.compacting).toBe(true);
+		expect(pool.anyInFlight()).toBe(true);
+		expect(await pool.commandForIdleTab("tab-a", { type: "get_state" })).toBeNull();
+
+		expect(await pending).toMatchObject({ success: true });
+		expect(pool.tabsForWindow(fw.win)[0]?.compacting).toBe(false);
+		const pushed = fw.sentTo(IPC_EVENTS.TAB_STATUS).slice(before);
+		expect(pushed.map(entry => (entry.data as IpcTabStatusPayload).compacting)).toEqual([true, false]);
+		expect(sidecar?.rpcCommands.map(command => command.type)).toEqual(["compact"]);
+	});
+
+	it("sends a compact to an idle tab with the long-running compaction timeout", async () => {
+		const { pool, sidecars } = fakePool();
+		const fw = fakeWindow(1);
+		pool.acquire("/a", fw.win, "tab-a", "/sessions/s.jsonl");
+		const [sidecar] = sidecars;
+		sidecar?.emitStatus("ready");
+
+		await pool.commandForIdleTab("tab-a", { type: "compact" });
+		await pool.commandForIdleTab("tab-a", { type: "get_state" });
+		expect(sidecar?.rpcTimeouts).toEqual([660_000, undefined]);
 	});
 
 	it("reports a session as live only while some process holds it", () => {

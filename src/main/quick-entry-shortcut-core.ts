@@ -8,6 +8,7 @@
  */
 
 import { chordToAccelerator, ctrlTwin, parseChord, serializeChord } from "../shared/chord";
+import { CONTEXT_FIT_PREF } from "../shared/context-fit-store";
 import { NATIVE_CHORDS, QUICK_ENTRY_DEFAULT_CHORD } from "../shared/hotkeys";
 import type { QuickEntryShortcutPref, QuickEntryShortcutState, QuickEntryShortcutUpdate } from "../shared/ipc-types";
 
@@ -69,7 +70,8 @@ export function sanitizeShortcutPref(raw: unknown, platform: NodeJS.Platform): Q
 	return { chord: serializeChord(parsed), enabled };
 }
 
-const MAIN_OWNED_PREF_KEYS = new Set(["quickEntryShortcut", "quickEntryTarget"]);
+/** `ollamaContextFit` holds measured limits: only the context-fit scheduler and its validated channels write it. */
+const MAIN_OWNED_PREF_KEYS = new Set(["quickEntryShortcut", "quickEntryTarget", CONTEXT_FIT_PREF]);
 
 /**
  * Keys only main writes, through validated channels; the generic PREFS_SET

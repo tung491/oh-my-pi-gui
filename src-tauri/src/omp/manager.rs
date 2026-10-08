@@ -24,6 +24,7 @@ use super::assistant_pack;
 use super::rpc_bridge::{attach_ndjson_parser, supports_rpc_protocol_v2};
 use super::rpc_client::RpcClient;
 use crate::bridge::spawn_task;
+use crate::paths;
 use crate::ports::{
     CtxRef, EventBatcher, SessionKind, SidecarError, SidecarEvent, SidecarEvents, SidecarHandle, SidecarOptions, SidecarRefusal, SidecarRestartProgress, SidecarStatus,
     SidecarStatusPayload,
@@ -134,6 +135,31 @@ fn stderr_excerpt(lines: &[String]) -> String {
         return trimmed.to_string();
     }
     String::new()
+}
+
+/// The context limits overlay beside `prefs_path` (the profile directory),
+/// created empty when missing so the sidecar's settings watcher has a file to
+/// follow. `None` when it neither exists nor can be created: the sidecar then
+/// runs at the global cap alone. An existing file is never touched; the
+/// `ollama` module owns its contents.
+fn context_limits_overlay(prefs_path: &Path) -> Option<PathBuf> {
+    let path = paths::context_limits_overlay_path(prefs_path.parent()?);
+    let created = std::fs::create_dir_all(path.parent()?).and_then(|()| {
+        let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&path)?;
+        std::io::Write::write_all(&mut file, paths::EMPTY_CONTEXT_LIMITS_OVERLAY.as_bytes())
+    });
+    match created {
+        Ok(()) => Some(path),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Some(path),
+        Err(error) => {
+            crate::runtime_log::note(
+                "unknown",
+                format!("could not create {}: {error}; sidecars run at the global context cap", path.display()),
+                json!({}),
+            );
+            None
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +607,11 @@ impl Inner {
             args.extend(assistant_pack::pack_flags(&state.pack_dir, std::env::consts::OS));
             (state.options.clone(), args, state.generation, state.spawn_env.clone())
         };
+        // Each local model's measured context limit, loaded after the pack's
+        // config and watched by the sidecar, so a new limit applies without a restart.
+        if let Some(overlay) = self.ctx.upgrade().and_then(|ctx| context_limits_overlay(&ctx.prefs.path())) {
+            args.extend(["--config".to_string(), overlay.to_string_lossy().into_owned()]);
+        }
         // `en` covers a context already gone at shutdown.
         let language = self.ctx.upgrade().map_or("en", |ctx| ctx.i18n.language().code());
         // User-controllable flags ride the extra_flags seam plus the launch
@@ -605,7 +636,7 @@ impl Inner {
             // The window sent as `num_ctx` (capped at the model's trained context);
             // a user-set value, inherited or from the login shell, wins.
             if std::env::var_os("OLLAMA_CONTEXT_LENGTH").is_none() && !env.contains_key("OLLAMA_CONTEXT_LENGTH") {
-                command.env("OLLAMA_CONTEXT_LENGTH", "131072");
+                command.env("OLLAMA_CONTEXT_LENGTH", paths::SIDECAR_DEFAULT_OLLAMA_CONTEXT.to_string());
             }
             // No startup file may ride along into the pack tools' system programs,
             // no profile or role override may redirect omp away from the pack's
@@ -1505,8 +1536,10 @@ process.stdin.resume();"#,
         wait_for_ready(&mut events).await;
         let launch = launch_argv(&sidecar).await;
         sidecar.dispose().await;
-        // Only the profile flags that cannot change what the session loads survive.
-        assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &["--no-lsp", "--session-dir", "/data/sessions"]));
+        // Only the profile flags that cannot change what the session loads survive,
+        // after the app's own context limits overlay.
+        let overlay = fakes.dir.path().join("ollama-context-limits.yml").to_string_lossy().into_owned();
+        assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &["--config", &overlay, "--no-lsp", "--session-dir", "/data/sessions"]));
         // Flags the pack passes itself, so a profile's copy shows up as a second occurrence.
         let pack_owned = ["--tools", "--config", "--append-system-prompt", "--no-rules", "--no-context-files"];
         for token in smuggled.iter().chain(["GUI injected", "--append-system-prompt", "--no-rules", "--add-dir", "/data/extra"].iter()) {
@@ -1515,10 +1548,42 @@ process.stdin.resume();"#,
             }
             assert!(!launch.iter().any(|arg| arg == token), "{token} survived");
         }
-        // The pack's own flags appear once each; the profile's copies are gone.
+        // The pack's own flags appear once each (`--config` once more for the
+        // app's overlay); the profile's copies are gone.
         for flag in pack_owned {
-            assert_eq!(launch.iter().filter(|arg| *arg == flag).count(), 1, "{flag}");
+            let expected = if flag == "--config" { 2 } else { 1 };
+            assert_eq!(launch.iter().filter(|arg| *arg == flag).count(), expected, "{flag}");
         }
+        assert!(!launch.iter().any(|arg| arg == "/x"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn passes_the_context_limits_overlay_after_the_pack_config_and_creates_a_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let fakes = Fakes::default();
+        let ctx = fake_ctx_with(&fakes, Registry::new());
+        let overlay = fakes.dir.path().join("ollama-context-limits.yml");
+        assert!(!overlay.exists());
+        let (sidecar, mut events) = SidecarManager::new(Arc::downgrade(&ctx), options(fixture_path(), dir.path()), fixed_env(&[]));
+        sidecar.start();
+        wait_for_ready(&mut events).await;
+        let launch = launch_argv(&sidecar).await;
+        let created = std::fs::read_to_string(&overlay).unwrap_or_default();
+        // A second spawn finds the file and leaves what the ollama module wrote alone.
+        let limits = "ollama:\n  contextLimits:\n    \"qwen3:8b\": 32768\n";
+        std::fs::write(&overlay, limits).unwrap();
+        sidecar.restart(None, None);
+        wait_for_ready(&mut events).await;
+        let relaunch = launch_argv(&sidecar).await;
+        sidecar.dispose().await;
+        let overlay_arg = overlay.to_string_lossy().into_owned();
+        assert_eq!(launch, argv(&["--mode", "rpc-ui"], &dev_pack(), &["--config", &overlay_arg]));
+        let pack_config = launch.iter().position(|arg| arg.ends_with("config.yml")).unwrap();
+        let overlay_at = launch.iter().position(|arg| *arg == overlay_arg).unwrap();
+        assert!(overlay_at > pack_config);
+        assert_eq!(created, "ollama:\n  contextLimits: {}\n");
+        assert_eq!(relaunch, launch);
+        assert_eq!(std::fs::read_to_string(&overlay).unwrap(), limits);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

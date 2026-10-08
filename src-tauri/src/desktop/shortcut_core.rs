@@ -283,7 +283,9 @@ pub(crate) fn sanitize_shortcut_pref(raw: Option<&Value>, platform: Platform) ->
     }
 }
 
-const MAIN_OWNED_PREF_KEYS: [&str; 2] = ["quickEntryShortcut", "quickEntryTarget"];
+/// `ollamaContextFit` holds each local model's measured context; only the
+/// `ollama` module writes it, through `ollama:context-set-cap` and its scheduler.
+const MAIN_OWNED_PREF_KEYS: [&str; 3] = ["quickEntryShortcut", "quickEntryTarget", "ollamaContextFit"];
 
 /// Keys only the shell writes, through validated channels; the generic
 /// `prefs:set` refuses them. The store reads "a.b" as a path, so the first segment counts.
@@ -422,6 +424,13 @@ mod tests {
 
     fn default() -> QuickEntryShortcutPref {
         QuickEntryShortcutPref { chord: "⇧⌃␣".into(), enabled: true }
+    }
+
+    #[test]
+    fn treats_the_context_fit_pref_as_main_owned() {
+        assert!(is_main_owned_pref_key("ollamaContextFit"));
+        assert!(is_main_owned_pref_key("ollamaContextFit.models"));
+        assert!(!is_main_owned_pref_key("ollamaContextFitness"));
     }
 
     #[test]

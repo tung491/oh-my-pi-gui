@@ -514,6 +514,16 @@ struct Inner {
     health_check: AtomicBool,
 }
 
+/// The response timeout for a command sent to an idle tab; `None` keeps the
+/// sidecar's default. Mirrors the `compact` entry of the command timeout table
+/// in `src/shared/rpc-client.ts`: a compaction runs far longer than the default.
+fn idle_command_timeout_ms(command: &Value) -> Option<u64> {
+    match command.get("type").and_then(Value::as_str) {
+        Some("compact") => Some(660_000),
+        _ => None,
+    }
+}
+
 /// The sidecar pool. Cloning shares the same pool.
 #[derive(Clone)]
 pub(crate) struct SidecarPool {
@@ -756,22 +766,45 @@ impl SidecarPool {
     /// command is queued on that sidecar's stdin before this returns. A delivery
     /// failure resolves as a failed response carrying the error, so the caller
     /// reports it the way the TS rejection did.
+    ///
+    /// A `compact` keeps the tab compacting until it answers, exactly like an
+    /// automatic one, so nothing else is sent to the session meanwhile.
     pub(crate) fn command_for_idle_session(&self, session_path: &str, command: Value) -> BoxFuture<'static, Option<Value>> {
-        let sidecar = self.read(|state| {
+        let is_compact = command.get("type").and_then(Value::as_str) == Some("compact");
+        let target = self.with_state(|state, out| {
             let owner = state.session_owners.get(session_path)?;
-            let entry = state.entry_for_tab(&owner.tab_id)?;
-            if entry.in_flight() || entry.sidecar.status() != SidecarStatus::Ready {
+            let index = state.index_of_tab(&owner.tab_id)?;
+            let entry = &mut state.entries[index];
+            if entry.in_flight() || entry.sidecar.status() != SidecarStatus::Ready || !entry.sidecar.has_rpc_client() {
                 return None;
             }
-            Some(entry.sidecar.clone())
+            if is_compact {
+                entry.compacting = Some(true);
+                out.send_tab_status(entry);
+            }
+            Some((entry.key, entry.sidecar.clone()))
         });
-        let Some(sidecar) = sidecar.filter(|sidecar| sidecar.has_rpc_client()) else {
+        let Some((key, sidecar)) = target else {
             return Box::pin(std::future::ready(None));
         };
         let command_type = command.get("type").cloned().unwrap_or(Value::Null);
-        let response = sidecar.request(command, None);
+        let timeout_ms = idle_command_timeout_ms(&command);
+        let response = sidecar.request(command, timeout_ms);
+        let pool = self.clone();
         Box::pin(async move {
-            match response.await {
+            let response = response.await;
+            if is_compact {
+                pool.with_state(|state, out| {
+                    let Some(index) = state.index_of_key(key) else { return };
+                    let entry = &mut state.entries[index];
+                    // A restart in between already reset the flag; leave that alone.
+                    if entry.compacting == Some(true) {
+                        entry.compacting = Some(false);
+                        out.send_tab_status(entry);
+                    }
+                });
+            }
+            match response {
                 Ok(response) => Some(response),
                 Err(error) => Some(json!({ "type": "response", "command": command_type, "success": false, "error": error.to_string() })),
             }
@@ -939,6 +972,13 @@ impl SidecarPool {
                 .map(|entry| WindowTabFact { window_id: entry.win_id, tab_id: entry.tab_id.clone(), in_flight: entry.working() })
                 .collect()
         })
+    }
+
+    /// Whether any tab in any window, the quick-entry bar's included, has an
+    /// agent run or a compaction in flight. User `bash`/`eval` commands do not
+    /// count: they never touch the model.
+    pub(crate) fn any_in_flight(&self) -> bool {
+        self.read(|state| state.entries.iter().any(Entry::in_flight))
     }
 
     /// Count a user `bash` or `eval` request of `tab_id` as running work until
@@ -1756,6 +1796,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn treats_a_compact_sent_to_an_idle_tab_as_compacting_until_it_answers() {
+        let h = harness();
+        let win = h.window(1);
+        h.acquire_with_session("/a", win, "tab-a", "/sessions/s.jsonl");
+        let sidecar = h.sidecar(0);
+        sidecar.set_status(SidecarStatus::Ready);
+        settle().await;
+        let before = h.sent(win, CHANNEL_TAB_STATUS).len();
+
+        // Not awaited yet: the compaction is still waiting for its answer.
+        let pending = h.tabs().command_for_idle_session("/sessions/s.jsonl", json!({ "type": "compact" }));
+        assert_eq!(h.tabs().tabs_for_window(win)[0].compacting, Some(true));
+        assert!(h.tabs().any_in_flight());
+        assert!(h.tabs().command_for_idle_session("/sessions/s.jsonl", json!({ "type": "get_state" })).await.is_none());
+
+        let response = pending.await;
+        assert_eq!(response.and_then(|response| response["success"].as_bool()), Some(true));
+        assert_eq!(h.tabs().tabs_for_window(win)[0].compacting, Some(false));
+        let pushed: Vec<Value> = h.sent(win, CHANNEL_TAB_STATUS)[before..].iter().map(|payload| payload["compacting"].clone()).collect();
+        assert_eq!(pushed, [json!(true), json!(false)]);
+        let requests = sidecar.log.calls().into_iter().filter(|call| call.starts_with("request(")).count();
+        assert_eq!(requests, 1);
+    }
+
+    #[tokio::test]
+    async fn sends_a_compact_to_an_idle_tab_with_the_long_running_compaction_timeout() {
+        let h = harness();
+        let win = h.window(1);
+        h.acquire_with_session("/a", win, "tab-a", "/sessions/s.jsonl");
+        let sidecar = h.sidecar(0);
+        sidecar.set_status(SidecarStatus::Ready);
+        settle().await;
+
+        let compact = json!({ "type": "compact" });
+        let get_state = json!({ "type": "get_state" });
+        h.tabs().command_for_idle_session("/sessions/s.jsonl", compact.clone()).await;
+        h.tabs().command_for_idle_session("/sessions/s.jsonl", get_state.clone()).await;
+        let requests: Vec<String> = sidecar.log.calls().into_iter().filter(|call| call.starts_with("request(")).collect();
+        assert_eq!(requests, [format!("request({compact}, Some(660000))"), format!("request({get_state}, None)")]);
+    }
+
+    #[tokio::test]
     async fn reports_a_session_as_live_only_while_some_process_holds_it() {
         let h = harness();
         let win = h.window(1);
@@ -2080,6 +2162,7 @@ mod tests {
                 { "windowId": 2, "tabId": "tab-c", "inFlight": false },
             ])
         );
+        assert!(!h.tabs().any_in_flight());
 
         // A background window's run counts the same as the active one's, and an automatic compaction is work too.
         agent_events(&a, &["agent_start"]);
@@ -2093,6 +2176,7 @@ mod tests {
                 WindowTabFact { window_id: second, tab_id: "tab-c".into(), in_flight: true },
             ]
         );
+        assert!(h.tabs().any_in_flight());
 
         // A closed tab leaves the inventory.
         agent_events(&b, &["agent_end"]);
@@ -2100,6 +2184,12 @@ mod tests {
         assert!(h.tabs().release_tab("tab-b"));
         let ids: Vec<String> = h.tabs().tab_inventory().into_iter().map(|fact| fact.tab_id).collect();
         assert_eq!(ids, ["tab-a", "tab-c"]);
+
+        // Every window idle again: nothing is in flight anywhere.
+        agent_events(&a, &["agent_end"]);
+        agent_events(&c, &["auto_compaction_end"]);
+        settle().await;
+        assert!(!h.tabs().any_in_flight());
     }
 
     // -- factory, health check, shutdown -------------------------------------------

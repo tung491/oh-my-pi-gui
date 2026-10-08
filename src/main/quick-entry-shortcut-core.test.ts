@@ -97,6 +97,12 @@ describe("main-owned preference keys", () => {
 		expect(isMainOwnedPrefKey("quickEntryShortcut.chord")).toBe(true);
 		expect(isMainOwnedPrefKey("quickEntryTarget.cwd")).toBe(true);
 	});
+
+	it("treats the context fit pref as main owned", () => {
+		expect(isMainOwnedPrefKey("ollamaContextFit")).toBe(true);
+		expect(isMainOwnedPrefKey("ollamaContextFit.models")).toBe(true);
+		expect(isMainOwnedPrefKey("ollamaContextFitX")).toBe(false);
+	});
 });
 
 describe("shortcut update plan", () => {

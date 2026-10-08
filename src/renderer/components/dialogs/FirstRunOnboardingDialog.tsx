@@ -316,6 +316,11 @@ export function FirstRunOnboardingDialog() {
 		if (cancelledTags.current.has(tag)) return;
 		if (final.done && !final.error) {
 			markInstalled(tag);
+			// Main holds a "pulled" measurement until this screen completes, so it
+			// never loads a second model while the user is still setting up.
+			window.omp.ollama
+				.measureContext(tag, "pulled")
+				.catch(cause => console.warn("[welcome] could not queue a context measurement:", errorText(cause)));
 			return;
 		}
 		// An error frame, including "another download is running", stays on the card as a notice.

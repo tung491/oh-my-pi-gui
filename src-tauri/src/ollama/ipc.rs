@@ -1,5 +1,5 @@
-//! Handlers for the channels this module owns: the seven `ollama:*` commands
-//! from `register-ipc.ts:55-98`. Pull and install progress stream to the
+//! Handlers for the channels this module owns: the `ollama:*` commands from
+//! `register-ipc.ts`. Pull and install progress stream to the
 //! caller (or every main window) through `ctx.bridge`, the only reach into
 //! the bridge this module makes.
 
@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use serde_json::Value;
 
+use super::context_fit_scheduler::MeasureReason;
 use super::{string_field, Ollama, OLLAMA_DOWNLOAD_URL};
 use crate::bridge::{self, IpcError, Reply};
 use crate::ctx::AppCtx;
@@ -102,6 +103,48 @@ pub fn ollama_open_download(ctx: &Arc<AppCtx>, _caller: Caller, _args: Vec<Value
     }
 }
 
+/// `ollama:context-list`
+pub fn ollama_context_list(ctx: &Arc<AppCtx>, _caller: Caller, _args: Vec<Value>) -> Reply {
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let scheduler = ollama(&ctx)?.context_fit().clone();
+        Ok(serde_json::to_value(scheduler.list().await)?)
+    }))
+}
+
+/// `ollama:context-measure`: `{ tag, reason?: "manual" | "pulled" }` → `{ queued: true }`.
+pub fn ollama_context_measure(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let Some(tag) = string_field(&args, "tag").map(str::to_string) else {
+        return Reply::err(IpcError::new("Invalid model name"));
+    };
+    let reason = match args.first().and_then(|payload| payload.get("reason")) {
+        None | Some(Value::Null) => MeasureReason::Manual,
+        Some(Value::String(reason)) if reason == "manual" => MeasureReason::Manual,
+        Some(Value::String(reason)) if reason == "pulled" => MeasureReason::Pulled,
+        Some(_) => return Reply::err(IpcError::new("Invalid measurement reason")),
+    };
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let scheduler = ollama(&ctx)?.context_fit().clone();
+        scheduler.request_measure(&tag, reason).await.map_err(IpcError::new)?;
+        Ok(serde_json::json!({ "queued": true }))
+    }))
+}
+
+/// `ollama:context-set-cap`: `{ tag, cap: number | null }` → the stored entry.
+pub fn ollama_context_set_cap(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
+    let payload = args.first();
+    let (Some(tag), Some(cap)) = (string_field(&args, "tag").map(str::to_string), payload.and_then(|payload| payload.get("cap")).cloned()) else {
+        return Reply::err(IpcError::new("Invalid context limit"));
+    };
+    let ctx = ctx.clone();
+    Reply::Later(Box::pin(async move {
+        let scheduler = ollama(&ctx)?.context_fit().clone();
+        let entry = scheduler.set_cap(&tag, &cap).await.map_err(IpcError::new)?;
+        Ok(serde_json::to_value(entry)?)
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +223,29 @@ mod tests {
         let result = dispatch_for_test(&ctx, main_caller(), "ollama:open-download", vec![]).await;
         assert_eq!(result, Ok(Value::Null));
         assert!(fakes.host.log.calls().iter().any(|call| call.contains(OLLAMA_DOWNLOAD_URL)));
+    }
+
+    #[tokio::test]
+    async fn ollama_context_measure_refuses_an_internal_or_unknown_reason_and_a_missing_tag() {
+        let fakes = Fakes::default();
+        let ctx = fake_ctx_cyclic(&fakes, registry(), |ctx, ports| ports.ollama = Some(Arc::new(Ollama::new(ctx.clone()))));
+        for reason in ["stale", "later"] {
+            let result = dispatch_for_test(&ctx, main_caller(), "ollama:context-measure", vec![serde_json::json!({ "tag": "qwen3:8b", "reason": reason })]).await;
+            assert_eq!(result, Err(IpcError::new("Invalid measurement reason")), "{reason}");
+        }
+        let result = dispatch_for_test(&ctx, main_caller(), "ollama:context-measure", vec![serde_json::json!({ "tag": 7 })]).await;
+        assert_eq!(result, Err(IpcError::new("Invalid model name")));
+        let result = dispatch_for_test(&ctx, main_caller(), "ollama:context-measure", vec![serde_json::json!({ "tag": "bad name" })]).await;
+        assert_eq!(result, Err(IpcError::new("Invalid model name")));
+    }
+
+    #[tokio::test]
+    async fn ollama_context_set_cap_refuses_a_payload_without_a_cap() {
+        let fakes = Fakes::default();
+        let ctx = fake_ctx_cyclic(&fakes, registry(), |ctx, ports| ports.ollama = Some(Arc::new(Ollama::new(ctx.clone()))));
+        for payload in [serde_json::json!({ "tag": "qwen3:8b" }), serde_json::json!({ "cap": 16384 }), Value::Null] {
+            let result = dispatch_for_test(&ctx, main_caller(), "ollama:context-set-cap", vec![payload.clone()]).await;
+            assert_eq!(result, Err(IpcError::new("Invalid context limit")), "{payload}");
+        }
     }
 }

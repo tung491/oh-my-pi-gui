@@ -6,6 +6,9 @@ import { awaitMainWindow, type Launch, launch, recorded, relaunch } from "./sess
 
 // A fresh profile meets the welcome screen once: download a model from a fake
 // Ollama, continue, and the next launch goes straight to the assistant.
+// The fake answers 404 to /api/show and /api/ps, so the context measurement
+// of the pulled model, held until the welcome screen closes, ends as a failure
+// that is remembered and not retried on the next launch.
 // The wdio worker is Node, so the daemon is the node:http fake the unit tests
 // share rather than Bun.serve.
 
@@ -13,15 +16,28 @@ const WELCOME = '[role="dialog"][aria-label="Set up your local assistant"]';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+interface FakeRequest {
+	method: string;
+	path: string;
+	at: number;
+}
+
+interface ContextFitPrefs {
+	ollamaContextFit?: { models?: Record<string, { lastError?: string | null }> };
+}
+
 describe("onboarding", () => {
 	let ollama: FakeOllama;
 	let first: Launch | null = null;
 	const installed = new Set<string>();
 	const pulls: string[] = [];
+	const requests: FakeRequest[] = [];
+	const showRequests = (since = 0) => requests.filter(request => request.path === "/api/show" && request.at >= since);
 
 	before(async () => {
 		ollama = await startFakeOllama((req, res, body) => {
 			const url = new URL(req.url ?? "/", "http://fake.invalid");
+			requests.push({ method: req.method ?? "", path: url.pathname, at: Date.now() });
 			if (req.method === "GET" && url.pathname === "/api/version") return sendJson(res, { version: "0.12.0" });
 			if (req.method === "GET" && url.pathname === "/api/tags")
 				return sendJson(res, { models: [...installed].map(name => ({ name })) });
@@ -98,6 +114,8 @@ describe("onboarding", () => {
 
 		const continueButton = welcome.$('[data-action="continue"]');
 		await expect(continueButton).toBeEnabled();
+		// The pulled model's measurement waits for the welcome screen to close.
+		expect(showRequests()).toEqual([]);
 		await continueButton.click();
 		await expect(welcome).not.toBeDisplayed();
 
@@ -111,10 +129,27 @@ describe("onboarding", () => {
 		expect(await recorded(first.record, "set_model_role")).toEqual([
 			expect.objectContaining({ role: "default", modelId: `ollama/${tag}` }),
 		]);
-		const prefs = JSON.parse(await fs.readFile(path.join(first.desktop, "prefs.json"), "utf8")) as {
+		const prefsFile = path.join(first.desktop, "prefs.json");
+		const prefs = JSON.parse(await fs.readFile(prefsFile, "utf8")) as {
 			welcome?: { completed?: unknown };
 		};
 		expect(typeof prefs.welcome?.completed).toBe("string");
+
+		// The fake has no /api/show, so the measurement fails and the failure is stored.
+		const lastError = async () => {
+			try {
+				const stored = JSON.parse(await fs.readFile(prefsFile, "utf8")) as ContextFitPrefs;
+				return stored.ollamaContextFit?.models?.[tag]?.lastError ?? null;
+			} catch {
+				return null;
+			}
+		};
+		await browser.waitUntil(async () => /HTTP 404/.test((await lastError()) ?? ""), {
+			timeout: 20_000,
+			timeoutMsg: "the pulled model's failed measurement was not stored",
+		});
+		expect(await lastError()).toMatch(/HTTP 404/);
+		const relaunchedAt = Date.now();
 
 		await relaunch(first);
 		await awaitMainWindow(browser);
@@ -123,5 +158,7 @@ describe("onboarding", () => {
 		// The gate runs on the ready transition; give it the time a probe would take before asserting absence.
 		await browser.pause(2_000);
 		await expect($$(WELCOME)).toBeElementsArrayOfSize(0);
+		// A failure under the same machine is not retried automatically.
+		expect(showRequests(relaunchedAt)).toEqual([]);
 	}).timeout(120_000);
 });
