@@ -29,6 +29,8 @@ import {
 	type SubagentFrame,
 	type TodoPhase,
 } from "../../shared/rpc-types";
+import { notifyFileWritten, writtenPathOf } from "../components/preview/file-writes";
+import { isOfficeTool } from "../components/tools/office-tools";
 import { formatClock } from "../lib/format";
 import { translate } from "../lib/i18n";
 import { acceptsActiveTabEvents } from "../lib/tab-routing";
@@ -266,12 +268,29 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 		const focusedTabId = () => useTabsStore.getState().activeTabId ?? "";
 		let disposed = false;
 		let statusVersion = 0;
+		// Arguments of running write and office tool calls, keyed `${tabId}:${toolCallId}`,
+		// so their end event can report the file they wrote to an open preview.
+		const fileWriteArgs = new Map<string, Record<string, unknown>>();
 		const unsubscribe =
 			typeof window.omp.events.onTabBatch === "function"
 				? window.omp.events.onTabBatch(reduceEvents)
 				: window.omp.events.onBatch(events => {
 						if (acceptsActiveTabEvents()) reduceEvents(events, focusedTabId());
 					});
+		function reportFileWrite(tabId: string, event: Extract<AgentSessionEvent, { type: "tool_execution_end" }>): void {
+			const key = `${tabId}:${event.toolCallId}`;
+			const args = fileWriteArgs.get(key);
+			fileWriteArgs.delete(key);
+			if (event.isError || (event.toolName !== "write" && !isOfficeTool(event.toolName))) return;
+			const path = writtenPathOf(event.toolName, args, event.result);
+			if (path !== null) notifyFileWritten(tabId, path);
+		}
+		/** Drops the arguments of calls that ended without an end event (an aborted turn). */
+		function forgetFileWriteArgs(tabId: string): void {
+			for (const key of fileWriteArgs.keys()) {
+				if (key.startsWith(`${tabId}:`)) fileWriteArgs.delete(key);
+			}
+		}
 		function reduceEvents(events: AgentSessionEvent[], tabId: string): void {
 			// Incoming session events belong to the target sidecar. Drop them
 			// during an in-place session switch, but never suppress the other pane.
@@ -323,7 +342,14 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 							useSessionStore.setState({ awaitingModelSince: null });
 							break;
 						}
+						case "tool_execution_start": {
+							if (event.toolName === "write" || isOfficeTool(event.toolName)) {
+								fileWriteArgs.set(`${tabId}:${event.toolCallId}`, event.args);
+							}
+							break;
+						}
 						case "tool_execution_end": {
+							reportFileWrite(tabId, event);
 							if (event.toolName !== "todo" || event.isError) break;
 							const phases = todoPhasesFromToolResult(event.result);
 							if (phases) useTodoStore.getState().setPhases(phases);
@@ -331,6 +357,7 @@ export function useRpcEvents(heartbeatMs = 15_000): void {
 						}
 						case "agent_end": {
 							useSessionStore.setState({ isStreaming: false, awaitingModelSince: null });
+							forgetFileWriteArgs(tabId);
 							notifyOnAgentEnd(tabId, event);
 							toastOnAgentError(tabId, event);
 							// Re-fetch state so agent-side todo updates mid-turn reach the panel.

@@ -23,6 +23,18 @@ export function panelTabFromPref(value: unknown): PanelTab | null {
 export type DockCardId = "todo" | "plan" | "agents";
 export type TranscriptDetail = "compact" | "full";
 
+/**
+ * What the Files drawer previews: a file pinned to the tab that opened it (so
+ * a relative path keeps resolving against that tab's workspace after a pane
+ * focus change), or an in-memory image with no file on disk.
+ */
+export type PreviewTarget =
+	| { kind: "path"; path: string; tabId: string | null }
+	| { kind: "image"; id: number; dataUrl: string; name: string };
+
+/** Gives each in-memory image target its own identity, so reopening remounts. */
+let nextImagePreviewId = 0;
+
 export interface GuiDisplayPreferences {
 	hideThinkingBlock?: boolean | null;
 	proseOnlyThinking?: boolean | null;
@@ -40,8 +52,8 @@ interface UiStore {
 	sidebarVisible: boolean;
 	panelVisible: boolean;
 	panelTab: PanelTab;
-	/** Local file currently shown in the Files drawer. */
-	filePreviewPath: string | null;
+	/** File or in-memory image currently shown in the Files drawer. */
+	filePreview: PreviewTarget | null;
 	commandPaletteOpen: boolean;
 	modelPickerOpen: boolean;
 	settingsOpen: boolean;
@@ -95,7 +107,8 @@ interface UiStore {
 	togglePanel: () => void;
 	toggleToolsExpandAll: () => void;
 	setPanelTab: (tab: PanelTab) => void;
-	openFilePreview: (path: string) => void;
+	openFilePreview: (path: string, tabId?: string | null) => void;
+	openImagePreview: (dataUrl: string, name: string) => void;
 	closeFilePreview: () => void;
 	/** Per-card collapse overrides for the center dock (absent = expanded). */
 	dockCollapsed: Partial<Record<DockCardId, boolean>>;
@@ -139,8 +152,10 @@ interface UiStore {
 	closeSessionInfo: () => void;
 	requestSessionSwitch: (session: SessionInfo) => void;
 	closeSessionSwitch: () => void;
-	/** Close UI whose data or actions belong to the outgoing tab. */
-	closeSessionOverlays: () => void;
+	/** Close UI whose data or actions belong to the outgoing tab. With
+	 * `keepFilePreview` the preview stays: it is pinned to its own tab, so a
+	 * focus change between split panes does not invalidate it. */
+	closeSessionOverlays: (options?: { keepFilePreview?: boolean }) => void;
 	/** In-flight sidebar/picker session switch: keep the outgoing transcript painted. */
 	setSidecarError: (error: string | null, restart?: SidecarRestartProgress | null) => void;
 	clearSidecarError: () => void;
@@ -169,7 +184,7 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	sidebarVisible: true,
 	panelVisible: false,
 	panelTab: "files",
-	filePreviewPath: null,
+	filePreview: null,
 	commandPaletteOpen: false,
 	modelPickerOpen: false,
 	settingsOpen: false,
@@ -188,8 +203,17 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	toggleToolsExpandAll: () =>
 		set({ toolsExpandAll: { expanded: !get().toolsExpandAll.expanded, seq: get().toolsExpandAll.seq + 1 } }),
 	setPanelTab: tab => set({ panelTab: tab, panelVisible: true }),
-	openFilePreview: path => set({ filePreviewPath: path, panelTab: "files", panelVisible: true }),
-	closeFilePreview: () => set({ filePreviewPath: null }),
+	openFilePreview: (path, tabId = null) =>
+		set({ filePreview: { kind: "path", path, tabId }, panelTab: "files", panelVisible: true }),
+	openImagePreview: (dataUrl, name) => {
+		nextImagePreviewId += 1;
+		set({
+			filePreview: { kind: "image", id: nextImagePreviewId, dataUrl, name },
+			panelTab: "files",
+			panelVisible: true,
+		});
+	},
+	closeFilePreview: () => set({ filePreview: null }),
 	dockCollapsed: {},
 	toggleDockCard: id =>
 		set({
@@ -261,8 +285,9 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	sessionSwitchPrompt: null as SessionInfo | null,
 	requestSessionSwitch: session => set({ sessionSwitchPrompt: session }),
 	closeSessionSwitch: () => set({ sessionSwitchPrompt: null }),
-	closeSessionOverlays: () =>
+	closeSessionOverlays: (options = {}) =>
 		set({
+			...(options.keepFilePreview ? {} : { filePreview: null }),
 			commandPaletteOpen: false,
 			modelPickerOpen: false,
 			settingsOpen: false,
@@ -274,7 +299,6 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 			composerEditorInitial: null,
 			renameDialogOpen: false,
 			armedCloseTab: null,
-			filePreviewPath: null,
 			sessionPickerOpen: false,
 			sessionInfoOpen: false,
 			sessionSwitchPrompt: null,

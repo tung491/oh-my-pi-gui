@@ -1,31 +1,32 @@
 /**
  * Files panel: workspace file tree sourced via the dedicated `fs:list` /
  * `fs:read` main-process IPC (node:fs — cross-platform, works with no live
- * agent session), in-drawer preview, and @mention insertion via the
- * "omp:insert-mention" window event.
+ * agent session), the in-drawer document preview (`DocumentPreview`), and
+ * @mention insertion via the "omp:insert-mention" window event.
  */
 
-import { ArrowLeft, AtSign, ExternalLink as ExternalLinkIcon, File, Folder, FolderOpen, RefreshCw } from "lucide-react";
+import {
+	ArrowLeft,
+	AtSign,
+	ExternalLink as ExternalLinkIcon,
+	File,
+	Folder,
+	FolderOpen,
+	RefreshCw,
+	RotateCw,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FsTreeEntry } from "../../../shared/ipc-types";
 import { useT } from "../../lib/i18n";
-import { MarkdownRenderer } from "../../lib/markdown";
 import { useRuntimeTabId } from "../../stores/session-runtime-context";
 import { useUiStore } from "../../stores/ui";
-import { Button, Spinner } from "../common";
+import { Button, IconButton, Spinner } from "../common";
 import { type TreeNode, TreeView } from "../common/TreeView";
+import { DocumentPreview } from "../preview/DocumentPreview";
 import { PathLink } from "../tools/PathLink";
 
 const MAX_FILES = 2000;
 const MAX_DEPTH = 8;
-const PREVIEW_MAX_BYTES = 200_000;
-
-interface PreviewState {
-	path: string;
-	content: string | null;
-	loading: boolean;
-	truncated: boolean;
-}
 
 function countFiles(entries: FsTreeEntry[]): number {
 	let count = 0;
@@ -51,18 +52,18 @@ export function searchFiles(entries: FsTreeEntry[], query: string): FsTreeEntry[
 export function FilesPanel() {
 	const t = useT();
 	const tabId = useRuntimeTabId();
-	const filePreviewPath = useUiStore(s => s.filePreviewPath);
+	const filePreview = useUiStore(s => s.filePreview);
 	const openFilePreview = useUiStore(s => s.openFilePreview);
 	const closeFilePreview = useUiStore(s => s.closeFilePreview);
 	const listVersion = useRef(0);
-	const previewVersion = useRef(0);
 	const [query, setQuery] = useState("");
 	const [tree, setTree] = useState<FsTreeEntry[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [truncated, setTruncated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
-	const [preview, setPreview] = useState<PreviewState | null>(null);
+	/** Bumped by the header's Reload: a full re-read of the previewed file. */
+	const [reloadToken, setReloadToken] = useState(0);
 
 	const load = useCallback(async () => {
 		const version = ++listVersion.current;
@@ -100,50 +101,6 @@ export function FilesPanel() {
 		};
 	}, [load]);
 
-	const openPreview = useCallback(
-		async (path: string) => {
-			const version = ++previewVersion.current;
-			setPreview({ path, content: null, loading: true, truncated: false });
-			try {
-				const result = tabId
-					? await window.omp.fs.read(path, PREVIEW_MAX_BYTES, tabId)
-					: await window.omp.fs.read(path, PREVIEW_MAX_BYTES);
-				if (version !== previewVersion.current) return;
-				if (!result.ok) {
-					setPreview({
-						path,
-						content: t("filesPanel.readFailed", { error: result.error ?? "unknown" }),
-						loading: false,
-						truncated: false,
-					});
-					return;
-				}
-				if (result.binary) {
-					setPreview({ path, content: t("filesPanel.binary"), loading: false, truncated: false });
-					return;
-				}
-				setPreview({ path, content: result.content, loading: false, truncated: result.truncated });
-			} catch (error) {
-				if (version !== previewVersion.current) return;
-				setPreview({
-					path,
-					content: t("filesPanel.readFailed", { error: error instanceof Error ? error.message : String(error) }),
-					loading: false,
-					truncated: false,
-				});
-			}
-		},
-		[t, tabId],
-	);
-
-	useEffect(() => {
-		if (filePreviewPath) void openPreview(filePreviewPath);
-		else setPreview(null);
-		return () => {
-			previewVersion.current++;
-		};
-	}, [filePreviewPath, openPreview]);
-
 	const insertMention = useCallback(
 		(path: string) => {
 			window.dispatchEvent(new CustomEvent("omp:insert-mention", { detail: { path, tabId } }));
@@ -154,7 +111,7 @@ export function FilesPanel() {
 	// Wire file activation: clicking a file previews it, clicking a dir toggles.
 	const onNodeClick = useCallback(
 		(id: string) => {
-			if (id.startsWith("file:")) openFilePreview(id.slice(5));
+			if (id.startsWith("file:")) openFilePreview(id.slice(5), tabId);
 			else if (id.startsWith("dir:")) {
 				setExpanded(prev => {
 					const next = new Set(prev);
@@ -164,7 +121,7 @@ export function FilesPanel() {
 				});
 			}
 		},
-		[openFilePreview],
+		[openFilePreview, tabId],
 	);
 
 	const nodes = useMemo<TreeNode[]>(() => {
@@ -185,10 +142,10 @@ export function FilesPanel() {
 	}, [tree, query, expanded, onNodeClick]);
 
 	const fileCount = useMemo(() => countFiles(tree), [tree]);
-	const activePreview = preview?.path === filePreviewPath ? preview : null;
-	const previewIsMarkdown = filePreviewPath ? /\.mdx?$/i.test(filePreviewPath) : false;
 
-	if (filePreviewPath) {
+	if (filePreview) {
+		const previewPath = filePreview.kind === "path" ? filePreview.path : null;
+		const title = filePreview.kind === "path" ? filePreview.path : filePreview.name;
 		return (
 			<div className="omp-slide-in-right flex h-full flex-col">
 				<div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-(--omp-border-muted) px-3 py-2">
@@ -201,54 +158,41 @@ export function FilesPanel() {
 						<ArrowLeft size={14} />
 					</button>
 					<File className="shrink-0 text-(--omp-dim)" size={12} />
-					<span className="min-w-0 flex-1 truncate font-mono text-omp-xs" title={filePreviewPath}>
-						{filePreviewPath}
+					<span className="min-w-0 flex-1 truncate font-mono text-omp-xs" title={title}>
+						{title}
 					</span>
-					<PathLink
-						path={filePreviewPath}
-						className="inline-flex shrink-0 items-center gap-1 px-1.5 py-1 text-omp-xs text-(--omp-muted)"
-					>
-						<ExternalLinkIcon size={12} />
-						<span>{t("filesPanel.openExternal")}</span>
-					</PathLink>
-					<button
-						type="button"
-						onClick={() => {
-							insertMention(filePreviewPath);
-							closeFilePreview();
-						}}
-						className="omp-pressable inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-omp-xs text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
-					>
-						<AtSign size={12} />
-						<span>{t("filesPanel.insertMention")}</span>
-					</button>
-				</div>
-				<div className="min-h-0 flex-1 overflow-auto bg-(--omp-code-bg)">
-					{!activePreview || activePreview.loading ? (
-						<div className="flex items-center gap-2 p-4">
-							<Spinner size="sm" />
-							<span className="text-omp-sm text-(--omp-dim)">{t("filesPanel.reading")}</span>
-						</div>
-					) : previewIsMarkdown ? (
-						<div className="p-4 text-omp-md text-(--omp-text)">
-							<MarkdownRenderer content={activePreview.content ?? ""} />
-							{activePreview.truncated && (
-								<div className="mt-3 text-omp-xs text-(--omp-dim)">
-									{t("filesPanel.truncated", { kb: PREVIEW_MAX_BYTES / 1000 })}
-								</div>
-							)}
-						</div>
-					) : (
-						<pre className="p-3 font-mono text-omp-sm leading-[1.5] break-words whitespace-pre-wrap text-(--omp-text)">
-							{activePreview.content}
-							{activePreview.truncated && (
-								<span className="text-(--omp-dim)">
-									{"\n"}
-									{t("filesPanel.truncated", { kb: PREVIEW_MAX_BYTES / 1000 })}
-								</span>
-							)}
-						</pre>
+					{previewPath !== null && (
+						<>
+							<PathLink
+								path={previewPath}
+								className="inline-flex shrink-0 items-center gap-1 px-1.5 py-1 text-omp-xs text-(--omp-muted)"
+							>
+								<ExternalLinkIcon size={12} />
+								<span>{t("filesPanel.openExternal")}</span>
+							</PathLink>
+							<IconButton
+								icon={<RotateCw size={12} />}
+								label={t("preview.reload")}
+								onClick={() => setReloadToken(token => token + 1)}
+								size="sm"
+								className="shrink-0"
+							/>
+							<button
+								type="button"
+								onClick={() => {
+									insertMention(previewPath);
+									closeFilePreview();
+								}}
+								className="omp-pressable inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-omp-xs text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
+							>
+								<AtSign size={12} />
+								<span>{t("filesPanel.insertMention")}</span>
+							</button>
+						</>
 					)}
+				</div>
+				<div className="min-h-0 flex-1 overflow-hidden bg-(--omp-code-bg)">
+					<DocumentPreview target={filePreview} reloadToken={reloadToken} />
 				</div>
 			</div>
 		);

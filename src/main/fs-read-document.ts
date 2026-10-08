@@ -1,7 +1,8 @@
 /**
  * Reads a document (PDF, OOXML/ODF zip, legacy OLE spreadsheet or an HTML
  * table export) for the in-app preview. The caller resolves the path; this
- * module only reads an absolute one. The file is opened once, its type, size
+ * module only reads an absolute one, normalized lexically (`.` and `..`
+ * segments, as `path.normalize` does) before it is opened. The file is opened once, its type, size
  * and mtime come from `fstat` on that handle, and at most one byte past the
  * cap is read, so a file that grows after `fstat` is refused rather than read
  * whole. Images are not accepted here: they go through `fs:read-image`.
@@ -9,6 +10,7 @@
  */
 import { constants as fsConstants, promises as fsp } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
+import path from "node:path";
 import type { IpcDocumentSignature, IpcFsReadDocumentResult, IpcFsReadDocumentStamp } from "../shared/ipc-types";
 
 export const FS_DOCUMENT_MAX_BYTES = 32 * 1024 * 1024;
@@ -48,9 +50,10 @@ export function documentSignature(header: Buffer): IpcDocumentSignature | null {
 }
 
 export async function readDocumentFile(
-	abs: string,
+	input: string,
 	options: ReadDocumentOptions = {},
 ): Promise<IpcFsReadDocumentResult> {
+	const abs = path.normalize(input);
 	let handle: FileHandle | undefined;
 	try {
 		// Non-blocking so a named pipe cannot stall the open before `fstat`

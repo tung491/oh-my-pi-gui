@@ -145,6 +145,18 @@ describe("readDocumentFile", () => {
 		});
 	});
 
+	it("document read normalizes an absolute path with dot segments", async () => {
+		const file = write("a.pdf", PDF);
+		const dotted = `${dir}/./sub/../a.pdf`;
+		expect(await readDocumentFile(dotted)).toEqual({
+			ok: true,
+			data: PDF.toString("base64"),
+			...stamp(file),
+			resolvedPath: file,
+			signature: "pdf",
+		});
+	});
+
 	it("document read reports a missing file as not ok", async () => {
 		const result = await readDocumentFile(path.join(dir, "missing.docx"));
 		expect(result.ok).toBe(false);

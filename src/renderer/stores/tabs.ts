@@ -451,8 +451,11 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		const version = ++switchVersion;
 		ensureTabRuntime(id);
 		beginTabRoute(state.activeTabId, id);
+		// Focus moving between the two panes of a split keeps the file preview:
+		// it is pinned to the tab that opened it, which is still on screen.
+		const paneFocus = state.split !== null && (state.split.firstTabId === id || state.split.secondTabId === id);
 		const ui = useUiStore.getState();
-		ui.closeSessionOverlays();
+		ui.closeSessionOverlays({ keepFilePreview: paneFocus });
 		const split = replaceFocusedSplitTab(state.split, state.activeTabId, id);
 		const outgoingStreaming = useSessionStore.getState().isStreaming;
 		set({

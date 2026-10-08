@@ -691,8 +691,10 @@ fn document_signature(header: &[u8]) -> Option<&'static str> {
     None
 }
 
+/// Reads `abs` after lexically normalizing it (`.` and `..` segments, as
+/// Node's `path.normalize` does), so `resolvedPath` matches the Electron shell.
 fn read_document_file(abs: &Path, max_bytes: u64, if_changed: Option<(u64, u64)>) -> Value {
-    read_document_with(abs, max_bytes, if_changed, || {})
+    read_document_with(&workspace_fs::normalize(abs), max_bytes, if_changed, || {})
 }
 
 /// One handle for the stamp, the cap and the read, reading at most one byte
@@ -1159,6 +1161,14 @@ mod tests {
             read_doc(dir.path()),
             json!({ "ok": false, "size": 0, "mtimeMs": 0, "resolvedPath": dir.path().to_str().unwrap(), "error": "not-a-file" })
         );
+    }
+
+    #[test]
+    fn document_read_normalizes_an_absolute_path_with_dot_segments() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = write_doc(&dir, "a.pdf", DOC_PDF);
+        let dotted = dir.path().join(".").join("sub").join("..").join("a.pdf");
+        assert_eq!(read_doc(&dotted), full_read(&file, DOC_PDF, "pdf"));
     }
 
     #[test]

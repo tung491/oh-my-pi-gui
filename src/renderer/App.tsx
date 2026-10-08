@@ -286,12 +286,14 @@ export function App() {
 	useEffect(() => applyFontSize(fontSize), [fontSize]);
 
 	// Keep the conversation usable at the minimum window size. The inspector
-	// becomes an on-demand overlay instead of permanently squeezing the chat.
+	// becomes an on-demand overlay instead of permanently squeezing the chat;
+	// a file preview stays, docked beside the chat (see PanelContainer).
 	useEffect(() => {
 		const compact = window.matchMedia("(max-width: 1000px)");
 		const hideInspector = () => {
 			const ui = useUiStore.getState();
-			if (compact.matches && ui.panelVisible) ui.togglePanel();
+			const previewing = ui.panelTab === "files" && ui.filePreview !== null;
+			if (compact.matches && ui.panelVisible && !previewing) ui.togglePanel();
 		};
 		hideInspector();
 		compact.addEventListener("change", hideInspector);

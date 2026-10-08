@@ -33,3 +33,37 @@ describe("restored preferences", () => {
 		expect(useUiStore.getState().keymapOverrides).toEqual({ retry: ["⌥⇧R"] });
 	});
 });
+
+describe("file preview target", () => {
+	afterEach(() => {
+		useUiStore.setState({ filePreview: null, panelVisible: false, panelTab: "files" });
+	});
+
+	it("pins a path preview to the tab that opened it", () => {
+		useUiStore.getState().openFilePreview("docs/a.pdf", "t0");
+		const state = useUiStore.getState();
+		expect(state.filePreview).toEqual({ kind: "path", path: "docs/a.pdf", tabId: "t0" });
+		expect(state.panelTab).toBe("files");
+		expect(state.panelVisible).toBe(true);
+	});
+
+	it("opens an in-memory image as an image target with a fresh id", () => {
+		useUiStore.getState().openImagePreview("data:image/png;base64,AA==", "paste.png");
+		const first = useUiStore.getState().filePreview;
+		expect(first).toMatchObject({ kind: "image", dataUrl: "data:image/png;base64,AA==", name: "paste.png" });
+		useUiStore.getState().openImagePreview("data:image/png;base64,AA==", "paste.png");
+		const second = useUiStore.getState().filePreview;
+		expect(first?.kind === "image" && second?.kind === "image" && first.id !== second.id).toBe(true);
+		expect(useUiStore.getState().panelVisible).toBe(true);
+	});
+
+	it("keeps the preview when session overlays close with keepFilePreview", () => {
+		useUiStore.getState().openFilePreview("a.csv", "t1");
+		useUiStore.getState().openSettings();
+		useUiStore.getState().closeSessionOverlays({ keepFilePreview: true });
+		expect(useUiStore.getState().settingsOpen).toBe(false);
+		expect(useUiStore.getState().filePreview).toEqual({ kind: "path", path: "a.csv", tabId: "t1" });
+		useUiStore.getState().closeSessionOverlays();
+		expect(useUiStore.getState().filePreview).toBeNull();
+	});
+});

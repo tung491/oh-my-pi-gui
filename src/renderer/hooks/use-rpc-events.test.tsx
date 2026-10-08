@@ -26,6 +26,7 @@ import type {
 	TodoPhase,
 } from "../../shared/rpc-types";
 import { TurnStatusRow } from "../components/chat/ChatStream";
+import { subscribeFileWrites } from "../components/preview/file-writes";
 import { formatClock } from "../lib/format";
 import { I18nProvider } from "../lib/i18n";
 import { en } from "../locales/en";
@@ -940,6 +941,120 @@ describe("useRpcEvents todo lifecycle", () => {
 		expect(state.reminderTodos).toEqual([]);
 		expect(state.history).toHaveLength(1);
 		expect(state.history[0]?.phases[0]?.tasks[0]?.status).toBe("completed");
+	});
+});
+
+describe("useRpcEvents file write notifications", () => {
+	function writeCall(toolCallId: string, isError: boolean): AgentSessionEvent[] {
+		return [
+			{ type: "tool_execution_start", toolCallId, toolName: "write", args: { path: "table.csv" } },
+			{
+				type: "tool_execution_end",
+				toolCallId,
+				toolName: "write",
+				isError,
+				result: { content: [{ type: "text", text: "ok" }], details: { resolvedPath: "/w/table.csv" } },
+			},
+		];
+	}
+
+	function seedTab(): void {
+		useTabsStore.setState({
+			tabs: [{ id: "t1", kind: "agent", cwd: "/w", status: "ready", unreadDone: false }],
+			activeTabId: "t1",
+		});
+		ensureTabRuntime("t1");
+		setFocusedSessionRuntime("t1");
+	}
+
+	it("reports a finished write with its tab and path, and not an errored one", async () => {
+		const { emitTabBatch } = installTabRoutedMockOmp();
+		seedTab();
+		const listener = vi.fn();
+		const unsubscribe = subscribeFileWrites(listener);
+		try {
+			await mount(<RpcEventsProbe />);
+			await act(async () => {
+				emitTabBatch(writeCall("w-1", false), "t1");
+			});
+			expect(listener.mock.calls).toEqual([[{ tabId: "t1", path: "/w/table.csv" }]]);
+			await act(async () => {
+				emitTabBatch(writeCall("w-2", true), "t1");
+			});
+			expect(listener).toHaveBeenCalledOnce();
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it("reports the argument path when a write ends in a later batch without a resolved path", async () => {
+		const { emitTabBatch } = installTabRoutedMockOmp();
+		seedTab();
+		const listener = vi.fn();
+		const unsubscribe = subscribeFileWrites(listener);
+		try {
+			await mount(<RpcEventsProbe />);
+			await act(async () => {
+				emitTabBatch(
+					[{ type: "tool_execution_start", toolCallId: "w-3", toolName: "write", args: { path: "notes.md" } }],
+					"t1",
+				);
+			});
+			await act(async () => {
+				emitTabBatch(
+					[
+						{
+							type: "tool_execution_end",
+							toolCallId: "w-3",
+							toolName: "write",
+							isError: false,
+							result: { content: [{ type: "text", text: "ok" }] },
+						},
+					],
+					"t1",
+				);
+			});
+			expect(listener.mock.calls).toEqual([[{ tabId: "t1", path: "notes.md" }]]);
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it("reports the file an office tool made and ignores other tools", async () => {
+		const { emitTabBatch } = installTabRoutedMockOmp();
+		seedTab();
+		const listener = vi.fn();
+		const unsubscribe = subscribeFileWrites(listener);
+		const file = "/home/u/Documents/Sai ATLAS/report.docx";
+		try {
+			await mount(<RpcEventsProbe />);
+			await act(async () => {
+				emitTabBatch(
+					[
+						{ type: "tool_execution_start", toolCallId: "o-1", toolName: "office_report", args: {} },
+						{
+							type: "tool_execution_end",
+							toolCallId: "o-1",
+							toolName: "office_report",
+							isError: false,
+							result: { content: [{ type: "text", text: JSON.stringify({ check: "ok", file, kind: "docx" }) }] },
+						},
+						{ type: "tool_execution_start", toolCallId: "r-1", toolName: "read", args: { path: "a.csv" } },
+						{
+							type: "tool_execution_end",
+							toolCallId: "r-1",
+							toolName: "read",
+							isError: false,
+							result: { content: [{ type: "text", text: "a" }], details: { resolvedPath: "/w/a.csv" } },
+						},
+					],
+					"t1",
+				);
+			});
+			expect(listener.mock.calls).toEqual([[{ tabId: "t1", path: file }]]);
+		} finally {
+			unsubscribe();
+		}
 	});
 });
 

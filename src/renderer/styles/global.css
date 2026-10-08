@@ -711,6 +711,20 @@ summary,
 		width: min(460px, calc(100vw - 56px)) !important;
 		box-shadow: -8px 0 24px rgba(24, 28, 33, 0.08);
 	}
+
+	/* A previewed file docks beside the chat at half the window instead of
+	   overlaying it; the !important wins over the rule above by source order.
+	   z-index 0 with isolation keeps a stacking context, so nothing a document
+	   paints can rise above the app. */
+	.omp-inspector[data-docked-preview] {
+		position: relative;
+		inset-block: auto;
+		right: auto;
+		z-index: 0;
+		isolation: isolate;
+		width: 50vw !important;
+		box-shadow: none;
+	}
 }
 
 /* ============================================================================
