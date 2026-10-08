@@ -227,6 +227,18 @@ describe("installed package", () => {
 		expect(appIds.length).toBeGreaterThan(0);
 		expect([...new Set(appIds)]).toEqual([APP_ID]);
 		await expect($("#root > *")).toBeDisplayed();
+		// The modern pdf.js build calls these without polyfills, so the packaged WebKitGTK must have them.
+		const pdfjsApis = await browser.execute(() => [
+			typeof (Map.prototype as unknown as Record<string, unknown>).getOrInsertComputed,
+			typeof (Math as unknown as Record<string, unknown>).sumPrecise,
+			typeof (Uint8Array as unknown as Record<string, unknown>).fromBase64,
+			typeof Promise.withResolvers,
+			typeof URL.parse,
+		]);
+		const userAgent = await browser.execute(() => navigator.userAgent);
+		labelled(`pdf.js APIs on ${userAgent}`, () =>
+			expect(pdfjsApis).toEqual(["function", "function", "function", "function", "function"]),
+		);
 		const settings = await browser.execute(() => window.omp.rpc.getSettings());
 		labelled(JSON.stringify(settings), () => expect(settings.success).toBe(true));
 	}).timeout(180_000);
