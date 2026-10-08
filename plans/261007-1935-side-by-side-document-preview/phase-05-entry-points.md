@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Entry points"
-status: pending
+status: completed
 priority: P2
 effort: "3h"
 dependencies: [4]
@@ -82,7 +82,7 @@ defined in Phase 2 (`src/renderer/stores/ui.ts`).
 - **Steps:**
   1. Run `grep -rnE "<AttachmentCard([[:space:]]|$)" src/renderer --include=*.tsx | grep -v "\.test\.tsx:" | grep -v "components/attachments/" | cut -d: -f1 | sort | uniq -c`. The pattern needs whitespace or a line end after the name, so it skips `Pick<AttachmentCardProps` in `AttachmentCard.tsx:51`, and the component's own folder is excluded. The expected output is exactly two lines: `      2 src/renderer/components/chat/MessageBubble.tsx` and `      3 src/renderer/components/layout/InputArea.tsx`. Any other output triggers the Failure Protocol.
   2. **Red.** Add the `AttachmentCard`, `InputArea.drop` and `MessageBubble` cases from the matrix and run them. For `MessageBubble.test.tsx`, follow the existing "shows trailing quoted document paths as cards and only the typed text" case (`:319`) and add a user message with an `ImageContent` block for the image case. For `InputArea.drop.test.tsx`, follow "turns dropped files into cards…" (`:202`) and "shows an image card with a spinner while the image is read" (`:242`).
-  3. **Green, the card.** When `onOpen` is set and `loading` is not, wrap the preview `div` and the `figcaption` in `<button type="button" onClick={onOpen} aria-label={t("preview.open", { name })} className="flex min-h-0 w-full flex-1 flex-col text-left">…</button>`. Otherwise keep today's markup. The remove button stays outside the wrapper.
+  3. **Green, the card.** When `onOpen` is set and `loading` is not, wrap the preview `div` and the `figcaption` in `<button type="button" onClick={onOpen} aria-label={t("preview.open", { name })} className="flex min-h-0 w-full flex-1 flex-col text-left">…</button>`. Otherwise keep today's markup. The remove button stays outside the wrapper. <!-- Shipped: not a wrapper, which would nest the figcaption's content inside a button (invalid HTML). The open control is an absolutely positioned sibling `<button className="absolute inset-0 …">` covering the figure, labelled `preview.open`; `preview.openButton` is the office card's label. The remove button is a second sibling above it. -->
   4. **Green, the call sites.** Read `const tabId = useRuntimeTabId();` in each component (once), then:
      - `InputArea.tsx` image card (about `:1024`): `onOpen={() => image.path ? useUiStore.getState().openFilePreview(image.path, tabId) : useUiStore.getState().openImagePreview(image.preview, image.name ?? t("input.attachmentAlt", { index: index + 1 }))}`. `image.preview` is a data URL (`InputArea.tsx:402`, `attach-document.ts:73`, `input-area-utils.ts:81`).
      - `InputArea.tsx` pending image card (about `:1036`, `loading`): no `onOpen`.

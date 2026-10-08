@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "End-to-end in both shells, packaged pdf.js check and docs"
-status: pending
+status: completed
 priority: P1
 effort: "5h"
 dependencies: [5]
@@ -50,7 +50,7 @@ render path were already asserted by the unit tests in Phases 1–5.
 
 ### Task 6.1 — Fixture write command and the Tauri spec
 <!-- Red team: R9, R11, K10 --> <!-- Validation: refresh -->
-- **Goal:** Real renders under the real CSP on WebKitGTK, with assertions that cannot pass before a renderer has drawn.
+- **Goal:** Real renders under the real CSP on WebKitGTK, with assertions that cannot pass before a renderer has drawn. <!-- Shipped: the specs (both shells) dismiss the toasts before clicking header controls, because the fixture sidecar's non-local-model warning covers them; the body-children count excludes the toast stack (`[aria-live="polite"]`), and it is asserted unchanged after closing the docx and the pptx preview; the narrow-window test also asserts the composer `textarea` is enabled. The e2e found that PdfPreview canvases must start at 0×0 until drawn (an unsized canvas holds a 300×150 bitmap, so `width > 0` counted undrawn pages); fixed in the PDF renderer. -->
 - **Target files and symbols:** `e2e/sidecar-fixture.ts`; `e2e-tauri/document-preview.e2e.ts`. The spec imports `launch`, `awaitBridge`, `collectPageErrors`, `pageErrors`, `until`, `lastExactText` and `exactTextCount` from `./session` (`e2e-tauri/session.ts:178,225,465,480,430,374,359`).
 - **Steps:**
   1. In `sidecar-fixture.ts`, inside the `bash` case before the `fixture:security:` branch, add: when `command.command === "fixture:write-table-csv"`, write `"Region,Revenue\nWest,77\n"` to `path.join(process.cwd(), "table.csv")` (the sidecar runs in the workspace), then `write({ type: "tool_execution_start", toolCallId: "write-table-csv", toolName: "write", args: { path: "table.csv" } })`, `write({ type: "tool_execution_end", toolCallId: "write-table-csv", toolName: "write", result: { content: [{ type: "text", text: "Wrote table.csv" }], details: { resolvedPath: <that absolute path> } }, isError: false })`, `ok()` and `break`.

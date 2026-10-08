@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Document byte channel and mailto opener"
-status: pending
+status: completed
 priority: P1
 effort: "6h"
 dependencies: []
@@ -131,14 +131,14 @@ tests, so a mail link in a document reaches the mail client.
      - `d0 cf 11 e0 a1 b1 1a e1` → `ole`;
      - after skipping a UTF-8 BOM and ASCII whitespace, the lowercased bytes start with `<!doctype html`, `<html` or `<table` → `html`;
      - otherwise `null`. Images return `null`: they are read through `fs:read-image`.
-  3. Implement `readDocumentFile`. Mirror the sibling's bounded PDF read (`read_pdf_bytes` in `src-tauri/src/services/ipc.rs`, which reads at most one byte past the cap):
+  3. Implement `readDocumentFile`. <!-- Shipped: `readDocumentFile` normalizes the path itself (`path.normalize`; Rust `read_document_file` uses `workspace_fs::normalize`) so `resolvedPath` matches in both shells. Electron also races the read against a 30 s timeout (`FS_DOCUMENT_READ_TIMEOUT_MS`) and returns `{ ok: false, size: 0, mtimeMs: 0, error: "timed-out" }` like Tauri, whose `settle_document_read` does the same; a timed-out read runs on and closes its handle when it settles. --> Mirror the sibling's bounded PDF read (`read_pdf_bytes` in `src-tauri/src/services/ipc.rs`, which reads at most one byte past the cap):
      1. `handle = await fsp.open(abs, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK)` so a FIFO cannot stall the open. On a throw, return `{ ok: false, size: 0, mtimeMs: 0, error: <message> }`.
      2. `stat = await handle.stat()`. If it is not a file, return `{ ok: false, size: 0, mtimeMs: 0, resolvedPath: abs, error: "not-a-file" }`.
      3. Set `mtimeMs = Math.floor(stat.mtimeMs)`, `cap = maxBytes ?? FS_DOCUMENT_MAX_BYTES`.
      4. If `ifChanged` matches `stat.size` and `mtimeMs`, return `{ ok: true, unchanged: true, size: stat.size, mtimeMs, resolvedPath: abs }`.
      5. If `stat.size > cap`, return `{ ok: false, size: stat.size, mtimeMs, resolvedPath: abs, error: "too-large" }`.
      6. `await options.afterOpen?.()`.
-     7. Read into a `Buffer.alloc(cap + 1)` with `handle.read` in a loop until EOF or `cap + 1` bytes. If more than `cap` bytes arrived, return `too-large` with `size` = bytes read.
+     7. Read into a `Buffer.alloc(cap + 1)` with `handle.read` in a loop until EOF or `cap + 1` bytes. If more than `cap` bytes arrived, return `too-large` with `size` = bytes read. <!-- Shipped: reads are chunked, not one `cap + 1` buffer: the first chunk is the `fstat` size + 1 byte, later chunks 64 KiB, and the total is bound at `cap + 1` -->
      8. Run `documentSignature(bytes.subarray(0, 512))`. If it is null, return `{ ok: false, size: stat.size, mtimeMs, resolvedPath: abs, error: "unsupported" }`.
      9. Otherwise return `{ ok: true, data: base64, size: bytesRead, mtimeMs, resolvedPath: abs, signature }`.
      10. Close the handle in `finally`. Wrap the whole function in a try/catch, so it never throws.
@@ -200,7 +200,7 @@ tests, so a mail link in a document reaches the mail client.
 - **Target files and symbols:** `src/main/external-url.ts` `isAllowedExternalUrl(url: unknown): url is string`; `src/main/external-url.test.ts`; `src/main/ipc.ts` `SYSTEM_OPEN_EXTERNAL` handler; `system.rs` `allowed_external_url` and new `pub fn allowed_web_url(url: &str) -> bool`; `host_tools.rs` `gui_open_url`; `lib.rs` and `testing.rs` `open_url`.
 - **Steps:**
   1. **Red.** Write `external-url.test.ts` with `it("allows http https and mailto urls")` (`https://a.b`, `http://a.b`, `mailto:a@b.c` → true) and `it("refuses file javascript and data urls")` (`file:///etc/passwd`, `javascript:alert(1)`, `data:text/html,x`, `""`, `42` → false). In `system.rs` `mod tests`, rename `allows_only_http_and_https_urls` to `allows_http_https_and_mailto_urls` and add the `mailto:` assertion; add `refuses_file_javascript_and_data_urls` with the same refused inputs (string ones); add `the_host_tool_still_refuses_mailto_urls`: `assert!(allowed_web_url("https://a.b")); assert!(!allowed_web_url("mailto:a@b.c"));`. Run both suites.
-  2. **Green.** `isAllowedExternalUrl` returns true only for a string starting with `https://`, `http://` or `mailto:`. In `ipc.ts`, the `SYSTEM_OPEN_EXTERNAL` handler becomes `if (isAllowedExternalUrl(url)) await shell.openExternal(url);`.
+  2. **Green.** `isAllowedExternalUrl` returns true only for a string starting with `https://`, `http://` or `mailto:`. <!-- Shipped: replaced by `sanitizeExternalUrl(url): string | null` (`src/main/external-url.ts`) and Rust `sanitize_external_url` (`services/system.rs`; `allowed_web_url` stays for `gui_open_url`). http and https pass unchanged. `mailto:` is reduced to the address plus the `subject`, `body`, `cc` and `bcc` fields (names matched case-insensitively after percent-decoding), the fragment is dropped, and an address holding an encoded `?` (`%3f`) is refused so a client that decodes it first finds no extra fields. The handler opens the sanitized string. --> In `ipc.ts`, the `SYSTEM_OPEN_EXTERNAL` handler becomes `if (isAllowedExternalUrl(url)) await shell.openExternal(url);`.
   3. In `system.rs`, move today's body of `allowed_external_url` into `allowed_web_url`, and make `allowed_external_url` return `allowed_web_url(url) || url.starts_with("mailto:")`. Update its doc comment to name the three schemes. In `host_tools.rs`, `gui_open_url` calls `super::system::allowed_web_url`.
   4. In `lib.rs` `open_url`, accept `lower.starts_with("mailto:")` next to http/https, and say so in the refusal message (`"refused to open a URL that is not http, https or mailto"`). In `testing.rs` `open_url`, accept `mailto:` the same way.
   5. Append `{ "ts": "src/main/external-url.test.ts", "rust": "src-tauri/src/services/system.rs" }` to `services.parity.json`.
