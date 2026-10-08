@@ -15,7 +15,7 @@ mod open_path_target;
 mod provider_cleanup;
 mod session_cache;
 mod session_index;
-mod system;
+pub(crate) mod system;
 
 use std::path::PathBuf;
 use std::any::Any;

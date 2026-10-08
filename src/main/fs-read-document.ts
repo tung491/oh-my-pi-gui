@@ -6,7 +6,9 @@
  * and mtime come from `fstat` on that handle, and at most one byte past the
  * cap is read, so a file that grows after `fstat` is refused rather than read
  * whole. Images are not accepted here: they go through `fs:read-image`.
- * Never throws.
+ * A read that has not settled after {@link FS_DOCUMENT_READ_TIMEOUT_MS} (a hung
+ * network mount) answers `timed-out`, as the Tauri core does; the read itself
+ * runs on and closes its handle when it settles. Never throws.
  */
 import { constants as fsConstants, promises as fsp } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
@@ -14,6 +16,9 @@ import path from "node:path";
 import type { IpcDocumentSignature, IpcFsReadDocumentResult, IpcFsReadDocumentStamp } from "../shared/ipc-types";
 
 export const FS_DOCUMENT_MAX_BYTES = 32 * 1024 * 1024;
+
+/** How long a read may take before it answers `timed-out` (`DOCUMENT_READ_TIMEOUT` in the Tauri core). */
+export const FS_DOCUMENT_READ_TIMEOUT_MS = 30_000;
 
 /** Bytes handed to {@link documentSignature}. */
 const SIGNATURE_WINDOW = 512;
@@ -33,6 +38,10 @@ export interface ReadDocumentOptions {
 	ifChanged?: IpcFsReadDocumentStamp;
 	/** Test-only hook between `fstat` and the read; production callers never pass it. */
 	afterOpen?: () => void | Promise<void>;
+	/** Test-only hook called once the handle is closed; production callers never pass it. */
+	afterClose?: () => void;
+	/** Test-only override of {@link FS_DOCUMENT_READ_TIMEOUT_MS}; production callers never pass it. */
+	timeoutMs?: number;
 }
 
 /** Classifies a document by its leading bytes; `null` for anything else (images included). */
@@ -53,7 +62,22 @@ export async function readDocumentFile(
 	input: string,
 	options: ReadDocumentOptions = {},
 ): Promise<IpcFsReadDocumentResult> {
-	const abs = path.normalize(input);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timedOut = new Promise<IpcFsReadDocumentResult>(resolve => {
+		timer = setTimeout(
+			() => resolve({ ok: false, size: 0, mtimeMs: 0, error: "timed-out" }),
+			options.timeoutMs ?? FS_DOCUMENT_READ_TIMEOUT_MS,
+		);
+	});
+	try {
+		// `readNormalized` never rejects, so the losing read needs no handler.
+		return await Promise.race([readNormalized(path.normalize(input), options), timedOut]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+async function readNormalized(abs: string, options: ReadDocumentOptions): Promise<IpcFsReadDocumentResult> {
 	let handle: FileHandle | undefined;
 	try {
 		// Non-blocking so a named pipe cannot stall the open before `fstat`
@@ -78,6 +102,7 @@ export async function readDocumentFile(
 		return { ok: false, size: 0, mtimeMs: 0, error: err instanceof Error ? err.message : String(err) };
 	} finally {
 		await handle?.close().catch(() => undefined);
+		options.afterClose?.();
 	}
 }
 

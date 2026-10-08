@@ -207,8 +207,8 @@ pub fn session_consume_pending(ctx: &Arc<AppCtx>, caller: Caller, _args: Vec<Val
 /// `system:open-external`
 pub fn system_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>) -> Reply {
     if let Some(url) = args.into_iter().next().and_then(|value| value.as_str().map(str::to_string)) {
-        if super::system::allowed_external_url(&url) {
-            let _ = ctx.host.open_url(&url);
+        if let Some(target) = super::system::sanitize_external_url(&url) {
+            let _ = ctx.host.open_url(&target);
         }
     }
     Reply::ok(Value::Null)
@@ -663,12 +663,17 @@ pub fn fs_read_document(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> 
             };
             read_document_file(&abs, FS_DOCUMENT_MAX_BYTES, if_changed)
         });
-        Ok(match tokio::time::timeout(DOCUMENT_READ_TIMEOUT, read).await {
-            Ok(Ok(result)) => result,
-            Ok(Err(error)) => document_failure(&error.to_string()),
-            Err(_) => document_failure("timed-out"),
-        })
+        Ok(settle_document_read(read, DOCUMENT_READ_TIMEOUT).await)
     }))
+}
+
+/// The blocking read's result, or `timed-out` once `timeout` passes first.
+async fn settle_document_read(read: tokio::task::JoinHandle<Value>, timeout: Duration) -> Value {
+    match tokio::time::timeout(timeout, read).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => document_failure(&error.to_string()),
+        Err(_) => document_failure("timed-out"),
+    }
 }
 
 /// A failure before the path resolved to a file: no stamp, no `resolvedPath`.
@@ -1185,6 +1190,19 @@ mod tests {
         assert_eq!(result["ok"], json!(false));
         assert_eq!(result["size"], json!(0));
         assert!(result["error"].as_str().is_some_and(|error| !error.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn document_read_answers_timed_out_when_the_read_outlasts_the_timeout() {
+        assert_eq!(super::DOCUMENT_READ_TIMEOUT, std::time::Duration::from_secs(30));
+        let (release, stalled) = std::sync::mpsc::channel::<()>();
+        let read = tokio::task::spawn_blocking(move || {
+            let _ = stalled.recv();
+            json!({ "ok": true })
+        });
+        let result = super::settle_document_read(read, std::time::Duration::from_millis(10)).await;
+        assert_eq!(result, json!({ "ok": false, "size": 0, "mtimeMs": 0, "error": "timed-out" }));
+        release.send(()).unwrap();
     }
 
     #[tokio::test]

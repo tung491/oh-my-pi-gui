@@ -2,7 +2,7 @@ import { appendFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from "no
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FS_DOCUMENT_MAX_BYTES, readDocumentFile } from "./fs-read-document";
+import { FS_DOCUMENT_MAX_BYTES, FS_DOCUMENT_READ_TIMEOUT_MS, readDocumentFile } from "./fs-read-document";
 
 const ZIP = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0]);
 const OLE = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0]);
@@ -162,5 +162,33 @@ describe("readDocumentFile", () => {
 		expect(result.ok).toBe(false);
 		expect(result.size).toBe(0);
 		expect(typeof result.error).toBe("string");
+	});
+
+	it("document read answers timed out when the read outlasts the timeout", async () => {
+		expect(FS_DOCUMENT_READ_TIMEOUT_MS).toBe(30_000);
+		const file = write("slow.docx", ZIP);
+		let release = (): void => {};
+		const stalled = new Promise<void>(resolve => {
+			release = resolve;
+		});
+		let closedSignal = (): void => {};
+		const closed = new Promise<void>(resolve => {
+			closedSignal = resolve;
+		});
+		let isClosed = false;
+		void closed.then(() => {
+			isClosed = true;
+		});
+		const result = await readDocumentFile(file, {
+			timeoutMs: 10,
+			afterOpen: () => stalled,
+			afterClose: closedSignal,
+		});
+		expect(result).toEqual({ ok: false, size: 0, mtimeMs: 0, error: "timed-out" });
+		expect(isClosed).toBe(false);
+		// The read that lost the race still closes its handle once it settles.
+		release();
+		await closed;
+		expect(isClosed).toBe(true);
 	});
 });

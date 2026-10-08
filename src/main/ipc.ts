@@ -57,7 +57,7 @@ import { requestQuit } from "./app-quit";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
-import { isAllowedExternalUrl } from "./external-url";
+import { sanitizeExternalUrl } from "./external-url";
 import { readDocumentFile } from "./fs-read-document";
 import { readPdfFile } from "./fs-read-pdf";
 import { mainT } from "./i18n";
@@ -738,7 +738,8 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 
 	// System
 	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, async (_event, url: unknown) => {
-		if (isAllowedExternalUrl(url)) await shell.openExternal(url);
+		const target = sanitizeExternalUrl(url);
+		if (target !== null) await shell.openExternal(target);
 	});
 
 	// Tool-card path links — open a file in the system editor. "~" expands,

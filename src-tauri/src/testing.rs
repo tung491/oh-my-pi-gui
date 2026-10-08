@@ -122,7 +122,8 @@ impl Host for FakeHost {
 
     fn open_url(&self, url: &str) -> Result<(), HostError> {
         self.log.record(format!("open_url({url})"));
-        if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:") {
+        // The same guard as the real host's `open_url`.
+        if crate::services::system::sanitize_external_url(url).is_some() {
             Ok(())
         } else {
             Err(HostError::Failed(format!("refused scheme in {url}")))
