@@ -9,6 +9,8 @@ dependencies: [11]
 
 # Phase 12: macOS and Windows cutover, then Electron removal
 
+> **Superseded on 2026-10-08 by [`plans/261008-0341-tauri-macos-cutover/`](../261008-0341-tauri-macos-cutover/plan.md)** (macOS arm64 only, fresh installs, then Electron removal). Execute that plan, not the tasks below.
+
 > **Windows is out of scope since 2026-10-05 (everyday-work rebrand, R13): skip every Windows step. The macOS Tauri bundle must ship resources/assistant-pack beside the omp sidecar the way the Linux bundle does (see the rebrand plan's spawn contract) before macOS switches to Tauri.**
 
 > **Deferred by the user on 2026-10-05.** Do not start this phase until the user reopens it. macOS and Windows stay on Electron in the meantime.
