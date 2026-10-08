@@ -23,9 +23,10 @@ A fresh package built from the merged Phases 2–5 passes every automated smoke 
 - Steps:
   1. `test -x resources/omp && bun run package:tauri:mac:arm64`
   2. `A="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Sai ATLAS.app"; bun scripts/tauri-mac-smoke.ts "$A" 2>&1 | tee "$TMPDIR/smoke-2.txt"`
-  3. Replace every `macOS <case>: …` line from Phase 3 in `reports/macos-parity.md` with the new result.
-- Success criteria: every case passes, including `hard kill leaves nothing`.
-- Verify: the smoke exits 0 and its last line is `tauri-mac-smoke: PASS`, and `grep -c "^FAIL " "$TMPDIR/smoke-2.txt"` prints `0`.
+  3. Replace every automated `macOS <case>: …` line from Phases 2 and 3 in `reports/macos-parity.md` with one line per smoke case from this run, so the report holds a single generation of results.
+  4. The packaged `hard kill leaves nothing` case proves the wiring (real GUI, supervisor and omp), but no packaged session can make omp start a tool that leaves its process group. The escaped-tool proof is the supervisor tests: run `cargo test --manifest-path src-tauri/Cargo.toml --all-features -- omp::supervisor` on the integrated branch and add `macOS escaped tool dies with the GUI: PASS` to the parity report when `sigkill_of_the_parent_kills_the_child_tree_within_10_s`, `a_dead_parent_ends_supervision_even_when_the_control_channel_stays_open` and `an_escaped_tool_dies_when_omp_exits_on_its_own` print `ok`.
+- Success criteria: every case passes, including `hard kill leaves nothing`, with no `FAIL clean stop` line, and the three supervisor tests pass.
+- Verify: the smoke exits 0 and its last line is `tauri-mac-smoke: PASS`, `grep -c "^FAIL " "$TMPDIR/smoke-2.txt"` prints `0`, and the step 4 command exits 0 with the three names `ok`.
 
 ### Task 6.2 — Copy the build for the sitting
 - Steps: `H=$(mktemp -d); ditto "$A" "$H/Sai ATLAS.app"; P=$(mktemp -d); mkdir -p "$P/project"`. Write `H` and `P` to the host log.

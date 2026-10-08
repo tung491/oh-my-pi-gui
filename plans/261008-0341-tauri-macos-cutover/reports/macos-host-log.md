@@ -286,3 +286,7 @@ Worktree `tauri_macos-docs`, branch `tung491/tauri_macos-docs` from `0ca87fd`. T
 - `package.json` has no `build:omp:x64` and no `package:tauri:mac:x64` (confirmed). Left for their owners: `scripts/build-bundled-omp.ts` usage comment still names `build:omp:x64`; `scripts/check-mac-update-floor.ts` header still says "macOS 12"; the site's `installerUrl` keeps a now-unused non-arm64 branch.
 - Gate 5 first run: exit 1, only `assistant-pack/test/compiled.test.ts` (`sidecar binary missing`: the fresh worktree had no `resources/omp`). Failure Protocol: kongming advised copying the sidecar rather than `SKIP_COMPILED=1`. `cp -p` of the main worktree's `resources/omp` (omp/18.4.8, built by the sidecar route), `bun run build:pack`, then `bunx vitest run` exit 0 (`Test Files 226 passed | 1 skipped`, `Tests 2379 passed | 9 skipped`); `git status --porcelain resources/` prints nothing.
 - Gate 6 `bun run check:types` exit 0; gate 7 `bunx biome check` on the five touched scripts exit 0.
+
+## Phase 3 follow-up (checkpoint review)
+
+Counsel verdict on the smoke check: GO. Applied in 8d20c17: hard-kill set narrowed to the sidecar tree (supervisor, omp and omp's descendants); clean stop drains 8 s before killing only this app's processes and reports leaks as `FAIL clean stop`; sidecar must carry the hardened runtime flag; a test keeps the pack file list equal to the Rust core's. Re-run on the Phase 2 bundle: nine PASS, `tauri-mac-smoke: PASS`, nothing left. Phase 6 Task 6.1 now cites the three supervisor tests as the escaped-tool proof.
