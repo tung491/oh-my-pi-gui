@@ -23,7 +23,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const SIDECAR_SOURCES: Readonly<Record<string, string>> = {
 	"x86_64-unknown-linux-gnu": "resources/omp.linux-x64",
 	"aarch64-apple-darwin": "resources/omp",
-	"x86_64-apple-darwin": "resources/omp.x64",
 };
 
 /** `src-tauri/binaries/omp-<triple>` (Tauri's sidecar naming). */

@@ -214,7 +214,6 @@ describe("sidecar placement", () => {
 		const expected: Record<string, [string, string]> = {
 			"package:tauri:linux": ["x86_64-unknown-linux-gnu", "src-tauri/linux/sidecar.conf.json"],
 			"package:tauri:mac:arm64": ["aarch64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
-			"package:tauri:mac:x64": ["x86_64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
 		};
 		expect(
 			packageScripts()
@@ -228,6 +227,12 @@ describe("sidecar placement", () => {
 			expect(script, name).toContain("source scripts/rust-pins.env");
 			expect(SIDECAR_SOURCES[triple], name).toBeDefined();
 		}
+	});
+
+	it("macOS packaging is arm64 only", () => {
+		const all = scripts();
+		expect(all).not.toHaveProperty("package:tauri:mac:x64");
+		expect(all).not.toHaveProperty("build:omp:x64");
 	});
 });
 
