@@ -443,7 +443,12 @@ pub fn run() -> ExitCode {
     let done = Arc::new(AtomicBool::new(false));
     let relaunch: PendingRelaunch = Arc::new(Mutex::new(None));
     let relaunch_for_setup = relaunch.clone();
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // `to_panel` reads the panel manager this plugin registers; without it,
+    // opening the quick-entry bar panics.
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+    let app = builder
         .plugin(
             tauri_plugin_single_instance::Builder::new()
                 .dbus_id(paths::single_instance_id())

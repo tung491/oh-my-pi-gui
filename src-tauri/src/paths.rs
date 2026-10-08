@@ -135,6 +135,39 @@ pub fn webview_data_dir() -> PathBuf {
     user_data_dir().join("webview")
 }
 
+/// WKWebView ignores the data directory, so on macOS each profile's webviews
+/// get their own data store, keyed on the first 16 bytes of the SHA-256 of
+/// that profile's webview data directory.
+#[cfg(any(test, target_os = "macos"))]
+pub(crate) fn webview_data_store_id(dir: &Path) -> [u8; 16] {
+    let digest = Sha256::digest(dir.to_string_lossy().as_bytes());
+    let mut id = [0; 16];
+    id.copy_from_slice(&digest[..16]);
+    id
+}
+
+/// The running macOS major version (13, 14, …), read once from `sw_vers`; 0
+/// when it cannot be read, so version-gated APIs stay off.
+#[cfg(target_os = "macos")]
+pub(crate) fn macos_major() -> u32 {
+    static MAJOR: OnceLock<u32> = OnceLock::new();
+    *MAJOR.get_or_init(|| {
+        std::process::Command::new("/usr/bin/sw_vers")
+            .arg("-productVersion")
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| parse_macos_major(&String::from_utf8_lossy(&output.stdout)))
+            .unwrap_or(0)
+    })
+}
+
+/// The major number of a `sw_vers -productVersion` string, 0 when unreadable.
+#[cfg(any(test, target_os = "macos"))]
+fn parse_macos_major(version: &str) -> u32 {
+    version.trim().split('.').next().and_then(|major| major.parse().ok()).unwrap_or(0)
+}
+
 /// Where the runtime crash log lives, as `runtime-log.ts` computed it.
 pub fn runtime_log_path() -> PathBuf {
     user_data_dir().join("logs").join("gui-runtime.jsonl")
@@ -492,5 +525,23 @@ mod tests {
         assert_ne!(id, single_instance_id_for(Some(Path::new("/tmp/other"))));
         let digest = Sha256::digest(b"/tmp/profile");
         assert_eq!(id, format!("{}.p{}", product::APP_ID, &hex::encode(digest)[..16]));
+    }
+
+    #[test]
+    fn derives_a_stable_webview_store_id_per_profile() {
+        let a = webview_data_store_id(Path::new("/a/webview"));
+        assert_eq!(a, webview_data_store_id(Path::new("/a/webview")));
+        assert_ne!(a, webview_data_store_id(Path::new("/b/webview")));
+        assert_eq!(a.len(), 16);
+    }
+
+    #[test]
+    fn parses_the_macos_major_version() {
+        assert_eq!(parse_macos_major("13.6.1"), 13);
+        assert_eq!(parse_macos_major("27.0"), 27);
+        assert_eq!(parse_macos_major("14"), 14);
+        assert_eq!(parse_macos_major("26.0.1\n"), 26);
+        assert_eq!(parse_macos_major(""), 0);
+        assert_eq!(parse_macos_major("ProductVersion"), 0);
     }
 }
