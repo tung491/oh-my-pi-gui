@@ -1,5 +1,8 @@
 {
   "bundle": {
-    "externalBin": ["binaries/omp"]
+    "externalBin": ["binaries/omp"],
+    "resources": {
+      "../resources/assistant-pack/": "assistant-pack/"
+    }
   }
 }

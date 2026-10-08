@@ -38,8 +38,14 @@ const OFFICE_TOOLS: &[&str] = &["office_report", "office_slides", "office_clean"
 /// nothing is found, the beside-binary path (or, for an empty binary path, the
 /// first search root's `resources/assistant-pack`), so the missing-file
 /// message names where the pack belongs. The result is always absolute: omp
-/// resolves a relative flag path against the session cwd.
+/// resolves a relative flag path against the session cwd. In a macOS app
+/// bundle (`Contents/MacOS/omp`) the pack lives in `Contents/Resources`, which
+/// the code seal covers, and that path wins over the beside-binary one.
 pub(crate) fn resolve_pack_dir(binary: &Path, search_from: &[PathBuf]) -> PathBuf {
+    let bundle = bundle_resources_pack(binary);
+    if let Some(bundle) = bundle.as_ref().filter(|bundle| bundle.is_dir()) {
+        return bundle.clone();
+    }
     let beside = (!binary.as_os_str().is_empty()).then(|| absolute(binary.parent().unwrap_or(Path::new("")).join(PACK_DIR_NAME)));
     if let Some(beside) = beside.as_ref().filter(|beside| beside.is_dir()) {
         return beside.clone();
@@ -53,7 +59,21 @@ pub(crate) fn resolve_pack_dir(binary: &Path, search_from: &[PathBuf]) -> PathBu
             }
         }
     }
-    beside.unwrap_or_else(|| absolute(search_from.first().cloned().unwrap_or_default().join("resources").join(PACK_DIR_NAME)))
+    bundle
+        .or(beside)
+        .unwrap_or_else(|| absolute(search_from.first().cloned().unwrap_or_default().join("resources").join(PACK_DIR_NAME)))
+}
+
+/// `Contents/Resources/assistant-pack` for a binary at `Contents/MacOS/<name>`
+/// inside a macOS app bundle; `None` for any other layout. Structural rather
+/// than OS-gated, so every platform tests it.
+fn bundle_resources_pack(binary: &Path) -> Option<PathBuf> {
+    let macos = binary.parent()?;
+    let contents = macos.parent()?;
+    if macos.file_name()? != "MacOS" || contents.file_name()? != "Contents" {
+        return None;
+    }
+    Some(absolute(contents.join("Resources").join(PACK_DIR_NAME)))
 }
 
 /// `path` made absolute against the process cwd, without following symlinks
@@ -376,6 +396,29 @@ mod tests {
             write_pack(&root.path().join("worktree").join("resources").join("assistant-pack"), PACK_FILES);
             assert_eq!(resolve_pack_dir(&linked, &[]), root.path().join("worktree").join("resources").join("assistant-pack"));
         }
+    }
+
+    #[test]
+    fn resolves_the_pack_in_the_app_bundle_resources() {
+        let root = tempfile::tempdir().unwrap();
+        let contents = root.path().join("Sai ATLAS.app").join("Contents");
+        let binary = contents.join("MacOS").join("omp");
+        write_file(&binary);
+        write_pack(&contents.join("Resources").join("assistant-pack"), PACK_FILES);
+        assert_eq!(resolve_pack_dir(&binary, &[]), contents.join("Resources").join("assistant-pack"));
+
+        // With no pack anywhere, the missing-file message names where the pack belongs in a bundle.
+        let root2 = tempfile::tempdir().unwrap();
+        let contents2 = root2.path().join("Sai ATLAS.app").join("Contents");
+        let binary2 = contents2.join("MacOS").join("omp");
+        write_file(&binary2);
+        assert_eq!(resolve_pack_dir(&binary2, &[]), contents2.join("Resources").join("assistant-pack"));
+
+        // A folder named MacOS outside a bundle's Contents keeps the beside-binary rule.
+        let root3 = tempfile::tempdir().unwrap();
+        let binary3 = root3.path().join("MacOS").join("omp");
+        write_file(&binary3);
+        assert_eq!(resolve_pack_dir(&binary3, &[]), root3.path().join("MacOS").join("assistant-pack"));
     }
 
     #[test]

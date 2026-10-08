@@ -14,7 +14,7 @@
     "build:renderer:tauri": "vite build --config vite.tauri.config.ts",
     "build:tauri": "bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --no-bundle'",
     "package:tauri:linux": "bun run build:pack && bun scripts/stage-tauri-sidecar.ts x86_64-unknown-linux-gnu && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target x86_64-unknown-linux-gnu --config src-tauri/linux/sidecar.conf.json' && bun src-tauri/linux/finalize-deb.ts src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb && bun src-tauri/linux/finalize-appimage.ts src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage",
-    "package:tauri:mac:arm64": "bun scripts/stage-tauri-sidecar.ts aarch64-apple-darwin && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target aarch64-apple-darwin --config src-tauri/macos/sidecar.conf.json'",
+    "package:tauri:mac:arm64": "bun run build:pack && bun scripts/stage-tauri-sidecar.ts aarch64-apple-darwin && bash -c 'source scripts/rust-pins.env && PATH=\"$CARGO_HOME_BIN:$PATH\" cargo tauri build --target aarch64-apple-darwin --config src-tauri/macos/sidecar.conf.json' && bun src-tauri/macos/finalize-app.ts src-tauri/target/aarch64-apple-darwin/release/bundle",
     "preview": "electron-vite preview",
     "package": "bun run build:pack && bun run build && electron-builder",
     "package:mac": "bun run build:pack && bun run build && electron-builder --mac",

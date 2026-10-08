@@ -167,7 +167,7 @@ describe("product identity", () => {
 	it("bundles for every target and names the asset files the updaters look for", () => {
 		expect(base().bundle?.active).toBe(true);
 		expect(platform("linux").bundle?.targets).toEqual(["appimage", "deb"]);
-		expect(platform("macos").bundle?.targets).toEqual(["dmg", "app"]);
+		expect(platform("macos").bundle?.targets).toEqual(["app"]);
 		expect(assetNames("1.0.0")).toMatchObject({
 			macArm64Dmg: "Sai-ATLAS-1.0.0-arm64.dmg",
 			macX64Dmg: "Sai-ATLAS-1.0.0.dmg",
@@ -181,12 +181,17 @@ describe("product identity", () => {
 		expect(state).toContain('"Sai-ATLAS-{version}-arm64.dmg"');
 		expect(state).toContain('"Sai-ATLAS-{version}.dmg"');
 	});
+
+	it("the macOS config builds only the app bundle; the finalize step makes the DMG", () => {
+		expect(platform("macos").bundle?.targets).toEqual(["app"]);
+	});
 });
 
 describe("sidecar placement", () => {
-	it("the macOS config ships binaries/omp as externalBin", () => {
+	it("the macOS config ships binaries/omp as externalBin and the assistant pack as a resource", () => {
 		expect(bundled("macos").bundle?.externalBin).toEqual(["binaries/omp"]);
-		expect(bundled("macos").bundle?.resources).toBeUndefined();
+		// Contents/Resources/assistant-pack, inside the code seal, where the manager looks for it.
+		expect(bundled("macos").bundle?.resources).toEqual({ "../resources/assistant-pack/": "assistant-pack/" });
 	});
 
 	it("the Linux config ships the sidecar as the omp resource and sets no externalBin", () => {
@@ -229,10 +234,13 @@ describe("sidecar placement", () => {
 		}
 	});
 
-	it("macOS packaging is arm64 only", () => {
+	it("macOS packaging is arm64 only and finalizes the app after the bundler", () => {
 		const all = scripts();
 		expect(all).not.toHaveProperty("package:tauri:mac:x64");
 		expect(all).not.toHaveProperty("build:omp:x64");
+		const mac = all["package:tauri:mac:arm64"] ?? "";
+		expect(mac.startsWith("bun run build:pack && ")).toBe(true);
+		expect(mac).toContain("bun src-tauri/macos/finalize-app.ts");
 	});
 });
 
@@ -552,13 +560,15 @@ describe("macOS bundle", () => {
 		expect(platform("macos").bundle?.macOS?.entitlements).toBe("macos/app.entitlements");
 	});
 
-	it("app entitlements grant no dyld or library-validation exemption", async () => {
+	it("the app entitlements hold only the microphone; the sidecar's only what the Bun runtime needs", async () => {
 		const app = (await parsePlistFile(path.join(TAURI, "macos/app.entitlements"))) as PlistObject;
 		expect(app).toEqual({ "com.apple.security.device.audio-input": true });
 		const omp = (await parsePlistFile(path.join(TAURI, "macos/omp.entitlements"))) as PlistObject;
 		expect(omp).toEqual({
 			"com.apple.security.cs.allow-jit": true,
 			"com.apple.security.cs.allow-unsigned-executable-memory": true,
+			// Ad-hoc signed, the sidecar cannot load the native addon it extracts without it.
+			"com.apple.security.cs.disable-library-validation": true,
 		});
 	});
 
