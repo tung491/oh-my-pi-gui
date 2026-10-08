@@ -212,3 +212,17 @@ none
 
 GUI pid 38088 (launched by its relative path, so the path filter above does not list it); supervisor 38167 has ppid 38088, omp 38168 has ppid 38167. `gui-runtime.jsonl` holds 9 lines, none naming `assistant-pack` or `sidecar-restart`. It does show `quick entry registered` (`Control+Shift+Space`) at startup; the chord was not pressed. `pgrep -fl` for the worktree's bundle path printed nothing afterwards.
 - `hdiutil create` prints a deprecation warning on Darwin 27; Apple's replacement is `diskutil image create from --format UDZO --volumeName "Sai ATLAS" <stage> <dmg>`, which exists only on macOS 26+, so `hdiutil` stays until it errors.
+
+## Phase 7
+
+Worktree `tauri_macos-docs`, branch `tung491/tauri_macos-docs` from `0ca87fd`. Task 7.2b skipped here (done in the main worktree).
+
+- 7.1 red: `bunx vitest run scripts/release-feeds.test.ts scripts/tauri-packaging-config.test.ts` exit 1 (6 release-feeds tests and the asset-name test failed on the arm64-only expectations).
+- 7.2 green: same command exit 0 (`Tests 47 passed | 1 skipped`). `grep -n "x64\|electron" scripts/release-feeds.ts` keeps only feed-format lines (electron-builder style YAML, js-yaml quoting), none about a macOS build.
+- 7.3 red: `bunx vitest run scripts/mac-update-floor.test.ts` exit 1 (`rejects macOS 13.0 now that the app needs 13.3`); green after `MAC_UPDATE_FLOOR = "22.4.0"`: the three-file run exits 0 (`Tests 53 passed | 1 skipped`).
+- 7.4: AGENTS.md greps print `0`, `3`, `1`.
+- 7.5: README.md grep prints `0`; README.vi.md `arm64` count `5`; CHANGELOG `macOS runs on Tauri` count `1`. The CHANGELOG line "macOS is unchanged and still runs on Electron." was replaced by the new entry, since both cannot stand in one section.
+- 7.5b deviation: the phase's `grep -c 'x64' site/index.html` printed `4`; every hit is a Linux x64 label (meta description, both `.deb` buttons, the AppImage button), which the arm64-only decision leaves unchanged. Failure Protocol: kongming advised keeping the Linux labels (they match README and AGENTS) and narrowing the check to Intel-only references: `grep -c 'data-omp-dmg="x64"\|macOS x64\|arm64 / x64\|"x64"\|[Ii]ntel' site/index.html` prints `4` on `HEAD` and `0` after the edit; `grep -c 'data-omp-dmg="arm64"'` prints `2`. The phase file is outside this lane's ownership, so the narrowed Verify is recorded here only. Not pushed.
+- `package.json` has no `build:omp:x64` and no `package:tauri:mac:x64` (confirmed). Left for their owners: `scripts/build-bundled-omp.ts` usage comment still names `build:omp:x64`; `scripts/check-mac-update-floor.ts` header still says "macOS 12"; the site's `installerUrl` keeps a now-unused non-arm64 branch.
+- Gate 5 first run: exit 1, only `assistant-pack/test/compiled.test.ts` (`sidecar binary missing`: the fresh worktree had no `resources/omp`). Failure Protocol: kongming advised copying the sidecar rather than `SKIP_COMPILED=1`. `cp -p` of the main worktree's `resources/omp` (omp/18.4.8, built by the sidecar route), `bun run build:pack`, then `bunx vitest run` exit 0 (`Test Files 226 passed | 1 skipped`, `Tests 2379 passed | 9 skipped`); `git status --porcelain resources/` prints nothing.
+- Gate 6 `bun run check:types` exit 0; gate 7 `bunx biome check` on the five touched scripts exit 0.
