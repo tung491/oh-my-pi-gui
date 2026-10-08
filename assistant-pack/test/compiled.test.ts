@@ -16,15 +16,14 @@ const CALL_TOOL = join(ROOT, "assistant-pack", "test", "fixtures", "call-tool.mj
 const CHECK = join(ROOT, "scripts", "check-assistant-pack.ts");
 const TIMEOUT_MS = 180_000;
 
+// The SAI OS tools exist on Linux only, as the shells' --tools lists say.
+const OS_TOOLS = ["diagnose", "system_status", "open_item", "os_setting"];
 const TOOLS = [
 	"read",
 	"glob",
 	"write",
 	"ask",
-	"diagnose",
-	"system_status",
-	"open_item",
-	"os_setting",
+	...(process.platform === "linux" ? OS_TOOLS : []),
 	"office_report",
 	"office_slides",
 	"office_clean",

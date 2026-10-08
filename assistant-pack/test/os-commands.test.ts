@@ -23,9 +23,10 @@ let outside: string;
 let gioPath: string;
 
 beforeEach(() => {
-	home = mkdtempSync(join(tmpdir(), "sai-atlas-oshome-"));
-	apps = mkdtempSync(join(tmpdir(), "sai-atlas-apps-"));
-	outside = mkdtempSync(join(tmpdir(), "sai-atlas-outside-"));
+	// Canonical paths: the tools resolve real paths, and macOS's temp dir sits behind /var → /private/var.
+	home = realpathSync(mkdtempSync(join(tmpdir(), "sai-atlas-oshome-")));
+	apps = realpathSync(mkdtempSync(join(tmpdir(), "sai-atlas-apps-")));
+	outside = realpathSync(mkdtempSync(join(tmpdir(), "sai-atlas-outside-")));
 	gioPath = join(outside, "gio");
 	writeFileSync(gioPath, "");
 });

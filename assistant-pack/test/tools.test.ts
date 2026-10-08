@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import registerPackTools from "../src/tools/index";
+import registerPackTools, { registerPackToolsFor } from "../src/tools/index";
 import type { PackTool } from "../src/tools/types";
 
-function registered(): PackTool[] {
+function registered(platform: NodeJS.Platform = "linux"): PackTool[] {
 	const tools: PackTool[] = [];
-	registerPackTools({ registerTool: tool => tools.push(tool) });
+	registerPackToolsFor({ registerTool: tool => tools.push(tool) }, platform);
 	return tools;
 }
 
@@ -30,6 +30,19 @@ describe("the pack's extension module", () => {
 				"office_clean",
 			].sort(),
 		);
+	});
+
+	it("registers only the office tools off Linux, as the shells' --tools lists do", () => {
+		for (const platform of ["darwin", "win32"] as const) {
+			expect(
+				registered(platform)
+					.map(tool => tool.name)
+					.sort(),
+			).toEqual(["office_clean", "office_report", "office_slides"]);
+		}
+		const tools: PackTool[] = [];
+		registerPackTools({ registerTool: tool => tools.push(tool) });
+		expect(tools.map(tool => tool.name).includes("diagnose")).toBe(process.platform === "linux");
 	});
 
 	it("gives every tool its tier and keeps every tool top-level", () => {
