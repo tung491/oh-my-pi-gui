@@ -48,9 +48,11 @@ use crate::runtime_log;
 use feed::{Asset, AssetTarget};
 use install::{InstallError, PkexecRunner, PrivilegedRunner};
 use state::{
-    asks_before_install, installer_partial_path, installs_on_quit, linux_package_kind, package_type_at, plan_installer_transfer,
-    settle_incomplete_update_check, sha512_file_base64, sweep_installer_partials, LinuxPackageKind, UpdateInstallMode, UpdateStatus,
+    asks_before_install, installer_partial_path, installs_on_quit, plan_installer_transfer, settle_incomplete_update_check,
+    sha512_file_base64, sweep_installer_partials, LinuxPackageKind, UpdateInstallMode, UpdateStatus,
 };
+#[cfg(target_os = "linux")]
+use state::{linux_package_kind, package_type_at};
 
 pub const CHANNELS: &[(&str, Scope)] = &[
     ("updater:check", Scope::Main),
@@ -734,6 +736,7 @@ mod tests {
 
     // -- a local release server --------------------------------------------
 
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct Request {
         path: String,
@@ -747,6 +750,7 @@ mod tests {
     }
 
     /// How the server answers a Range request for an asset.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     #[derive(Clone, Copy)]
     enum RangeMode {
         /// 206 from the requested offset, as GitHub does.
@@ -950,6 +954,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "linux")]
     async fn wait_until(mut condition: impl FnMut() -> bool) {
         for _ in 0..500 {
             if condition() {
@@ -962,6 +967,7 @@ mod tests {
 
     // -- checks ---------------------------------------------------------------
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn check_reports_an_available_update_with_its_notes() {
         let (server, base) = start_server().await;
@@ -1053,6 +1059,7 @@ mod tests {
         assert!(server.requests.lock().unwrap().is_empty());
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn check_now_runs_a_manual_check_from_the_menu() {
         let (server, base) = start_server().await;
@@ -1075,6 +1082,7 @@ mod tests {
         assert!(!h.download_dir().exists());
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn download_verifies_the_package_and_reports_progress() {
         let (server, base) = start_server().await;
@@ -1103,6 +1111,7 @@ mod tests {
         assert_eq!(server.requests.lock().unwrap().last().unwrap().path, format!("/releases/download/v0.9.16/{DEB_NAME}"));
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn download_resumes_a_partial_when_the_server_continues_it() {
         let (server, base) = start_server().await;
@@ -1124,6 +1133,7 @@ mod tests {
         assert!(first_progress["transferred"].as_u64().unwrap() > 20_000, "{first_progress}");
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn download_restarts_when_the_server_answers_a_different_range() {
         let (server, base) = start_server().await;
@@ -1142,6 +1152,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn download_removes_the_partial_on_a_hash_mismatch() {
         let (server, base) = start_server().await;
@@ -1158,6 +1169,7 @@ mod tests {
         assert!(!h.download_dir().join(DEB_NAME).exists());
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn download_drops_a_partial_the_release_can_never_complete() {
         let (server, base) = start_server().await;

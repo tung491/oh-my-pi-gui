@@ -769,6 +769,20 @@ pub(crate) fn saved_state_value(ctx: &AppCtx) -> Option<serde_json::Value> {
 
 pub(crate) use tauri_backend::TauriBackend;
 
+/// The panel class the quick-entry window becomes on macOS: it takes keyboard
+/// focus (the bar is a text field) but never becomes the main window.
+#[cfg(target_os = "macos")]
+mod quick_entry_panel {
+    tauri_nspanel::tauri_panel! {
+        panel!(QuickEntryPanel {
+            config: {
+                can_become_key_window: true,
+                can_become_main_window: false
+            }
+        })
+    }
+}
+
 mod tauri_backend {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
@@ -1027,9 +1041,8 @@ mod tauri_backend {
             {
                 // A non-activating panel floats over full-screen apps on every Space.
                 use tauri_nspanel::WebviewWindowExt;
-                if let Ok(panel) = window.to_panel() {
-                    const NS_NONACTIVATING_PANEL_MASK: i32 = 1 << 7;
-                    panel.set_style_mask(NS_NONACTIVATING_PANEL_MASK);
+                if let Ok(panel) = window.to_panel::<super::quick_entry_panel::QuickEntryPanel>() {
+                    let _ = panel.add_style_mask(tauri_nspanel::objc2_app_kit::NSWindowStyleMask::NonactivatingPanel);
                     panel.set_hides_on_deactivate(false);
                 }
             }

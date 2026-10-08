@@ -4,8 +4,8 @@
 use std::process::ExitCode;
 
 #[cfg(target_os = "linux")]
-use sai_atlas_lib::{appimage_handover, electron_relauncher, gstreamer_env};
-use sai_atlas_lib::{omp, ports, product, webview};
+use sai_atlas_lib::{appimage_handover, electron_relauncher, gstreamer_env, product, webview};
+use sai_atlas_lib::{omp, ports};
 
 fn main() -> ExitCode {
     let args: Vec<std::ffi::OsString> = std::env::args_os().collect();

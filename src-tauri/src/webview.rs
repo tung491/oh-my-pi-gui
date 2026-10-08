@@ -631,6 +631,7 @@ mod linux {
 pub use linux::{hooked_contexts, install_sandbox_hook};
 
 /// The channel the WebKitGTK drag observer sends a file drag's paths on.
+#[cfg(target_os = "linux")]
 const NATIVE_DROP_PATHS_CHANNEL: &str = "system:native-drop-paths";
 
 /// Absolute local paths of the `file://` URIs in a drag's URI list, in order and

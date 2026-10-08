@@ -313,7 +313,18 @@ pub(crate) fn spawn_supervised(program: &Path, args: &[String], configure: impl 
     {
         use nix::sys::socket::{socketpair, AddressFamily, SockFlag, SockType};
         use std::os::fd::AsRawFd;
+        #[cfg(target_os = "linux")]
         let (gui_end, omp_end) = socketpair(AddressFamily::Unix, SockType::Stream, None, SockFlag::SOCK_CLOEXEC)?;
+        // macOS has no SOCK_CLOEXEC, so both ends get close-on-exec right after
+        // creation; `pre_exec` below clears it on the one end the supervisor keeps.
+        #[cfg(not(target_os = "linux"))]
+        let (gui_end, omp_end) = {
+            use nix::fcntl::{fcntl, FcntlArg, FdFlag};
+            let (gui_end, omp_end) = socketpair(AddressFamily::Unix, SockType::Stream, None, SockFlag::empty())?;
+            fcntl(&gui_end, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
+            fcntl(&omp_end, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))?;
+            (gui_end, omp_end)
+        };
         let raw = omp_end.as_raw_fd();
         // SAFETY: `pre_exec` runs in the forked child before `exec`, where only
         // async-signal-safe calls are allowed; `dup2` and `fcntl` are. `raw` is
@@ -1092,10 +1103,13 @@ impl SidecarHandle for SidecarManager {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
     use crate::bridge::Registry;
+    #[cfg(target_os = "linux")]
     use crate::testing::{fake_ctx_with, Fakes};
     use std::sync::Weak;
 
+    #[cfg(target_os = "linux")]
     pub(crate) fn fixture_path() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("e2e").join("sidecar-fixture.ts").canonicalize().unwrap()
     }
@@ -1110,11 +1124,13 @@ pub(crate) mod tests {
     }
 
     /// The pack a fixture sidecar outside the tree resolves through the dev fallback.
+    #[cfg(target_os = "linux")]
     fn dev_pack() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("resources").join("assistant-pack")
     }
 
     /// The `--tools` value of the spawn contract for the platform running the suite.
+    #[cfg(target_os = "linux")]
     fn pack_tools() -> &'static str {
         if cfg!(target_os = "linux") {
             "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean"
@@ -1124,6 +1140,7 @@ pub(crate) mod tests {
     }
 
     /// The pack part of the spawn argv, written out so the test does not restate the code it checks.
+    #[cfg(target_os = "linux")]
     fn expected_pack_flags(pack: &Path) -> Vec<String> {
         vec![
             "--no-extensions".to_string(),
@@ -1144,6 +1161,7 @@ pub(crate) mod tests {
         ]
     }
 
+    #[cfg(target_os = "linux")]
     fn argv(head: &[&str], pack: &Path, tail: &[&str]) -> Vec<String> {
         let mut argv: Vec<String> = head.iter().map(|arg| arg.to_string()).collect();
         argv.extend(expected_pack_flags(pack));
@@ -1175,6 +1193,7 @@ pub(crate) mod tests {
         .expect("sidecar became ready");
     }
 
+    #[cfg(target_os = "linux")]
     async fn wait_for_pid(sidecar: &SidecarManager) -> u32 {
         for _ in 0..200 {
             if let Some(pid) = sidecar.omp_pid() {
@@ -1186,6 +1205,7 @@ pub(crate) mod tests {
     }
 
     /// omp's argv after the fixture path, from `/proc`.
+    #[cfg(target_os = "linux")]
     async fn launch_argv(sidecar: &SidecarManager) -> Vec<String> {
         let pid = wait_for_pid(sidecar).await;
         let cmdline = std::fs::read(format!("/proc/{pid}/cmdline")).unwrap();
@@ -1285,6 +1305,7 @@ pub(crate) mod tests {
         assert_eq!(launch_profile_to_flags(&profile), vec!["--no-lsp", "--session-dir", "/s"]);
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn passes_the_active_session_path_on_a_manual_restart() {
         let dir = tempfile::tempdir().unwrap();
@@ -1299,6 +1320,7 @@ pub(crate) mod tests {
         assert_eq!(launch, argv(&["--mode", "rpc-ui", "--session", &session_path.to_string_lossy()], &dev_pack(), &[]));
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn spawns_every_sidecar_with_the_assistant_pack_flags_and_never_chat() {
         let dir = tempfile::tempdir().unwrap();
@@ -1450,6 +1472,7 @@ process.stdin.resume();"#,
         assert!(!spawned.exists());
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn forces_a_freshly_created_tab_to_bypass_the_cli_auto_resume_setting() {
         let dir = tempfile::tempdir().unwrap();
@@ -1500,6 +1523,7 @@ process.stdin.resume();"#,
         assert_eq!(command_output, Some(json!({ "type": "command_output", "text": "Enabled models" })));
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn appends_the_workspace_launch_profile_flags_at_spawn_denylist_proof() {
         let dir = tempfile::tempdir().unwrap();
@@ -1557,6 +1581,7 @@ process.stdin.resume();"#,
         assert!(!launch.iter().any(|arg| arg == "/x"));
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn passes_the_context_limits_overlay_after_the_pack_config_and_creates_a_missing_file() {
         let dir = tempfile::tempdir().unwrap();
@@ -1586,6 +1611,7 @@ process.stdin.resume();"#,
         assert_eq!(std::fs::read_to_string(&overlay).unwrap(), limits);
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn adoptcwd_re_roots_the_reported_cwd_and_plain_restarts_spawn_there() {
         let dir = tempfile::tempdir().unwrap();
@@ -1817,6 +1843,7 @@ setTimeout(() => process.exit(4), 120);"#,
         assert_eq!(report.stderr, vec!["dyld: Library not loaded: pi_natives", "  Referenced by: omp"]);
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn dispose_stops_the_supervisor_and_the_fixture() {
         let dir = tempfile::tempdir().unwrap();

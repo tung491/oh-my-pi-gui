@@ -25,7 +25,7 @@ pub(crate) const TEST_ROLE_ENV: &str = "SAI_ATLAS_TEST_ROLE";
 pub(crate) const TEST_ARGV_ENV: &str = "SAI_ATLAS_TEST_SUPERVISE_ARGV";
 /// The helper test that plays the supervisor when the test binary is re-executed.
 #[cfg(test)]
-pub(crate) const TEST_SUPERVISOR_HELPER: &str = "omp::supervisor::tests::supervisor_role_helper";
+pub(crate) const TEST_SUPERVISOR_HELPER: &str = "omp::supervisor::test_role::supervisor_role_helper";
 /// libtest flags for every re-execution of the test binary into a helper role.
 /// The child inherits the harness's stdout, which omp (or the stand-in GUI's
 /// report) then writes to, so the harness must leave the cursor at a line
@@ -331,6 +331,31 @@ mod unix {
     }
 }
 
+/// Plays the supervisor when the test binary is re-executed by the manager:
+/// the test harness owns `main`, so `--omp-supervise` cannot reach `run`.
+/// Every unix test binary needs it, because every supervised spawn in a test
+/// goes through it; the tool-tree tests below stay Linux-only until their port.
+#[cfg(all(test, unix))]
+mod test_role {
+    use super::*;
+
+    #[test]
+    fn supervisor_role_helper() {
+        if std::env::var(TEST_ROLE_ENV).as_deref() != Ok("supervisor") {
+            // A module rename would turn the re-exec into `running 0 tests` and exit 0,
+            // which the manager would read as a supervisor that died without a pid line.
+            let module = module_path!().trim_start_matches("sai_atlas_lib::");
+            assert_eq!(TEST_SUPERVISOR_HELPER, format!("{module}::supervisor_role_helper"));
+            assert_eq!(run_code(vec![OsString::from("exe"), OsString::from(crate::ports::SUPERVISOR_ARGV)]), 2);
+            return;
+        }
+        let argv: Vec<String> = std::env::var(TEST_ARGV_ENV).ok().and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default();
+        let mut args = vec![OsString::from("sai-atlas"), OsString::from(crate::ports::SUPERVISOR_ARGV)];
+        args.extend(argv.into_iter().map(OsString::from));
+        std::process::exit(i32::from(run_code(args)));
+    }
+}
+
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
@@ -523,10 +548,6 @@ mod tests {
     #[test]
     fn gui_role_helper() {
         if std::env::var(TEST_ROLE_ENV).as_deref() != Ok("gui") {
-            // A module rename would turn the re-exec into `running 0 tests` and exit 0,
-            // which the manager would read as a supervisor that died without a pid line.
-            let module = module_path!().trim_start_matches("sai_atlas_lib::");
-            assert_eq!(TEST_SUPERVISOR_HELPER, format!("{module}::supervisor_role_helper"));
             return;
         }
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
@@ -561,19 +582,5 @@ mod tests {
         let status = supervised.child.wait().await.unwrap();
         assert_eq!(status.code(), Some(0));
         assert!(seen.iter().any(|line| line == "marker"), "stdout lines were {seen:?}");
-    }
-
-    /// Plays the supervisor when the test binary is re-executed by the manager:
-    /// the test harness owns `main`, so `--omp-supervise` cannot reach `run`.
-    #[test]
-    fn supervisor_role_helper() {
-        if std::env::var(TEST_ROLE_ENV).as_deref() != Ok("supervisor") {
-            assert_eq!(run_code(vec![OsString::from("exe"), OsString::from(crate::ports::SUPERVISOR_ARGV)]), 2);
-            return;
-        }
-        let argv: Vec<String> = std::env::var(TEST_ARGV_ENV).ok().and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default();
-        let mut args = vec![OsString::from("sai-atlas"), OsString::from(crate::ports::SUPERVISOR_ARGV)];
-        args.extend(argv.into_iter().map(OsString::from));
-        std::process::exit(i32::from(run_code(args)));
     }
 }

@@ -265,12 +265,14 @@ pub(crate) async fn sweep_installer_partials(directory: &Path, active_partial: O
 /* ------------------------------------------------------ Linux package kinds */
 
 /// The `package-type` marker in `resources_path` ("deb" inside the .deb), if any.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn package_type_at(resources_path: &Path) -> Option<String> {
     let raw = std::fs::read_to_string(resources_path.join("package-type")).ok()?;
     let trimmed = raw.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
+#[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum LinuxPackageKind {
     AppImage,
@@ -282,6 +284,7 @@ pub(crate) enum LinuxPackageKind {
 /// `APPIMAGE` alone is not proof: child processes inherit it, and the AppImage
 /// install replaces whatever file it names, so this process must also be
 /// running from the mounted `APPDIR`.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn linux_package_kind(
     appimage: Option<&str>,
     appdir: Option<&str>,

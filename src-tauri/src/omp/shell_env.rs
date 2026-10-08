@@ -228,9 +228,12 @@ pub(crate) fn resolve_editor_command(env: &Env, probed: &LoginShellEnv) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
     use crate::omp::manager::SidecarManager;
+    #[cfg(target_os = "linux")]
     use crate::ports::{SessionKind, SidecarEvent, SidecarHandle, SidecarOptions, SidecarStatus};
     use std::path::Path;
+    #[cfg(target_os = "linux")]
     use std::sync::{Arc, Weak};
 
     fn env(pairs: &[(&str, &str)]) -> Env {
@@ -355,10 +358,12 @@ mod tests {
     }
 
     /// The real sidecar fixture, which runs under the supervisor exactly like omp.
+    #[cfg(target_os = "linux")]
     fn fixture_path() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("e2e").join("sidecar-fixture.ts").canonicalize().unwrap()
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn injects_the_shellenv_overlay_into_the_spawned_process() {
         let dir = tempfile::tempdir().unwrap();

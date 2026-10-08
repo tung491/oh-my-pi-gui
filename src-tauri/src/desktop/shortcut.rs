@@ -358,6 +358,7 @@ impl ShortcutRegistry for PluginShortcutRegistry {
 /// Translate a plugin accelerator (`Control+Shift+Space`) into the portal's
 /// trigger description (`CTRL+SHIFT+space`: XDG modifiers and XKB keysym names).
 /// The portal only exists on Linux, where `CommandOrControl` means Control.
+#[cfg(any(target_os = "linux", test))]
 pub(crate) fn accelerator_to_portal_trigger(accelerator: &str) -> String {
     accelerator
         .split('+')
