@@ -8,7 +8,7 @@ import { useTabsStore } from "../../stores/tabs";
 import type { PanelTab } from "../../stores/ui";
 import { useUiStore } from "../../stores/ui";
 import { IconButton, PanelErrorBoundary } from "../common";
-import { FilesPanel } from "../panels/FilesPanel";
+import { FilePreviewPanel, FilesPanel } from "../panels/FilesPanel";
 import { LogPanel } from "../panels/LogPanel";
 
 const MIN_WIDTH = 360;
@@ -205,11 +205,29 @@ export function PanelContainer() {
 				</div>
 			</div>
 			<div className="min-h-0 flex-1 overflow-hidden">
-				{/* A preview is pinned to its own tab: a pane-focus change must not remount it. */}
-				<PanelErrorBoundary key={previewing ? `preview:${panelTab}` : `${activeTabId ?? "no-tab"}:${panelTab}`}>
-					{panelTab === "files" && <FilesPanel />}
-					{panelTab === "logs" && <LogPanel />}
-				</PanelErrorBoundary>
+				{panelTab === "files" && (
+					<>
+						{/* The tree stays mounted under a preview, so Back finds its folders,
+						    search and listing as they were. */}
+						<div className="h-full" hidden={previewing}>
+							<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:files`}>
+								<FilesPanel />
+							</PanelErrorBoundary>
+						</div>
+						{/* A preview is pinned to its own tab: a pane-focus change must not
+						    remount it. Its renderer boundary keys on the target inside. */}
+						{previewing && (
+							<PanelErrorBoundary key="preview">
+								<FilePreviewPanel />
+							</PanelErrorBoundary>
+						)}
+					</>
+				)}
+				{panelTab === "logs" && (
+					<PanelErrorBoundary key={`${activeTabId ?? "no-tab"}:logs`}>
+						<LogPanel />
+					</PanelErrorBoundary>
+				)}
 			</div>
 			<div
 				role="separator"

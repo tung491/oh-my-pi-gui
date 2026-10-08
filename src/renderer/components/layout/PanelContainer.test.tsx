@@ -340,6 +340,43 @@ function aside(): HTMLElement {
 	return document.querySelector("aside") as HTMLElement;
 }
 
+function click(selector: string): void {
+	const element = document.querySelector(selector);
+	if (!element) throw new Error(`${selector} not rendered`);
+	element.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+}
+
+describe("PanelContainer file tree across a preview", () => {
+	it("keeps expanded folders and the listing when a previewed file goes Back to the tree", async () => {
+		seedActiveTab("agent");
+		installPreviewOmp();
+		const list = vi.fn(async () => ({
+			ok: true,
+			entries: [
+				{ kind: "dir", name: "src", path: "src", children: [{ kind: "file", name: "a.md", path: "src/a.md" }] },
+			],
+			truncated: false,
+		}));
+		(ompWindow.omp as { fs: { list: unknown } }).fs.list = list;
+		await mount(<PanelContainer />);
+
+		await act(async () => click('[data-tree-id="dir:src"]'));
+		expect(document.querySelector('[data-tree-id="file:src/a.md"]')).not.toBeNull();
+
+		await act(async () => click('[data-tree-id="file:src/a.md"]'));
+		await flush();
+		expect(useUiStore.getState().filePreview).toMatchObject({ kind: "path", path: "src/a.md" });
+		expect(document.querySelector("aside h1")?.textContent).toBe("Report");
+
+		await act(async () => click('button[aria-label="Back to files"]'));
+		await flush();
+
+		expect(useUiStore.getState().filePreview).toBeNull();
+		expect(document.querySelector('[data-tree-id="file:src/a.md"]')).not.toBeNull();
+		expect(list).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("PanelContainer docking beside the chat", () => {
 	it("keeps the preview mounted and pinned to its tab when focus moves to the other pane", async () => {
 		seedSplitTabs();

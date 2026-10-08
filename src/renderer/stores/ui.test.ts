@@ -57,6 +57,30 @@ describe("file preview target", () => {
 		expect(useUiStore.getState().panelVisible).toBe(true);
 	});
 
+	it("bumps the re-check counter only when the same path target opens again", () => {
+		const start = useUiStore.getState().filePreviewRecheck;
+		useUiStore.getState().openFilePreview("docs/a.pdf", "t0");
+		expect(useUiStore.getState().filePreviewRecheck).toBe(start);
+
+		useUiStore.getState().openFilePreview("docs/a.pdf", "t0");
+		expect(useUiStore.getState().filePreviewRecheck).toBe(start + 1);
+
+		// Another tab or another path is a new target, not a re-check.
+		useUiStore.getState().openFilePreview("docs/a.pdf", "t1");
+		useUiStore.getState().openFilePreview("docs/b.pdf", "t1");
+		expect(useUiStore.getState().filePreviewRecheck).toBe(start + 1);
+		expect(useUiStore.getState().filePreview).toEqual({ kind: "path", path: "docs/b.pdf", tabId: "t1" });
+	});
+
+	it("keeps the same target object when re-opened, so nothing keyed on it remounts", () => {
+		useUiStore.getState().openFilePreview("docs/a.pdf", "t0");
+		const first = useUiStore.getState().filePreview;
+		useUiStore.getState().setPanelTab("logs");
+		useUiStore.getState().openFilePreview("docs/a.pdf", "t0");
+		expect(useUiStore.getState().filePreview).toBe(first);
+		expect(useUiStore.getState().panelTab).toBe("files");
+	});
+
 	it("keeps the preview when session overlays close with keepFilePreview", () => {
 		useUiStore.getState().openFilePreview("a.csv", "t1");
 		useUiStore.getState().openSettings();

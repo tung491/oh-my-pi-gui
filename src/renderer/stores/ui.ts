@@ -54,6 +54,9 @@ interface UiStore {
 	panelTab: PanelTab;
 	/** File or in-memory image currently shown in the Files drawer. */
 	filePreview: PreviewTarget | null;
+	/** Bumped when the previewed path target is opened again: the preview re-checks
+	 * it (`ifChanged`) in place instead of remounting, since its target key is unchanged. */
+	filePreviewRecheck: number;
 	commandPaletteOpen: boolean;
 	modelPickerOpen: boolean;
 	settingsOpen: boolean;
@@ -185,6 +188,7 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	panelVisible: false,
 	panelTab: "files",
 	filePreview: null,
+	filePreviewRecheck: 0,
 	commandPaletteOpen: false,
 	modelPickerOpen: false,
 	settingsOpen: false,
@@ -203,8 +207,14 @@ export const useUiStore = create<UiStore>()((set, get) => ({
 	toggleToolsExpandAll: () =>
 		set({ toolsExpandAll: { expanded: !get().toolsExpandAll.expanded, seq: get().toolsExpandAll.seq + 1 } }),
 	setPanelTab: tab => set({ panelTab: tab, panelVisible: true }),
-	openFilePreview: (path, tabId = null) =>
-		set({ filePreview: { kind: "path", path, tabId }, panelTab: "files", panelVisible: true }),
+	openFilePreview: (path, tabId = null) => {
+		const current = get().filePreview;
+		if (current?.kind === "path" && current.path === path && current.tabId === tabId) {
+			set({ filePreviewRecheck: get().filePreviewRecheck + 1, panelTab: "files", panelVisible: true });
+			return;
+		}
+		set({ filePreview: { kind: "path", path, tabId }, panelTab: "files", panelVisible: true });
+	},
 	openImagePreview: (dataUrl, name) => {
 		nextImagePreviewId += 1;
 		set({

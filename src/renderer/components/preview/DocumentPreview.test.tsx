@@ -380,22 +380,160 @@ describe("DocumentPreview refresh", () => {
 		expect(stubText()).toBe(String(bytes.length));
 	});
 
-	it("ignores Reload while a full read of the same file is still pending", async () => {
+	it("starts no second read while a full read is pending, then runs one full follow-up for the Reload", async () => {
 		const pending = Promise.withResolvers<IpcFsReadDocumentResult>();
-		const readDocument: ReadDocumentMock = vi.fn(() => pending.promise);
+		const bytes = await zipBytes("b");
+		const readDocument: ReadDocumentMock = vi.fn(async () => documentReply(bytes));
+		readDocument.mockImplementationOnce(() => pending.promise);
 		installFs({ readDocument });
 		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} renderers={stubRenderers} />);
 		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={1} renderers={stubRenderers} />);
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={2} renderers={stubRenderers} />);
 
 		expect(readDocument).toHaveBeenCalledTimes(1);
 		expect(previewState()).toBe("loading");
 
-		const bytes = await zipBytes("b");
 		await act(async () => {
 			pending.resolve(documentReply(bytes));
 		});
-		await settle(() => stubText() !== null);
+		await settle(() => readDocument.mock.calls.length === 2 && stubText() !== null);
+		await flush();
+
+		expect(readDocument).toHaveBeenCalledTimes(2);
+		expect(readDocument.mock.calls[1]).toEqual(["a.docx", { tabId: "t0" }]);
 		expect(stubText()).toBe(String(bytes.length));
+	});
+
+	it("never piles reads on a hung mount: writes and Reloads during a pending re-check wait for it", async () => {
+		const bytes = await zipBytes("b");
+		const readDocument: ReadDocumentMock = vi.fn(async () => documentReply(bytes));
+		installFs({ readDocument });
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} renderers={stubRenderers} />);
+		await settle(() => stubText() !== null);
+
+		const hung = Promise.withResolvers<IpcFsReadDocumentResult>();
+		readDocument.mockImplementationOnce(() => hung.promise);
+		await act(async () => {
+			notifyFileWritten("t0", "/w/a.docx");
+		});
+		expect(readDocument).toHaveBeenCalledTimes(2);
+
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={1} renderers={stubRenderers} />);
+		await act(async () => {
+			notifyFileWritten("t0", "/w/a.docx");
+		});
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={2} renderers={stubRenderers} />);
+		await flush();
+		expect(readDocument).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			hung.resolve({ ok: true, unchanged: true, size: bytes.length, mtimeMs: 100, resolvedPath: "/w/a.docx" });
+		});
+		await settle(() => readDocument.mock.calls.length === 3 && stubText() !== null);
+		await flush();
+		await flush();
+
+		// Exactly one follow-up, and a full one because a Reload asked for it.
+		expect(readDocument).toHaveBeenCalledTimes(3);
+		expect(readDocument.mock.calls[2]).toEqual(["a.docx", { tabId: "t0" }]);
+		expect(stubText()).toBe(String(bytes.length));
+	});
+
+	it("re-checks once with the fresh stamp for writes that land during the first read", async () => {
+		const first = Promise.withResolvers<IpcFsReadDocumentResult>();
+		const bytes = await zipBytes("b");
+		const readDocument: ReadDocumentMock = vi.fn(async () => ({
+			ok: true,
+			unchanged: true,
+			size: bytes.length,
+			mtimeMs: 100,
+			resolvedPath: "/w/a.docx",
+		}));
+		readDocument.mockImplementationOnce(() => first.promise);
+		installFs({ readDocument });
+		await render(<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} renderers={stubRenderers} />);
+
+		await act(async () => {
+			notifyFileWritten("t0", "a.docx");
+			notifyFileWritten("t0", "a.docx");
+		});
+		expect(readDocument).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			first.resolve(documentReply(bytes));
+		});
+		await settle(() => readDocument.mock.calls.length === 2 && stubText() !== null);
+		await flush();
+		await flush();
+
+		expect(readDocument).toHaveBeenCalledTimes(2);
+		expect(readDocument.mock.calls[1]).toEqual([
+			"a.docx",
+			{ tabId: "t0", ifChanged: { size: bytes.length, mtimeMs: 100 } },
+		]);
+		expect(previewState()).toBe("rich");
+		expect(mounts).toBe(1);
+	});
+
+	it("re-checks the same target in place when it is opened again", async () => {
+		const bytes = await zipBytes("b");
+		const readDocument: ReadDocumentMock = vi.fn(async () => documentReply(bytes));
+		installFs({ readDocument });
+		await render(
+			<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} recheckToken={4} renderers={stubRenderers} />,
+		);
+		await settle(() => stubText() !== null);
+		await flush();
+		expect(readDocument).toHaveBeenCalledTimes(1);
+
+		readDocument.mockImplementation(async () => ({
+			ok: true,
+			unchanged: true,
+			size: bytes.length,
+			mtimeMs: 100,
+			resolvedPath: "/w/a.docx",
+		}));
+		await render(
+			<DocumentPreview target={pathTarget("a.docx")} reloadToken={0} recheckToken={5} renderers={stubRenderers} />,
+		);
+		await settle(() => readDocument.mock.calls.length === 2);
+		await flush();
+
+		expect(readDocument.mock.calls[1]).toEqual([
+			"a.docx",
+			{ tabId: "t0", ifChanged: { size: bytes.length, mtimeMs: 100 } },
+		]);
+		expect(previewState()).toBe("rich");
+		expect(mounts).toBe(1);
+	});
+
+	it("re-reads a text target without the spinner when it is opened again", async () => {
+		const fs = installFs({
+			read: vi.fn(async () => ({ ok: true, content: "v1", truncated: false, binary: false, size: 2 })),
+		});
+		await render(
+			<DocumentPreview
+				target={pathTarget("notes.txt")}
+				reloadToken={0}
+				recheckToken={0}
+				renderers={stubRenderers}
+			/>,
+		);
+		expect(document.querySelector("pre")?.textContent).toBe("v1");
+
+		fs.read.mockImplementation(async () => ({ ok: true, content: "v2", truncated: false, binary: false, size: 2 }));
+		await render(
+			<DocumentPreview
+				target={pathTarget("notes.txt")}
+				reloadToken={0}
+				recheckToken={1}
+				renderers={stubRenderers}
+			/>,
+		);
+		await settle(() => document.querySelector("pre")?.textContent === "v2");
+
+		expect(fs.read).toHaveBeenCalledTimes(2);
+		expect(document.querySelector("pre")?.textContent).toBe("v2");
 	});
 
 	it("drops a read superseded by a newer target", async () => {

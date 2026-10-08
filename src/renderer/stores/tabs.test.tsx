@@ -1196,6 +1196,31 @@ describe("tab runtime lifecycle guards", () => {
 		expect(useUiStore.getState().filePreview).toBeNull();
 	});
 
+	it("clears a path preview pinned to the tab that closes, including one pane of a split", async () => {
+		seedTabs("t0");
+		useTabsStore.setState({ split: { axis: "columns", firstTabId: "t0", secondTabId: "t1", ratio: 0.5 } });
+		useUiStore.getState().openFilePreview("a.pdf", "t1");
+
+		await useTabsStore.getState().closeTab("t1");
+
+		expect(useTabsStore.getState().split).toBeNull();
+		expect(useUiStore.getState().filePreview).toBeNull();
+	});
+
+	it("keeps a path preview pinned to another tab, and an image preview, when a tab closes", async () => {
+		seedTabs("t0");
+		useUiStore.getState().openFilePreview("a.pdf", "t0");
+
+		await useTabsStore.getState().closeTab("t2");
+
+		expect(useUiStore.getState().filePreview).toEqual({ kind: "path", path: "a.pdf", tabId: "t0" });
+
+		useUiStore.getState().openImagePreview("data:image/png;base64,AA==", "paste.png");
+		await useTabsStore.getState().closeTab("t1");
+
+		expect(useUiStore.getState().filePreview).toMatchObject({ kind: "image", name: "paste.png" });
+	});
+
 	it("refuses to re-split a tab that already occupies a pane", async () => {
 		seedTabs("t0");
 		useTabsStore.setState({

@@ -1,8 +1,10 @@
 /**
  * Files panel: workspace file tree sourced via the dedicated `fs:list` /
  * `fs:read` main-process IPC (node:fs — cross-platform, works with no live
- * agent session), the in-drawer document preview (`DocumentPreview`), and
- * @mention insertion via the "omp:insert-mention" window event.
+ * agent session), the in-drawer document preview (`FilePreviewPanel`, around
+ * `DocumentPreview`), and @mention insertion via the "omp:insert-mention"
+ * window event. The two are siblings so the tree keeps its folders, search
+ * and listing while a preview covers it.
  */
 
 import {
@@ -52,9 +54,7 @@ export function searchFiles(entries: FsTreeEntry[], query: string): FsTreeEntry[
 export function FilesPanel() {
 	const t = useT();
 	const tabId = useRuntimeTabId();
-	const filePreview = useUiStore(s => s.filePreview);
 	const openFilePreview = useUiStore(s => s.openFilePreview);
-	const closeFilePreview = useUiStore(s => s.closeFilePreview);
 	const listVersion = useRef(0);
 	const [query, setQuery] = useState("");
 	const [tree, setTree] = useState<FsTreeEntry[]>([]);
@@ -62,8 +62,6 @@ export function FilesPanel() {
 	const [truncated, setTruncated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
-	/** Bumped by the header's Reload: a full re-read of the previewed file. */
-	const [reloadToken, setReloadToken] = useState(0);
 
 	const load = useCallback(async () => {
 		const version = ++listVersion.current;
@@ -101,13 +99,6 @@ export function FilesPanel() {
 		};
 	}, [load]);
 
-	const insertMention = useCallback(
-		(path: string) => {
-			window.dispatchEvent(new CustomEvent("omp:insert-mention", { detail: { path, tabId } }));
-		},
-		[tabId],
-	);
-
 	// Wire file activation: clicking a file previews it, clicking a dir toggles.
 	const onNodeClick = useCallback(
 		(id: string) => {
@@ -142,64 +133,6 @@ export function FilesPanel() {
 	}, [tree, query, expanded, onNodeClick]);
 
 	const fileCount = useMemo(() => countFiles(tree), [tree]);
-
-	if (filePreview) {
-		const previewPath = filePreview.kind === "path" ? filePreview.path : null;
-		// The tab the preview is pinned to, which may not be the focused one.
-		const previewTabId = filePreview.kind === "path" ? filePreview.tabId : null;
-		const title = filePreview.kind === "path" ? filePreview.path : filePreview.name;
-		return (
-			<div className="omp-slide-in-right flex h-full flex-col">
-				<div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-(--omp-border-muted) px-3 py-2">
-					<button
-						type="button"
-						onClick={closeFilePreview}
-						aria-label={t("filesPanel.back")}
-						className="omp-pressable flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
-					>
-						<ArrowLeft size={14} />
-					</button>
-					<File className="shrink-0 text-(--omp-dim)" size={12} />
-					<span className="min-w-0 flex-1 truncate font-mono text-omp-xs" title={title}>
-						{title}
-					</span>
-					{previewPath !== null && (
-						<>
-							<PathLink
-								path={previewPath}
-								tabId={previewTabId}
-								className="inline-flex shrink-0 items-center gap-1 px-1.5 py-1 text-omp-xs text-(--omp-muted)"
-							>
-								<ExternalLinkIcon size={12} />
-								<span>{t("filesPanel.openExternal")}</span>
-							</PathLink>
-							<IconButton
-								icon={<RotateCw size={12} />}
-								label={t("preview.reload")}
-								onClick={() => setReloadToken(token => token + 1)}
-								size="sm"
-								className="shrink-0"
-							/>
-							<button
-								type="button"
-								onClick={() => {
-									insertMention(previewPath);
-									closeFilePreview();
-								}}
-								className="omp-pressable inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-omp-xs text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
-							>
-								<AtSign size={12} />
-								<span>{t("filesPanel.insertMention")}</span>
-							</button>
-						</>
-					)}
-				</div>
-				<div className="min-h-0 flex-1 overflow-hidden bg-(--omp-code-bg)">
-					<DocumentPreview target={filePreview} reloadToken={reloadToken} />
-				</div>
-			</div>
-		);
-	}
 
 	return (
 		<div className="flex h-full flex-col">
@@ -262,6 +195,80 @@ export function FilesPanel() {
 						onExpandedChange={setExpanded}
 					/>
 				)}
+			</div>
+		</div>
+	);
+}
+
+/** The preview that covers the tree while a file or image is open. */
+export function FilePreviewPanel() {
+	const t = useT();
+	const focusedTabId = useRuntimeTabId();
+	const filePreview = useUiStore(s => s.filePreview);
+	const recheckToken = useUiStore(s => s.filePreviewRecheck);
+	const closeFilePreview = useUiStore(s => s.closeFilePreview);
+	/** Bumped by the header's Reload: a full re-read of the previewed file. */
+	const [reloadToken, setReloadToken] = useState(0);
+
+	if (!filePreview) return null;
+	const previewPath = filePreview.kind === "path" ? filePreview.path : null;
+	// The tab the preview is pinned to, which may not be the focused one.
+	const previewTabId = filePreview.kind === "path" ? filePreview.tabId : null;
+	const title = filePreview.kind === "path" ? filePreview.path : filePreview.name;
+	// The mention goes to the composer whose workspace the path resolves in.
+	const insertMention = (path: string) => {
+		window.dispatchEvent(
+			new CustomEvent("omp:insert-mention", { detail: { path, tabId: previewTabId ?? focusedTabId } }),
+		);
+	};
+	return (
+		<div className="omp-slide-in-right flex h-full flex-col">
+			<div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-(--omp-border-muted) px-3 py-2">
+				<button
+					type="button"
+					onClick={closeFilePreview}
+					aria-label={t("filesPanel.back")}
+					className="omp-pressable flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
+				>
+					<ArrowLeft size={14} />
+				</button>
+				<File className="shrink-0 text-(--omp-dim)" size={12} />
+				<span className="min-w-0 flex-1 truncate font-mono text-omp-xs" title={title}>
+					{title}
+				</span>
+				{previewPath !== null && (
+					<>
+						<PathLink
+							path={previewPath}
+							tabId={previewTabId}
+							className="inline-flex shrink-0 items-center gap-1 px-1.5 py-1 text-omp-xs text-(--omp-muted)"
+						>
+							<ExternalLinkIcon size={12} />
+							<span>{t("filesPanel.openExternal")}</span>
+						</PathLink>
+						<IconButton
+							icon={<RotateCw size={12} />}
+							label={t("preview.reload")}
+							onClick={() => setReloadToken(token => token + 1)}
+							size="sm"
+							className="shrink-0"
+						/>
+						<button
+							type="button"
+							onClick={() => {
+								insertMention(previewPath);
+								closeFilePreview();
+							}}
+							className="omp-pressable inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-omp-xs text-(--omp-muted) hover:bg-(--omp-bg-tertiary) hover:text-(--omp-text)"
+						>
+							<AtSign size={12} />
+							<span>{t("filesPanel.insertMention")}</span>
+						</button>
+					</>
+				)}
+			</div>
+			<div className="min-h-0 flex-1 overflow-hidden bg-(--omp-code-bg)">
+				<DocumentPreview target={filePreview} reloadToken={reloadToken} recheckToken={recheckToken} />
 			</div>
 		</div>
 	);

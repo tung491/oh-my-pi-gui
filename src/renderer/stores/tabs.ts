@@ -583,6 +583,10 @@ export const useTabsStore = create<TabsStore>()((set, get) => ({
 		if (state.tabs.length <= 1) return;
 		const index = state.tabs.findIndex(tab => tab.id === id);
 		if (index === -1) return;
+		// A path preview resolves against its pinned tab's workspace; once that
+		// tab is gone, Reload and Open externally could only fail.
+		const preview = useUiStore.getState().filePreview;
+		if (preview?.kind === "path" && preview.tabId === id) useUiStore.getState().closeFilePreview();
 		const splitSurvivor = state.split
 			? state.split.firstTabId === id
 				? state.split.secondTabId
