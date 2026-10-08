@@ -78,7 +78,20 @@ function makeDmg(app: string, bundleDir: string, version: string): string {
 	try {
 		run(["ditto", app, path.join(stage, `${PRODUCT_NAME}.app`)]);
 		symlinkSync("/Applications", path.join(stage, "Applications"));
-		run(["hdiutil", "create", "-volname", PRODUCT_NAME, "-srcfolder", stage, "-fs", "HFS+", "-format", "UDZO", "-ov", dmg]);
+		run([
+			"hdiutil",
+			"create",
+			"-volname",
+			PRODUCT_NAME,
+			"-srcfolder",
+			stage,
+			"-fs",
+			"HFS+",
+			"-format",
+			"UDZO",
+			"-ov",
+			dmg,
+		]);
 	} finally {
 		rmSync(stage, { recursive: true, force: true });
 	}

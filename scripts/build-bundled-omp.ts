@@ -31,7 +31,7 @@
  *
  * Usage (from packages/gui):
  *   bun run build:omp                                       # host arch → resources/omp
- *   bun run build:omp:x64                                   # Intel cross-build → resources/omp.x64
+ *   bun scripts/build-bundled-omp.ts --target bun-darwin-x64 # Intel cross-build → resources/omp.x64 (no macOS release ships it)
  *   bun scripts/build-bundled-omp.ts --target bun-darwin-x64 --out custom/path
  *
  * After upgrading the monorepo (upstream sync), run scripts/sync-upstream.sh
@@ -71,7 +71,7 @@ if (!existsSync(compileBinaryModulePath) || !existsSync(path.join(nativesDir, "s
 			"    cd gui && bun install",
 			"",
 			"  To package WITHOUT the monorepo, copy a prebuilt sidecar into resources/omp",
-			"  (and resources/omp.x64 for Intel) and skip this script — see README → Build from source.",
+			"  and skip this script — see README → Build from source.",
 			"",
 		].join("\n"),
 	);

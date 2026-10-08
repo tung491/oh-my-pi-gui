@@ -211,3 +211,4 @@ none
 ```
 
 GUI pid 38088 (launched by its relative path, so the path filter above does not list it); supervisor 38167 has ppid 38088, omp 38168 has ppid 38167. `gui-runtime.jsonl` holds 9 lines, none naming `assistant-pack` or `sidecar-restart`. It does show `quick entry registered` (`Control+Shift+Space`) at startup; the chord was not pressed. `pgrep -fl` for the worktree's bundle path printed nothing afterwards.
+- `hdiutil create` prints a deprecation warning on Darwin 27; Apple's replacement is `diskutil image create from --format UDZO --volumeName "Sai ATLAS" <stage> <dmg>`, which exists only on macOS 26+, so `hdiutil` stays until it errors.

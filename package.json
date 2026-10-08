@@ -27,7 +27,7 @@
     "build:pack": "bun scripts/build-assistant-pack.ts",
     "build:omp": "bun scripts/build-bundled-omp.ts",
     "check": "node scripts/lint-surfaces.mjs && biome check . && tsc --noEmit",
-    "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.wdio.json",
+    "check:types": "tsc --noEmit && tsc --noEmit -p tsconfig.wdio.json && tsc --noEmit -p tsconfig.tauri-scripts.json",
     "check:protocol": "bun scripts/check-protocol.ts",
     "check:mac-update-floor": "bun scripts/check-mac-update-floor.ts",
     "lint": "biome lint .",

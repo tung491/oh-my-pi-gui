@@ -8,6 +8,7 @@
 			"e2e/**/*.ts",
 			"e2e-tauri/**/*.ts",
 			"scripts/**/*.ts",
+			"src-tauri/**/*.ts",
 			"*.ts",
 			"!out",
 			"!dist",

@@ -71,7 +71,8 @@ export const TRAY_ALTERNATION = "libayatana-appindicator3-1 | libappindicator3-1
 export const DEB_DEPENDS = `bubblewrap, xdg-dbus-proxy, ${TRAY_ALTERNATION}, libwebkit2gtk-4.1-0, libgtk-3-0`;
 
 /** The finished package's Recommends: the configured `deb.recommends`, which the app runs without. */
-export const DEB_RECOMMENDS = "desktop-file-utils, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-pipewire, libglib2.0-bin";
+export const DEB_RECOMMENDS =
+	"desktop-file-utils, xdg-utils, gstreamer1.0-plugins-good, gstreamer1.0-pipewire, libglib2.0-bin";
 
 /** The only control-archive members the package may carry: no maintainer scripts, triggers or conffiles. */
 export const CONTROL_MEMBERS: readonly string[] = ["control", "md5sums"];
@@ -85,7 +86,8 @@ function dpkgDeb(args: string[]): void {
 function dpkgDebOutput(args: string[]): string {
 	const result = spawnSync("dpkg-deb", args, { encoding: "utf8" });
 	if (result.error) throw new Error(`dpkg-deb is required to finish the .deb: ${result.error.message}`);
-	if (result.status !== 0) throw new Error(`dpkg-deb ${args[0]} failed with status ${result.status}: ${result.stderr.trim()}`);
+	if (result.status !== 0)
+		throw new Error(`dpkg-deb ${args[0]} failed with status ${result.status}: ${result.stderr.trim()}`);
 	return result.stdout;
 }
 
@@ -137,7 +139,8 @@ export function assertPackageControl(fields: Map<string, string>, members: reado
 	const depends = fields.get("depends");
 	if (depends !== DEB_DEPENDS) problems.push(`Depends is "${depends ?? ""}", expected "${DEB_DEPENDS}"`);
 	const recommends = fields.get("recommends");
-	if (recommends !== DEB_RECOMMENDS) problems.push(`Recommends is "${recommends ?? ""}", expected "${DEB_RECOMMENDS}"`);
+	if (recommends !== DEB_RECOMMENDS)
+		problems.push(`Recommends is "${recommends ?? ""}", expected "${DEB_RECOMMENDS}"`);
 	if (fields.has("pre-depends")) problems.push(`it has Pre-Depends: ${fields.get("pre-depends")}`);
 	const unexpected = members.filter(member => !CONTROL_MEMBERS.includes(member)).sort();
 	if (unexpected.length > 0) problems.push(`its control archive carries ${unexpected.join(", ")}`);
@@ -206,13 +209,16 @@ export function finalizeDeb(debPath: string): void {
 
 		const applications = path.join(root, "usr/share/applications");
 		const entries = readdirSync(applications).filter(name => name.endsWith(".desktop"));
-		if (entries.length !== 1) throw new Error(`expected one desktop entry in ${debPath}, found: ${entries.join(", ")}`);
+		if (entries.length !== 1)
+			throw new Error(`expected one desktop entry in ${debPath}, found: ${entries.join(", ")}`);
 		const entry = entries[0] as string;
-		if (entry !== DESKTOP_ENTRY_ID) renameSync(path.join(applications, entry), path.join(applications, DESKTOP_ENTRY_ID));
+		if (entry !== DESKTOP_ENTRY_ID)
+			renameSync(path.join(applications, entry), path.join(applications, DESKTOP_ENTRY_ID));
 
 		for (const [link, target] of Object.entries(COMPAT_SYMLINKS)) {
 			const resolved = path.join(root, target);
-			if (!existsSync(resolved) || !lstatSync(resolved).isFile()) throw new Error(`${target} is missing from ${debPath}`);
+			if (!existsSync(resolved) || !lstatSync(resolved).isFile())
+				throw new Error(`${target} is missing from ${debPath}`);
 			const linkPath = path.join(root, link);
 			if (existsSync(linkPath)) throw new Error(`${link} already exists in ${debPath}`);
 			mkdirTree(root, path.dirname(link));
