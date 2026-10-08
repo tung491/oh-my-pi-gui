@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "arm64-only release tooling and docs"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [2]

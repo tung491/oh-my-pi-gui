@@ -53,7 +53,7 @@ The macOS arm64 build of Sai ATLAS is the Tauri app from `src-tauri/`. It ships 
 | 4 | [OS branches: supervisor, proxy, GPU and RAM](./phase-04-os-branches.md) | 1 | 1.5d | Completed |
 | 5 | [Desktop and webview parity](./phase-05-desktop-webview-parity.md) | 1 | 1.5d | Pending |
 | 6 | [Host verification and the human sitting](./phase-06-host-verification.md) | 3, 4, 5 | 1d | Pending |
-| 7 | [arm64-only release tooling and docs](./phase-07-release-tooling-docs.md) | 2 | 1d | Pending |
+| 7 | [arm64-only release tooling and docs](./phase-07-release-tooling-docs.md) | 2 | 1d | Completed |
 | 8 | [macOS release](./phase-08-macos-release.md) | 6, 7 | 0.5d | Pending |
 | 9 | [Electron removal: move what stays](./phase-09-removal-prep.md) | 8 + user confirmation | 1.5d | Pending |
 | 10 | [Electron removal: delete and rename](./phase-10-electron-removal.md) | 9 | 1.5d | Pending |
