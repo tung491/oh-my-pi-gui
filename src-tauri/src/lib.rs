@@ -207,8 +207,8 @@ impl Host for TauriHost {
 
     fn open_url(&self, url: &str) -> Result<(), HostError> {
         let lower = url.to_ascii_lowercase();
-        if !(lower.starts_with("http://") || lower.starts_with("https://")) {
-            return Err(HostError::Failed(format!("refused to open a non-http URL: {url}")));
+        if !(lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("mailto:")) {
+            return Err(HostError::Failed(format!("refused to open a URL that is not http, https or mailto: {url}")));
         }
         self.app.opener().open_url(url, None::<&str>).map_err(|error| HostError::Failed(error.to_string()))
     }

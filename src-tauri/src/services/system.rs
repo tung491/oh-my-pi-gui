@@ -10,9 +10,15 @@ use crate::ports::{Caller, WindowId};
 
 use super::open_path_target::{self, LaunchPlatform, OpenAction, OsFs};
 
-/// The URL schemes `system:open-external` allows (`ipc.ts:792-806`); the host
-/// refuses anything else again, but this stops the browser from even being asked.
+/// The URL schemes `system:open-external` allows: http, https and mailto
+/// (`isAllowedExternalUrl` in `external-url.ts`); the host refuses anything
+/// else again, but this stops the opener from even being asked.
 pub fn allowed_external_url(url: &str) -> bool {
+    allowed_web_url(url) || url.starts_with("mailto:")
+}
+
+/// http and https only: the rule the agent's `gui_open_url` tool keeps.
+pub fn allowed_web_url(url: &str) -> bool {
     url.starts_with("https://") || url.starts_with("http://")
 }
 
@@ -140,11 +146,23 @@ mod tests {
     }
 
     #[test]
-    fn allows_only_http_and_https_urls() {
-        assert!(allowed_external_url("https://example.com"));
-        assert!(allowed_external_url("http://example.com"));
-        assert!(!allowed_external_url("file:///etc/passwd"));
-        assert!(!allowed_external_url("javascript:alert(1)"));
+    fn allows_http_https_and_mailto_urls() {
+        assert!(allowed_external_url("https://a.b"));
+        assert!(allowed_external_url("http://a.b"));
+        assert!(allowed_external_url("mailto:a@b.c"));
+    }
+
+    #[test]
+    fn refuses_file_javascript_and_data_urls() {
+        for url in ["file:///etc/passwd", "javascript:alert(1)", "data:text/html,x", ""] {
+            assert!(!allowed_external_url(url), "{url} must be refused");
+        }
+    }
+
+    #[test]
+    fn the_host_tool_still_refuses_mailto_urls() {
+        assert!(allowed_web_url("https://a.b"));
+        assert!(!allowed_web_url("mailto:a@b.c"));
     }
 
     #[test]

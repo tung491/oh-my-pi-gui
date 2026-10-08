@@ -19,6 +19,9 @@ import type {
 	IpcCloseTabPayload,
 	IpcExtensionUiRespondPayload,
 	IpcFsListPayload,
+	IpcFsReadDocumentPayload,
+	IpcFsReadDocumentResult,
+	IpcFsReadDocumentStamp,
 	IpcFsReadImagePayload,
 	IpcFsReadImageResult,
 	IpcFsReadPayload,
@@ -54,6 +57,8 @@ import { requestQuit } from "./app-quit";
 import { ensureDefaultWorkspace } from "./default-workspace";
 import { dialogDirOf, dialogStartPath } from "./dialog-memory";
 import { openInExternalEditor } from "./editor";
+import { isAllowedExternalUrl } from "./external-url";
+import { readDocumentFile } from "./fs-read-document";
 import { readPdfFile } from "./fs-read-pdf";
 import { mainT } from "./i18n";
 import type { LogWatcher } from "./log-watcher";
@@ -235,6 +240,15 @@ async function loadIgnoreRules(rootAbs: string): Promise<IgnoreRule[]> {
 		// No readable root .gitignore — defaults only.
 	}
 	return rules;
+}
+
+/** The renderer's change stamp when both fields are finite numbers, else undefined. */
+function validStamp(stamp: unknown): IpcFsReadDocumentStamp | undefined {
+	if (typeof stamp !== "object" || stamp === null) return undefined;
+	const { size, mtimeMs } = stamp as Partial<Record<keyof IpcFsReadDocumentStamp, unknown>>;
+	if (typeof size !== "number" || !Number.isFinite(size)) return undefined;
+	if (typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs)) return undefined;
+	return { size, mtimeMs };
 }
 
 /** Resolve `rel` against `root`, refusing escapes outside the workspace. */
@@ -730,10 +744,8 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	});
 
 	// System
-	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, async (_event, url: string) => {
-		if (typeof url === "string" && (url.startsWith("https://") || url.startsWith("http://"))) {
-			await shell.openExternal(url);
-		}
+	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, async (_event, url: unknown) => {
+		if (isAllowedExternalUrl(url)) await shell.openExternal(url);
 	});
 
 	// Tool-card path links — open a file in the system editor. "~" expands,
@@ -1078,6 +1090,30 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// path and sniff rules.
 	ipcMain.handle(IPC_COMMANDS.FS_READ_PDF, (_event, payload: IpcFsReadPdfPayload | undefined) =>
 		readPdfFile(payload?.path),
+	);
+
+	// Document read for the in-app preview; see fs-read-document.ts for the
+	// signature and size rules. Absolute and `~/` paths read as given (like
+	// fs:read-image); relative ones are confined to the tab's workspace.
+	ipcMain.handle(
+		IPC_COMMANDS.FS_READ_DOCUMENT,
+		async (event, payload: IpcFsReadDocumentPayload | undefined): Promise<IpcFsReadDocumentResult> => {
+			const fail = (error: string): IpcFsReadDocumentResult => ({ ok: false, size: 0, mtimeMs: 0, error });
+			const raw = payload?.path;
+			if (typeof raw !== "string" || raw.length === 0) return fail("invalid-path");
+			const expanded = raw.startsWith("~/") ? path.join(os.homedir(), raw.slice(2)) : raw;
+			let abs: string;
+			if (path.isAbsolute(expanded)) {
+				abs = path.normalize(expanded);
+			} else {
+				const cwd = cwdFor(deps, event, typeof payload?.tabId === "string" ? payload.tabId : undefined);
+				if (!cwd) return fail("no-workspace");
+				const within = resolveWithin(cwd, expanded);
+				if (!within) return fail("outside-workspace");
+				abs = within;
+			}
+			return readDocumentFile(abs, { ifChanged: validStamp(payload?.ifChanged) });
+		},
 	);
 
 	// Plan-mode document read — deliberately OFF the RPC bus: reading via the

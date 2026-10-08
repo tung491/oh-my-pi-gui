@@ -204,6 +204,8 @@ export const IPC_COMMANDS = {
 	FS_READ_IMAGE: "fs:read-image",
 	/** Read a PDF (absolute or `~` path) as base64 for a local page-1 thumbnail (PDF sniff, size cap) */
 	FS_READ_PDF: "fs:read-pdf",
+	/** Read a document's bytes (PDF, ZIP, OLE or HTML-table signature; bounded by a size cap), or report that it is unchanged since a size and mtime stamp, for the in-app preview */
+	FS_READ_DOCUMENT: "fs:read-document",
 	/** Open a session (or a fresh window) in a new parallel window with its own sidecar */
 	SESSION_OPEN_NEW_WINDOW: "session:open-new-window",
 	/** Fresh window pulls the session it was opened for (one-shot) */
@@ -780,6 +782,50 @@ export interface IpcFsReadPdfResult {
 	data?: string;
 	/** Total file size in bytes (0 when unknown). */
 	size: number;
+	error?: string;
+}
+
+/** The leading-bytes signature of a document `fs:read-document` accepts. */
+export type IpcDocumentSignature = "pdf" | "zip" | "ole" | "html";
+
+/** The fixed error codes of `fs:read-document`; an OS error message may appear instead. */
+export type IpcFsReadDocumentError =
+	| "invalid-path"
+	| "no-workspace"
+	| "outside-workspace"
+	| "not-a-file"
+	| "too-large"
+	| "unsupported"
+	| "timed-out";
+
+/** A file's size and whole-millisecond mtime, used to skip re-reading an unchanged document. */
+export interface IpcFsReadDocumentStamp {
+	size: number;
+	mtimeMs: number;
+}
+
+export interface IpcFsReadDocumentPayload {
+	/** Absolute, `~/` or workspace-relative path (relative resolves against the tab's cwd). */
+	path: string;
+	tabId?: string;
+	/** When the file still has this size and mtime, the reply is `unchanged` without bytes. */
+	ifChanged?: IpcFsReadDocumentStamp;
+}
+
+export interface IpcFsReadDocumentResult {
+	ok: boolean;
+	/** Bytes on disk (or bytes read); 0 when unknown. */
+	size: number;
+	/** `Math.floor` of the mtime in ms since the epoch; 0 when unknown. */
+	mtimeMs: number;
+	/** The absolute path read; absent when the path never resolved. */
+	resolvedPath?: string;
+	/** `ifChanged` matched size and mtime; no data. */
+	unchanged?: true;
+	/** Base64 of the whole file; only on a full successful read. */
+	data?: string;
+	signature?: IpcDocumentSignature;
+	/** An {@link IpcFsReadDocumentError} code, or an OS error message. */
 	error?: string;
 }
 
@@ -1360,6 +1406,10 @@ export interface OmpApi {
 		readPlan(payload: IpcFsReadPlanPayload): Promise<IpcFsReadPlanResult>;
 		readImage(path: string, tabId?: string): Promise<IpcFsReadImageResult>;
 		readPdf(path: string): Promise<IpcFsReadPdfResult>;
+		readDocument(
+			path: string,
+			options?: { tabId?: string; ifChanged?: IpcFsReadDocumentStamp },
+		): Promise<IpcFsReadDocumentResult>;
 	};
 	editor: {
 		openExternal(content: string): Promise<{

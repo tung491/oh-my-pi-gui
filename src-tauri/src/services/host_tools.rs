@@ -15,7 +15,7 @@ pub fn execute(ctx: &Arc<AppCtx>, name: &str, args: &Value) -> Option<futures_ut
             let url = args.get("url").and_then(Value::as_str).unwrap_or("").to_string();
             let ctx = ctx.clone();
             Some(Box::pin(async move {
-                if super::system::allowed_external_url(&url) {
+                if super::system::allowed_web_url(&url) {
                     let _ = ctx.host.open_url(&url);
                     Ok(Value::String("Opened in browser".into()))
                 } else {

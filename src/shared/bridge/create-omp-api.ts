@@ -8,6 +8,8 @@ import type {
 	DeepLinkPayload,
 	IpcActiveTabEnvelope,
 	IpcFsListResult,
+	IpcFsReadDocumentResult,
+	IpcFsReadDocumentStamp,
 	IpcFsReadImageResult,
 	IpcFsReadPdfResult,
 	IpcFsReadPlanPayload,
@@ -398,6 +400,12 @@ export function createOmpApi(
 			readImage: (path: string, tabId?: string) =>
 				port.invoke(IPC_COMMANDS.FS_READ_IMAGE, { path, tabId }) as Promise<IpcFsReadImageResult>,
 			readPdf: (path: string) => port.invoke(IPC_COMMANDS.FS_READ_PDF, { path }) as Promise<IpcFsReadPdfResult>,
+			readDocument: (path: string, options: { tabId?: string; ifChanged?: IpcFsReadDocumentStamp } = {}) =>
+				port.invoke(IPC_COMMANDS.FS_READ_DOCUMENT, {
+					path,
+					tabId: options.tabId,
+					ifChanged: options.ifChanged,
+				}) as Promise<IpcFsReadDocumentResult>,
 		},
 
 		editor: {

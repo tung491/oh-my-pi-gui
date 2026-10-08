@@ -223,6 +223,20 @@ describe("createOmpApi", () => {
 		expect(electronApi.system.onNativeDropPaths).toBeUndefined();
 	});
 
+	it("reads a document over its own channel with tab and change stamp", async () => {
+		const { port, invokes } = fakePort(() => ({ ok: true, unchanged: true, size: 3, mtimeMs: 7 }));
+		const api = createOmpApi(port, "linux");
+		await expect(
+			api.fs.readDocument("docs/a.docx", { tabId: "t1", ifChanged: { size: 3, mtimeMs: 7 } }),
+		).resolves.toEqual({ ok: true, unchanged: true, size: 3, mtimeMs: 7 });
+		expect(invokes).toEqual([
+			{
+				channel: IPC_COMMANDS.FS_READ_DOCUMENT,
+				args: [{ path: "docs/a.docx", tabId: "t1", ifChanged: { size: 3, mtimeMs: 7 } }],
+			},
+		]);
+	});
+
 	it("delivers native drop paths only when the shell emits them, dropping malformed entries", () => {
 		const { port, emit, listenerCount } = fakePort();
 		expect(createOmpApi(port, "linux").system.onNativeDropPaths).toBeUndefined();
