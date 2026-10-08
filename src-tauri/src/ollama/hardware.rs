@@ -71,8 +71,7 @@ fn run_nvidia_smi(timeout: Duration) -> BoxFuture<Option<String>> {
 
 /// `lspci -mm` (VGA/3D class), falling back to the sysfs vendor/device ids
 /// when `lspci` is unavailable. Electron's `app.getGPUInfo` has no Rust
-/// equivalent (Phase 2 → Design); macOS and Windows gain a real probe in
-/// Phase 12, logging once in the meantime.
+/// equivalent; macOS asks `system_profiler`, and other OSes log once.
 fn read_gpu_name_linux() -> BoxFuture<Result<Option<String>, String>> {
     Box::pin(async move {
         let output = Command::new("lspci").arg("-mm").stdin(Stdio::null()).output().await;
@@ -102,11 +101,34 @@ fn gpu_name_from_sysfs() -> Option<String> {
     })
 }
 
+/// The display adapter's name from `system_profiler SPDisplaysDataType -json`.
+#[cfg(target_os = "macos")]
+fn read_gpu_name_macos() -> BoxFuture<Result<Option<String>, String>> {
+    Box::pin(async move {
+        let output = Command::new("/usr/sbin/system_profiler").args(["SPDisplaysDataType", "-json"]).stdin(Stdio::null()).stderr(Stdio::null()).kill_on_drop(true).output().await.map_err(|error| error.to_string())?;
+        Ok(gpu_name_from_system_profiler(&String::from_utf8_lossy(&output.stdout)))
+    })
+}
+
+/// The first display adapter's `sppci_model`, else its `_name`, trimmed.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn gpu_name_from_system_profiler(json: &str) -> Option<String> {
+    let report: serde_json::Value = serde_json::from_str(json).ok()?;
+    let adapter = report.get("SPDisplaysDataType")?.as_array()?.first()?;
+    ["sppci_model", "_name"].iter().filter_map(|key| adapter.get(*key)?.as_str()).map(str::trim).find(|name| !name.is_empty()).map(str::to_string)
+}
+
+/// Bytes from `sysctl -n hw.memsize`; `None` unless a positive number.
+#[cfg(any(target_os = "macos", test))]
+pub(crate) fn parse_sysctl_memsize(text: &str) -> Option<u64> {
+    text.trim().parse::<u64>().ok().filter(|bytes| *bytes > 0)
+}
+
 fn gpu_name_other_os() -> BoxFuture<Result<Option<String>, String>> {
     Box::pin(async move {
         static LOGGED: std::sync::Once = std::sync::Once::new();
         LOGGED.call_once(|| {
-            crate::runtime_log::note("unknown", "GPU name lookup is not implemented on this OS", serde_json::json!({}));
+            crate::runtime_log::note("unknown", "GPU name lookup is not available on this OS", serde_json::json!({}));
         });
         Ok(None)
     })
@@ -124,8 +146,12 @@ fn default_deps() -> HardwareDeps {
         "aarch64" => Arch::Arm64,
         _ => Arch::Other,
     };
-    let gpu_name: Arc<dyn Fn() -> BoxFuture<Result<Option<String>, String>> + Send + Sync> =
-        if platform == Platform::Linux { Arc::new(read_gpu_name_linux) } else { Arc::new(gpu_name_other_os) };
+    let gpu_name: Arc<dyn Fn() -> BoxFuture<Result<Option<String>, String>> + Send + Sync> = match platform {
+        Platform::Linux => Arc::new(read_gpu_name_linux),
+        #[cfg(target_os = "macos")]
+        Platform::Darwin => Arc::new(read_gpu_name_macos),
+        _ => Arc::new(gpu_name_other_os),
+    };
     HardwareDeps {
         platform,
         arch,
@@ -154,7 +180,18 @@ fn sysinfo_totalmem() -> u64 {
         }
         0
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("/usr/sbin/sysctl")
+            .args(["-n", "hw.memsize"])
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output()
+            .ok()
+            .and_then(|output| parse_sysctl_memsize(&String::from_utf8_lossy(&output.stdout)))
+            .unwrap_or(0)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         0
     }
@@ -268,6 +305,33 @@ mod tests {
     use super::*;
 
     const GIB: u64 = 1024 * 1024 * 1024;
+
+    #[test]
+    fn reads_the_gpu_name_from_system_profiler() {
+        assert_eq!(gpu_name_from_system_profiler(r#"{"SPDisplaysDataType":[{"_name":"Apple M3 Pro","sppci_model":"Apple M3 Pro","sppci_cores":"18"}]}"#).as_deref(), Some("Apple M3 Pro"));
+        assert_eq!(gpu_name_from_system_profiler(r#"{"SPDisplaysDataType":[{"_name":"kHW_AMDRadeonPro5500MItem","sppci_model":"AMD Radeon Pro 5500M"}]}"#).as_deref(), Some("AMD Radeon Pro 5500M"));
+        assert_eq!(gpu_name_from_system_profiler(r#"{"SPDisplaysDataType":[{"_name":"Apple M1 Pro"}]}"#).as_deref(), Some("Apple M1 Pro"));
+        assert_eq!(gpu_name_from_system_profiler("{}"), None);
+        assert_eq!(gpu_name_from_system_profiler("not json"), None);
+        assert_eq!(gpu_name_from_system_profiler(r#"{"SPDisplaysDataType":[]}"#), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn reads_this_macs_memory_and_gpu() {
+        let facts = read_machine_default().await.expect("this Mac's machine facts");
+        assert!(facts.ram_bytes > 0);
+        assert!(facts.unified_memory);
+        assert!(facts.gpu_name.is_some(), "{facts:?}");
+    }
+
+    #[test]
+    fn reads_total_memory_from_sysctl() {
+        assert_eq!(parse_sysctl_memsize("38654705664\n"), Some(38654705664));
+        assert_eq!(parse_sysctl_memsize("0"), None);
+        assert_eq!(parse_sysctl_memsize(""), None);
+        assert_eq!(parse_sysctl_memsize("abc"), None);
+    }
 
     fn test_deps() -> HardwareDeps {
         HardwareDeps {
