@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -136,7 +136,8 @@ describe("assistant pack", () => {
 		const appPath = join(root, "out", "main");
 		mkdirSync(appPath, { recursive: true });
 		// The main process's cwd holds a pack-shaped folder, as the repo root holds the pack source.
-		const cwd = tempRoot();
+		// macOS keeps the temp dir behind a /var symlink, and chdir resolves it.
+		const cwd = realpathSync(tempRoot());
 		writePack(join(cwd, "assistant-pack"), PACK_FILES);
 		const previous = process.cwd();
 		process.chdir(cwd);

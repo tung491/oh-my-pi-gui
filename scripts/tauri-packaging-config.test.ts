@@ -388,73 +388,77 @@ describe("Linux package", () => {
 		}
 	});
 
-	it("deb ships the /opt compat symlink and one desktop entry named after the app id", () => {
-		// The 0.9.x Electron deb updater relaunches /opt/Sai ATLAS/sai-atlas after dpkg -i.
-		expect(COMPAT_SYMLINKS).toEqual({ "opt/Sai ATLAS/sai-atlas": "/usr/bin/sai-atlas" });
-		expect(DESKTOP_ENTRY_ID).toBe("vn.io.vif.saiatlas.desktop");
-		expect(scripts()["package:tauri:linux"]).toMatch(
-			/ && bun src-tauri\/linux\/finalize-deb\.ts src-tauri\/target\/x86_64-unknown-linux-gnu\/release\/bundle\/deb( && |$)/,
-		);
-		// Round-trip a package laid out the way tauri-bundler writes one.
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), "finalize-deb-"));
-		try {
-			const root = path.join(dir, "root");
-			const put = (file: string, contents: string, mode = 0o644) => {
-				fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
-				fs.writeFileSync(path.join(root, file), contents);
-				fs.chmodSync(path.join(root, file), mode);
-			};
-			put(
-				"DEBIAN/control",
-				[
-					"Package: sai-atlas",
-					"Version: 1.0.0",
-					"Architecture: amd64",
-					"Maintainer: test",
-					`Depends: ${DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY)}`,
-					`Recommends: ${DEB_RECOMMENDS}`,
-					"Description: test",
-					"",
-				].join("\n"),
+	it.skipIf(process.platform !== "linux")(
+		"deb ships the /opt compat symlink and one desktop entry named after the app id",
+		() => {
+			// The 0.9.x Electron deb updater relaunches /opt/Sai ATLAS/sai-atlas after dpkg -i.
+			expect(COMPAT_SYMLINKS).toEqual({ "opt/Sai ATLAS/sai-atlas": "/usr/bin/sai-atlas" });
+			expect(DESKTOP_ENTRY_ID).toBe("vn.io.vif.saiatlas.desktop");
+			expect(scripts()["package:tauri:linux"]).toMatch(
+				/ && bun src-tauri\/linux\/finalize-deb\.ts src-tauri\/target\/x86_64-unknown-linux-gnu\/release\/bundle\/deb( && |$)/,
 			);
-			put("usr/bin/sai-atlas", "binary", 0o755);
-			put("usr/lib/Sai ATLAS/omp", "sidecar", 0o755);
-			put("usr/share/applications/Sai ATLAS.desktop", "[Desktop Entry]\nStartupWMClass=vn.io.vif.saiatlas\n");
-			for (const sub of [
-				"DEBIAN",
-				"usr",
-				"usr/bin",
-				"usr/lib",
-				"usr/lib/Sai ATLAS",
-				"usr/share",
-				"usr/share/applications",
-			]) {
-				fs.chmodSync(path.join(root, sub), 0o755);
+			// Round-trip a package laid out the way tauri-bundler writes one.
+			const dir = fs.mkdtempSync(path.join(os.tmpdir(), "finalize-deb-"));
+			try {
+				const root = path.join(dir, "root");
+				const put = (file: string, contents: string, mode = 0o644) => {
+					fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+					fs.writeFileSync(path.join(root, file), contents);
+					fs.chmodSync(path.join(root, file), mode);
+				};
+				put(
+					"DEBIAN/control",
+					[
+						"Package: sai-atlas",
+						"Version: 1.0.0",
+						"Architecture: amd64",
+						"Maintainer: test",
+						`Depends: ${DEB_DEPENDS.replace(TRAY_ALTERNATION, TRAY_DEPENDENCY)}`,
+						`Recommends: ${DEB_RECOMMENDS}`,
+						"Description: test",
+						"",
+					].join("\n"),
+				);
+				put("usr/bin/sai-atlas", "binary", 0o755);
+				put("usr/lib/Sai ATLAS/omp", "sidecar", 0o755);
+				put("usr/share/applications/Sai ATLAS.desktop", "[Desktop Entry]\nStartupWMClass=vn.io.vif.saiatlas\n");
+				for (const sub of [
+					"DEBIAN",
+					"usr",
+					"usr/bin",
+					"usr/lib",
+					"usr/lib/Sai ATLAS",
+					"usr/share",
+					"usr/share/applications",
+				]) {
+					fs.chmodSync(path.join(root, sub), 0o755);
+				}
+				const deb = path.join(dir, "Sai ATLAS_1.0.0_amd64.deb");
+				expect(spawnSync("dpkg-deb", ["--root-owner-group", "-Zgzip", "-b", root, deb]).status).toBe(0);
+				finalizeDeb(deb);
+				const listing = spawnSync("dpkg-deb", ["-c", deb], { encoding: "utf8" }).stdout.split("\n");
+				const desktopFiles = listing.filter(line => /applications\/[^/]+$/.test(line));
+				expect(desktopFiles).toHaveLength(1);
+				expect(desktopFiles[0]).toMatch(/usr\/share\/applications\/vn\.io\.vif\.saiatlas\.desktop$/);
+				const link = listing.filter(line => line.endsWith("opt/Sai ATLAS/sai-atlas -> /usr/bin/sai-atlas"));
+				expect(link).toHaveLength(1);
+				expect(link[0]).toMatch(/^l.* root\/root /);
+				expect(listing.find(line => line.endsWith("usr/lib/Sai ATLAS/omp"))).toMatch(/^-rwxr-xr-x root\/root /);
+				const extracted = path.join(dir, "check");
+				expect(spawnSync("dpkg-deb", ["-e", deb, extracted]).status).toBe(0);
+				const md5sums = fs.readFileSync(path.join(extracted, "md5sums"), "utf8");
+				expect(md5sums).toContain("  usr/share/applications/vn.io.vif.saiatlas.desktop\n");
+				expect(md5sums).not.toContain("opt/Sai ATLAS/sai-atlas");
+				expect(fs.readFileSync(path.join(extracted, "control"), "utf8")).toContain("Package: sai-atlas");
+				const field = (name: string) =>
+					spawnSync("dpkg-deb", ["-f", deb, name], { encoding: "utf8" }).stdout.trim();
+				expect(field("Depends")).toBe(DEB_DEPENDS);
+				expect(field("Recommends")).toBe(DEB_RECOMMENDS);
+			} finally {
+				fs.rmSync(dir, { recursive: true, force: true });
 			}
-			const deb = path.join(dir, "Sai ATLAS_1.0.0_amd64.deb");
-			expect(spawnSync("dpkg-deb", ["--root-owner-group", "-Zgzip", "-b", root, deb]).status).toBe(0);
-			finalizeDeb(deb);
-			const listing = spawnSync("dpkg-deb", ["-c", deb], { encoding: "utf8" }).stdout.split("\n");
-			const desktopFiles = listing.filter(line => /applications\/[^/]+$/.test(line));
-			expect(desktopFiles).toHaveLength(1);
-			expect(desktopFiles[0]).toMatch(/usr\/share\/applications\/vn\.io\.vif\.saiatlas\.desktop$/);
-			const link = listing.filter(line => line.endsWith("opt/Sai ATLAS/sai-atlas -> /usr/bin/sai-atlas"));
-			expect(link).toHaveLength(1);
-			expect(link[0]).toMatch(/^l.* root\/root /);
-			expect(listing.find(line => line.endsWith("usr/lib/Sai ATLAS/omp"))).toMatch(/^-rwxr-xr-x root\/root /);
-			const extracted = path.join(dir, "check");
-			expect(spawnSync("dpkg-deb", ["-e", deb, extracted]).status).toBe(0);
-			const md5sums = fs.readFileSync(path.join(extracted, "md5sums"), "utf8");
-			expect(md5sums).toContain("  usr/share/applications/vn.io.vif.saiatlas.desktop\n");
-			expect(md5sums).not.toContain("opt/Sai ATLAS/sai-atlas");
-			expect(fs.readFileSync(path.join(extracted, "control"), "utf8")).toContain("Package: sai-atlas");
-			const field = (name: string) => spawnSync("dpkg-deb", ["-f", deb, name], { encoding: "utf8" }).stdout.trim();
-			expect(field("Depends")).toBe(DEB_DEPENDS);
-			expect(field("Recommends")).toBe(DEB_RECOMMENDS);
-		} finally {
-			fs.rmSync(dir, { recursive: true, force: true });
-		}
-	});
+		},
+	);
 
 	it("the AppImage is finished last so its bundled WebKit finds the host's bwrap and xdg-dbus-proxy", () => {
 		// tauri-bundler relocates every /usr in the bundled libwebkit2gtk; without the finalize
