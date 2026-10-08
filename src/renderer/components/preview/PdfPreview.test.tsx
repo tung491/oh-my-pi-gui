@@ -188,6 +188,21 @@ describe("PdfPreview", () => {
 		expect(onError).not.toHaveBeenCalled();
 	});
 
+	it("holds no bitmap for a page it has not drawn", async () => {
+		const doc = fakeDoc(20, A4);
+		await show({ bytes: new Uint8Array([1]) }, () => doc.handle);
+		doc.resolve();
+		await flush();
+		await act(async () => FakeObserver.current?.show([5]));
+		await flush();
+
+		// A canvas without a size holds the default 300×150 bitmap, so every
+		// undrawn page starts as freed as one that scrolled away.
+		expect([canvas(9)?.getAttribute("width"), canvas(9)?.getAttribute("height")]).toEqual(["0", "0"]);
+		expect(canvas(5)?.width).toBe(816);
+		expect(onError).not.toHaveBeenCalled();
+	});
+
 	it("skips a page with an extreme aspect ratio and says so", async () => {
 		const doc = fakeDoc(2, page => (page === 2 ? { width: 10, height: 14_400 } : A4()));
 		await show({ bytes: new Uint8Array([1]) }, () => doc.handle);

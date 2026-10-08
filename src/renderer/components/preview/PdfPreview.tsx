@@ -232,7 +232,8 @@ export default function PdfPreview({
 						className="w-full overflow-hidden rounded-sm shadow-sm"
 						style={{ aspectRatio: `${size.width} / ${size.height}` }}
 					>
-						<canvas data-page={page} className="block h-full w-full" />
+						{/* Sized 0×0 until drawn: an unsized canvas holds a 300×150 bitmap. */}
+						<canvas data-page={page} width={0} height={0} className="block h-full w-full" />
 					</div>
 				);
 			})}
