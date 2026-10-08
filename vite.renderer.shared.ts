@@ -4,10 +4,12 @@
  * two differ only in which module `@boot` resolves to and in how the CSP is
  * delivered, so everything else lives here once.
  */
+import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
-import type { UserConfig } from "vite";
+import type { Plugin, UserConfig } from "vite";
 
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
 const resolveFromRoot = (...parts: string[]): string => path.resolve(ROOT, ...parts);
@@ -45,6 +47,10 @@ export const VENDOR_CHUNK_RULES: ReadonlyArray<readonly [RegExp, string]> = [
 	[/[\\/]node_modules[\\/]highlight\.js[\\/]/, "highlight"],
 	// dnd-kit drag and drop.
 	[/[\\/]node_modules[\\/]@dnd-kit[\\/]/, "dnd-kit"],
+	// pdf.js (document preview and PDF card thumbnails; lazy-imported by lib/pdfjs.ts).
+	[/[\\/]node_modules[\\/]pdfjs-dist[\\/]/, "pdfjs"],
+	// SheetJS (sheet preview; lazy-imported with SheetPreview).
+	[/[\\/]node_modules[\\/]xlsx[\\/]/, "sheetjs"],
 ];
 
 /**
@@ -65,13 +71,61 @@ function manualChunks(id: string): string | undefined {
 	return undefined;
 }
 
+/** pdf.js data folders served from the app's own origin (`pdfDocumentOptions` in lib/pdfjs.ts). */
+const PDFJS_DATA_DIRS = ["cmaps", "standard_fonts"] as const;
+const PDFJS_DATA_FILE = /^[\w.+-]+$/;
+
+/**
+ * Self-hosts pdf.js's CMaps and standard fonts under `pdfjs/`, beside the
+ * page, so CJK and non-embedded-font PDFs render without any remote host and
+ * without widening the CSP. The build emits them as assets (`out/renderer/pdfjs/…`,
+ * reached as `file://` in Electron and `tauri://localhost/` in Tauri); the dev
+ * server serves the same paths straight from node_modules.
+ */
+function pdfjsAssets(): Plugin {
+	const root = path.dirname(createRequire(import.meta.url).resolve("pdfjs-dist/package.json"));
+	return {
+		name: "omp-pdfjs-assets",
+		configureServer(server) {
+			server.middlewares.use("/pdfjs", (req, res, next) => {
+				const [, dir, file, ...rest] = new URL(req.url ?? "/", "http://localhost").pathname.split("/");
+				const known = PDFJS_DATA_DIRS.find(name => name === dir);
+				if (!known || file === undefined || rest.length > 0 || !PDFJS_DATA_FILE.test(file)) {
+					next();
+					return;
+				}
+				let source: Buffer;
+				try {
+					source = readFileSync(path.join(root, known, file));
+				} catch {
+					next();
+					return;
+				}
+				res.setHeader("Content-Type", "application/octet-stream");
+				res.end(source);
+			});
+		},
+		generateBundle() {
+			for (const dir of PDFJS_DATA_DIRS) {
+				for (const file of readdirSync(path.join(root, dir))) {
+					this.emitFile({
+						type: "asset",
+						fileName: `pdfjs/${dir}/${file}`,
+						source: readFileSync(path.join(root, dir, file)),
+					});
+				}
+			}
+		},
+	};
+}
+
 /**
  * The renderer config block. `bootModule` is the absolute path of the file
  * `@boot` resolves to: `src/renderer/boot/boot-electron.ts` or `boot-tauri.ts`.
  */
 export function rendererConfig(bootModule: string): UserConfig {
 	return {
-		plugins: [tailwindcss()],
+		plugins: [tailwindcss(), pdfjsAssets()],
 		resolve: {
 			alias: {
 				"@renderer": resolveFromRoot("src", "renderer"),

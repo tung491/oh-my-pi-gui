@@ -52,9 +52,17 @@ async function flush(): Promise<void> {
 	});
 }
 
-/** Flushes until `done` holds; the ZIP guard inflates through real streams. */
+const SETTLE_DEADLINE_MS = 5_000;
+
+/**
+ * Flushes until `done` holds or a wall-clock deadline passes; the ZIP guard
+ * inflates through real streams, which take many more ticks when the suite
+ * runs in parallel, so a fixed tick count starves under load. The callers'
+ * assertions decide the outcome either way.
+ */
 async function settle(done: () => boolean): Promise<void> {
-	for (let attempt = 0; attempt < 50 && !done(); attempt += 1) await flush();
+	const deadline = performance.now() + SETTLE_DEADLINE_MS;
+	while (!done() && performance.now() < deadline) await flush();
 }
 
 async function render(element: ReactElement): Promise<void> {

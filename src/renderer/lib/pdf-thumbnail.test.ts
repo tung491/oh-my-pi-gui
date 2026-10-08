@@ -8,6 +8,7 @@ import {
 	type PdfThumbnailSources,
 	renderPdfThumbnail,
 } from "./pdf-thumbnail";
+import { createPdfOpener, type PdfJsApi } from "./pdfjs";
 
 const PDF_BYTES = "%PDF-1.7";
 const PDF_BASE64 = btoa(PDF_BYTES);
@@ -211,8 +212,8 @@ describe("renderPdfThumbnail", () => {
 
 /**
  * A stand-in for pdf.js that keeps the behaviour the rasterizer depends on:
- * one cached PDFWorker per port, `PDFWorker.create` refusing a port whose
- * worker is being destroyed, and a render failing once its worker is gone.
+ * one PDFWorker per port, refusing a second on the same port, and a render
+ * failing once its worker is gone. Documents open through the shared opener.
  */
 interface FakePdfOptions {
 	/** Resolves when the named document's page has been drawn; immediate by default. */
@@ -228,13 +229,6 @@ interface FakePort {
 	terminate(): void;
 }
 
-interface FakeWorker {
-	port: FakePort;
-	destroyed: boolean;
-	pendingDestroy: boolean;
-	destroy(): void;
-}
-
 interface FakeCanvas {
 	width: number;
 	height: number;
@@ -243,27 +237,22 @@ interface FakeCanvas {
 }
 
 function fakePdfJs(options: FakePdfOptions = {}) {
-	const workers = new Map<FakePort, FakeWorker>();
+	const usedPorts = new Set<FakePort>();
 	const ports: FakePort[] = [];
-	const PDFWorker = {
-		create({ port }: { port: FakePort }): FakeWorker {
-			const cached = workers.get(port);
-			if (cached?.pendingDestroy) throw new Error("PDFWorker.create - the worker is being destroyed.");
-			if (cached) return cached;
-			const worker: FakeWorker = {
-				port,
-				destroyed: false,
-				pendingDestroy: false,
-				destroy() {
-					worker.destroyed = true;
-					workers.delete(port);
-				},
-			};
-			workers.set(port, worker);
-			return worker;
-		},
-	};
-	function getDocument({ data, worker }: { data: Uint8Array; worker: FakeWorker }) {
+	class PDFWorker {
+		destroyed = false;
+		constructor({ port }: { port: FakePort }) {
+			if (usedPorts.has(port)) throw new Error("Cannot use more than one PDFWorker per port.");
+			usedPorts.add(port);
+		}
+		destroy() {
+			this.destroyed = true;
+		}
+		static create(params: { port: FakePort }): PDFWorker {
+			return new PDFWorker(params);
+		}
+	}
+	function getDocument({ data, worker }: { data: Uint8Array; worker: PDFWorker }) {
 		const text = new TextDecoder().decode(data);
 		const page = {
 			getViewport: ({ scale }: { scale: number }) => ({ width: 100 * scale, height: 140 * scale }),
@@ -280,11 +269,10 @@ function fakePdfJs(options: FakePdfOptions = {}) {
 			destroy: options.destroy ?? (async () => {}),
 		};
 	}
-	const deps: PdfRasterizerDeps = {
-		// The fakes implement only the members the rasterizer touches.
-		loadPdfJs: async () =>
-			({ getDocument, PDFWorker }) as unknown as Awaited<ReturnType<PdfRasterizerDeps["loadPdfJs"]>>,
-		createWorkerPort: () => {
+	const opener = createPdfOpener({
+		// The fakes implement only the members the opener and rasterizer touch.
+		load: async () => ({ getDocument, PDFWorker }) as unknown as PdfJsApi,
+		createPort: () => {
 			const port: FakePort = {
 				terminated: false,
 				terminate() {
@@ -294,6 +282,11 @@ function fakePdfJs(options: FakePdfOptions = {}) {
 			ports.push(port);
 			return port as unknown as Worker;
 		},
+		baseUri: () => "file:///app/out/renderer/index.html",
+		destroyGraceMs: 10,
+	});
+	const deps: PdfRasterizerDeps = {
+		open: bytes => opener.open(bytes),
 		createCanvas: () => {
 			const canvas: FakeCanvas = {
 				width: 0,
@@ -304,7 +297,6 @@ function fakePdfJs(options: FakePdfOptions = {}) {
 			return canvas as unknown as HTMLCanvasElement;
 		},
 		timeoutMs: 50,
-		destroyGraceMs: 10,
 	};
 	return { deps, ports };
 }
