@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "OS branches: supervisor, proxy, GPU and RAM"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [1]
@@ -91,7 +91,7 @@ No macOS branch in the Rust core is still a placeholder.
   2. Environment reads cannot come from `ps -E` (it prints nothing for a child on macOS): have the fixture or fake script dump `process.env` to a file the test reads.
   3. Port `launch_argv` and the `/proc` reads to the helpers, then remove the `#[cfg(target_os = "linux")]` attributes Phase 1 added (tests and the helpers/imports only they used).
   4. Append one `ungated: <test path>` line to the host log per test.
-- Verify: `cargo test --manifest-path src-tauri/Cargo.toml --all-features omp::manager omp::shell_env` on the Mac prints `… ok` for each of the eight names; `grep -c 'cfg(target_os = "linux")' src-tauri/src/omp/manager.rs` prints `1` and `src-tauri/src/omp/shell_env.rs` prints `0`; every host-log `gated:` line naming Task 4.2b has an `ungated:` twin.
+- Verify: `cargo test --manifest-path src-tauri/Cargo.toml --all-features -- omp::manager omp::shell_env` on the Mac (cargo takes one filter before `--`) prints `… ok` for each of the eight names; `grep -c 'cfg(target_os = "linux")' src-tauri/src/omp/manager.rs` prints `1` and `src-tauri/src/omp/shell_env.rs` prints `0`; every host-log `gated:` line naming Task 4.2b has an `ungated:` twin.
 
 ### Task 4.3 — Red: scutil parsing
 - Goal: a failing test for the macOS proxy parser.
