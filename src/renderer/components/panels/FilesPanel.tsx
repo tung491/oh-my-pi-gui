@@ -145,6 +145,8 @@ export function FilesPanel() {
 
 	if (filePreview) {
 		const previewPath = filePreview.kind === "path" ? filePreview.path : null;
+		// The tab the preview is pinned to, which may not be the focused one.
+		const previewTabId = filePreview.kind === "path" ? filePreview.tabId : null;
 		const title = filePreview.kind === "path" ? filePreview.path : filePreview.name;
 		return (
 			<div className="omp-slide-in-right flex h-full flex-col">
@@ -165,6 +167,7 @@ export function FilesPanel() {
 						<>
 							<PathLink
 								path={previewPath}
+								tabId={previewTabId}
 								className="inline-flex shrink-0 items-center gap-1 px-1.5 py-1 text-omp-xs text-(--omp-muted)"
 							>
 								<ExternalLinkIcon size={12} />

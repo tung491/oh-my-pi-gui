@@ -237,6 +237,22 @@ describe("createOmpApi", () => {
 		]);
 	});
 
+	it("opens a path with the tab it belongs to, and without one as before", async () => {
+		const { port, invokes } = fakePort(() => ({ ok: true, resolvedPath: "/ws/two/a.pdf" }));
+		const api = createOmpApi(port, "linux");
+		await expect(api.system.openPath("a.pdf", { tabId: "t2" })).resolves.toEqual({
+			ok: true,
+			resolvedPath: "/ws/two/a.pdf",
+		});
+		await api.system.openPath("b.md");
+		await api.system.openPath("c.md", {});
+		expect(invokes).toEqual([
+			{ channel: IPC_COMMANDS.SYSTEM_OPEN_PATH, args: ["a.pdf", { tabId: "t2" }] },
+			{ channel: IPC_COMMANDS.SYSTEM_OPEN_PATH, args: ["b.md"] },
+			{ channel: IPC_COMMANDS.SYSTEM_OPEN_PATH, args: ["c.md"] },
+		]);
+	});
+
 	it("delivers native drop paths only when the shell emits them, dropping malformed entries", () => {
 		const { port, emit, listenerCount } = fakePort();
 		expect(createOmpApi(port, "linux").system.onNativeDropPaths).toBeUndefined();

@@ -91,24 +91,43 @@ impl OpenPathError {
     }
 }
 
-/// `system:open-path`: tool-card path links. `~` expands, relative paths
-/// resolve inside the calling window's workspace (escapes refused), absolute
-/// paths pass through. A path the OS default handler would run — judged by
-/// its requested and its resolved name — is revealed, never opened.
-pub async fn open_path(ctx: &Arc<AppCtx>, caller: Caller, target: &str) -> Result<OpenPathOutcome, OpenPathError> {
+/// Where `system:open-path` points before the OS sees it (`resolveOpenPath`
+/// in `open-path-resolve.ts`): `~/` expands against `home`, an absolute path
+/// passes through, a relative one resolves inside `cwd_for(tab_id)` — the
+/// named tab's workspace, or the calling window's when `tab_id` is `None`.
+/// A named tab without a workspace fails rather than borrowing another's.
+pub fn resolve_open_path(
+    target: &str,
+    home: Option<&std::path::Path>,
+    tab_id: Option<&str>,
+    cwd_for: impl FnOnce(Option<&str>) -> Option<String>,
+) -> Result<String, OpenPathError> {
     if target.trim().is_empty() {
         return Err(OpenPathError::EmptyPath);
     }
-    let expanded = super::ipc::expand_home(target);
-    let resolved = if std::path::Path::new(&expanded).is_absolute() {
-        expanded
-    } else {
-        let root = ctx.tabs.cwd_for(caller, None).ok_or(OpenPathError::NoWorkspace)?;
-        super::fs::resolve_within(std::path::Path::new(&root), &expanded)
-            .ok_or(OpenPathError::EscapesWorkspace)?
-            .to_string_lossy()
-            .into_owned()
-    };
+    let expanded = super::ipc::expand_home_in(target, home);
+    if std::path::Path::new(&expanded).is_absolute() {
+        return Ok(expanded);
+    }
+    let root = cwd_for(tab_id).ok_or(OpenPathError::NoWorkspace)?;
+    Ok(super::fs::resolve_within(std::path::Path::new(&root), &expanded)
+        .ok_or(OpenPathError::EscapesWorkspace)?
+        .to_string_lossy()
+        .into_owned())
+}
+
+/// `system:open-path`: tool-card path links and the preview's Open
+/// externally. The path resolves through [`resolve_open_path`]; a path the OS
+/// default handler would run — judged by its requested and its resolved name
+/// — is revealed, never opened.
+pub async fn open_path(
+    ctx: &Arc<AppCtx>,
+    caller: Caller,
+    target: &str,
+    tab_id: Option<&str>,
+) -> Result<OpenPathOutcome, OpenPathError> {
+    let resolved =
+        resolve_open_path(target, dirs::home_dir().as_deref(), tab_id, |tab_id| ctx.tabs.cwd_for(caller, tab_id))?;
     let probe_path = resolved.clone();
     let decision = tokio::task::spawn_blocking(move || {
         open_path_target::open_path_target(&probe_path, launch_platform(), &OsFs)
@@ -221,6 +240,90 @@ mod tests {
         let result = bridge::dispatch_for_test(&ctx, caller, "system:open-path", vec![json!("notes.md")]).await.unwrap();
         assert_eq!(result["ok"], json!(true));
         assert!(fakes.host.log.calls().iter().any(|call| call.starts_with("open_path(")));
+    }
+
+    /// Window `/win` with tabs `t1` → `/ws/one` and `t2` → `/ws/two`; records which tab was asked for.
+    fn tab_cwd(asked: &std::cell::RefCell<Vec<Option<String>>>, tab_id: Option<&str>) -> Option<String> {
+        asked.borrow_mut().push(tab_id.map(str::to_string));
+        match tab_id {
+            None => Some("/win".into()),
+            Some("t1") => Some("/ws/one".into()),
+            Some("t2") => Some("/ws/two".into()),
+            Some(_) => None,
+        }
+    }
+
+    fn home() -> Option<&'static std::path::Path> {
+        Some(std::path::Path::new("/home/me"))
+    }
+
+    #[test]
+    fn open_path_resolves_a_relative_path_against_the_given_tab() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let resolved = resolve_open_path("docs/a.pdf", home(), Some("t2"), |tab| tab_cwd(&asked, tab));
+        assert_eq!(resolved, Ok("/ws/two/docs/a.pdf".to_string()));
+        assert_eq!(*asked.borrow(), [Some("t2".to_string())]);
+    }
+
+    #[test]
+    fn open_path_refuses_an_unknown_tab() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let resolved = resolve_open_path("docs/a.pdf", home(), Some("gone"), |tab| tab_cwd(&asked, tab));
+        assert_eq!(resolved, Err(OpenPathError::NoWorkspace));
+    }
+
+    #[test]
+    fn open_path_resolves_against_the_window_workspace_without_a_tab() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let resolved = resolve_open_path("notes.md", home(), None, |tab| tab_cwd(&asked, tab));
+        assert_eq!(resolved, Ok("/win/notes.md".to_string()));
+        assert_eq!(*asked.borrow(), [None]);
+    }
+
+    #[test]
+    fn open_path_keeps_absolute_and_home_paths_without_asking_for_a_workspace() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        assert_eq!(
+            resolve_open_path("/abs/a.txt", home(), Some("gone"), |tab| tab_cwd(&asked, tab)),
+            Ok("/abs/a.txt".to_string())
+        );
+        assert_eq!(
+            resolve_open_path("~/a.txt", home(), Some("gone"), |tab| tab_cwd(&asked, tab)),
+            Ok("/home/me/a.txt".to_string())
+        );
+        assert!(asked.borrow().is_empty());
+    }
+
+    #[test]
+    fn open_path_refuses_a_path_that_escapes_the_tab_workspace() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        let resolved = resolve_open_path("../one/a.txt", home(), Some("t2"), |tab| tab_cwd(&asked, tab));
+        assert_eq!(resolved, Err(OpenPathError::EscapesWorkspace));
+    }
+
+    #[test]
+    fn open_path_refuses_an_empty_path() {
+        let asked = std::cell::RefCell::new(Vec::new());
+        assert_eq!(resolve_open_path("  ", home(), Some("t1"), |tab| tab_cwd(&asked, tab)), Err(OpenPathError::EmptyPath));
+        assert!(asked.borrow().is_empty());
+    }
+
+    #[tokio::test]
+    async fn open_path_reads_the_tab_id_only_from_a_non_empty_string() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("notes.md"), "hello").unwrap();
+        let fakes = Fakes::default();
+        fakes.tabs.cwds.lock().unwrap().insert(WindowId(1), dir.path().to_string_lossy().into_owned());
+        let ctx = services_ctx(&fakes);
+        let caller = Caller::main(WindowId(1));
+        for options in [json!({ "tabId": "t1" }), json!({ "tabId": "" }), json!({ "tabId": 7 }), json!("t1")] {
+            let result =
+                bridge::dispatch_for_test(&ctx, caller, "system:open-path", vec![json!("notes.md"), options]).await.unwrap();
+            assert_eq!(result["ok"], json!(true));
+        }
+        let asked: Vec<String> =
+            fakes.tabs.log.calls().into_iter().filter(|call| call.starts_with("cwd_for(")).collect();
+        assert_eq!(asked, ["cwd_for(1, Some(\"t1\"))", "cwd_for(1, None)", "cwd_for(1, None)", "cwd_for(1, None)"]);
     }
 
     #[tokio::test]

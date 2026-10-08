@@ -9,15 +9,28 @@ import { toast } from "../../stores/toast";
  * the main process (`system:open-path`): relative paths resolve against the
  * workspace, failures fall back to revealing the file, only hard failures
  * toast. Events stop at the link so a surrounding disclosure row does not
- * toggle when the user meant to open the file.
+ * toggle when the user meant to open the file. `tabId` pins a relative path to
+ * that tab's workspace instead of the focused one.
  */
-export function PathLink({ path, children, className }: { path: string; children?: ReactNode; className?: string }) {
+export function PathLink({
+	path,
+	tabId,
+	children,
+	className,
+}: {
+	path: string;
+	tabId?: string | null;
+	children?: ReactNode;
+	className?: string;
+}) {
 	const t = useT();
 	if (!path) return <span className={className}>{children}</span>;
 
 	const open = async () => {
 		try {
-			const result = await window.omp.system.openPath(path);
+			const result = tabId
+				? await window.omp.system.openPath(path, { tabId })
+				: await window.omp.system.openPath(path);
 			if (!result?.ok) {
 				toast({ variant: "error", title: t("tools.path.openFailed"), message: result?.error || path });
 			}

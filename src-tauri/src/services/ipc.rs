@@ -20,7 +20,7 @@ pub(super) fn expand_home(path: &str) -> String {
     expand_home_in(path, dirs::home_dir().as_deref())
 }
 
-fn expand_home_in(path: &str, home: Option<&Path>) -> String {
+pub(super) fn expand_home_in(path: &str, home: Option<&Path>) -> String {
     match (path.strip_prefix("~/"), home) {
         (Some(rest), Some(home)) => home.join(rest).to_string_lossy().into_owned(),
         _ => path.to_string(),
@@ -214,14 +214,21 @@ pub fn system_open_external(ctx: &Arc<AppCtx>, _caller: Caller, args: Vec<Value>
     Reply::ok(Value::Null)
 }
 
-/// `system:open-path`
+/// `system:open-path`: `[path, { tabId }?]`. A non-empty `tabId` resolves a
+/// relative path in that tab's workspace (an unknown tab fails); without one
+/// the calling window's workspace is used, as before tabs could be named.
 pub fn system_open_path(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
-    let Some(target) = args.into_iter().next().and_then(|value| value.as_str().map(str::to_string)) else {
+    let mut args = args.into_iter();
+    let Some(target) = args.next().and_then(|value| value.as_str().map(str::to_string)) else {
         return Reply::ok(json!({ "ok": false, "error": "Empty path" }));
     };
+    let tab_id = args
+        .next()
+        .and_then(|options| options.get("tabId").and_then(Value::as_str).map(str::to_string))
+        .filter(|tab_id| !tab_id.is_empty());
     let ctx = ctx.clone();
     Reply::Later(Box::pin(async move {
-        match super::system::open_path(&ctx, caller, &target).await {
+        match super::system::open_path(&ctx, caller, &target, tab_id.as_deref()).await {
             Ok(outcome) => Ok(json!({ "ok": true, "resolvedPath": outcome.resolved_path })),
             Err(error) => Ok(json!({ "ok": false, "error": error.message() })),
         }

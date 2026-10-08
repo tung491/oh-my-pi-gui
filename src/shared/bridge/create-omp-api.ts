@@ -309,7 +309,11 @@ export function createOmpApi(
 
 		system: {
 			openExternal: (url: string) => port.invoke(IPC_COMMANDS.SYSTEM_OPEN_EXTERNAL, url) as Promise<void>,
-			openPath: (path: string) => port.invoke(IPC_COMMANDS.SYSTEM_OPEN_PATH, path) as Promise<IpcOpenPathResult>,
+			// Without a tab the wire stays `[path]`, as before tabs could be named.
+			openPath: (path: string, options: { tabId?: string } = {}) =>
+				(options.tabId
+					? port.invoke(IPC_COMMANDS.SYSTEM_OPEN_PATH, path, { tabId: options.tabId })
+					: port.invoke(IPC_COMMANDS.SYSTEM_OPEN_PATH, path)) as Promise<IpcOpenPathResult>,
 			showSaveDialog: (defaultPath?: string, filters?: { name: string; extensions: string[] }[]) =>
 				port.invoke(IPC_COMMANDS.SYSTEM_SAVE_DIALOG, defaultPath, filters) as Promise<string | null>,
 			showOpenDialog: (filters?: { name: string; extensions: string[] }[], options?: { directory?: boolean }) =>

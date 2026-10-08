@@ -65,6 +65,7 @@ import type { LogWatcher } from "./log-watcher";
 import { createMenu } from "./menu";
 import { listModelsProviders } from "./models-config";
 import { registerOllamaIpc } from "./ollama/register-ipc";
+import { openPathTabId, resolveOpenPath, resolveWithin } from "./open-path-resolve";
 import { openPathTarget } from "./open-path-target";
 import { registerProviderCleanupIpc } from "./provider-cleanup";
 import { isMainOwnedPrefKey } from "./quick-entry-shortcut-core";
@@ -249,14 +250,6 @@ function validStamp(stamp: unknown): IpcFsReadDocumentStamp | undefined {
 	if (typeof size !== "number" || !Number.isFinite(size)) return undefined;
 	if (typeof mtimeMs !== "number" || !Number.isFinite(mtimeMs)) return undefined;
 	return { size, mtimeMs };
-}
-
-/** Resolve `rel` against `root`, refusing escapes outside the workspace. */
-function resolveWithin(root: string, rel: string): string | null {
-	const resolved = path.resolve(root, rel);
-	const rootWithSep = root.endsWith(path.sep) ? root : root + path.sep;
-	if (resolved !== root && !resolved.startsWith(rootWithSep)) return null;
-	return resolved;
 }
 
 /** `abs` when it exists and is a regular file, else null. */
@@ -757,27 +750,29 @@ export function registerIpcHandlers(deps: IpcDeps): void {
 	// bundle or any executable file), judged by its requested and its resolved
 	// name, is revealed, never opened: one click on an agent-written link must
 	// not execute it.
-	ipcMain.handle(IPC_COMMANDS.SYSTEM_OPEN_PATH, async (event, target: string): Promise<IpcOpenPathResult> => {
-		if (typeof target !== "string" || !target.trim()) return { ok: false, error: "Empty path" };
-		let resolved = target.startsWith("~/") ? path.join(os.homedir(), target.slice(2)) : target;
-		if (!path.isAbsolute(resolved)) {
-			const rootAbs = cwdFor(deps, event);
-			if (!rootAbs) return { ok: false, error: "No workspace" };
-			const within = resolveWithin(rootAbs, resolved);
-			if (!within) return { ok: false, error: "Path escapes the workspace" };
-			resolved = within;
-		}
-		// A stale tool card can reference a file that no longer exists (or never
-		// did outside the workspace). Both openPath and showItemInFolder fail
-		// silently on missing paths, so detect it here and let the link toast.
-		const decision = await openPathTarget(resolved, launchPlatformOf(process.platform));
-		if (!decision) return { ok: false, error: "File not found" };
-		if (decision.action === "open" && !(await shell.openPath(decision.path))) {
+	// A relative path resolves in the given tab's workspace (an unknown tab
+	// fails), else the calling window's; see open-path-resolve.ts.
+	ipcMain.handle(
+		IPC_COMMANDS.SYSTEM_OPEN_PATH,
+		async (event, target: unknown, options?: unknown): Promise<IpcOpenPathResult> => {
+			const resolution = resolveOpenPath(target, openPathTabId(options), {
+				homedir: os.homedir(),
+				cwdFor: tabId => cwdFor(deps, event, tabId),
+			});
+			if (!resolution.ok) return { ok: false, error: resolution.error };
+			const resolved = resolution.path;
+			// A stale tool card can reference a file that no longer exists (or never
+			// did outside the workspace). Both openPath and showItemInFolder fail
+			// silently on missing paths, so detect it here and let the link toast.
+			const decision = await openPathTarget(resolved, launchPlatformOf(process.platform));
+			if (!decision) return { ok: false, error: "File not found" };
+			if (decision.action === "open" && !(await shell.openPath(decision.path))) {
+				return { ok: true, resolvedPath: resolved };
+			}
+			shell.showItemInFolder(decision.path);
 			return { ok: true, resolvedPath: resolved };
-		}
-		shell.showItemInFolder(decision.path);
-		return { ok: true, resolvedPath: resolved };
-	});
+		},
+	);
 
 	ipcMain.handle(
 		IPC_COMMANDS.SYSTEM_SAVE_DIALOG,
