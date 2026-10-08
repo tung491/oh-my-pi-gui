@@ -1154,6 +1154,8 @@ export const en: Record<string, string> = {
 	"preview.fileTruncated": "Only the first 2 MB of this file is shown.",
 	"preview.sheets": "Sheets",
 	"preview.formula": "Formula without a saved value",
+	"preview.openButton": "Preview",
+	"preview.open": "Preview {name}",
 
 	// Plan panel
 	"dock.resizeHeight": "Drag to resize; ArrowUp/ArrowDown also work",

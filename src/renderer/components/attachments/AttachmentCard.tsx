@@ -15,6 +15,8 @@ export interface AttachmentCardProps {
 	onRemove?: () => void;
 	/** The file is still being read: the preview area shows a spinner. */
 	loading?: boolean;
+	/** Opens the file beside the chat; ignored while `loading`. */
+	onOpen?: () => void;
 }
 
 function KindTile({ kind }: { kind: FileKind }) {
@@ -60,7 +62,15 @@ function CardPreview({
 }
 
 /** One attached file: a preview above a footer with its type badge and name. */
-export function AttachmentCard({ name, kind, path, preview, onRemove, loading }: AttachmentCardProps): ReactElement {
+export function AttachmentCard({
+	name,
+	kind,
+	path,
+	preview,
+	onRemove,
+	loading,
+	onOpen,
+}: AttachmentCardProps): ReactElement {
 	const t = useT();
 	return (
 		<figure
@@ -75,6 +85,18 @@ export function AttachmentCard({ name, kind, path, preview, onRemove, loading }:
 				<KindBadge kind={kind} />
 				<span className="min-w-0 flex-1 truncate text-omp-sm text-(--omp-text)">{name}</span>
 			</figcaption>
+			{onOpen && !loading && (
+				// A sibling that covers the card rather than a wrapper: the figcaption
+				// stays a child of the figure, and the remove button below stacks above
+				// it instead of nesting inside it. The focus ring is inset because the
+				// figure clips everything outside its border.
+				<button
+					type="button"
+					aria-label={t("preview.open", { name })}
+					onClick={onOpen}
+					className="absolute inset-0 cursor-pointer focus-visible:shadow-[inset_0_0_0_2px_var(--omp-accent)]"
+				/>
+			)}
 			{onRemove && (
 				<button
 					type="button"

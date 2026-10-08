@@ -111,6 +111,50 @@ describe("AttachmentCard", () => {
 		expect(query("button")).not.toBeNull();
 	});
 
+	it("opens the file from a labelled preview button", async () => {
+		const onOpen = vi.fn();
+		const onRemove = vi.fn();
+		await mount(
+			<AttachmentCard name="report.pdf" kind="word" path="/docs/report.pdf" onOpen={onOpen} onRemove={onRemove} />,
+		);
+
+		const open = query('button[aria-label="Preview report.pdf"]');
+		expect(open?.getAttribute("type")).toBe("button");
+		await act(async () => {
+			open?.click();
+		});
+		expect(onOpen).toHaveBeenCalledTimes(1);
+		expect(onRemove).not.toHaveBeenCalled();
+	});
+
+	it("keeps the remove button outside the preview button and does not open from it", async () => {
+		const onOpen = vi.fn();
+		const onRemove = vi.fn();
+		await mount(<AttachmentCard name="report.pdf" kind="word" onOpen={onOpen} onRemove={onRemove} />);
+
+		expect(query("button button")).toBeNull();
+		expect(query('button[aria-label="Preview report.pdf"] figcaption')).toBeNull();
+		await act(async () => {
+			query('button[aria-label="Remove report.pdf"]')?.click();
+		});
+		expect(onRemove).toHaveBeenCalledTimes(1);
+		expect(onOpen).not.toHaveBeenCalled();
+	});
+
+	it("has no preview button without onOpen", async () => {
+		await mount(<AttachmentCard name="report.pdf" kind="word" path="/docs/report.pdf" />);
+
+		expect(query('button[aria-label="Preview report.pdf"]')).toBeNull();
+	});
+
+	it("has no preview button while the file is being read", async () => {
+		const onOpen = vi.fn();
+		await mount(<AttachmentCard name="photo.png" kind="image" path="/pics/photo.png" loading onOpen={onOpen} />);
+
+		expect(query('button[aria-label="Preview photo.png"]')).toBeNull();
+		expect(query("button")).toBeNull();
+	});
+
 	it("gives an unknown file the generic icon and no image", async () => {
 		await mount(<AttachmentCard name="scene.blend" kind="file" path="/work/scene.blend" />);
 

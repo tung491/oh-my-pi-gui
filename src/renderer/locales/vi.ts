@@ -1056,6 +1056,8 @@ export const vi: Record<string, string> = {
 	"preview.fileTruncated": "Chỉ hiển thị 2 MB đầu tiên của tệp này.",
 	"preview.sheets": "Trang tính",
 	"preview.formula": "Công thức chưa có giá trị đã lưu",
+	"preview.openButton": "Xem trước",
+	"preview.open": "Xem trước {name}",
 	"dock.resizeHeight": "Kéo để thay đổi kích thước; cũng có thể dùng phím Mũi tên lên/xuống",
 	"subagent.status.started": "đang chạy",
 	"subagent.status.completed": "đã hoàn thành",

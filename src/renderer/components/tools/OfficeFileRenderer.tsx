@@ -1,7 +1,9 @@
-import { FileText, FolderOpen, type LucideIcon, Presentation, Sheet } from "lucide-react";
+import { Eye, FileText, FolderOpen, type LucideIcon, Presentation, Sheet } from "lucide-react";
 import { resultText, sanitizeToolText } from "../../lib/format";
 import { useT } from "../../lib/i18n";
+import { useRuntimeTabId } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
+import { useUiStore } from "../../stores/ui";
 import { GenericRenderer } from "./GenericRenderer";
 import type { OfficeKind } from "./office-tools";
 import type { ToolRendererProps } from "./ToolCard";
@@ -56,9 +58,10 @@ function dirName(path: string): string {
 	return path.slice(0, path.lastIndexOf("/"));
 }
 
-/** The finished file of an office job, with Open and Show in folder. */
+/** The finished file of an office job, with Preview, Open and Show in folder. */
 export function OfficeFileRenderer({ kind, ...props }: ToolRendererProps & { kind: OfficeKind }) {
 	const t = useT();
+	const tabId = useRuntimeTabId();
 	const office = props.isPartial || props.isError ? null : parseOfficeResult(resultText(props.result), kind);
 	if (!office) return <GenericRenderer {...props} />;
 
@@ -91,6 +94,14 @@ export function OfficeFileRenderer({ kind, ...props }: ToolRendererProps & { kin
 				<div className="truncate text-omp-sm text-[var(--omp-muted)]">{sanitizeToolText(office.check)}</div>
 			</div>
 			<div className="flex shrink-0 items-center gap-1.5">
+				<button
+					type="button"
+					className={buttonClass}
+					onClick={() => useUiStore.getState().openFilePreview(office.file, tabId)}
+				>
+					<Eye size={14} aria-hidden />
+					{t("preview.openButton")}
+				</button>
 				<button type="button" className={buttonClass} onClick={() => void open(office.file)}>
 					{t("tools.office.open")}
 				</button>

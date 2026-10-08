@@ -3,6 +3,8 @@ import { act, type ReactElement } from "react";
 import type { Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "../../lib/i18n";
+import { activeTabCommand, SessionRuntimeProvider } from "../../stores/session-runtime-context";
+import { useUiStore } from "../../stores/ui";
 
 const { document, window, Event, HTMLElement, Element, Node } = parseHTML("<html><body></body></html>");
 Object.assign(globalThis as Record<string, unknown>, {
@@ -33,6 +35,7 @@ async function mount(element: ReactElement): Promise<void> {
 afterEach(async () => {
 	await act(async () => root?.unmount());
 	container?.remove();
+	useUiStore.setState({ filePreview: null, panelVisible: false, panelTab: "files" });
 });
 
 const DIFF = "@@ -1,2 +1,2 @@\n-1|const oldValue = true;\n+1|const newValue = true;\n 2|export {};\n";
@@ -95,5 +98,65 @@ describe("WriteRenderer", () => {
 	it("accepts the file_path argument alias", async () => {
 		await mount(<WriteRenderer args={{ file_path: "src/alias.ts", content: "x\n" }} result={{}} />);
 		expect(container.textContent).toContain("alias.ts");
+	});
+
+	describe("preview button", () => {
+		const RUNTIME_TAB = "tab-write";
+		const runtime = { tabId: RUNTIME_TAB, command: activeTabCommand, stores: new Map() };
+		const previewButton = () =>
+			container.querySelector('button[aria-label="Preview notes.md"]') as HTMLElement | null;
+
+		async function clickPreview(): Promise<void> {
+			const button = previewButton();
+			if (!button) throw new Error("preview button missing");
+			await act(async () => {
+				button.click();
+			});
+		}
+
+		it("previews the resolved path of a finished write in the card's tab", async () => {
+			await mount(
+				<SessionRuntimeProvider runtime={runtime}>
+					<WriteRenderer
+						args={{ path: "docs/notes.md", content: "# Notes\n" }}
+						result={{
+							content: [{ type: "text", text: "Successfully wrote 8 bytes to docs/notes.md" }],
+							details: { resolvedPath: "/work/docs/notes.md" },
+						}}
+					/>
+				</SessionRuntimeProvider>,
+			);
+			await clickPreview();
+			const ui = useUiStore.getState();
+			expect(ui.filePreview).toEqual({ kind: "path", path: "/work/docs/notes.md", tabId: RUNTIME_TAB });
+			expect(ui.panelVisible).toBe(true);
+			expect(ui.panelTab).toBe("files");
+		});
+
+		it("falls back to the path argument without a resolved path", async () => {
+			await mount(
+				<SessionRuntimeProvider runtime={runtime}>
+					<WriteRenderer args={{ path: "docs/notes.md", content: "# Notes\n" }} result={{}} />
+				</SessionRuntimeProvider>,
+			);
+			await clickPreview();
+			expect(useUiStore.getState().filePreview).toEqual({ kind: "path", path: "docs/notes.md", tabId: RUNTIME_TAB });
+		});
+
+		it("is absent while the write is still running", async () => {
+			await mount(<WriteRenderer args={{ path: "docs/notes.md", content: "# Notes\n" }} result={{}} isPartial />);
+			expect(previewButton()).toBeNull();
+		});
+
+		it("is absent when the write failed", async () => {
+			await mount(
+				<WriteRenderer
+					args={{ path: "docs/notes.md", content: "# Notes\n" }}
+					result={{ content: [{ type: "text", text: "EACCES" }] }}
+					isError
+				/>,
+			);
+			expect(previewButton()).toBeNull();
+		});
 	});
 });

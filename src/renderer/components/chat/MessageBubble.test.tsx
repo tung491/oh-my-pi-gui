@@ -19,6 +19,7 @@ import {
 } from "../../stores/session-runtime-context";
 import { useToastStore } from "../../stores/toast";
 import { useToolsStore } from "../../stores/tools";
+import { useUiStore } from "../../stores/ui";
 
 import { MessageBubble } from "./MessageBubble";
 
@@ -132,6 +133,7 @@ afterEach(async () => {
 	useMessagesStore.getState().reset();
 	useToastStore.setState({ toasts: [] });
 	useToolsStore.getState().reset();
+	useUiStore.setState({ filePreview: null, panelVisible: false, panelTab: "files" });
 });
 
 describe("MessageBubble tool messages", () => {
@@ -332,10 +334,41 @@ describe("MessageBubble user attachments", () => {
 		]);
 		expect(cards[0]?.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
 		// Transcript cards cannot be removed.
-		expect(container.querySelector("figure button")).toBeNull();
+		expect(container.querySelector('figure button[aria-label^="Remove"]')).toBeNull();
 		const body = container.querySelector(".omp-user-bubble-content")?.textContent ?? "";
 		expect(body).toContain("Summarise these");
 		expect(body).not.toContain("'/home/u/Q3 report.pdf'");
+	});
+
+	it("opens a sent document in the preview, pinned to the bubble's tab", async () => {
+		const runtime: SessionRuntime = { tabId: PANE_TAB, command: vi.fn(), stores: new Map() };
+		const container = await mount(
+			<SessionRuntimeProvider runtime={runtime}>
+				<MessageBubble message={sentWithAttachments} />
+			</SessionRuntimeProvider>,
+		);
+
+		const open = container.querySelector('button[aria-label="Preview Q3 report.pdf"]');
+		expect(open).not.toBeNull();
+		await click(open as unknown as TestElement);
+		const ui = useUiStore.getState();
+		expect(ui.filePreview).toEqual({ kind: "path", path: "/home/u/Q3 report.pdf", tabId: PANE_TAB });
+		expect(ui.panelVisible).toBe(true);
+		expect(ui.panelTab).toBe("files");
+	});
+
+	it("opens a sent image, which has no path, as an in-memory image preview", async () => {
+		const container = await mount(<MessageBubble message={sentWithAttachments} />);
+
+		const open = container.querySelector('button[aria-label="Preview attached image"]');
+		expect(open).not.toBeNull();
+		await click(open as unknown as TestElement);
+		expect(useUiStore.getState().filePreview).toMatchObject({
+			kind: "image",
+			dataUrl: "data:image/png;base64,AAAA",
+			name: "attached image",
+		});
+		expect(useUiStore.getState().panelVisible).toBe(true);
 	});
 
 	it("copies only the typed text", async () => {

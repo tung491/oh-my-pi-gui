@@ -15,6 +15,7 @@ import { useSessionStore } from "../../stores/session";
 import { useRuntimeTabId, withSessionRuntime } from "../../stores/session-runtime-context";
 import { toast } from "../../stores/toast";
 import { toolEntryKey } from "../../stores/tools";
+import { useUiStore } from "../../stores/ui";
 import { AttachmentCard, AttachmentStrip, fileKindOf } from "../attachments";
 import { IconButton, SaiAtlasLogo } from "../common";
 import { type RunningIndicator, ToolCard } from "../tools/ToolCard";
@@ -444,20 +445,27 @@ export const MessageBubble = memo(function MessageBubble({
 							{userImages.length + documentPaths.length > 0 && (
 								<div className="mb-1.5">
 									<AttachmentStrip>
-										{userImages.map((image, i) => (
-											<AttachmentCard
-												key={`image:${i}`}
-												name={t("chat.attachedImage")}
-												kind="image"
-												preview={`data:${image.mimeType};base64,${image.data}`}
-											/>
-										))}
+										{userImages.map((image, i) => {
+											const dataUrl = `data:${image.mimeType};base64,${image.data}`;
+											return (
+												<AttachmentCard
+													key={`image:${i}`}
+													name={t("chat.attachedImage")}
+													kind="image"
+													preview={dataUrl}
+													onOpen={() =>
+														useUiStore.getState().openImagePreview(dataUrl, t("chat.attachedImage"))
+													}
+												/>
+											);
+										})}
 										{documentPaths.map(path => (
 											<AttachmentCard
 												key={`document:${path}`}
 												name={fileNameOf(path)}
 												kind={fileKindOf(path)}
 												path={path}
+												onOpen={() => useUiStore.getState().openFilePreview(path, tabId)}
 											/>
 										))}
 									</AttachmentStrip>

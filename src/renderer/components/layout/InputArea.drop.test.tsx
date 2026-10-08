@@ -19,6 +19,7 @@ import { useSessionStore } from "../../stores/session";
 import { useSettingsStore } from "../../stores/settings";
 import { useTabsStore } from "../../stores/tabs";
 import { useToastStore } from "../../stores/toast";
+import { useUiStore } from "../../stores/ui";
 import { InputArea } from "./InputArea";
 
 const { document, window, Event, CustomEvent, HTMLElement, Node } = parseHTML("<html><body></body></html>");
@@ -195,6 +196,7 @@ afterEach(async () => {
 	useSettingsStore.getState().reset();
 	useTabsStore.getState().reset();
 	useToastStore.setState({ toasts: [] });
+	useUiStore.setState({ filePreview: null, panelVisible: false, panelTab: "files" });
 	vi.restoreAllMocks();
 });
 
@@ -257,6 +259,55 @@ describe("InputArea file drop", () => {
 		expect(useComposerStore.getState().images).toHaveLength(1);
 	});
 
+	it("opens a dropped document in the preview, pinned to the composer's tab", async () => {
+		await mount();
+		await drag("drop", fileDrop("/home/u/Q3 report.pdf"));
+		await flush();
+
+		const open = cards()[0]?.querySelector('button[aria-label="Preview Q3 report.pdf"]');
+		expect(open).not.toBeNull();
+		await click(open as TestNode);
+		const ui = useUiStore.getState();
+		expect(ui.filePreview).toEqual({ kind: "path", path: "/home/u/Q3 report.pdf", tabId: "t0" });
+		expect(ui.panelVisible).toBe(true);
+		expect(ui.panelTab).toBe("files");
+	});
+
+	it("opens a dropped image from its path once read, but offers no preview while it is read", async () => {
+		await mount();
+		const { promise, resolve } = Promise.withResolvers<IpcFsReadImageResult>();
+		readImage.mockImplementation(() => promise);
+
+		await drag("drop", fileDrop("/home/u/photo.png"));
+		await flush();
+		expect(cards()[0]?.querySelector('button[aria-label="Preview photo.png"]')).toBeNull();
+
+		await act(async () => resolve(PNG_READ));
+		await flush();
+		const open = cards()[0]?.querySelector('button[aria-label="Preview photo.png"]');
+		expect(open).not.toBeNull();
+		await click(open as TestNode);
+		expect(useUiStore.getState().filePreview).toEqual({ kind: "path", path: "/home/u/photo.png", tabId: "t0" });
+	});
+
+	it("opens a pasted image, which has no path, as an in-memory image preview", async () => {
+		await mount();
+		await act(async () =>
+			useComposerStore
+				.getState()
+				.setImages([{ content: { type: "image", data: "iVBOR", mimeType: "image/png" }, preview: PNG_DATA_URL }]),
+		);
+
+		const open = cards()[0]?.querySelector('button[aria-label="Preview attachment 1"]');
+		expect(open).not.toBeNull();
+		await click(open as TestNode);
+		expect(useUiStore.getState().filePreview).toMatchObject({
+			kind: "image",
+			dataUrl: PNG_DATA_URL,
+			name: "attachment 1",
+		});
+	});
+
 	it("drops a failed image read with an error toast", async () => {
 		await mount();
 		readImage.mockImplementation(async () => ({
@@ -314,7 +365,7 @@ describe("InputArea file drop", () => {
 		await drag("drop", fileDrop("/home/u/a.pdf", "/home/u/b.zip"));
 		await flush();
 
-		const remove = cards()[0]?.querySelector("button");
+		const remove = cards()[0]?.querySelector('button[aria-label^="Remove"]');
 		expect(remove?.getAttribute("aria-label")).toBe("Remove a.pdf");
 		expect(remove?.getAttribute("type")).toBe("button");
 		await click(remove as TestNode);

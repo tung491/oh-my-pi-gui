@@ -232,6 +232,43 @@ describe("PanelContainer drawer tabs", () => {
 		expect(document.querySelector("aside pre")?.textContent).toContain("SELECT 1;");
 	});
 
+	it("opens a local Word document link in the side-by-side preview", async () => {
+		seedActiveTab("agent");
+		useUiStore.setState({ panelVisible: false, filePreview: null });
+		const readDocument = vi.fn(async (_path: string, _options?: { tabId?: string }) => ({
+			ok: false,
+			size: 0,
+			mtimeMs: 0,
+			error: "unsupported",
+		}));
+		ompWindow.omp = {
+			fs: {
+				list: vi.fn(async () => ({ ok: true, entries: [], truncated: false })),
+				read: vi.fn(async () => ({ ok: false, error: "not text" })),
+				readDocument,
+			},
+			system: {
+				openExternal: vi.fn(async () => {}),
+				openPath: vi.fn(async () => ({ ok: true })),
+			},
+		};
+		const path = "/home/u/Documents/Sai ATLAS/r.docx";
+		await mount(<FileLinkHarness content="[r](file:///home/u/Documents/Sai%20ATLAS/r.docx)" />);
+
+		await act(async () => {
+			document.querySelector("a")?.dispatchEvent(new Event("click", { bubbles: true, cancelable: true }));
+		});
+		const deadline = Date.now() + 2_000;
+		while (readDocument.mock.calls.length === 0 && Date.now() < deadline) await flush();
+
+		expect(useUiStore.getState()).toMatchObject({
+			panelVisible: true,
+			filePreview: { kind: "path", path },
+		});
+		expect(readDocument).toHaveBeenCalled();
+		expect(readDocument.mock.calls[0]?.[0]).toBe(path);
+	});
+
 	it("keeps the workspace heading and a named close control", async () => {
 		seedActiveTab("agent");
 		useUiStore.setState({ panelTab: "files", panelVisible: true });
