@@ -51,6 +51,12 @@ export const VENDOR_CHUNK_RULES: ReadonlyArray<readonly [RegExp, string]> = [
 	[/[\\/]node_modules[\\/]pdfjs-dist[\\/]/, "pdfjs"],
 	// SheetJS (sheet preview; lazy-imported with SheetPreview).
 	[/[\\/]node_modules[\\/]xlsx[\\/]/, "sheetjs"],
+	// docx-preview (Word preview; lazy-imported with DocxPreview).
+	[/[\\/]node_modules[\\/]docx-preview[\\/]/, "docx"],
+	// @aiden0z/pptx-renderer and its chart and font stacks (slide preview; lazy-imported with PptxPreview).
+	[/[\\/]node_modules[\\/](@aiden0z[\\/]pptx-renderer|echarts|zrender|mtx-decompressor)[\\/]/, "pptx"],
+	// JSZip, shared by docx-preview and the pptx renderer.
+	[/[\\/]node_modules[\\/](jszip|pako)[\\/]/, "jszip"],
 ];
 
 /**

@@ -21,6 +21,8 @@ export interface PreviewRendererProps {
 export type PreviewRenderers = Partial<Record<"pdf" | "docx" | "pptx" | "sheet", ComponentType<PreviewRendererProps>>>;
 
 export const DEFAULT_PREVIEW_RENDERERS: PreviewRenderers = {
+	docx: lazy(() => import("./DocxPreview")),
 	pdf: lazy(() => import("./PdfPreview")),
+	pptx: lazy(() => import("./PptxPreview")),
 	sheet: lazy(() => import("./SheetPreview")),
 };

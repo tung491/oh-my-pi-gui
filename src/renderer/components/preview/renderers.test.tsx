@@ -1,7 +1,6 @@
 /**
- * The default renderer registry: pdf and sheet load lazily, docx and pptx
- * have no entry yet (the shell shows "not available"), and csv text renders
- * through the sheet entry. Same linkedom harness as ThinkingBlock.test.tsx.
+ * The default renderer registry: docx, pdf, pptx and sheet load lazily, and
+ * csv text renders through the sheet entry. Same linkedom harness as ThinkingBlock.test.tsx.
  */
 
 import { parseHTML } from "linkedom";
@@ -41,8 +40,8 @@ afterEach(async () => {
 });
 
 describe("DEFAULT_PREVIEW_RENDERERS", () => {
-	it("registers lazy pdf and sheet renderers and nothing else yet", () => {
-		expect(Object.keys(DEFAULT_PREVIEW_RENDERERS).sort()).toEqual(["pdf", "sheet"]);
+	it("registers lazy docx, pdf, pptx and sheet renderers", () => {
+		expect(Object.keys(DEFAULT_PREVIEW_RENDERERS).sort()).toEqual(["docx", "pdf", "pptx", "sheet"]);
 		for (const renderer of Object.values(DEFAULT_PREVIEW_RENDERERS)) {
 			expect((renderer as unknown as { $$typeof: symbol }).$$typeof).toBe(LAZY);
 		}
