@@ -983,6 +983,24 @@ mod tests {
         assert_eq!(server.requests.lock().unwrap()[0].path, format!("/releases/latest/download/{}", feed::FEED_FILE));
     }
 
+    /// The macOS twin: an arm64 Mac picks its own DMG out of the arm64-only feed
+    /// the release writes and offers it as a manual update.
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[tokio::test]
+    async fn check_reports_an_available_manual_update_for_this_mac() {
+        let (server, base) = start_server().await;
+        let entry = |name: &str, bytes: &[u8]| format!("  - url: {name}\n    sha512: {}\n    size: {}\n", sha512_base64(bytes), bytes.len());
+        let files = [entry("Sai-ATLAS-0.9.16-arm64.zip", b"z"), entry("Sai-ATLAS-0.9.16-arm64.dmg", b"m"), entry("omp-0.9.16-arm64.dmg", b"m")].concat();
+        *server.feed.lock().unwrap() = Some(format!("version: 0.9.16\nfiles:\n{files}path: Sai-ATLAS-0.9.16-arm64.zip\nreleaseDate: '2026-10-01T00:00:00.000Z'\nreleaseNotes: 'Faster dictation'\n"));
+        let h = harness(Setup { release_base: base, install_mode: UpdateInstallMode::Manual, private_downloads: false, kind: None, ..Setup::default() });
+
+        let reply = h.call("updater:check").await;
+
+        assert_eq!(reply, json!({ "state": "available", "version": "0.9.16", "notes": "Faster dictation", "mode": "manual" }));
+        assert_eq!(h.updater().inner().active.as_ref().unwrap().asset.name, "Sai-ATLAS-0.9.16-arm64.dmg");
+        assert_eq!(server.requests.lock().unwrap()[0].path, format!("/releases/latest/download/{}", feed::FEED_FILE));
+    }
+
     #[tokio::test]
     async fn check_reports_not_available_when_the_feed_is_not_newer() {
         let (server, base) = start_server().await;
