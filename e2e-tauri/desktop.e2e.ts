@@ -654,6 +654,8 @@ describe("desktop", () => {
 		expect(await browser.execute(() => document.querySelector("textarea")?.disabled)).toBe(false);
 		expect(await browser.getUrl()).toBe(trustedUrl);
 		await reload();
+		// The composer mounts only once the tab store hydrates after the bridge is up.
+		await $("textarea").waitForExist();
 		expect(
 			await until(
 				() => editable("textarea"),
