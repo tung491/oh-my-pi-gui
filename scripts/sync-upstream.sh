@@ -9,10 +9,9 @@
 #   1. fetch upstream, show what's incoming
 #   2. merge upstream/main (stop on conflict for manual resolution)
 #   3. bun install (lockfile may have moved)
-#   4. if the omp version bumped, re-provision pi_natives for the new version
-#   5. gen:stats (re-embed the stats dashboard client bundle)
-#   6. build:omp (rebuild the bundled sidecar with upstream + local changes)
-#   7. build the GUI renderer + typecheck + tests
+#   4. gen:stats (re-embed the stats dashboard client bundle)
+#   5. build:omp (rebuild the bundled sidecar with upstream + local changes)
+#   6. build the GUI renderer + typecheck + tests
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
@@ -20,20 +19,20 @@ GUI=packages/gui
 say() { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 
 if [ "${SKIP_MERGE:-0}" = "1" ]; then
-	say "1-2/7 resume after resolved merge"
+	say "1-2/6 resume after resolved merge"
 	if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
 		echo "CONFLICT — unresolved files remain; resolve and commit them before resuming"
 		git status --short
 		exit 1
 	fi
 else
-	say "1/7 fetch upstream"
+	say "1/6 fetch upstream"
 	git fetch upstream --quiet
 	incoming=$(git rev-list --count HEAD..upstream/main)
 	echo "incoming commits: $incoming"
 	git log --oneline HEAD..upstream/main | head -15 || true
 
-	say "2/7 merge upstream/main"
+	say "2/6 merge upstream/main"
 	if [ "$incoming" = "0" ]; then
 		echo "already up to date"
 	elif ! git merge upstream/main --no-edit; then
@@ -44,29 +43,13 @@ else
 	fi
 fi
 
-say "3/7 bun install"
+say "3/6 bun install"
 bun install
 
-new_version="$(cd packages/coding-agent && node -p "require('./package.json').version" 2>/dev/null || true)"
-say "4/7 pi_natives for v$new_version"
-# build:omp (step 6) now stages the matching-version addon itself — including
-# replacing stale addons whose version sentinel doesn't match — so this step is
-# only an early, explicit check that the new version is available somewhere.
-native_dir="$HOME/.omp/natives/$new_version"
-if [ -n "$new_version" ] && [ ! -f "$native_dir/pi_natives.darwin-arm64.node" ]; then
-	tmp="$(mktemp -d)"
-	bun add --no-cache --registry=https://registry.npmjs.org --os=darwin --cpu=arm64 "@oh-my-pi/pi-natives-darwin-arm64@$new_version" --cwd "$tmp" || \
-		echo "WARN: natives $new_version not on npm yet — build:omp will fail unless you build from crates/pi-natives"
-	mkdir -p "$native_dir"
-	cp "$tmp"/node_modules/@oh-my-pi/pi-natives-darwin-arm64/pi_natives.darwin-arm64.node "$native_dir/" 2>/dev/null || true
-else
-	echo "natives present (or version unchanged)"
-fi
-
-say "5/7 gen:stats (embed stats dashboard)"
+say "4/6 gen:stats (embed stats dashboard)"
 bun --cwd=packages/stats run gen:stats
 
-say "6/7 build:omp (rebuild bundled sidecar) + assistant pack load check"
+say "5/6 build:omp (rebuild bundled sidecar) + assistant pack load check"
 bun --cwd="$GUI" run build:omp
 "$GUI/resources/omp" --smoke-test
 # The new sidecar must still load the assistant pack exactly (tools, skills,
@@ -74,7 +57,7 @@ bun --cwd="$GUI" run build:omp
 bun --cwd="$GUI" run build:pack
 bun --cwd="$GUI" scripts/check-assistant-pack.ts resources/omp
 
-say "7/7 GUI build + typecheck + tests"
+say "6/6 GUI build + typecheck + tests"
 bun --cwd="$GUI" run build
 # `bun --cwd x tsc|vitest` resolves tsconfig/vitest.config by the SHELL's cwd,
 # not --cwd — from the repo root that picks the monorepo's root configs and

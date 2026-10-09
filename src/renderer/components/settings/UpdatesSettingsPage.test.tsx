@@ -117,13 +117,13 @@ describe("updates overview state", () => {
 	});
 
 	it("reports attention while an app update is available, downloading or ready", () => {
-		expect(updateOverviewState({ state: "available", version: "0.7.2", mode: "manual" }, false)).toBe("attention");
+		expect(updateOverviewState({ state: "available", version: "0.7.2", mode: "automatic" }, false)).toBe("attention");
 		expect(
 			updateOverviewState(
 				{
 					state: "downloading",
 					version: "0.7.2",
-					mode: "manual",
+					mode: "automatic",
 					percent: 40,
 					bytesPerSecond: 1,
 					transferred: 40,

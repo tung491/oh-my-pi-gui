@@ -503,17 +503,11 @@ export const en: Record<string, string> = {
 		"Cached at session startup — edits take effect after restarting the session (in every client).",
 	"updater.available": "Version {version} is available",
 	"updater.download": "Download update",
-	"updater.downloadInstaller": "Download installer",
 	"updater.downloading": "Downloading update…",
-	"updater.downloadingInstaller": "Downloading installer…",
 	"updater.ready": "{version} ready — restart to apply",
 	"updater.restart": "Restart & install",
 	"updater.reopenToInstall":
 		"{version} is downloaded, but Sai ATLAS can't ask for administrator access in this session. Quit and reopen Sai ATLAS, then try again.",
-	"updater.installerReady": "{version} installer verified and opened in Finder",
-	"updater.openInstaller": "Open installer",
-	"updater.manualInstructions":
-		"Quit Sai ATLAS, drag Sai ATLAS into Applications, choose Replace, then reopen it. If macOS blocks it, use System Settings → Privacy & Security → Open Anyway.",
 	"updater.unresolvedDependencies":
 		"The update was not installed because apt could not resolve the packages it needs. Run this in a terminal to see why and install it: {command}",
 	"updater.retry": "Check again",

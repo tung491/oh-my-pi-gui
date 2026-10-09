@@ -1,5 +1,5 @@
-//! Installing a downloaded package: the deb's privileged `apt-get` run, the
-//! AppImage file swap and the Windows installer start. Every command is an
+//! Installing a downloaded package: the deb's privileged `apt-get` run and the
+//! AppImage file swap. Every command is an
 //! argv vector of absolute paths; nothing here goes through a shell.
 //!
 //! A deb installs with one command, `pkexec apt-get install -y --no-remove --
@@ -239,23 +239,6 @@ async fn set_executable(path: &Path) -> Result<(), String> {
     let mut permissions = metadata.permissions();
     permissions.set_mode(permissions.mode() | 0o755);
     tokio::fs::set_permissions(path, permissions).await.map_err(|error| format!("{} could not be made executable: {error}", path.display()))
-}
-
-#[cfg(not(unix))]
-async fn set_executable(_path: &Path) -> Result<(), String> {
-    Ok(())
-}
-
-/// Start the downloaded NSIS installer. `/S` is NSIS's silent switch, used for
-/// the install at quit; an install the user asked for shows the installer's
-/// own progress. The installer outlives this process, which exits right after.
-#[cfg(windows)]
-pub(crate) fn start_windows_installer(installer: &Path, silent: bool) -> Result<(), String> {
-    let mut command = tokio::process::Command::new(installer);
-    if silent {
-        command.arg("/S");
-    }
-    command.spawn().map(|_child| ()).map_err(|error| format!("{} could not start: {error}", installer.display()))
 }
 
 /// The file the AppImage install replaces: `$APPIMAGE` when set and non-empty.

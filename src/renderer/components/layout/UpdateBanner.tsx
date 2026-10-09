@@ -1,9 +1,7 @@
 /**
- * Update banner for both staged automatic updates and verified manual macOS
- * installers. Manual mode keeps the DMG replacement steps visible after the
- * installer opens in Finder.
+ * Update banner for staged automatic updates.
  */
-import { AlertTriangle, Download, FolderOpen, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, X } from "lucide-react";
 import type { UpdateStatus } from "../../../shared/ipc-types";
 import { useT } from "../../lib/i18n";
 import { useUpdaterStore } from "../../stores/updater";
@@ -38,7 +36,7 @@ export function UpdateBanner() {
 					{t("updater.available", { version: status.version })}
 				</span>
 				<Button size="sm" onClick={() => void window.omp.updater.download()}>
-					{status.mode === "manual" ? t("updater.downloadInstaller") : t("updater.download")}
+					{t("updater.download")}
 				</Button>
 				<button
 					type="button"
@@ -58,7 +56,7 @@ export function UpdateBanner() {
 				<Download size={13} className="shrink-0 text-(--omp-accent)" />
 				<div className="min-w-0 flex-1">
 					<div className="mb-1 flex justify-between text-(--omp-text)">
-						<span>{status.mode === "manual" ? t("updater.downloadingInstaller") : t("updater.downloading")}</span>
+						<span>{t("updater.downloading")}</span>
 						<span className="tabular-nums text-(--omp-dim)">
 							{status.percent}% · {formatBytes(status.transferred)}/{formatBytes(status.total)}
 						</span>
@@ -77,20 +75,6 @@ export function UpdateBanner() {
 	}
 
 	if (status.state === "downloaded") {
-		if (status.mode === "manual") {
-			return (
-				<div className="flex items-center gap-2 border-b border-(--omp-border-muted) bg-transparent px-3 py-2 text-omp-md">
-					<FolderOpen size={13} className="shrink-0 text-(--omp-success)" />
-					<div className="min-w-0 flex-1">
-						<div className="text-(--omp-text)">{t("updater.installerReady", { version: status.version })}</div>
-						<div className="mt-0.5 text-omp-xs text-(--omp-dim)">{t("updater.manualInstructions")}</div>
-					</div>
-					<Button size="sm" onClick={() => void window.omp.updater.apply()}>
-						{t("updater.openInstaller")}
-					</Button>
-				</div>
-			);
-		}
 		// Installing again here would fail the same way, so there is no button.
 		if (status.reopenRequired) {
 			return (

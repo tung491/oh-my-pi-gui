@@ -47,36 +47,6 @@ afterEach(async () => {
 });
 
 describe("UpdateBanner", () => {
-	it("offers the architecture installer instead of Squirrel installation in manual mode", async () => {
-		useUpdaterStore.setState({
-			status: { state: "available", version: "0.8.5", mode: "manual" },
-			dismissed: {},
-		});
-		await mount(<UpdateBanner />);
-
-		expect(container.textContent).toContain("Download installer");
-		expect(container.textContent).not.toContain("Restart & install");
-	});
-
-	it("keeps Finder replacement guidance visible and reopens the verified installer", async () => {
-		useUpdaterStore.setState({
-			status: { state: "downloaded", version: "0.8.5", mode: "manual" },
-			dismissed: {},
-		});
-		await mount(<UpdateBanner />);
-
-		expect(container.textContent).toContain("drag Sai ATLAS into Applications");
-		expect(container.textContent).toContain("Privacy & Security");
-		const openButton = container
-			.querySelectorAll("button")
-			.find(button => button.textContent?.includes("Open installer"));
-		expect(openButton).toBeDefined();
-		await act(async () => {
-			openButton?.click();
-		});
-		expect(apply).toHaveBeenCalledOnce();
-	});
-
 	it("retains restart-and-install for certificate-backed automatic updates", async () => {
 		useUpdaterStore.setState({
 			status: { state: "downloaded", version: "0.8.5", mode: "automatic" },
@@ -85,7 +55,6 @@ describe("UpdateBanner", () => {
 		await mount(<UpdateBanner />);
 
 		expect(container.textContent).toContain("Restart & install");
-		expect(container.textContent).not.toContain("Open installer");
 		expect(container.textContent).not.toMatch(/Finder|DMG/i);
 	});
 

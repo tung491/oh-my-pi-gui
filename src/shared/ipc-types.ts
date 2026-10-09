@@ -232,9 +232,9 @@ export const IPC_COMMANDS = {
 	EDITOR_OPEN_EXTERNAL: "editor:open-external",
 	/** Manual update check */
 	UPDATER_CHECK: "updater:check",
-	/** Download the updater-selected payload or architecture-matched macOS installer */
+	/** Download the updater-selected package */
 	UPDATER_DOWNLOAD: "updater:download",
-	/** Apply an automatic update or reopen a downloaded manual installer */
+	/** Install a downloaded update */
 	UPDATER_APPLY: "updater:apply",
 	/** Current updater status (replay for renderer boot) */
 	UPDATER_GET_STATUS: "updater:getStatus",
@@ -298,7 +298,7 @@ export interface RuntimeErrorReport {
 // Update status machine (updater → renderer)
 // ============================================================================
 
-export type UpdateInstallMode = "automatic" | "manual";
+export type UpdateInstallMode = "automatic";
 
 export type UpdateStatus =
 	| { state: "idle" }

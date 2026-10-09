@@ -1,9 +1,8 @@
 /**
  * Generate the app icons from resources/icon-source.svg: a 1024px master PNG
- * (dev dock icon, Windows base, and the macOS icon electron-builder converts to
- * ICNS itself), the Windows .ico and the Linux resources/icons/*.png set. Also
- * renders the tray mark from resources/tray-source.svg into src/shared/tray-mark.ts.
- * Run: `bun run gen:icons`.
+ * (the source for the Tauri icon set) and the Linux resources/icons/*.png set.
+ * Also renders the tray mark from resources/tray-source.svg into
+ * src/shared/tray-mark.ts. Run: `bun run gen:icons`.
  */
 
 import { execFileSync } from "node:child_process";
@@ -22,7 +21,6 @@ const trayMarkPath = path.join(packageRoot, "src", "shared", "tray-mark.ts");
 /** The tray mark is 18pt drawn at 2×, so it stays crisp on HiDPI displays. */
 const TRAY_MARK_SIZE = 36;
 const LINUX_SIZES = [16, 32, 48, 64, 128, 256, 512, 1024];
-const ICO_SIZES = [16, 32, 48, 64, 128, 256];
 
 async function render(svg: Buffer, size: number): Promise<Buffer> {
 	// High density so the vector mark stays crisp when resized down.
@@ -66,32 +64,10 @@ function writeTrayMark(svg: Buffer, alpha: Buffer): void {
 	execFileSync("bunx", ["biome", "format", "--write", trayMarkPath], { cwd: packageRoot, stdio: "inherit" });
 }
 
-function writeIco(frames: { size: number; data: Buffer }[], outPath: string): void {
-	const header = Buffer.alloc(6);
-	header.writeUInt16LE(0, 0);
-	header.writeUInt16LE(1, 2);
-	header.writeUInt16LE(frames.length, 4);
-	const entries = Buffer.alloc(16 * frames.length);
-	const blobs: Buffer[] = [];
-	let offset = header.length + entries.length;
-	for (const [index, frame] of frames.entries()) {
-		const width = frame.size >= 256 ? 0 : frame.size;
-		entries.writeUInt8(width, index * 16);
-		entries.writeUInt8(width, index * 16 + 1);
-		entries.writeUInt16LE(1, index * 16 + 4);
-		entries.writeUInt16LE(32, index * 16 + 6);
-		entries.writeUInt32LE(frame.data.length, index * 16 + 8);
-		entries.writeUInt32LE(offset, index * 16 + 12);
-		blobs.push(frame.data);
-		offset += frame.data.length;
-	}
-	writeFileSync(outPath, Buffer.concat([header, entries, ...blobs]));
-}
-
 async function main(): Promise<void> {
 	const svg = await fs.readFile(svgPath);
 
-	// Master 1024px PNG (dev dock icon, the macOS bundle icon, and the Windows .ico base).
+	// Master 1024px PNG (the source for the Tauri icon set).
 	await Bun.write(path.join(resources, "icon.png"), await render(svg, 1024));
 
 	// Linux PNG set.
@@ -101,13 +77,10 @@ async function main(): Promise<void> {
 		await Bun.write(path.join(linuxDir, `${px}x${px}.png`), await render(svg, px));
 	}
 
-	const icoFrames = await Promise.all(ICO_SIZES.map(async size => ({ size, data: await render(svg, size) })));
-	writeIco(icoFrames, path.join(resources, "icon.ico"));
-
 	const traySvg = await fs.readFile(traySvgPath);
 	writeTrayMark(traySvg, await renderTrayMark(traySvg));
 
-	console.log("Generated icon.png, icon.ico, resources/icons/*.png and src/shared/tray-mark.ts");
+	console.log("Generated icon.png, resources/icons/*.png and src/shared/tray-mark.ts");
 }
 
 await main();

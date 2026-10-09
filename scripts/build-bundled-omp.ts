@@ -31,8 +31,7 @@
  *
  * Usage (from packages/gui):
  *   bun run build:omp                                       # host arch → resources/omp
- *   bun run build:omp:x64                                   # Intel cross-build → resources/omp.x64
- *   bun scripts/build-bundled-omp.ts --target bun-darwin-x64 --out custom/path
+ *   bun scripts/build-bundled-omp.ts --target bun-linux-x64-baseline --out custom/path
  *
  * After upgrading the monorepo (upstream sync), run scripts/sync-upstream.sh
  * instead — it merges upstream and re-runs this end-to-end.
@@ -102,7 +101,7 @@ const argValue = (flag: string): string | undefined => {
 interface SidecarTarget {
 	/** Bun --compile target (undefined = host). */
 	readonly target?: Bun.Build.CompileTarget;
-	/** pi-natives platform tag, e.g. darwin-arm64. */
+	/** pi-natives platform tag, e.g. linux-x64. */
 	readonly platformTag: string;
 	/** Default output path under packages/gui/resources/. */
 	readonly out: string;
@@ -126,22 +125,18 @@ function resolveTarget(): SidecarTarget {
 			addonFilenames: addonFilenamesFor(platformTag),
 		};
 	}
-	const match = /^bun-(darwin|linux)-(arm64|x64)(?:-.*)?$/.exec(targetFlag);
+	const match = /^bun-linux-(arm64|x64)(?:-.*)?$/.exec(targetFlag);
 	if (!match) {
-		throw new Error(`Unsupported --target '${targetFlag}'. Expected bun-<darwin|linux>-<arch> (e.g. bun-linux-x64).`);
+		throw new Error(`Unsupported --target '${targetFlag}'. Expected bun-linux-<arch> (e.g. bun-linux-x64-baseline).`);
 	}
-	const osName = match[1]!;
-	const arch = match[2]!;
+	const osName = "linux";
+	const arch = match[1]!;
 	const platformTag = `${osName}-${arch}`;
 	const bunTarget = targetFlag as Bun.Build.CompileTarget;
 	return {
 		target: bunTarget,
 		platformTag,
-		out: path.join(
-			guiRoot,
-			"resources",
-			osName === "linux" ? `omp.linux-${arch}` : arch === "x64" ? "omp.x64" : "omp",
-		),
+		out: path.join(guiRoot, "resources", `omp.linux-${arch}`),
 		addonFilenames: addonFilenamesFor(platformTag),
 	};
 }

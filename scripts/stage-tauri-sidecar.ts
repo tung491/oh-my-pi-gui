@@ -5,8 +5,7 @@
  *
  * Copies the locally built sidecar (`resources/omp*`, gitignored) to
  * `src-tauri/binaries/omp-<triple>`. The `package:tauri:*` scripts pass an
- * overlay config that names that file: `externalBin` on macOS (beside the
- * executable) and the `omp` resource on Linux
+ * overlay config that names that file: the `omp` resource
  * (`/usr/lib/Sai ATLAS/omp`, off PATH). The overlay is passed only to bundle
  * builds because tauri-build copies `externalBin` and `resources` at compile
  * time, so a plain `cargo build` or `cargo test` must not name a 300 MB file
@@ -22,8 +21,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 /** Which built sidecar each bundle target ships (see `build:omp*` in package.json). */
 export const SIDECAR_SOURCES: Readonly<Record<string, string>> = {
 	"x86_64-unknown-linux-gnu": "resources/omp.linux-x64",
-	"aarch64-apple-darwin": "resources/omp",
-	"x86_64-apple-darwin": "resources/omp.x64",
 };
 
 /** `src-tauri/binaries/omp-<triple>` (Tauri's sidecar naming). */

@@ -1,5 +1,5 @@
 // Sidecar deadlock smoke probe (dev only — requires the native addon at
-// packages/natives/native/pi_natives.darwin-arm64.node).
+// packages/natives/native/pi_natives.linux-x64-modern.node).
 //
 // Boots the SAME spawn the GUI uses for source sidecars —
 //   `bun packages/coding-agent/src/cli.ts --mode rpc-ui`

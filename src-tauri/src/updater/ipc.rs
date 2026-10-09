@@ -43,7 +43,7 @@ pub fn updater_download(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> 
     later(ctx, |updater| Box::pin(async move { serde_json::to_value(updater.download().await).map_err(IpcError::from) }))
 }
 
-/// `updater:apply`: install a downloaded update (or open the manual installer again).
+/// `updater:apply`: install a downloaded update.
 pub fn updater_apply(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
     let _ = (caller, args);
     later(ctx, |updater| {

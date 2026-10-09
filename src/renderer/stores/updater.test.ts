@@ -54,7 +54,7 @@ describe("useUpdaterStore", () => {
 		expect(useUpdaterStore.getState().dismissed.version).toBe("0.4.1");
 		// The banner hides only when dismissed.version === status.version; a newer
 		// available version must compare unequal.
-		setStatus({ state: "available", version: "0.4.2", mode: "manual" });
+		setStatus({ state: "available", version: "0.4.2", mode: "automatic" });
 		expect(useUpdaterStore.getState().dismissed.version).not.toBe("0.4.2");
 	});
 

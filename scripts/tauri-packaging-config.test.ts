@@ -49,7 +49,6 @@ interface TauriConfig {
 		targets?: string[];
 		externalBin?: string[];
 		resources?: Record<string, string> | string[];
-		macOS?: { minimumSystemVersion?: string; signingIdentity?: string; entitlements?: string };
 		linux?: {
 			appimage?: { bundleMediaFramework?: boolean };
 			deb?: {
@@ -67,8 +66,8 @@ function readJson<T = Json>(relative: string): T {
 }
 
 const base = (): TauriConfig => readJson("src-tauri/tauri.conf.json");
-const platform = (os: "linux" | "macos"): TauriConfig => readJson(`src-tauri/tauri.${os}.conf.json`);
-const overlay = (os: "linux" | "macos"): TauriConfig => readJson(`src-tauri/${os}/sidecar.conf.json`);
+const platform = (): TauriConfig => readJson("src-tauri/tauri.linux.conf.json");
+const overlay = (): TauriConfig => readJson("src-tauri/linux/sidecar.conf.json");
 
 /** RFC 7396 merge, as tauri-cli applies the platform file and then each `--config` overlay. */
 function merge(target: Json, patch: Json): Json {
@@ -87,9 +86,9 @@ function merge(target: Json, patch: Json): Json {
 	return out;
 }
 
-/** The configuration a `package:tauri:*` build of `os` bundles with. */
-function bundled(os: "linux" | "macos"): TauriConfig {
-	return merge(merge(base() as Json, platform(os) as Json), overlay(os) as Json) as TauriConfig;
+/** The configuration the `package:tauri:linux` build bundles with. */
+function bundled(): TauriConfig {
+	return merge(merge(base() as Json, platform() as Json), overlay() as Json) as TauriConfig;
 }
 
 const scripts = (): Record<string, string> => readJson<{ scripts: Record<string, string> }>("package.json").scripts;
@@ -103,19 +102,17 @@ function filesUnder(directory: string): string[] {
 	});
 }
 
-/** Every packaging input: the three configs, the overlays and every file under the per-OS dirs. */
+/** Every packaging input: both configs and every file under linux/, the overlay included. */
 function packagingFiles(): string[] {
 	return [
-		...["tauri.conf.json", "tauri.linux.conf.json", "tauri.macos.conf.json", "Info.plist"].map(name =>
-			path.join(TAURI, name),
-		),
-		...["linux", "macos"].flatMap(dir => filesUnder(path.join(TAURI, dir))),
+		...["tauri.conf.json", "tauri.linux.conf.json"].map(name => path.join(TAURI, name)),
+		...filesUnder(path.join(TAURI, "linux")),
 	];
 }
 
 /** The deb's (and, through the shared data tree, the AppImage's) desktop entry template. */
 function desktopTemplate(): string {
-	const template = platform("linux").bundle?.linux?.deb?.desktopTemplate;
+	const template = platform().bundle?.linux?.deb?.desktopTemplate;
 	if (!template) throw new Error("tauri.linux.conf.json sets no bundle.linux.deb.desktopTemplate");
 	return fs.readFileSync(path.join(TAURI, template), "utf8");
 }
@@ -165,53 +162,39 @@ describe("product identity", () => {
 
 	it("the desktop template sets StartupWMClass to the identifier", () => {
 		const template = desktopTemplate();
-		expect(platform("linux").bundle?.linux?.deb?.desktopTemplate).toBe("linux/vn.io.vif.saiatlas.desktop");
+		expect(platform().bundle?.linux?.deb?.desktopTemplate).toBe("linux/vn.io.vif.saiatlas.desktop");
 		expect(template).toMatch(new RegExp(`^StartupWMClass=${APP_ID.replaceAll(".", "\\.")}$`, "m"));
 		expect(template).toMatch(/^Name=Sai ATLAS$/m);
 		expect(template.match(/^\[Desktop Entry\]$/gm)).toHaveLength(1);
 	});
 
-	it("bundles for every target and names the asset files the updaters look for", () => {
+	it("bundles the AppImage and deb and names the asset files the updaters look for", () => {
 		expect(base().bundle?.active).toBe(true);
-		expect(platform("linux").bundle?.targets).toEqual(["appimage", "deb"]);
-		expect(platform("macos").bundle?.targets).toEqual(["dmg", "app"]);
-		expect(assetNames("1.0.0")).toMatchObject({
-			macArm64Dmg: "Sai-ATLAS-1.0.0-arm64.dmg",
-			macX64Dmg: "Sai-ATLAS-1.0.0.dmg",
-			macArm64Zip: "Sai-ATLAS-1.0.0-arm64.zip",
-			macX64Zip: "Sai-ATLAS-1.0.0.zip",
-			bridgeArm64Dmg: "omp-1.0.0-arm64.dmg",
-			bridgeX64Dmg: "omp-1.0.0.dmg",
+		expect(platform().bundle?.targets).toEqual(["appimage", "deb"]);
+		expect(assetNames("1.0.0")).toEqual({
+			appImage: "Sai-ATLAS-1.0.0-x86_64.AppImage",
+			deb: "sai-atlas_1.0.0_amd64.deb",
 		});
-		// The Rust updater selects the same DMG names.
-		const state = fs.readFileSync(path.join(TAURI, "src/updater/state.rs"), "utf8");
-		expect(state).toContain('"Sai-ATLAS-{version}-arm64.dmg"');
-		expect(state).toContain('"Sai-ATLAS-{version}.dmg"');
 	});
 });
 
 describe("sidecar placement", () => {
-	it("the macOS config ships binaries/omp as externalBin", () => {
-		expect(bundled("macos").bundle?.externalBin).toEqual(["binaries/omp"]);
-		expect(bundled("macos").bundle?.resources).toBeUndefined();
-	});
-
 	it("the Linux config ships the sidecar as the omp resource and sets no externalBin", () => {
 		// Installs as /usr/lib/Sai ATLAS/omp (deb) and $APPDIR/usr/lib/Sai ATLAS/omp
 		// (AppImage), where paths::resolve_bundled_omp looks, never on PATH. The
 		// assistant pack sits beside it, where the manager looks for it; the
 		// trailing slashes copy the directory tree (a glob key flattens the skill folders).
-		expect(bundled("linux").bundle?.resources).toEqual({
+		expect(bundled().bundle?.resources).toEqual({
 			"binaries/omp-x86_64-unknown-linux-gnu": "omp",
 			"../resources/assistant-pack/": "assistant-pack/",
 		});
-		expect(bundled("linux").bundle?.externalBin).toBeUndefined();
+		expect(bundled().bundle?.externalBin).toBeUndefined();
 		expect(stagedSidecarPath("x86_64-unknown-linux-gnu")).toBe("src-tauri/binaries/omp-x86_64-unknown-linux-gnu");
 	});
 
 	it("tauri.conf.json and the platform configs declare no externalBin or resources, so cargo builds never need a staged sidecar", () => {
 		// tauri-build copies both at compile time and fails when the file is missing.
-		for (const config of [base(), platform("linux"), platform("macos")]) {
+		for (const config of [base(), platform()]) {
 			expect(config.bundle?.externalBin).toBeUndefined();
 			expect(config.bundle?.resources).toBeUndefined();
 		}
@@ -220,8 +203,6 @@ describe("sidecar placement", () => {
 	it("every package:tauri script stages the matching triple and passes the matching overlay", () => {
 		const expected: Record<string, [string, string]> = {
 			"package:tauri:linux": ["x86_64-unknown-linux-gnu", "src-tauri/linux/sidecar.conf.json"],
-			"package:tauri:mac:arm64": ["aarch64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
-			"package:tauri:mac:x64": ["x86_64-apple-darwin", "src-tauri/macos/sidecar.conf.json"],
 		};
 		expect(
 			packageScripts()
@@ -311,8 +292,7 @@ describe("renderer security", () => {
 	});
 
 	it("no bundle or package script enables e2e-hooks", () => {
-		for (const os of ["linux", "macos"] as const)
-			expect(bundled(os).build?.features ?? []).not.toContain("e2e-hooks");
+		expect(bundled().build?.features ?? []).not.toContain("e2e-hooks");
 		for (const file of packagingFiles()) {
 			expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain("e2e-hooks");
 		}
@@ -338,13 +318,13 @@ describe("renderer security", () => {
 });
 
 describe("Linux package", () => {
-	const depends = () => platform("linux").bundle?.linux?.deb?.depends ?? [];
-	const recommends = () => platform("linux").bundle?.linux?.deb?.recommends ?? [];
+	const depends = () => platform().bundle?.linux?.deb?.depends ?? [];
+	const recommends = () => platform().bundle?.linux?.deb?.recommends ?? [];
 
 	it("deb control names the maintainer, homepage and description of the Electron package", () => {
 		// The bundler writes Maintainer from bundle.publisher (Cargo.toml has no authors),
 		// Homepage from bundle.homepage and Description from the descriptions.
-		const bundle = platform("linux").bundle as TauriConfig["bundle"] & {
+		const bundle = platform().bundle as TauriConfig["bundle"] & {
 			publisher?: string;
 			homepage?: string;
 			shortDescription?: string;
@@ -420,7 +400,7 @@ describe("Linux package", () => {
 	});
 
 	it("marks the deb install so the updater picks the dpkg path", () => {
-		const files = platform("linux").bundle?.linux?.deb?.files ?? {};
+		const files = platform().bundle?.linux?.deb?.files ?? {};
 		expect(files["/usr/lib/Sai ATLAS/package-type"]).toBe("linux/package-type");
 		expect(fs.readFileSync(path.join(TAURI, "linux/package-type"), "utf8").trim()).toBe("deb");
 	});
@@ -429,7 +409,7 @@ describe("Linux package", () => {
 		// A vendor drop-in applies to the ollama.service the official installer writes to /etc once systemd
 		// reloads (a reboot; the package runs no script); one in /etc with the same name (the welcome
 		// screen's) overrides it with the same content.
-		const files = platform("linux").bundle?.linux?.deb?.files ?? {};
+		const files = platform().bundle?.linux?.deb?.files ?? {};
 		expect(files["/usr/lib/systemd/system/ollama.service.d/sai-atlas.conf"]).toBe("linux/ollama-no-cloud.conf");
 		const dropIn = fs.readFileSync(path.join(TAURI, "linux/ollama-no-cloud.conf"), "utf8");
 		expect(dropIn).toBe('[Service]\nEnvironment="OLLAMA_NO_CLOUD=1"\n');
@@ -518,7 +498,7 @@ describe("Linux package", () => {
 	it("the AppImage bundles the GStreamer plugins the build image stages, and only those", () => {
 		// Without bundleMediaFramework the AppImage carries the GStreamer core but no plugins, and
 		// the host's plugins cannot load into it: no microphone capture and no audio playback.
-		expect(bundled("linux").bundle?.linux?.appimage?.bundleMediaFramework).toBe(true);
+		expect(bundled().bundle?.linux?.appimage?.bundleMediaFramework).toBe(true);
 		const build = fs.readFileSync(path.join(ROOT, "scripts", "tauri-linux-build.sh"), "utf8");
 		const staged = build.match(/-e GSTREAMER_PLUGINS_DIR=(\S+)\)/)?.[1];
 		expect(staged).toBe("/opt/sai-atlas/gstreamer-1.0");
@@ -541,13 +521,19 @@ describe("Linux package", () => {
 	});
 });
 
-describe("Windows", () => {
-	it("no windows build config remains", () => {
-		// Windows is not a target: no installer config, overlay or package script may bring it back.
-		for (const file of ["src-tauri/tauri.windows.conf.json", "src-tauri/windows"]) {
+describe("no macOS or Windows build", () => {
+	it("no macOS or Windows build config remains", () => {
+		// Linux is the only target: no installer config, overlay or package script may bring another back.
+		for (const file of [
+			"src-tauri/tauri.windows.conf.json",
+			"src-tauri/windows",
+			"src-tauri/tauri.macos.conf.json",
+			"src-tauri/macos",
+			"src-tauri/Info.plist",
+		]) {
 			expect(fs.existsSync(path.join(ROOT, file)), file).toBe(false);
 		}
-		expect(Object.keys(scripts()).filter(name => name.includes("win"))).toEqual([]);
+		expect(Object.keys(scripts()).filter(name => /mac|win/.test(name))).toEqual([]);
 	});
 
 	it("the sidecar build and staging scripts name no windows target", () => {

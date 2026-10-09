@@ -116,10 +116,8 @@ main_text! {
     UpdatesDownloadFailed => "updates.downloadFailed", "The installer download failed.", "Tải xuống trình cài đặt thất bại.";
     UpdatesHashMismatch => "updates.hashMismatch", "The downloaded installer failed SHA-512 verification and was removed.", "Trình cài đặt đã tải xuống không vượt qua xác minh SHA-512 và đã bị xóa.";
     UpdatesInstallFailed => "updates.installFailed", "The update could not be installed.", "Không thể cài đặt bản cập nhật.";
-    UpdatesInstallerMissing => "updates.installerMissing", "This release does not include the required installer for this Mac.", "Bản phát hành này không bao gồm trình cài đặt cần thiết cho máy Mac này.";
+    UpdatesInstallerMissing => "updates.installerMissing", "This release does not include the required installer for this system.", "Bản phát hành này không bao gồm trình cài đặt cần thiết cho hệ thống này.";
     UpdatesNoResult => "updates.noResult", "Update check completed without a result.", "Kiểm tra cập nhật hoàn tất nhưng không có kết quả.";
-    UpdatesOpenInstallerFailed => "updates.openInstallerFailed", "The installer was downloaded, but macOS could not open it.", "Trình cài đặt đã được tải xuống, nhưng macOS không thể mở tệp.";
-    UpdatesUnsupportedArchitecture => "updates.unsupportedArchitecture", "This Mac architecture does not have a supported installer.", "Kiến trúc máy Mac này không có trình cài đặt được hỗ trợ.";
 }
 
 /// Fill `{name}` placeholders from `params`; unknown names stay as written.

@@ -457,17 +457,11 @@ export const vi: Record<string, string> = {
 		"Được lưu vào bộ nhớ cache khi bắt đầu phiên — các chỉnh sửa sẽ có hiệu lực sau khi khởi động lại phiên (trong mọi client).",
 	"updater.available": "Đã có phiên bản {version}",
 	"updater.download": "Tải bản cập nhật",
-	"updater.downloadInstaller": "Tải trình cài đặt",
 	"updater.downloading": "Đang tải bản cập nhật…",
-	"updater.downloadingInstaller": "Đang tải trình cài đặt…",
 	"updater.ready": "{version} đã sẵn sàng — khởi động lại để áp dụng",
 	"updater.restart": "Khởi động lại & cài đặt",
 	"updater.reopenToInstall":
 		"Đã tải xong {version}, nhưng Sai ATLAS không thể yêu cầu quyền quản trị trong phiên này. Hãy thoát rồi mở lại Sai ATLAS, sau đó thử lại.",
-	"updater.installerReady": "Trình cài đặt {version} đã được xác minh và mở trong Finder",
-	"updater.openInstaller": "Mở trình cài đặt",
-	"updater.manualInstructions":
-		"Thoát Sai ATLAS, kéo Sai ATLAS vào Applications, chọn Thay thế, sau đó mở lại. Nếu macOS chặn, hãy vào Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Vẫn mở.",
 	"updater.unresolvedDependencies":
 		"Bản cập nhật chưa được cài đặt vì apt không thể giải quyết các gói phụ thuộc cần thiết. Hãy chạy lệnh này trong terminal để xem nguyên nhân và cài đặt: {command}",
 	"updater.retry": "Kiểm tra lại",

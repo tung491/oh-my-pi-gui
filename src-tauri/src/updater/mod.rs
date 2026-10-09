@@ -3,23 +3,18 @@
 //!
 //! Decisions this port makes where Tauri differs from Electron:
 //!
-//! - **Install mode.** The macOS bundle is ad-hoc signed and Tauri has no
-//!   Squirrel flow, so macOS is always `manual`: the architecture-matched DMG
-//!   is downloaded to the user's Downloads folder, revealed and opened, and
-//!   Finder does the replacement. Linux and Windows are `automatic`. The old
-//!   `OMP_DEV_UPDATE_MODE` seam is gone, since no macOS automatic path exists
-//!   for it to select.
+//! - **Install mode.** Every install is `automatic`: the downloaded deb or
+//!   AppImage replaces the app itself.
 //! - **Linux package kind.** `linux_package_kind` from `APPIMAGE`/`APPDIR`, the
 //!   executable path and the `package-type` marker the .deb ships in
 //!   `<exe dir>/../lib/Sai ATLAS` (falling back to `/usr/lib/Sai ATLAS` for an
 //!   executable started through a compatibility path).
-//! - **Download location.** macOS DMGs go to Downloads (the user keeps them);
-//!   Linux and Windows packages go to a cache directory this module owns and
-//!   clears before each download.
+//! - **Download location.** Packages go to a cache directory this module owns
+//!   and clears before each download.
 //! - **Installs.** A deb runs `pkexec apt-get install -y --no-remove --
 //!   <package>` after the quit prompt and relaunches `/usr/bin/sai-atlas`; an AppImage swaps `$APPIMAGE` and
-//!   relaunches it; Windows starts the NSIS installer. Installs on quit cover
-//!   the AppImage and Windows cases only (`installs_on_quit`).
+//!   relaunches it. Installs on quit cover every kind but the deb
+//!   (`installs_on_quit`).
 
 mod feed;
 mod install;
@@ -49,7 +44,7 @@ use feed::{Asset, AssetTarget};
 use install::{InstallError, PkexecRunner, PrivilegedRunner};
 use state::{
     asks_before_install, installer_partial_path, installs_on_quit, linux_package_kind, package_type_at, plan_installer_transfer,
-    settle_incomplete_update_check, sha512_file_base64, sweep_installer_partials, LinuxPackageKind, UpdateInstallMode, UpdateStatus,
+    settle_incomplete_update_check, sha512_file_base64, LinuxPackageKind, UpdateInstallMode, UpdateStatus,
 };
 
 pub const CHANNELS: &[(&str, Scope)] = &[
@@ -88,38 +83,24 @@ pub(crate) struct Config {
     pub release_base: String,
     /// Where packages download to.
     pub download_dir: PathBuf,
-    /// True when `download_dir` belongs to this module (cleared before a
-    /// download); false for the user's Downloads folder.
-    pub private_downloads: bool,
-    /// The Linux install kind; `None` on other OSes.
-    pub kind: Option<LinuxPackageKind>,
+    /// The Linux install kind.
+    pub kind: LinuxPackageKind,
     /// `$APPIMAGE`: the file an AppImage install replaces and relaunches.
     pub appimage: Option<PathBuf>,
-    pub install_mode: UpdateInstallMode,
     /// False in dev unless `OMP_DEV_UPDATE_CHECK=1`: checks then settle without a result.
     pub checks_enabled: bool,
-    /// The OS release compared with `minimumSystemVersion`; probed on macOS when `None`.
-    pub os_release: Option<String>,
     pub privileged: Arc<dyn PrivilegedRunner>,
 }
 
 impl Config {
     fn detect() -> Self {
         let appimage = std::env::var_os("APPIMAGE").filter(|value| !value.is_empty()).map(PathBuf::from);
-        let (download_dir, private_downloads) = if cfg!(target_os = "macos") {
-            (dirs::download_dir().unwrap_or_else(|| dirs::home_dir().unwrap_or_else(std::env::temp_dir).join("Downloads")), false)
-        } else {
-            (dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("@oh-my-pi").join("omp-gui").join("updates"), true)
-        };
         Self {
             release_base: feed::release_base().to_string(),
-            download_dir,
-            private_downloads,
+            download_dir: dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("@oh-my-pi").join("omp-gui").join("updates"),
             kind: detect_linux_kind(),
             appimage,
-            install_mode: if cfg!(target_os = "macos") { UpdateInstallMode::Manual } else { UpdateInstallMode::Automatic },
             checks_enabled: !tauri::is_dev() || std::env::var("OMP_DEV_UPDATE_CHECK").as_deref() == Ok("1"),
-            os_release: None,
             privileged: Arc::new(PkexecRunner),
         }
     }
@@ -127,8 +108,7 @@ impl Config {
 
 /// The .deb's `package-type` marker sits next to the sidecar in the resources
 /// directory; the AppImage ships none.
-#[cfg(target_os = "linux")]
-fn detect_linux_kind() -> Option<LinuxPackageKind> {
+fn detect_linux_kind() -> LinuxPackageKind {
     let exe = std::env::current_exe().ok();
     let resources = Path::new("lib").join(crate::product::PRODUCT_NAME);
     let marker = exe
@@ -138,12 +118,7 @@ fn detect_linux_kind() -> Option<LinuxPackageKind> {
         .or_else(|| package_type_at(&Path::new("/usr").join(&resources)));
     let env = |name: &str| std::env::var(name).ok();
     let exe_path = exe.as_deref().map(|path| path.to_string_lossy().into_owned()).unwrap_or_default();
-    Some(linux_package_kind(env("APPIMAGE").as_deref(), env("APPDIR").as_deref(), &exe_path, marker.as_deref()))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn detect_linux_kind() -> Option<LinuxPackageKind> {
-    None
+    linux_package_kind(env("APPIMAGE").as_deref(), env("APPDIR").as_deref(), &exe_path, marker.as_deref())
 }
 
 /// The release the last check found.
@@ -256,7 +231,7 @@ impl Updater {
         self.set_status(UpdateStatus::Checking);
         match self.run_check().await {
             Ok(CheckOutcome::Available { version, notes, asset }) => {
-                let mode = self.config.install_mode;
+                let mode = UpdateInstallMode::Automatic;
                 {
                     let mut inner = self.inner();
                     inner.active = Some(ActiveUpdate { version: version.clone(), asset });
@@ -298,42 +273,18 @@ impl Updater {
         if !feed::is_newer(&feed.version, &current)? {
             return Ok(CheckOutcome::NotAvailable);
         }
-        if !feed::update_supported(feed.minimum_system_version.as_deref(), self.os_release().await.as_deref()) {
-            return Ok(CheckOutcome::NotAvailable);
-        }
-        let target = match self.asset_target() {
-            Ok(target) => target,
-            Err(key) => return Ok(CheckOutcome::ReleaseProblem(key)),
-        };
-        let Some(asset) = feed::select_asset(&feed.files, &feed.version, target) else {
+        let Some(asset) = feed::select_asset(&feed.files, self.asset_target()) else {
             return Ok(CheckOutcome::ReleaseProblem(MainTextKey::UpdatesInstallerMissing));
         };
         Ok(CheckOutcome::Available { version: feed.version.clone(), notes: feed.notes(), asset })
     }
 
-    async fn os_release(&self) -> Option<String> {
-        if self.config.os_release.is_some() {
-            return self.config.os_release.clone();
-        }
-        platform_os_release().await
-    }
-
     /// The asset this install can use.
-    fn asset_target(&self) -> Result<AssetTarget, MainTextKey> {
-        if cfg!(target_os = "macos") {
-            return if cfg!(target_arch = "aarch64") {
-                Ok(AssetTarget::MacArm64)
-            } else if cfg!(target_arch = "x86_64") {
-                Ok(AssetTarget::MacX64)
-            } else {
-                Err(MainTextKey::UpdatesUnsupportedArchitecture)
-            };
+    fn asset_target(&self) -> AssetTarget {
+        match self.config.kind {
+            LinuxPackageKind::Deb => AssetTarget::LinuxDeb,
+            LinuxPackageKind::AppImage | LinuxPackageKind::Other => AssetTarget::LinuxAppImage,
         }
-        Ok(match self.config.kind {
-            Some(LinuxPackageKind::Deb) => AssetTarget::LinuxDeb,
-            Some(LinuxPackageKind::AppImage | LinuxPackageKind::Other) => AssetTarget::LinuxAppImage,
-            None => AssetTarget::WindowsInstaller,
-        })
     }
 
     // -- download ------------------------------------------------------------
@@ -361,14 +312,9 @@ impl Updater {
     async fn run_download(&self, version: &str, mode: UpdateInstallMode, asset: &Asset) -> Result<(), String> {
         let dir = &self.config.download_dir;
         tokio::fs::create_dir_all(dir).await.map_err(|error| format!("{} could not be created: {error}", dir.display()))?;
-        let destination = if self.config.private_downloads { dir.join(&asset.name) } else { available_download_path(dir, &asset.name).await };
+        let destination = dir.join(&asset.name);
         let partial = installer_partial_path(&destination);
-        if self.config.private_downloads {
-            clear_private_downloads(dir, &partial).await;
-        } else {
-            // Partials of releases this one superseded can never be continued.
-            sweep_installer_partials(dir, Some(&partial)).await;
-        }
+        clear_private_downloads(dir, &partial).await;
 
         let mut existing = file_size(&partial).await;
         if asset.size.is_some_and(|size| existing > size) {
@@ -439,18 +385,8 @@ impl Updater {
         }
         tokio::fs::rename(&partial, &destination).await.map_err(|error| failed(error.to_string()))?;
         self.inner().downloaded = Some(destination.clone());
-        if mode == UpdateInstallMode::Manual {
-            self.open_manual_installer(&destination)?;
-        }
         self.set_status(UpdateStatus::Downloaded { version: version.to_string(), mode, reopen_required: false });
         Ok(())
-    }
-
-    /// `openManualInstaller`: show the DMG in Finder, then open it.
-    fn open_manual_installer(&self, path: &Path) -> Result<(), String> {
-        let ctx = self.ctx().ok_or_else(|| "shutting down".to_string())?;
-        let _ = ctx.host.reveal_in_folder(path);
-        ctx.host.open_path(path).map_err(|_| ctx.i18n.t(MainTextKey::UpdatesOpenInstallerFailed))
     }
 
     // -- apply ---------------------------------------------------------------
@@ -478,16 +414,10 @@ impl Updater {
             let Some(active) = inner.active.as_ref() else { return };
             (version, mode, path, active.asset.sha512.clone())
         };
-        if mode == UpdateInstallMode::Manual {
-            if let Err(message) = self.open_manual_installer(&path) {
-                self.error(message, Some(true));
-            }
-            return;
-        }
         let Some(ctx) = self.ctx() else { return };
         // pkexec cannot work in this process at all, so asking the user to
         // close their working tabs first would be for nothing.
-        if self.config.kind == Some(LinuxPackageKind::Deb) && !self.config.privileged.can_elevate() {
+        if self.config.kind == LinuxPackageKind::Deb && !self.config.privileged.can_elevate() {
             self.ask_for_reopen(version, mode);
             return;
         }
@@ -547,21 +477,16 @@ impl Updater {
     /// to start once this process has exited.
     async fn install_now(&self, package: &Path, sha512: &str) -> Result<Option<PathBuf>, InstallError> {
         match self.config.kind {
-            Some(LinuxPackageKind::Deb) => {
+            LinuxPackageKind::Deb => {
                 // Verifies the hash itself, right before the privileged call.
                 install::install_deb(self.config.privileged.as_ref(), package, sha512).await?;
                 Ok(Some(PathBuf::from(install::DEB_BINARY)))
             }
-            Some(LinuxPackageKind::AppImage | LinuxPackageKind::Other) => {
+            LinuxPackageKind::AppImage | LinuxPackageKind::Other => {
                 install::verify_package(package, sha512).await?;
                 let target = install::appimage_target(self.config.appimage.as_deref())?;
                 install::replace_appimage(package, &target).await?;
                 Ok(Some(target))
-            }
-            None => {
-                install::verify_package(package, sha512).await?;
-                start_platform_installer(package, false)?;
-                Ok(None)
             }
         }
     }
@@ -571,58 +496,13 @@ impl Updater {
     async fn install_on_quit(&self, package: &Path, sha512: &str) -> Result<(), String> {
         install::verify_package(package, sha512).await?;
         match self.config.kind {
-            Some(LinuxPackageKind::Deb) => Err("a deb never installs at quit".into()),
-            Some(LinuxPackageKind::AppImage | LinuxPackageKind::Other) => {
+            LinuxPackageKind::Deb => Err("a deb never installs at quit".into()),
+            LinuxPackageKind::AppImage | LinuxPackageKind::Other => {
                 let target = install::appimage_target(self.config.appimage.as_deref())?;
                 install::replace_appimage(package, &target).await
             }
-            None => start_platform_installer(package, true),
         }
     }
-
-    /// Partials older builds keyed by process id can never continue; they are
-    /// the only debris a startup sweep of the user's Downloads can identify.
-    async fn startup_sweep(&self) {
-        if !self.config.private_downloads {
-            sweep_installer_partials(&self.config.download_dir, None).await;
-        }
-    }
-}
-
-#[cfg(windows)]
-fn start_platform_installer(package: &Path, silent: bool) -> Result<(), String> {
-    install::start_windows_installer(package, silent)
-}
-
-#[cfg(not(windows))]
-fn start_platform_installer(package: &Path, _silent: bool) -> Result<(), String> {
-    Err(format!("{} cannot be installed automatically on this platform", package.display()))
-}
-
-/// The Darwin kernel release, which `minimumSystemVersion` is compared with.
-#[cfg(target_os = "macos")]
-async fn platform_os_release() -> Option<String> {
-    let output = tokio::process::Command::new("/usr/bin/uname").arg("-r").output().await.ok()?;
-    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[cfg(not(target_os = "macos"))]
-async fn platform_os_release() -> Option<String> {
-    None
-}
-
-/// `<dir>/<name>`, or `<dir>/<stem> (n)<ext>` when the user already has a file of that name.
-async fn available_download_path(dir: &Path, file_name: &str) -> PathBuf {
-    let path = Path::new(file_name);
-    let extension = path.extension().map(|ext| format!(".{}", ext.to_string_lossy())).unwrap_or_default();
-    let stem = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_else(|| file_name.to_string());
-    let mut candidate = dir.join(file_name);
-    let mut suffix = 2u32;
-    while tokio::fs::try_exists(&candidate).await.unwrap_or(false) {
-        candidate = dir.join(format!("{stem} ({suffix}){extension}"));
-        suffix += 1;
-    }
-    candidate
 }
 
 /// The cache directory holds nothing but packages this module downloaded, so
@@ -689,7 +569,7 @@ impl UpdaterPort for Updater {
             let pending = {
                 let inner = self.inner();
                 match (&inner.status, &inner.downloaded, &inner.active) {
-                    (Some(UpdateStatus::Downloaded { mode, .. }), Some(path), Some(active)) if !inner.install_done && installs_on_quit(*mode, self.config.kind) => {
+                    (Some(UpdateStatus::Downloaded { .. }), Some(path), Some(active)) if !inner.install_done && installs_on_quit(self.config.kind) => {
                         Some((path.clone(), active.asset.sha512.clone()))
                     }
                     _ => None,
@@ -707,13 +587,6 @@ impl UpdaterPort for Updater {
 pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
     let _ = app;
     let weak: CtxRef = Arc::downgrade(ctx);
-    let sweep = weak.clone();
-    spawn_task(async move {
-        let Some(ctx) = sweep.upgrade() else { return };
-        if let Some(updater) = of(&ctx) {
-            updater.startup_sweep().await;
-        }
-    });
     spawn_task(schedule_checks(weak));
     Ok(())
 }
@@ -876,16 +749,14 @@ mod tests {
 
     struct Setup {
         release_base: String,
-        kind: Option<LinuxPackageKind>,
+        kind: LinuxPackageKind,
         appimage: Option<PathBuf>,
-        install_mode: UpdateInstallMode,
         checks_enabled: bool,
-        private_downloads: bool,
     }
 
     impl Default for Setup {
         fn default() -> Self {
-            Self { release_base: "http://127.0.0.1:9/releases".into(), kind: Some(LinuxPackageKind::Deb), appimage: None, install_mode: UpdateInstallMode::Automatic, checks_enabled: true, private_downloads: true }
+            Self { release_base: "http://127.0.0.1:9/releases".into(), kind: LinuxPackageKind::Deb, appimage: None, checks_enabled: true }
         }
     }
 
@@ -896,12 +767,9 @@ mod tests {
         let config = Config {
             release_base: setup.release_base,
             download_dir: dir.path().join("downloads"),
-            private_downloads: setup.private_downloads,
             kind: setup.kind,
             appimage: setup.appimage,
-            install_mode: setup.install_mode,
             checks_enabled: setup.checks_enabled,
-            os_release: None,
             privileged: runner.clone(),
         };
         let mut registry = Registry::new();
@@ -988,27 +856,6 @@ mod tests {
 
         *h.fakes.host.version.lock().unwrap() = "1.0.0".into();
         assert_eq!(h.call("updater:check").await, json!({ "state": "not-available", "version": "1.0.0" }));
-    }
-
-    #[tokio::test]
-    async fn check_skips_a_release_the_os_cannot_run() {
-        let (server, base) = start_server().await;
-        *server.feed.lock().unwrap() = Some(format!("{}minimumSystemVersion: 22.0.0\n", feed_yaml("0.9.16", b"a", b"d")));
-        let fakes = Fakes::default();
-        let dir = tempfile::tempdir().unwrap();
-        let config = Config {
-            release_base: base,
-            download_dir: dir.path().to_path_buf(),
-            private_downloads: true,
-            kind: Some(LinuxPackageKind::Deb),
-            appimage: None,
-            install_mode: UpdateInstallMode::Automatic,
-            checks_enabled: true,
-            os_release: Some("21.6.0".into()),
-            privileged: Arc::new(install::tests::FakeRunner::default()),
-        };
-        let ctx = fake_ctx_cyclic(&fakes, Registry::new(), |ctx, ports| ports.updater = Some(Arc::new(Updater::with_config(ctx.clone(), config))));
-        assert_eq!(of(&ctx).unwrap().check(CheckKind::Manual).await, UpdateStatus::NotAvailable { version: "0.0.0-test".into() });
     }
 
     #[tokio::test]
@@ -1178,44 +1025,6 @@ mod tests {
         assert!(!partial.exists());
     }
 
-    #[tokio::test]
-    async fn manual_downloads_land_in_downloads_and_open_the_installer() {
-        let (server, base) = start_server().await;
-        let dmg = asset_bytes(2, 2_000);
-        let name = if cfg!(target_arch = "aarch64") { "Sai-ATLAS-0.9.16-arm64.dmg" } else { "Sai-ATLAS-0.9.16.dmg" };
-        *server.feed.lock().unwrap() = Some(format!("version: 0.9.16\nfiles:\n  - url: {name}\n    sha512: {}\n    size: {}\n", sha512_base64(&dmg), dmg.len()));
-        server.assets.lock().unwrap().insert(name.into(), dmg.clone());
-        let h = harness(Setup { release_base: base, install_mode: UpdateInstallMode::Manual, private_downloads: false, kind: None, ..Setup::default() });
-        std::fs::create_dir_all(h.download_dir()).unwrap();
-        std::fs::write(h.download_dir().join(name), b"the user's earlier copy").unwrap();
-        std::fs::write(h.download_dir().join("holiday.dmg.partial"), b"not ours").unwrap();
-        let taken = h.download_dir().join(name);
-        let expected = h.download_dir().join(name.replace(".dmg", " (2).dmg"));
-
-        // This test runs on Linux, where the asset target is chosen by package kind; drive the manual path directly.
-        let updater = h.updater();
-        {
-            let mut inner = updater.inner();
-            inner.active = Some(ActiveUpdate { version: "0.9.16".into(), asset: Asset { name: name.into(), sha512: sha512_base64(&dmg), size: Some(dmg.len() as u64) } });
-            inner.status = Some(UpdateStatus::Available { version: "0.9.16".into(), notes: None, mode: UpdateInstallMode::Manual });
-        }
-
-        assert_eq!(h.call("updater:download").await, json!({ "state": "downloaded", "version": "0.9.16", "mode": "manual" }));
-
-        assert_eq!(std::fs::read(&expected).unwrap(), dmg);
-        assert_eq!(std::fs::read(&taken).unwrap(), b"the user's earlier copy");
-        assert!(h.download_dir().join("holiday.dmg.partial").exists());
-        let log = h.fakes.host.log.calls();
-        assert!(log.contains(&format!("reveal_in_folder({})", expected.display())), "{log:?}");
-        assert!(log.contains(&format!("open_path({})", expected.display())), "{log:?}");
-
-        // Applying a manual update opens the installer again.
-        h.fakes.host.log.clear();
-        assert_eq!(h.call("updater:apply").await, Value::Null);
-        assert_eq!(h.fakes.host.log.calls(), [format!("reveal_in_folder({})", expected.display()), format!("open_path({})", expected.display())]);
-        assert!(h.fakes.host.exit_codes.lock().unwrap().is_empty());
-    }
-
     // -- installs -----------------------------------------------------------------
 
     #[tokio::test]
@@ -1354,7 +1163,7 @@ mod tests {
         let appimage = dir.path().join("Applications").join("Sai ATLAS.AppImage");
         std::fs::create_dir_all(appimage.parent().unwrap()).unwrap();
         std::fs::write(&appimage, b"old image").unwrap();
-        let h = harness(Setup { kind: Some(LinuxPackageKind::AppImage), appimage: Some(appimage.clone()), ..Setup::default() });
+        let h = harness(Setup { kind: LinuxPackageKind::AppImage, appimage: Some(appimage.clone()), ..Setup::default() });
         *h.fakes.desktop.approve_install.lock().unwrap() = true;
         h.seed_downloaded(UpdateInstallMode::Automatic, b"new image", APPIMAGE_NAME);
 
@@ -1369,7 +1178,7 @@ mod tests {
 
     #[tokio::test]
     async fn apply_reports_a_missing_appimage_path() {
-        let h = harness(Setup { kind: Some(LinuxPackageKind::Other), appimage: None, ..Setup::default() });
+        let h = harness(Setup { kind: LinuxPackageKind::Other, appimage: None, ..Setup::default() });
         h.seed_downloaded(UpdateInstallMode::Automatic, b"new image", APPIMAGE_NAME);
 
         h.call("updater:apply").await;
@@ -1396,7 +1205,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let appimage = dir.path().join("Sai ATLAS.AppImage");
         std::fs::write(&appimage, b"old image").unwrap();
-        let h = harness(Setup { kind: Some(LinuxPackageKind::AppImage), appimage: Some(appimage.clone()), ..Setup::default() });
+        let h = harness(Setup { kind: LinuxPackageKind::AppImage, appimage: Some(appimage.clone()), ..Setup::default() });
         h.seed_downloaded(UpdateInstallMode::Automatic, b"new image", APPIMAGE_NAME);
 
         h.ctx.updater.shutdown().await;
@@ -1411,19 +1220,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn shutdown_never_installs_a_deb_and_skips_manual_or_undownloaded_updates() {
+    async fn shutdown_never_installs_a_deb_and_skips_undownloaded_updates() {
         let h = harness(Setup::default());
         h.seed_downloaded(UpdateInstallMode::Automatic, b"deb bytes", DEB_NAME);
         h.ctx.updater.shutdown().await;
         assert!(h.runner.calls.lock().unwrap().is_empty());
         assert!(!h.updater().inner().install_done);
 
-        let h = harness(Setup { kind: None, ..Setup::default() });
-        h.seed_downloaded(UpdateInstallMode::Manual, b"dmg", "Sai-ATLAS-0.9.16.dmg");
-        h.ctx.updater.shutdown().await;
-        assert!(h.fakes.host.log.calls().is_empty());
-
-        let h = harness(Setup { kind: Some(LinuxPackageKind::AppImage), ..Setup::default() });
+        let h = harness(Setup { kind: LinuxPackageKind::AppImage, ..Setup::default() });
         h.updater().set_status(UpdateStatus::Available { version: "0.9.16".into(), notes: None, mode: UpdateInstallMode::Automatic });
         h.ctx.updater.shutdown().await;
         assert!(!h.updater().inner().install_done);
@@ -1445,38 +1249,10 @@ mod tests {
         assert_eq!(h.call("updater:version").await, json!("0.9.15"));
     }
 
-    #[tokio::test]
-    async fn startup_sweep_clears_only_pid_keyed_debris_from_downloads() {
-        let h = harness(Setup { private_downloads: false, ..Setup::default() });
-        std::fs::create_dir_all(h.download_dir()).unwrap();
-        std::fs::write(h.download_dir().join("Sai-ATLAS-0.9.8.dmg.download-99"), "x").unwrap();
-        std::fs::write(h.download_dir().join("Sai-ATLAS-0.9.9.dmg.partial"), "x").unwrap();
-        h.updater().startup_sweep().await;
-        assert!(!h.download_dir().join("Sai-ATLAS-0.9.8.dmg.download-99").exists());
-        assert!(h.download_dir().join("Sai-ATLAS-0.9.9.dmg.partial").exists());
-
-        let h = harness(Setup::default());
-        std::fs::create_dir_all(h.download_dir()).unwrap();
-        std::fs::write(h.download_dir().join("Sai-ATLAS-0.9.8.dmg.download-99"), "x").unwrap();
-        h.updater().startup_sweep().await;
-        assert!(h.download_dir().join("Sai-ATLAS-0.9.8.dmg.download-99").exists(), "the private cache is cleared at download time instead");
-    }
-
-    #[tokio::test]
-    async fn available_download_path_never_overwrites_a_user_file() {
-        let dir = tempfile::tempdir().unwrap();
-        assert_eq!(available_download_path(dir.path(), "Sai-ATLAS-0.9.16.dmg").await, dir.path().join("Sai-ATLAS-0.9.16.dmg"));
-        std::fs::write(dir.path().join("Sai-ATLAS-0.9.16.dmg"), "x").unwrap();
-        std::fs::write(dir.path().join("Sai-ATLAS-0.9.16 (2).dmg"), "x").unwrap();
-        assert_eq!(available_download_path(dir.path(), "Sai-ATLAS-0.9.16.dmg").await, dir.path().join("Sai-ATLAS-0.9.16 (3).dmg"));
-    }
-
     #[test]
     fn detects_the_install_configuration_without_touching_the_profile() {
         let config = Config::detect();
         assert!(!config.release_base.is_empty());
-        assert_eq!(config.private_downloads, !cfg!(target_os = "macos"));
-        assert_eq!(config.install_mode, if cfg!(target_os = "macos") { UpdateInstallMode::Manual } else { UpdateInstallMode::Automatic });
-        assert_eq!(config.kind.is_some(), cfg!(target_os = "linux"));
+        assert!(config.download_dir.ends_with(Path::new("@oh-my-pi").join("omp-gui").join("updates")));
     }
 }

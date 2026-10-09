@@ -7,7 +7,7 @@ use std::fmt::Write as _;
 use semver::Version;
 use serde::Deserialize;
 
-use super::state::{release_file_name, select_mac_installer, MacInstallerArchitecture, ReleaseFile};
+use super::state::{release_file_name, ReleaseFile};
 
 /// The publishing repository's releases page. A build-time override lets a
 /// test bundle read a local feed; shipped builds have no runtime switch.
@@ -17,14 +17,8 @@ pub(crate) fn release_base() -> &'static str {
     option_env!("SAI_ATLAS_UPDATE_BASE").unwrap_or(GITHUB_RELEASE_BASE)
 }
 
-/// The channel file for this OS, as electron-builder names it.
-pub(crate) const FEED_FILE: &str = if cfg!(target_os = "macos") {
-    "latest-mac.yml"
-} else if cfg!(windows) {
-    "latest.yml"
-} else {
-    "latest-linux.yml"
-};
+/// The Linux channel file, as electron-builder names it (the 0.9.x updater reads the same file).
+pub(crate) const FEED_FILE: &str = "latest-linux.yml";
 
 /// `<base>/latest/download/<feed file>`: GitHub redirects to the latest release's asset.
 pub(crate) fn feed_url(base: &str) -> String {
@@ -75,8 +69,6 @@ pub(crate) struct Feed {
     pub files: Vec<ReleaseFile>,
     #[serde(default)]
     release_notes: Option<ReleaseNotes>,
-    #[serde(default)]
-    pub minimum_system_version: Option<String>,
 }
 
 const NOTES_EXCERPT_CHARS: usize = 500;
@@ -117,26 +109,11 @@ pub(crate) fn is_newer(latest: &str, current: &str) -> Result<bool, String> {
     Ok(latest > current)
 }
 
-/// `minimumSystemVersion` against the OS release (the Darwin kernel release on
-/// macOS, as electron-updater compares `os.release()`). Without a minimum, an
-/// unknown release or a value semver cannot read, the update is allowed, which
-/// is what electron-updater does after logging the comparison failure.
-pub(crate) fn update_supported(minimum_system_version: Option<&str>, os_release: Option<&str>) -> bool {
-    let (Some(minimum), Some(release)) = (minimum_system_version, os_release) else { return true };
-    match (Version::parse(release.trim()), Version::parse(minimum.trim())) {
-        (Ok(release), Ok(minimum)) => release >= minimum,
-        _ => true,
-    }
-}
-
 /// Which release asset this install downloads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AssetTarget {
-    MacArm64,
-    MacX64,
     LinuxAppImage,
     LinuxDeb,
-    WindowsInstaller,
 }
 
 /// One downloadable release asset.
@@ -147,17 +124,13 @@ pub(crate) struct Asset {
     pub size: Option<u64>,
 }
 
-/// Pick the asset for `target`. macOS takes only the exact DMG for its
-/// architecture; Linux and Windows take the file with the package extension,
+/// Pick the asset for `target`: the file with the package extension,
 /// preferring one that names this CPU architecture, else the first, as
 /// electron-updater's `findFile` does.
-pub(crate) fn select_asset(files: &[ReleaseFile], version: &str, target: AssetTarget) -> Option<Asset> {
+pub(crate) fn select_asset(files: &[ReleaseFile], target: AssetTarget) -> Option<Asset> {
     let extension = match target {
-        AssetTarget::MacArm64 => return mac_asset(files, version, MacInstallerArchitecture::Arm64),
-        AssetTarget::MacX64 => return mac_asset(files, version, MacInstallerArchitecture::X64),
         AssetTarget::LinuxAppImage => ".appimage",
         AssetTarget::LinuxDeb => ".deb",
-        AssetTarget::WindowsInstaller => ".exe",
     };
     let named: Vec<(String, &ReleaseFile)> = files
         .iter()
@@ -167,10 +140,6 @@ pub(crate) fn select_asset(files: &[ReleaseFile], version: &str, target: AssetTa
     let arch = std::env::consts::ARCH;
     let (name, file) = named.iter().find(|(name, _)| name.contains(arch)).or_else(|| named.first())?;
     Some(Asset { name: name.clone(), sha512: file.sha512.clone(), size: file.size })
-}
-
-fn mac_asset(files: &[ReleaseFile], version: &str, architecture: MacInstallerArchitecture) -> Option<Asset> {
-    select_mac_installer(files, version, architecture).map(|asset| Asset { name: asset.name, sha512: asset.sha512, size: asset.size })
 }
 
 #[cfg(test)]
@@ -202,7 +171,6 @@ releaseDate: '2026-09-30T10:00:00.000Z'
         assert_eq!(feed.files.len(), 2);
         assert_eq!(feed.files[1].url, "sai-atlas_0.9.15_amd64.deb");
         assert_eq!(feed.files[1].size, Some(178_130_000));
-        assert_eq!(feed.minimum_system_version, None);
         assert_eq!(feed.notes(), None);
     }
 
@@ -234,25 +202,12 @@ releaseDate: '2026-09-30T10:00:00.000Z'
     }
 
     #[test]
-    fn honors_the_minimum_system_version_only_when_both_sides_parse() {
-        assert!(update_supported(Some("22.0.0"), Some("23.1.0")));
-        assert!(update_supported(Some("22.0.0"), Some("22.0.0")));
-        assert!(!update_supported(Some("22.0.0"), Some("21.6.0")));
-        assert!(update_supported(Some("22.0.0"), None));
-        assert!(update_supported(None, Some("21.6.0")));
-        assert!(update_supported(Some("22.0.0"), Some("Darwin")));
-        // A Linux kernel release reads as a semver prerelease and would compare,
-        // which is why the OS release is only probed on macOS.
-        assert!(!update_supported(Some("22.0.0"), Some("7.0.0-30-generic")));
-    }
-
-    #[test]
     fn builds_the_feed_and_download_urls_from_one_base() {
         let base = "https://github.com/tung491/oh-my-pi-gui/releases";
         assert_eq!(feed_url(base), format!("{base}/latest/download/{FEED_FILE}"));
         assert_eq!(feed_url(&format!("{base}/")), format!("{base}/latest/download/{FEED_FILE}"));
         assert_eq!(download_url(base, "0.9.16", "sai-atlas_0.9.16_amd64.deb"), format!("{base}/download/v0.9.16/sai-atlas_0.9.16_amd64.deb"));
-        assert_eq!(download_url(base, "1.0.0-rc.1", "Sai ATLAS_1.0.0_x64-setup.exe"), format!("{base}/download/v1.0.0-rc.1/Sai%20ATLAS_1.0.0_x64-setup.exe"));
+        assert_eq!(download_url(base, "1.0.0-rc.1", "Sai ATLAS_1.0.0_x86_64.AppImage"), format!("{base}/download/v1.0.0-rc.1/Sai%20ATLAS_1.0.0_x86_64.AppImage"));
         assert!(release_base().starts_with("http"));
     }
 
@@ -260,27 +215,18 @@ releaseDate: '2026-09-30T10:00:00.000Z'
     fn selects_the_asset_by_package_kind() {
         let feed = Feed::parse(PUBLISHED).unwrap();
         assert_eq!(
-            select_asset(&feed.files, "0.9.15", AssetTarget::LinuxDeb),
+            select_asset(&feed.files, AssetTarget::LinuxDeb),
             Some(Asset { name: "sai-atlas_0.9.15_amd64.deb".into(), sha512: "deb-hash".into(), size: Some(178_130_000) })
         );
-        assert_eq!(select_asset(&feed.files, "0.9.15", AssetTarget::LinuxAppImage).map(|asset| asset.name).as_deref(), Some("Sai-ATLAS-0.9.15-x86_64.AppImage"));
-        assert_eq!(select_asset(&feed.files, "0.9.15", AssetTarget::WindowsInstaller), None);
-        let windows = vec![file("Sai%20ATLAS_0.9.15_x64-setup.exe", "exe-hash")];
-        assert_eq!(select_asset(&windows, "0.9.15", AssetTarget::WindowsInstaller).map(|asset| asset.name).as_deref(), Some("Sai ATLAS_0.9.15_x64-setup.exe"));
-    }
-
-    #[test]
-    fn selects_the_exact_mac_installer_through_the_shared_rule() {
-        let files = vec![file("Sai-ATLAS-0.9.15-arm64.dmg", "arm"), file("Sai-ATLAS-0.9.15.dmg", "x64"), file("Sai-ATLAS-0.9.15-arm64.zip", "zip")];
-        assert_eq!(select_asset(&files, "0.9.15", AssetTarget::MacArm64).map(|asset| asset.sha512).as_deref(), Some("arm"));
-        assert_eq!(select_asset(&files, "0.9.15", AssetTarget::MacX64).map(|asset| asset.sha512).as_deref(), Some("x64"));
-        assert_eq!(select_asset(&files, "0.9.16", AssetTarget::MacArm64), None);
+        assert_eq!(select_asset(&feed.files, AssetTarget::LinuxAppImage).map(|asset| asset.name).as_deref(), Some("Sai-ATLAS-0.9.15-x86_64.AppImage"));
+        let spaced = vec![file("https://example.test/download/Sai%20ATLAS-0.9.15-x86_64.AppImage", "appimage-hash")];
+        assert_eq!(select_asset(&spaced, AssetTarget::LinuxAppImage).map(|asset| asset.name).as_deref(), Some("Sai ATLAS-0.9.15-x86_64.AppImage"));
     }
 
     #[test]
     fn prefers_the_asset_naming_this_architecture() {
         let arch = std::env::consts::ARCH;
         let files = vec![file("sai-atlas_0.9.15_other.deb", "other"), file(&format!("sai-atlas_0.9.15_{arch}.deb"), "mine")];
-        assert_eq!(select_asset(&files, "0.9.15", AssetTarget::LinuxDeb).map(|asset| asset.sha512).as_deref(), Some("mine"));
+        assert_eq!(select_asset(&files, AssetTarget::LinuxDeb).map(|asset| asset.sha512).as_deref(), Some("mine"));
     }
 }
