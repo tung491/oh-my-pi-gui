@@ -28,10 +28,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
  create mode 100644 packages/coding-agent/test/sdk-no-context-files.test.ts
 
 diff --git a/docs/cli-reference.md b/docs/cli-reference.md
-index eeccd96779..79faf38e1c 100644
+index e4c72cbebe..a645e5316f 100644
 --- a/docs/cli-reference.md
 +++ b/docs/cli-reference.md
-@@ -157,6 +157,7 @@ See [providers](./providers.md) and [models](./models.md) for model resolution.
+@@ -158,6 +158,7 @@ See [providers](./providers.md) and [models](./models.md) for model resolution.
  | `--skills <globs>` | Comma-separated glob patterns to filter [skills](./skills.md) (e.g. `git-*,docker`). |
  | `--no-skills` | Disable skills discovery and loading. |
  | `--no-rules` | Disable rules discovery and loading. See [context files](./context-files.md). |
@@ -40,10 +40,10 @@ index eeccd96779..79faf38e1c 100644
  #### System prompt
  
 diff --git a/packages/coding-agent/src/cli.ts b/packages/coding-agent/src/cli.ts
-index 6b6b34417b..81d62d1b12 100755
+index 6ed949f15c..8d2028035a 100755
 --- a/packages/coding-agent/src/cli.ts
 +++ b/packages/coding-agent/src/cli.ts
-@@ -82,6 +82,7 @@ const PREPAINT_SAFE_FLAGS: Record<string, true> = {
+@@ -83,6 +83,7 @@ const PREPAINT_SAFE_FLAGS: Record<string, true> = {
  	"--no-extensions": true,
  	"--no-skills": true,
  	"--no-rules": true,
@@ -52,10 +52,10 @@ index 6b6b34417b..81d62d1b12 100755
  	"--no-lsp": true,
  	"--no-title": true,
 diff --git a/packages/coding-agent/src/cli/args.ts b/packages/coding-agent/src/cli/args.ts
-index 09efd75179..4d52320c9f 100644
+index 274a25a39a..4fa1c51960 100644
 --- a/packages/coding-agent/src/cli/args.ts
 +++ b/packages/coding-agent/src/cli/args.ts
-@@ -84,6 +84,7 @@ export interface Args {
+@@ -86,6 +86,7 @@ export interface Args {
  	noSkills?: boolean;
  	skills?: string[];
  	noRules?: boolean;
@@ -63,7 +63,7 @@ index 09efd75179..4d52320c9f 100644
  	noTitle?: boolean;
  	/** RPC modes only: run extensions without a UI; `rpc-ui` tool UI remains enabled. */
  	noUi?: boolean;
-@@ -295,6 +296,8 @@ export function parseArgs(inputArgs: string[], extensionFlags?: Map<string, { ty
+@@ -352,6 +353,8 @@ export function parseArgs(inputArgs: string[], extensionFlags?: Map<string, { ty
  			result.noSkills = true;
  		} else if (arg === "--no-rules") {
  			result.noRules = true;
@@ -73,10 +73,10 @@ index 09efd75179..4d52320c9f 100644
  			result.noTitle = true;
  		} else if (arg === "--no-ui") {
 diff --git a/packages/coding-agent/src/cli/flag-tables.ts b/packages/coding-agent/src/cli/flag-tables.ts
-index fcaf0e34cb..df34939132 100644
+index c58e5336f2..eed5cf2336 100644
 --- a/packages/coding-agent/src/cli/flag-tables.ts
 +++ b/packages/coding-agent/src/cli/flag-tables.ts
-@@ -317,6 +317,7 @@ export const VALUELESS_FLAGS: ReadonlySet<string> = new Set([
+@@ -321,6 +321,7 @@ export const VALUELESS_FLAGS: ReadonlySet<string> = new Set([
  	"--no-extensions",
  	"--no-skills",
  	"--no-rules",
@@ -85,10 +85,10 @@ index fcaf0e34cb..df34939132 100644
  	"--no-ui",
  	"--auto-approve",
 diff --git a/packages/coding-agent/src/commands/launch-help.ts b/packages/coding-agent/src/commands/launch-help.ts
-index 0eb54c05b4..3184ac9c02 100644
+index b76fdc5ff2..b036225108 100644
 --- a/packages/coding-agent/src/commands/launch-help.ts
 +++ b/packages/coding-agent/src/commands/launch-help.ts
-@@ -97,6 +97,9 @@ export const launchHelp = {
+@@ -101,6 +101,9 @@ export const launchHelp = {
  		"no-skills": Flags.boolean({ description: "Disable skills discovery and loading" }),
  		skills: Flags.string({ description: "Comma-separated glob patterns to filter skills (e.g., git-*,docker)" }),
  		"no-rules": Flags.boolean({ description: "Disable rules discovery and loading" }),
@@ -99,10 +99,10 @@ index 0eb54c05b4..3184ac9c02 100644
  		"no-title": Flags.boolean({ description: "Disable title auto-generation" }),
  		"no-ui": Flags.boolean({
 diff --git a/packages/coding-agent/src/main.ts b/packages/coding-agent/src/main.ts
-index 5e5ed474b3..33232d4ac5 100644
+index 62dbcc96fe..0af659a4e3 100644
 --- a/packages/coding-agent/src/main.ts
 +++ b/packages/coding-agent/src/main.ts
-@@ -1620,6 +1620,11 @@ export async function buildSessionOptions(
+@@ -1689,6 +1689,11 @@ export async function buildSessionOptions(
  		options.rules = [];
  	}
  
@@ -115,10 +115,10 @@ index 5e5ed474b3..33232d4ac5 100644
  	if (parsed.trustedExtensions && parsed.trustedExtensions.length > 0) {
  		const trustedPaths = parsed.trustedExtensions.map(trustedPath => {
 diff --git a/packages/coding-agent/src/sdk.ts b/packages/coding-agent/src/sdk.ts
-index 1b063d2204..e5710b8bbb 100644
+index 7e0fc62445..432fc5e871 100644
 --- a/packages/coding-agent/src/sdk.ts
 +++ b/packages/coding-agent/src/sdk.ts
-@@ -693,6 +693,11 @@ export interface CreateAgentSessionOptions {
+@@ -728,6 +728,11 @@ export interface CreateAgentSessionOptions {
  	rules?: Rule[];
  	/** Context files (AGENTS.md content). Default: discovered walking up from cwd */
  	contextFiles?: Array<{ path: string; content: string }>;
@@ -130,7 +130,7 @@ index 1b063d2204..e5710b8bbb 100644
  	/** Pre-built workspace tree (skips re-scanning; passed by parents to subagents). */
  	workspaceTree?: WorkspaceTree;
  	/** Prompt templates. Default: discovered from cwd/.omp/prompts/ + agentDir/prompts/ */
-@@ -1735,9 +1740,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+@@ -1801,9 +1806,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
  	// Independent discoveries that depend only on cwd/agentDir — kicked off in parallel and awaited
  	// at their respective consumer sites. Their work can overlap with model resolution, secret loading,
  	// session-context build, tool creation, MCP discovery, and extension discovery.
@@ -145,7 +145,7 @@ index 1b063d2204..e5710b8bbb 100644
  	contextFilesPromise.catch(() => {});
  	const resolveRepoContext = async (repoCwd: string) => {
  		try {
-@@ -2187,6 +2194,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+@@ -2285,6 +2292,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
  			},
  			skipPythonPreflight: options.skipPythonPreflight,
  			contextFiles,
@@ -153,7 +153,7 @@ index 1b063d2204..e5710b8bbb 100644
  			get workspaceTree() {
  				return lateWorkspaceTree ?? resolvedWorkspaceTree;
  			},
-@@ -3656,7 +3664,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+@@ -3749,7 +3757,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
  			const activeRepoContext = hasSession
  				? await logger.time("resolveActiveRepoContext", resolveRepoContext, promptCwd)
  				: initialActiveRepoContext;
@@ -162,7 +162,7 @@ index 1b063d2204..e5710b8bbb 100644
  				contextFiles = await logger.time("discoverContextFiles", discoverContextFiles, promptCwd, agentDir, [
  					...cfgDisabledExtensions.get(settings),
  				]);
-@@ -3815,6 +3823,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
+@@ -3910,6 +3918,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
  			const defaultPrompt = await buildSystemPromptInternal({
  				cwd: promptCwd,
  				additionalWorkspaceRoots: sessionManager.getAdditionalDirectories(),
@@ -171,10 +171,10 @@ index 1b063d2204..e5710b8bbb 100644
  				xdevDocs: xdevPromptDocs ? renderXdevPromptDocs(xdevPromptDocs, routedCatalogNames) : "",
  				resolvedCustomPrompt: options.customSystemPrompt,
 diff --git a/packages/coding-agent/src/system-prompt.ts b/packages/coding-agent/src/system-prompt.ts
-index 61e9e7c0d4..2ce665814d 100644
+index 7eb21a6428..9d01b4429b 100644
 --- a/packages/coding-agent/src/system-prompt.ts
 +++ b/packages/coding-agent/src/system-prompt.ts
-@@ -524,6 +524,8 @@ export interface BuildSystemPromptOptions {
+@@ -526,6 +526,8 @@ export interface BuildSystemPromptOptions {
  	additionalWorkspaceRoots?: string[];
  	/** Pre-loaded context files (skips discovery if provided). */
  	contextFiles?: Array<{ path: string; content: string; depth?: number }>;
@@ -183,7 +183,7 @@ index 61e9e7c0d4..2ce665814d 100644
  	/** Skills provided directly to system prompt construction. */
  	skills?: readonly Skill[];
  	/** Session-scoped description snapshot; background cache writes apply only to the next session. */
-@@ -642,6 +644,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+@@ -653,6 +655,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
  		cwd,
  		additionalWorkspaceRoots = [],
  		contextFiles: providedContextFiles,
@@ -191,7 +191,7 @@ index 61e9e7c0d4..2ce665814d 100644
  		skills: providedSkills,
  		rules,
  		alwaysApplyRules,
-@@ -753,6 +756,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
+@@ -767,6 +770,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
  		? Promise.resolve(null)
  		: logger.time("loadSystemPromptFiles", loadSystemPromptFiles, { cwd: resolvedCwd });
  	const contextFilesPromise = (async () => {
@@ -200,10 +200,10 @@ index 61e9e7c0d4..2ce665814d 100644
  			? providedContextFiles
  			: await logger.time("loadProjectContextFiles", loadProjectContextFiles, { cwd: resolvedCwd });
 diff --git a/packages/coding-agent/src/task/executor.ts b/packages/coding-agent/src/task/executor.ts
-index 3cf05bfdab..30ca9e1aa9 100644
+index 4503506c3e..6a02e9f62f 100644
 --- a/packages/coding-agent/src/task/executor.ts
 +++ b/packages/coding-agent/src/task/executor.ts
-@@ -523,6 +523,8 @@ export interface ExecutorOptions {
+@@ -499,6 +499,8 @@ export interface ExecutorOptions {
  	eventBus?: EventBus;
  	subagentEventBus?: EventBus;
  	contextFiles?: ContextFileEntry[];
@@ -212,19 +212,19 @@ index 3cf05bfdab..30ca9e1aa9 100644
  	skills?: Skill[];
  	promptTemplates?: PromptTemplate[];
  	workspaceTree?: WorkspaceTree;
-@@ -4028,6 +4030,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
- 				restrictToolNames: options.restrictToolNames,
- 				requireYieldTool: true,
- 				contextFiles: options.contextFiles,
-+				noContextFiles: options.noContextFiles,
- 				skills: options.skills,
- 				promptTemplates: options.promptTemplates,
- 				workspaceTree: options.workspaceTree,
+@@ -4443,6 +4445,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
+ 					restrictToolNames: options.restrictToolNames,
+ 					requireYieldTool: true,
+ 					contextFiles: options.contextFiles,
++					noContextFiles: options.noContextFiles,
+ 					skills: options.skills,
+ 					promptTemplates: options.promptTemplates,
+ 					workspaceTree: options.workspaceTree,
 diff --git a/packages/coding-agent/src/task/structured-subagent.ts b/packages/coding-agent/src/task/structured-subagent.ts
-index 6f12a1e551..3e15114ebc 100644
+index ac4134395d..d1a888ca5b 100644
 --- a/packages/coding-agent/src/task/structured-subagent.ts
 +++ b/packages/coding-agent/src/task/structured-subagent.ts
-@@ -543,6 +543,7 @@ function buildExecutorOptions(
+@@ -586,6 +586,7 @@ function buildExecutorOptions(
  		customTools: request.customTools,
  		workPoolYieldItems: request.workPoolYieldItems,
  		contextFiles: session.contextFiles?.filter(file => path.basename(file.path).toLowerCase() !== "agents.md"),
@@ -246,10 +246,10 @@ index c7870c8281..15b8bcdeb6 100644
  	workspaceTree?: WorkspaceTree;
  	/** Pre-loaded skills */
 diff --git a/packages/coding-agent/src/vibe/runtime.ts b/packages/coding-agent/src/vibe/runtime.ts
-index cd49a343dd..0eae7c70b7 100644
+index c5aa4f7f9b..7393afaafe 100644
 --- a/packages/coding-agent/src/vibe/runtime.ts
 +++ b/packages/coding-agent/src/vibe/runtime.ts
-@@ -1308,6 +1308,7 @@ export class VibeSessionRegistry {
+@@ -1312,6 +1312,7 @@ export class VibeSessionRegistry {
  			inheritedSessionAgents: session.getSessionAgents?.(),
  			mcpManager: session.mcpManager ?? MCPManager.instance(),
  			contextFiles: session.contextFiles?.filter(file => path.basename(file.path).toLowerCase() !== "agents.md"),
