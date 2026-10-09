@@ -206,15 +206,6 @@ async fn resolve_base_url(ctx: &CtxRef, cache: &OnceCell<String>) -> String {
     cache.get_or_init(|| async { base_url::ollama_base_url(&env_overlay(ctx).await) }).await.clone()
 }
 
-/// `NodeJS.Platform`-shaped name, matching the strings `OllamaStatus.platform` carried in Electron.
-fn node_platform() -> &'static str {
-    match std::env::consts::OS {
-        "macos" => "darwin",
-        "windows" => "win32",
-        other => other,
-    }
-}
-
 fn install_checks(ctx: CtxRef) -> probe::InstallChecks {
     probe::default_install_checks(move || {
         let ctx = ctx.clone();
@@ -225,8 +216,7 @@ fn install_checks(ctx: CtxRef) -> probe::InstallChecks {
 async fn probe_with(ctx: &CtxRef, cache: &Arc<OnceCell<String>>) -> probe::OllamaStatus {
     let base_url = resolve_base_url(ctx, cache).await;
     let checks = install_checks(ctx.clone());
-    let local_app_data = std::env::var("LOCALAPPDATA").ok();
-    probe::probe_ollama(&base_url, node_platform(), &checks, probe::PROBE_TIMEOUT_MS, local_app_data.as_deref()).await
+    probe::probe_ollama(&base_url, &checks, probe::PROBE_TIMEOUT_MS).await
 }
 
 /// Production `OllamaPort`.
@@ -339,7 +329,7 @@ impl Ollama {
                         }
                     });
                     let on_progress: &(dyn Fn(install_progress::OllamaInstallProgress) + Send + Sync) = &move |frame| throttle.push(frame);
-                    remedy::run_remedy_real(id, node_platform(), &probe_fn_for_attempt, remedy::SettleOptions::default(), Some(on_progress)).await
+                    remedy::run_remedy_real(id, &probe_fn_for_attempt, remedy::SettleOptions::default(), Some(on_progress)).await
                 })
             })
             .await

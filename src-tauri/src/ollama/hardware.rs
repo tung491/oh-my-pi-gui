@@ -15,21 +15,6 @@ use super::catalog::MachineFacts;
 pub const HARDWARE_PROBE_TIMEOUT_MS: u64 = 2_000;
 const MIB: u64 = 1024 * 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Platform {
-    Linux,
-    Darwin,
-    Win32,
-    Other,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Arch {
-    X64,
-    Arm64,
-    Other,
-}
-
 pub struct NvidiaGpu {
     pub name: String,
     pub vram_bytes: u64,
@@ -39,8 +24,6 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 /// Everything `read_machine` needs from the OS, injectable for tests.
 pub struct HardwareDeps {
-    pub platform: Platform,
-    pub arch: Arch,
     /// `None` when RAM cannot be read at all.
     pub totalmem: Arc<dyn Fn() -> Option<u64> + Send + Sync>,
     /// Hardware threads the model runtime can use; `None` when unreadable.
@@ -70,9 +53,7 @@ fn run_nvidia_smi(timeout: Duration) -> BoxFuture<Option<String>> {
 }
 
 /// `lspci -mm` (VGA/3D class), falling back to the sysfs vendor/device ids
-/// when `lspci` is unavailable. Electron's `app.getGPUInfo` has no Rust
-/// equivalent (Phase 2 → Design); macOS and Windows gain a real probe in
-/// Phase 12, logging once in the meantime.
+/// when `lspci` is unavailable.
 fn read_gpu_name_linux() -> BoxFuture<Result<Option<String>, String>> {
     Box::pin(async move {
         let output = Command::new("lspci").arg("-mm").stdin(Stdio::null()).output().await;
@@ -102,62 +83,30 @@ fn gpu_name_from_sysfs() -> Option<String> {
     })
 }
 
-fn gpu_name_other_os() -> BoxFuture<Result<Option<String>, String>> {
-    Box::pin(async move {
-        static LOGGED: std::sync::Once = std::sync::Once::new();
-        LOGGED.call_once(|| {
-            crate::runtime_log::note("unknown", "GPU name lookup is not implemented on this OS", serde_json::json!({}));
-        });
-        Ok(None)
-    })
-}
-
 fn default_deps() -> HardwareDeps {
-    let platform = match std::env::consts::OS {
-        "linux" => Platform::Linux,
-        "macos" => Platform::Darwin,
-        "windows" => Platform::Win32,
-        _ => Platform::Other,
-    };
-    let arch = match std::env::consts::ARCH {
-        "x86_64" => Arch::X64,
-        "aarch64" => Arch::Arm64,
-        _ => Arch::Other,
-    };
-    let gpu_name: Arc<dyn Fn() -> BoxFuture<Result<Option<String>, String>> + Send + Sync> =
-        if platform == Platform::Linux { Arc::new(read_gpu_name_linux) } else { Arc::new(gpu_name_other_os) };
     HardwareDeps {
-        platform,
-        arch,
         totalmem: Arc::new(|| {
             let bytes = sysinfo_totalmem();
             if bytes > 0 { Some(bytes) } else { None }
         }),
         available_parallelism: Arc::new(|| std::thread::available_parallelism().ok().map(usize::from)),
         nvidia_smi: Arc::new(run_nvidia_smi),
-        gpu_name,
+        gpu_name: Arc::new(read_gpu_name_linux),
         timeout: Duration::from_millis(HARDWARE_PROBE_TIMEOUT_MS),
     }
 }
 
 /// Total physical RAM in bytes, `0` when it cannot be read.
 fn sysinfo_totalmem() -> u64 {
-    #[cfg(target_os = "linux")]
-    {
-        if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
-            for line in meminfo.lines() {
-                if let Some(rest) = line.strip_prefix("MemTotal:") {
-                    let kib: u64 = rest.trim().trim_end_matches(" kB").trim().parse().unwrap_or(0);
-                    return kib.saturating_mul(1024);
-                }
+    if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
+        for line in meminfo.lines() {
+            if let Some(rest) = line.strip_prefix("MemTotal:") {
+                let kib: u64 = rest.trim().trim_end_matches(" kB").trim().parse().unwrap_or(0);
+                return kib.saturating_mul(1024);
             }
         }
-        0
     }
-    #[cfg(not(target_os = "linux"))]
-    {
-        0
-    }
+    0
 }
 
 /// `name, MiB` per line; picks the card with the most memory (the one a model is sized against).
@@ -247,15 +196,12 @@ pub async fn read_machine(deps: &HardwareDeps) -> Option<MachineFacts> {
         return None;
     }
     let threads = read_threads(deps);
-    let unified_memory = deps.platform == Platform::Darwin && deps.arch == Arch::Arm64;
-    if !unified_memory && matches!(deps.platform, Platform::Linux | Platform::Win32) {
-        let csv = settle_option((deps.nvidia_smi)(deps.timeout), deps.timeout).await;
-        if let Some(gpu) = csv.and_then(|csv| parse_nvidia_smi(&csv)) {
-            return Some(MachineFacts { ram_bytes, vram_bytes: Some(gpu.vram_bytes), gpu_name: Some(gpu.name), unified_memory: false, threads });
-        }
+    let csv = settle_option((deps.nvidia_smi)(deps.timeout), deps.timeout).await;
+    if let Some(gpu) = csv.and_then(|csv| parse_nvidia_smi(&csv)) {
+        return Some(MachineFacts { ram_bytes, vram_bytes: Some(gpu.vram_bytes), gpu_name: Some(gpu.name), unified_memory: false, threads });
     }
     let gpu_name = settle_result((deps.gpu_name)(), deps.timeout).await.flatten();
-    Some(MachineFacts { ram_bytes, vram_bytes: None, gpu_name, unified_memory, threads })
+    Some(MachineFacts { ram_bytes, vram_bytes: None, gpu_name, unified_memory: false, threads })
 }
 
 /// Machine facts using the real OS probes.
@@ -271,8 +217,6 @@ mod tests {
 
     fn test_deps() -> HardwareDeps {
         HardwareDeps {
-            platform: Platform::Linux,
-            arch: Arch::X64,
             totalmem: Arc::new(|| Some(32 * GIB)),
             available_parallelism: Arc::new(|| Some(8)),
             nvidia_smi: Arc::new(|_| Box::pin(async { None })),
@@ -335,24 +279,6 @@ mod tests {
         assert_eq!(machine.gpu_name.as_deref(), Some("Intel Iris"));
         assert!(!machine.unified_memory);
         assert_eq!(machine.threads, 8);
-    }
-
-    #[tokio::test]
-    async fn marks_apple_silicon_as_unified_memory_and_skips_nvidia_smi() {
-        let asked = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let asked2 = asked.clone();
-        let mut deps = test_deps();
-        deps.platform = Platform::Darwin;
-        deps.arch = Arch::Arm64;
-        deps.nvidia_smi = Arc::new(move |_| {
-            asked2.store(true, std::sync::atomic::Ordering::SeqCst);
-            Box::pin(async { Some("X, 1".to_string()) })
-        });
-        let machine = read_machine(&deps).await.expect("machine facts");
-        assert!(!asked.load(std::sync::atomic::Ordering::SeqCst));
-        assert_eq!(machine.vram_bytes, None);
-        assert!(machine.unified_memory);
-        assert_eq!(machine.gpu_name, None);
     }
 
     #[tokio::test]

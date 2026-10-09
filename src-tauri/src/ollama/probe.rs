@@ -46,7 +46,7 @@ pub struct OllamaStatus {
     pub model_count: u32,
     pub installed_tags: Vec<String>,
     pub platform: String,
-    /// The remedy that fits this state and platform, or `None` when none applies.
+    /// The remedy that fits this state, or `None` when none applies.
     pub remedy: Option<OllamaRemedyId>,
     /// Last probe or remedy failure, for diagnostics.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,7 +59,6 @@ pub struct InstallChecks {
     pub systemd_unit: Arc<dyn Fn() -> BoxFuture<bool> + Send + Sync>,
     /// An executable named `name` is on the login-shell PATH (`which`).
     pub on_path: Arc<dyn Fn(String) -> BoxFuture<bool> + Send + Sync>,
-    pub exists: Arc<dyn Fn(&Path) -> bool + Send + Sync>,
 }
 
 async fn is_executable(path: &Path) -> bool {
@@ -71,13 +70,9 @@ async fn is_executable(path: &Path) -> bool {
             Err(_) => false,
         }
     }
-    #[cfg(not(unix))]
-    {
-        tokio::fs::metadata(path).await.map(|meta| meta.is_file()).unwrap_or(false)
-    }
 }
 
-/// Default install checks: `systemctl`, PATH lookup through the given directories, and `Path::exists`.
+/// Default install checks: `systemctl` and PATH lookup through the given directories.
 pub fn default_install_checks(path_dirs: impl Fn() -> BoxFuture<String> + Send + Sync + 'static) -> InstallChecks {
     let path_dirs = Arc::new(path_dirs);
     InstallChecks {
@@ -95,7 +90,7 @@ pub fn default_install_checks(path_dirs: impl Fn() -> BoxFuture<String> + Send +
             let path_dirs = path_dirs.clone();
             Box::pin(async move {
                 let path = (path_dirs)().await;
-                for dir in path.split(if cfg!(windows) { ';' } else { ':' }).filter(|d| !d.is_empty()) {
+                for dir in path.split(':').filter(|d| !d.is_empty()) {
                     if is_executable(&PathBuf::from(dir).join(&name)).await {
                         return true;
                     }
@@ -103,7 +98,6 @@ pub fn default_install_checks(path_dirs: impl Fn() -> BoxFuture<String> + Send +
                 false
             })
         }),
-        exists: Arc::new(|path| path.exists()),
     }
 }
 
@@ -114,40 +108,22 @@ pub struct InstallFacts {
 }
 
 /// Whether Ollama is installed though not answering, and how it was installed.
-pub async fn detect_ollama_install(platform: &str, checks: &InstallChecks, local_app_data: Option<&str>) -> InstallFacts {
-    match platform {
-        "linux" => {
-            let systemd_unit = (checks.systemd_unit)().await;
-            let installed = systemd_unit || (checks.on_path)("ollama".to_string()).await;
-            InstallFacts { installed, systemd_unit }
-        }
-        "darwin" => {
-            let installed = (checks.exists)(Path::new("/Applications/Ollama.app")) || (checks.on_path)("ollama".to_string()).await;
-            InstallFacts { installed, systemd_unit: false }
-        }
-        "win32" => {
-            let installed = local_app_data
-                .map(|dir| (checks.exists)(&PathBuf::from(dir).join("Programs").join("Ollama").join("ollama.exe")))
-                .unwrap_or(false);
-            InstallFacts { installed, systemd_unit: false }
-        }
-        _ => InstallFacts { installed: (checks.on_path)("ollama".to_string()).await, systemd_unit: false },
-    }
+pub async fn detect_ollama_install(checks: &InstallChecks) -> InstallFacts {
+    let systemd_unit = (checks.systemd_unit)().await;
+    let installed = systemd_unit || (checks.on_path)("ollama".to_string()).await;
+    InstallFacts { installed, systemd_unit }
 }
 
 /// Whether Ollama is installed though not answering.
 #[cfg(test)]
-pub async fn is_ollama_installed(platform: &str, checks: &InstallChecks, local_app_data: Option<&str>) -> bool {
-    detect_ollama_install(platform, checks, local_app_data).await.installed
+pub async fn is_ollama_installed(checks: &InstallChecks) -> bool {
+    detect_ollama_install(checks).await.installed
 }
 
-/// The one-click fix for a state, Linux only. Starting needs the systemd unit:
+/// The one-click fix for a state. Starting needs the systemd unit:
 /// a binary or tarball install on PATH has none, and `systemctl start` could
 /// only fail after asking for the root password, so it gets no button.
-pub fn remedy_for(state: OllamaState, platform: &str, systemd_unit: bool) -> Option<OllamaRemedyId> {
-    if platform != "linux" {
-        return None;
-    }
+pub fn remedy_for(state: OllamaState, systemd_unit: bool) -> Option<OllamaRemedyId> {
     match state {
         OllamaState::Stopped => systemd_unit.then_some(OllamaRemedyId::LinuxStart),
         OllamaState::Absent => Some(OllamaRemedyId::LinuxInstall),
@@ -182,13 +158,7 @@ async fn get_json(client: &reqwest::Client, url: &str, timeout: Duration) -> Res
 }
 
 /// Probe `/api/version` and `/api/tags`; never hangs the caller past `timeout_ms`.
-pub async fn probe_ollama(
-    base_url: &str,
-    platform: &str,
-    checks: &InstallChecks,
-    timeout_ms: u64,
-    local_app_data: Option<&str>,
-) -> OllamaStatus {
+pub async fn probe_ollama(base_url: &str, checks: &InstallChecks, timeout_ms: u64) -> OllamaStatus {
     let timeout = Duration::from_millis(timeout_ms);
     let client = reqwest::Client::new();
     let version_url = format!("{base_url}/api/version");
@@ -208,24 +178,18 @@ pub async fn probe_ollama(
                 version: version.get("version").and_then(Value::as_str).map(str::to_string),
                 model_count: installed_tags.len() as u32,
                 installed_tags,
-                platform: platform.to_string(),
+                platform: "linux".to_string(),
                 remedy: None,
                 fault: None,
             },
-            Err(fault) => absent_or_stopped(base_url, platform, checks, local_app_data, fault).await,
+            Err(fault) => absent_or_stopped(base_url, checks, fault).await,
         },
-        Err(fault) => absent_or_stopped(base_url, platform, checks, local_app_data, fault).await,
+        Err(fault) => absent_or_stopped(base_url, checks, fault).await,
     }
 }
 
-async fn absent_or_stopped(
-    base_url: &str,
-    platform: &str,
-    checks: &InstallChecks,
-    local_app_data: Option<&str>,
-    fault: String,
-) -> OllamaStatus {
-    let facts = detect_ollama_install(platform, checks, local_app_data).await;
+async fn absent_or_stopped(base_url: &str, checks: &InstallChecks, fault: String) -> OllamaStatus {
+    let facts = detect_ollama_install(checks).await;
     let state = if facts.installed { OllamaState::Stopped } else { OllamaState::Absent };
     OllamaStatus {
         state,
@@ -233,8 +197,8 @@ async fn absent_or_stopped(
         version: None,
         model_count: 0,
         installed_tags: Vec::new(),
-        platform: platform.to_string(),
-        remedy: remedy_for(state, platform, facts.systemd_unit),
+        platform: "linux".to_string(),
+        remedy: remedy_for(state, facts.systemd_unit),
         fault: Some(fault),
     }
 }
@@ -244,11 +208,10 @@ mod tests {
     use super::*;
     use crate::ollama::test_fake_ollama::{closed_port_url, send_json, start_fake_ollama};
 
-    fn checks(unit: bool, path: bool, files: Vec<&'static str>) -> InstallChecks {
+    fn checks(unit: bool, path: bool) -> InstallChecks {
         InstallChecks {
             systemd_unit: Arc::new(move || Box::pin(async move { unit })),
             on_path: Arc::new(move |_name| Box::pin(async move { path })),
-            exists: Arc::new(move |p| files.iter().any(|f| Path::new(f) == p)),
         }
     }
 
@@ -265,7 +228,7 @@ mod tests {
             send_json(serde_json::json!({ "error": "not found" }), 404)
         })
         .await;
-        let status = probe_ollama(&fake.url, "linux", &checks(false, false, vec![]), PROBE_TIMEOUT_MS, None).await;
+        let status = probe_ollama(&fake.url, &checks(false, false), PROBE_TIMEOUT_MS).await;
         assert_eq!(
             status,
             OllamaStatus {
@@ -284,7 +247,7 @@ mod tests {
     #[tokio::test]
     async fn reports_stopped_with_the_start_remedy_when_the_systemd_unit_exists_but_nothing_answers() {
         let url = closed_port_url().await;
-        let status = probe_ollama(&url, "linux", &checks(true, false, vec![]), PROBE_TIMEOUT_MS, None).await;
+        let status = probe_ollama(&url, &checks(true, false), PROBE_TIMEOUT_MS).await;
         assert_eq!(status.state, OllamaState::Stopped);
         assert_eq!(status.remedy, Some(OllamaRemedyId::LinuxStart));
         assert!(status.fault.is_some());
@@ -294,7 +257,7 @@ mod tests {
     #[tokio::test]
     async fn reports_stopped_with_no_start_remedy_when_only_the_binary_is_on_path() {
         let url = closed_port_url().await;
-        let status = probe_ollama(&url, "linux", &checks(false, true, vec![]), PROBE_TIMEOUT_MS, None).await;
+        let status = probe_ollama(&url, &checks(false, true), PROBE_TIMEOUT_MS).await;
         assert_eq!(status.state, OllamaState::Stopped);
         assert_eq!(status.remedy, None);
     }
@@ -302,25 +265,16 @@ mod tests {
     #[tokio::test]
     async fn reports_absent_with_the_install_remedy_when_nothing_is_installed() {
         let url = closed_port_url().await;
-        let status = probe_ollama(&url, "linux", &checks(false, false, vec![]), PROBE_TIMEOUT_MS, None).await;
+        let status = probe_ollama(&url, &checks(false, false), PROBE_TIMEOUT_MS).await;
         assert_eq!(status.state, OllamaState::Absent);
         assert_eq!(status.remedy, Some(OllamaRemedyId::LinuxInstall));
-    }
-
-    #[tokio::test]
-    async fn offers_no_remedy_off_linux() {
-        let url = closed_port_url().await;
-        let status = probe_ollama(&url, "darwin", &checks(false, false, vec![]), PROBE_TIMEOUT_MS, None).await;
-        assert_eq!(status.state, OllamaState::Absent);
-        assert_eq!(status.remedy, None);
-        assert_eq!(status.platform, "darwin");
     }
 
     #[tokio::test]
     async fn treats_a_daemon_that_never_answers_as_down_within_the_timeout() {
         let fake = start_fake_ollama(|_req, _body| None).await;
         let started = std::time::Instant::now();
-        let status = probe_ollama(&fake.url, "linux", &checks(true, false, vec![]), 100, None).await;
+        let status = probe_ollama(&fake.url, &checks(true, false), 100).await;
         assert_eq!(status.state, OllamaState::Stopped);
         assert!(started.elapsed() < Duration::from_secs(1));
     }
@@ -334,42 +288,27 @@ mod tests {
             send_json(serde_json::json!({ "nope": true }), 200)
         })
         .await;
-        let status = probe_ollama(&fake.url, "linux", &checks(false, false, vec![]), PROBE_TIMEOUT_MS, None).await;
+        let status = probe_ollama(&fake.url, &checks(false, false), PROBE_TIMEOUT_MS).await;
         assert_eq!(status.state, OllamaState::Absent);
     }
 
     #[tokio::test]
     async fn tells_a_systemd_install_from_a_binary_on_path_on_linux() {
-        let facts = detect_ollama_install("linux", &checks(true, false, vec![]), None).await;
+        let facts = detect_ollama_install(&checks(true, false)).await;
         assert!(facts.installed);
         assert!(facts.systemd_unit);
-        let facts = detect_ollama_install("linux", &checks(false, true, vec![]), None).await;
+        let facts = detect_ollama_install(&checks(false, true)).await;
         assert!(facts.installed);
         assert!(!facts.systemd_unit);
-        assert!(!is_ollama_installed("linux", &checks(false, false, vec![]), None).await);
-    }
-
-    #[tokio::test]
-    async fn checks_the_macos_app_bundle() {
-        assert!(is_ollama_installed("darwin", &checks(false, false, vec!["/Applications/Ollama.app"]), None).await);
-        assert!(!is_ollama_installed("darwin", &checks(false, false, vec![]), None).await);
-    }
-
-    #[tokio::test]
-    async fn checks_the_windows_per_user_install() {
-        let exe = "C:\\Users\\u\\AppData\\Local/Programs/Ollama/ollama.exe";
-        let files = [exe];
-        assert!(is_ollama_installed("win32", &checks(false, false, files.to_vec()), Some("C:\\Users\\u\\AppData\\Local")).await);
-        assert!(!is_ollama_installed("win32", &checks(false, false, vec![]), None).await);
+        assert!(!is_ollama_installed(&checks(false, false)).await);
     }
 
     #[test]
     fn maps_linux_states_to_remedies() {
-        assert_eq!(remedy_for(OllamaState::Ok, "linux", true), None);
-        assert_eq!(remedy_for(OllamaState::Stopped, "linux", true), Some(OllamaRemedyId::LinuxStart));
-        assert_eq!(remedy_for(OllamaState::Stopped, "linux", false), None);
-        assert_eq!(remedy_for(OllamaState::Absent, "linux", false), Some(OllamaRemedyId::LinuxInstall));
-        assert_eq!(remedy_for(OllamaState::Absent, "win32", false), None);
+        assert_eq!(remedy_for(OllamaState::Ok, true), None);
+        assert_eq!(remedy_for(OllamaState::Stopped, true), Some(OllamaRemedyId::LinuxStart));
+        assert_eq!(remedy_for(OllamaState::Stopped, false), None);
+        assert_eq!(remedy_for(OllamaState::Absent, false), Some(OllamaRemedyId::LinuxInstall));
     }
 
     #[test]

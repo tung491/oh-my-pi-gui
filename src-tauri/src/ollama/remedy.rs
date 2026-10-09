@@ -361,17 +361,15 @@ async fn settle(probe: &ProbeFn, options: SettleOptions, attempt: Attempt) -> Ol
 }
 
 /// Run the remedy `id` maps to, then re-probe. Rejects only on programming
-/// errors: an id outside the closed set (caught earlier, at `is_remedy_id`),
-/// or a platform without remedies.
+/// errors: an id outside the closed set (caught earlier, at `is_remedy_id`).
 async fn run_remedy(
     spawner: &Spawner,
     id: OllamaRemedyId,
-    platform: &str,
     probe: &ProbeFn,
     options: SettleOptions,
     on_progress: Option<&(dyn Fn(OllamaInstallProgress) + Send + Sync)>,
 ) -> Result<OllamaRemedyResult, String> {
-    run_remedy_command(spawner, id, remedy_command(id), platform, probe, options, on_progress).await
+    run_remedy_command(spawner, id, remedy_command(id), probe, options, on_progress).await
 }
 
 /// `run_remedy`, with the command's timeout overridable (tests only: the
@@ -380,14 +378,10 @@ async fn run_remedy_command(
     spawner: &Spawner,
     id: OllamaRemedyId,
     command: RemedyCommand,
-    platform: &str,
     probe: &ProbeFn,
     options: SettleOptions,
     on_progress: Option<&(dyn Fn(OllamaInstallProgress) + Send + Sync)>,
 ) -> Result<OllamaRemedyResult, String> {
-    if platform != "linux" {
-        return Err(format!("Ollama remedies run on Linux only, not {platform}"));
-    }
     let on_progress = if id == OllamaRemedyId::LinuxInstall { on_progress } else { None };
 
     let Some(on_progress) = on_progress else {
@@ -507,14 +501,13 @@ impl Default for RemedyGate {
 async fn run_remedy_if_elevatable(
     spawner: &Spawner,
     id: OllamaRemedyId,
-    platform: &str,
     probe: &ProbeFn,
     options: SettleOptions,
     on_progress: Option<&(dyn Fn(OllamaInstallProgress) + Send + Sync)>,
     can_elevate: bool,
 ) -> Result<OllamaRemedyResult, String> {
-    if can_elevate || platform != "linux" {
-        return run_remedy(spawner, id, platform, probe, options, on_progress).await;
+    if can_elevate {
+        return run_remedy(spawner, id, probe, options, on_progress).await;
     }
     Ok(settle(probe, options, reopen_required()).await)
 }
@@ -522,13 +515,12 @@ async fn run_remedy_if_elevatable(
 /// `run_remedy` with the real process spawner, for production use.
 pub async fn run_remedy_real(
     id: OllamaRemedyId,
-    platform: &str,
     probe: &ProbeFn,
     options: SettleOptions,
     on_progress: Option<&(dyn Fn(OllamaInstallProgress) + Send + Sync)>,
 ) -> Result<OllamaRemedyResult, String> {
     let spawner: Spawner = Arc::new(spawn_real);
-    run_remedy_if_elevatable(&spawner, id, platform, probe, options, on_progress, !crate::relaunch::no_new_privs()).await
+    run_remedy_if_elevatable(&spawner, id, probe, options, on_progress, !crate::relaunch::no_new_privs()).await
 }
 
 #[cfg(test)]
@@ -650,7 +642,7 @@ systemctl restart ollama.service";
         let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
         let (probe, _) = probe_sequence(vec![OllamaState::Stopped, OllamaState::Stopped, OllamaState::Ok]);
         let settle_options = SettleOptions { interval: Duration::ZERO, attempts: 5 };
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, settle_options, None).await.expect("the remedy runs");
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, &probe, settle_options, None).await.expect("the remedy runs");
         assert_eq!(*lock(&calls), vec![("pkexec", sh_c(remedy_script(OllamaRemedyId::LinuxStart)))]);
         assert_eq!(result, OllamaRemedyResult { outcome: OllamaRemedyOutcome::Applied, status: status(OllamaState::Ok), fault: None });
     }
@@ -659,7 +651,7 @@ systemctl restart ollama.service";
     async fn runs_the_install_line_and_the_no_cloud_steps_as_one_pkexec_sh_c() {
         let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
         let (probe, _) = probe_sequence(vec![OllamaState::Ok]);
-        run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
+        run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
             .await
             .expect("the remedy runs");
         assert_eq!(*lock(&calls), vec![("pkexec", sh_c(remedy_script(OllamaRemedyId::LinuxInstall)))]);
@@ -684,7 +676,7 @@ systemctl restart ollama.service";
     async fn reports_failed_when_the_command_succeeds_but_the_daemon_never_comes_up() {
         let (spawner, _calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
         let (probe, probes) = probe_sequence(vec![OllamaState::Stopped]);
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
             .await
             .expect("the remedy runs");
         assert_eq!(
@@ -716,7 +708,7 @@ systemctl restart ollama.service";
             let (spawner, _calls, _kills) = fake_spawn(ending, stderr.clone());
             let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
             let result =
-                run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
+                run_remedy(&spawner, OllamaRemedyId::LinuxStart, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
                     .await
                     .expect("the remedy runs");
             assert_eq!(result.outcome, outcome);
@@ -738,7 +730,7 @@ systemctl restart ollama.service";
             let frames = Arc::new(Mutex::new(Vec::new()));
             let frames2 = frames.clone();
             let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
-            let result = run_remedy_if_elevatable(&spawner, id, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, Some(on_progress), false)
+            let result = run_remedy_if_elevatable(&spawner, id, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, Some(on_progress), false)
                 .await
                 .expect("the remedy answers");
             assert!(lock(&calls).is_empty(), "pkexec never runs");
@@ -751,21 +743,18 @@ systemctl restart ollama.service";
         let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
         let (probe, _) = probe_sequence(vec![OllamaState::Ok]);
         let result =
-            run_remedy_if_elevatable(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None, true)
+            run_remedy_if_elevatable(&spawner, OllamaRemedyId::LinuxStart, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None, true)
                 .await
                 .expect("the remedy runs");
         assert_eq!(lock(&calls).len(), 1);
         assert_eq!(result.outcome, OllamaRemedyOutcome::Applied);
-        // Off Linux the platform error still wins.
-        let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
-        assert!(run_remedy_if_elevatable(&spawner, OllamaRemedyId::LinuxStart, "darwin", &probe, SettleOptions::default(), None, false).await.is_err());
     }
 
     #[tokio::test]
     async fn reads_pkexec_s_setuid_failure_as_a_reopen_not_a_cancel() {
         let (spawner, _calls, _kills) = fake_spawn(Ending::Exit(Some(127)), vec!["pkexec must be setuid root\n"]);
         let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxStart, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, None)
             .await
             .expect("the remedy runs");
         assert_eq!(result.outcome, OllamaRemedyOutcome::ReopenRequired);
@@ -811,7 +800,6 @@ systemctl restart ollama.service";
             &spawner,
             OllamaRemedyId::LinuxInstall,
             command,
-            "linux",
             &probe,
             SettleOptions { interval: Duration::ZERO, attempts: 5 },
             Some(on_progress),
@@ -836,7 +824,7 @@ systemctl restart ollama.service";
         let (spawner, _calls, _kills) =
             fake_spawn(Ending::Exit(Some(1)), vec!["\r##   10.0%\r#####  50.0%\ncurl: (56) connection reset\n"]);
         let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions::default(), None).await.expect("the remedy runs");
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions::default(), None).await.expect("the remedy runs");
         assert_eq!(result.fault.as_deref(), Some("#####  50.0%\ncurl: (56) connection reset"));
     }
 
@@ -847,7 +835,7 @@ systemctl restart ollama.service";
         let chunks: Vec<&'static str> = vec![Box::leak(first.into_boxed_str()), Box::leak(second.into_boxed_str())];
         let (spawner, _calls, _kills) = fake_spawn(Ending::Exit(Some(1)), chunks);
         let (probe, _) = probe_sequence(vec![OllamaState::Stopped]);
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions::default(), None).await.expect("the remedy runs");
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions::default(), None).await.expect("the remedy runs");
         let fault = result.fault.expect("a fault is reported");
         assert_eq!(fault.chars().count(), 500);
         assert!(fault.ends_with("END"));
@@ -857,15 +845,6 @@ systemctl restart ollama.service";
     async fn rejects_ids_outside_the_closed_set_without_running_anything() {
         assert!(!is_remedy_id(Some("rm -rf /")));
         assert!(!is_remedy_id(Some("toString")));
-    }
-
-    #[tokio::test]
-    async fn rejects_off_linux() {
-        let (spawner, calls, _kills) = fake_spawn(Ending::ExitOk, vec![]);
-        let (probe, _) = probe_sequence(vec![OllamaState::Ok]);
-        let error = run_remedy(&spawner, OllamaRemedyId::LinuxStart, "darwin", &probe, SettleOptions::default(), None).await.unwrap_err();
-        assert!(error.contains("Linux"));
-        assert!(lock(&calls).is_empty());
     }
 
     #[tokio::test]
@@ -885,7 +864,7 @@ systemctl restart ollama.service";
         let frames = Arc::new(Mutex::new(Vec::new()));
         let frames2 = frames.clone();
         let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
         assert_eq!(result, OllamaRemedyResult { outcome: OllamaRemedyOutcome::Applied, status: status(OllamaState::Ok), fault: None });
         let got = lock(&frames).clone();
         assert_eq!(got.len(), 8);
@@ -907,7 +886,7 @@ systemctl restart ollama.service";
         let frames = Arc::new(Mutex::new(Vec::new()));
         let frames2 = frames.clone();
         let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
-        run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
+        run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
         assert!(lock(&frames).first().is_some_and(|f| f.stage.is_none() && f.percent == -1));
         assert!(lock(&frames).last().is_some_and(|f| f.done));
     }
@@ -926,7 +905,7 @@ systemctl restart ollama.service";
             let frames2 = frames.clone();
             let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
             let result =
-                run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
+                run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
             assert_eq!(result.outcome, expected);
             let got = lock(&frames).clone();
             assert_eq!(got.len(), 2);
@@ -953,7 +932,7 @@ systemctl restart ollama.service";
         });
         let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
         let result =
-            run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, Some(on_progress))
+            run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions { interval: Duration::ZERO, attempts: 5 }, Some(on_progress))
                 .await
                 .expect("the remedy runs");
         assert_eq!(probes.load(Ordering::SeqCst), 5);
@@ -971,7 +950,6 @@ systemctl restart ollama.service";
         let outcome = std::panic::AssertUnwindSafe(run_remedy(
             &spawner,
             OllamaRemedyId::LinuxInstall,
-            "linux",
             &probe,
             SettleOptions::default(),
             Some(on_progress),
@@ -999,7 +977,7 @@ systemctl restart ollama.service";
         // `report` isolates a panicking listener (the TS source's `try`/`catch`
         // around one frame), so `run_remedy` stays infallible on its account.
         let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &|_frame| panic!("window gone");
-        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, "linux", &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
+        let result = run_remedy(&spawner, OllamaRemedyId::LinuxInstall, &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
         assert_eq!(result.outcome, OllamaRemedyOutcome::Applied);
     }
 
@@ -1010,7 +988,7 @@ systemctl restart ollama.service";
         let frames = Arc::new(Mutex::new(Vec::new()));
         let frames2 = frames.clone();
         let on_progress: &(dyn Fn(OllamaInstallProgress) + Send + Sync) = &move |frame| lock(&frames2).push(frame);
-        run_remedy(&spawner, OllamaRemedyId::LinuxStart, "linux", &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
+        run_remedy(&spawner, OllamaRemedyId::LinuxStart, &probe, SettleOptions::default(), Some(on_progress)).await.expect("the remedy runs");
         assert!(lock(&frames).is_empty());
     }
 
