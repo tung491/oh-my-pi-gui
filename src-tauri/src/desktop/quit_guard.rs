@@ -1,5 +1,5 @@
 //! The "sessions are still working" inventory behind the quit confirmation,
-//! ported from `src/main/quit-guard.ts`. Pure: `app_quit.rs` keeps the dialog
+//! Pure: `app_quit.rs` keeps the dialog
 //! and the latch.
 
 use std::collections::HashSet;

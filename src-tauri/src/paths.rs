@@ -1,8 +1,6 @@
 //! Filesystem locations the shell depends on: the profile directory, the
 //! webview data directory, the agent profile, the bundled sidecar and the
-//! directory a window starts in. Ported from `user-data-directory.ts`,
-//! `bundled-omp-path.ts`, `initial-cwd.ts`, `default-workspace.ts` and
-//! `agent-paths.ts`.
+//! directory a window starts in.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;

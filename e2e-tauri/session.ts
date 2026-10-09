@@ -105,7 +105,7 @@ export function specName(spec: string): string {
 	return path.basename(file).replace(/\.e2e\.ts$/, "");
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
 	return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 

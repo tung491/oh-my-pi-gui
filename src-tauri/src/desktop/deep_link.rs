@@ -1,5 +1,5 @@
-//! `omp://` deep links, the second-instance handoff and launch paths, ported
-//! from `src/main/deep-link.ts`. Links that arrive before any window exists are
+//! `omp://` deep links, the second-instance handoff and launch paths.
+//! Links that arrive before any window exists are
 //! buffered and replayed after setup; once a window exists the bridge keeps
 //! every undelivered link per window and replays it when the page attaches.
 

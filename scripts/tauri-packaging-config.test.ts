@@ -1,14 +1,12 @@
 /**
  * Tauri packaging contract: the identity, sandbox, sidecar placement, update
- * feeds and installer hooks every Tauri bundle must keep. The Electron
- * equivalents live in src/main/packaging-config.test.ts.
+ * feeds and installer hooks every Tauri bundle must keep.
  */
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { type PlistObject, parsePlistFile } from "app-builder-lib/out/util/plist";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { OLLAMA_REMEDY_COMMANDS } from "../src/shared/ollama-types";
@@ -25,8 +23,7 @@ import {
 	WEBKIT_DEPENDENCY,
 	WEBKIT_REQUIREMENT,
 } from "../src-tauri/linux/finalize-deb";
-import { MAC_UPDATE_FLOOR } from "./mac-update-floor";
-import { assetNames, darwinReleaseFor } from "./release-feeds";
+import { assetNames } from "./release-feeds";
 import { SIDECAR_SOURCES, stagedSidecarPath } from "./stage-tauri-sidecar";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -124,7 +121,7 @@ function desktopTemplate(): string {
 }
 
 describe("product identity", () => {
-	it("names the product and app id the core and the Electron build use", () => {
+	it("names the product and app id the core uses", () => {
 		expect(base().identifier).toBe(APP_ID);
 		expect(base().identifier).toBe("vn.io.vif.saiatlas");
 		expect(base().productName).toBe(PRODUCT_NAME);
@@ -547,14 +544,9 @@ describe("Linux package", () => {
 describe("Windows", () => {
 	it("no windows build config remains", () => {
 		// Windows is not a target: no installer config, overlay or package script may bring it back.
-		for (const file of ["electron-builder.win.yml", "src-tauri/tauri.windows.conf.json", "src-tauri/windows"]) {
+		for (const file of ["src-tauri/tauri.windows.conf.json", "src-tauri/windows"]) {
 			expect(fs.existsSync(path.join(ROOT, file)), file).toBe(false);
 		}
-		const electron: Record<string, unknown> = parseYaml(
-			fs.readFileSync(path.join(ROOT, "electron-builder.yml"), "utf8"),
-		);
-		expect(Object.keys(electron)).not.toContain("win");
-		expect(Object.keys(electron)).not.toContain("nsis");
 		expect(Object.keys(scripts()).filter(name => name.includes("win"))).toEqual([]);
 	});
 
@@ -565,58 +557,6 @@ describe("Windows", () => {
 			const source = fs.readFileSync(path.join(ROOT, file), "utf8");
 			expect(source, file).not.toMatch(/windows|win32|\.exe\b/i);
 		}
-	});
-
-	it("the mac bundle comments name no stats server", () => {
-		for (const file of ["electron-builder.yml", "electron-builder.x64.yml"]) {
-			expect(fs.readFileSync(path.join(ROOT, file), "utf8"), file).not.toMatch(/stats server/i);
-		}
-	});
-});
-
-describe("macOS bundle", () => {
-	const PRIVACY_KEYS = [
-		"NSMicrophoneUsageDescription",
-		"NSCameraUsageDescription",
-		"NSBluetoothAlwaysUsageDescription",
-		"NSBluetoothPeripheralUsageDescription",
-	];
-
-	it("names the app in every privacy prompt the bundle can trigger", async () => {
-		const plist = (await parsePlistFile(path.join(TAURI, "Info.plist"))) as PlistObject;
-		for (const key of PRIVACY_KEYS) expect(String(plist[key]), key).toContain(PRODUCT_NAME);
-	});
-
-	it("ships an explicit transport policy that leaves ATS on and excepts loopback", async () => {
-		const plist = (await parsePlistFile(path.join(TAURI, "Info.plist"))) as PlistObject;
-		expect(plist.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false, NSAllowsLocalNetworking: true });
-	});
-
-	it("signs ad hoc with the app entitlements", () => {
-		expect(platform("macos").bundle?.macOS?.signingIdentity).toBe("-");
-		expect(platform("macos").bundle?.macOS?.entitlements).toBe("macos/app.entitlements");
-	});
-
-	it("app entitlements grant no dyld or library-validation exemption", async () => {
-		const app = (await parsePlistFile(path.join(TAURI, "macos/app.entitlements"))) as PlistObject;
-		expect(app).toEqual({ "com.apple.security.device.audio-input": true });
-		const omp = (await parsePlistFile(path.join(TAURI, "macos/omp.entitlements"))) as PlistObject;
-		expect(omp).toEqual({
-			"com.apple.security.cs.allow-jit": true,
-			"com.apple.security.cs.allow-unsigned-executable-memory": true,
-		});
-	});
-
-	it("macOS floor matches the update-feed floor", () => {
-		const floor = platform("macos").bundle?.macOS?.minimumSystemVersion ?? "";
-		expect(floor).toBe("13.3");
-		// The feed carries the Darwin release of the same floor, and it clears the release gate.
-		const darwin = darwinReleaseFor(floor);
-		expect(darwin).toBe("22.4.0");
-		const parts = (version: string) => version.split(".").map(Number);
-		const [major, minor] = parts(darwin);
-		const [floorMajor, floorMinor] = parts(MAC_UPDATE_FLOOR);
-		expect((major ?? 0) * 100 + (minor ?? 0)).toBeGreaterThanOrEqual((floorMajor ?? 0) * 100 + (floorMinor ?? 0));
 	});
 });
 

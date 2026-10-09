@@ -1,5 +1,5 @@
 //! What a launch asked for, decoded from the arguments of a cold start or of
-//! a refused second instance. Ported from `src/main/launch-argv.ts`.
+//! a refused second instance.
 
 use crate::ports::SUPERVISOR_ARGV;
 

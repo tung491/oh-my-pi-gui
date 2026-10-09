@@ -1,4 +1,4 @@
-//! Pure tray vocabulary, ported from `src/main/tray-labels.ts`: every string
+//! Pure tray vocabulary: every string
 //! the native menu shows, plus the signature that decides whether the menu has
 //! to be rebuilt.
 

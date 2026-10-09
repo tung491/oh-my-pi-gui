@@ -1,5 +1,5 @@
-//! App lifecycle and close ordering, ported from `src/main/index.ts`
-//! (`window-all-closed`, `activate`, the closed-window subscribers) so a
+//! App lifecycle and close ordering (the last window closing and the
+//! closed-window subscribers) so a
 //! multi-window session restores in full and no hidden process stays behind.
 
 use std::sync::Arc;

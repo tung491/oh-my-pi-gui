@@ -1,5 +1,5 @@
-//! The quick-entry rules that need no window, ported from
-//! `src/main/quick-entry-core.ts`: where the bar goes, what a submit may carry,
+//! The quick-entry rules that need no window:
+//! where the bar goes, what a submit may carry,
 //! which macOS chords the bar swallows, and the per-window prompt queue. The
 //! shell owns a prompt until its chat window acknowledges it.
 

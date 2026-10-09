@@ -1,5 +1,4 @@
-//! Login-shell environment resolution for GUI-spawned processes, ported from
-//! `src/main/shell-env.ts`.
+//! Login-shell environment resolution for GUI-spawned processes.
 //!
 //! A desktop-launched app inherits the session's bare environment, so the
 //! PATH entries, provider API keys and `$VISUAL`/`$EDITOR` the user's rc files

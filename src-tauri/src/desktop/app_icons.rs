@@ -1,5 +1,5 @@
-//! Tray and window icon choices per platform, ported from
-//! `src/main/app-icons.ts`. macOS status items are template images (the system
+//! Tray and window icon choices per platform.
+//! macOS status items are template images (the system
 //! recolors them); Ubuntu's AppIndicator shows pixels as drawn on a top bar
 //! that is dark in both themes, so Linux gets a white mark. The mark's alpha
 //! channel is read from `src/shared/tray-mark.ts`, which `gen:icons` renders.

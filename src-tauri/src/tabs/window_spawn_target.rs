@@ -1,7 +1,7 @@
-//! Port of `src/main/window-spawn-target.ts`: the sidecar target for a newly
+//! The sidecar target for a newly
 //! created window.
 //!
-//! Electron's caller is the window spawn path in `index.ts`, which the `desktop`
+//! The caller is the window spawn path, which the `desktop`
 //! module owns in the Tauri core and resolves through its own code (cross-module
 //! calls go through the frozen ports only). Nothing in this module calls it, so
 //! `tabs/mod.rs` compiles it only for tests: it is the tested reference port.

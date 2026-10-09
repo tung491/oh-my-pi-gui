@@ -1,8 +1,5 @@
 /**
- * The renderer's Vite configuration, shared by the Electron build
- * (electron.vite.config.ts) and the Tauri build (vite.tauri.config.ts). The
- * two differ only in which module `@boot` resolves to and in how the CSP is
- * delivered, so everything else lives here once.
+ * The renderer's Vite configuration, used by the Tauri build (vite.tauri.config.ts).
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -84,8 +81,8 @@ const PDFJS_DATA_FILE = /^[\w.+-]+$/;
 /**
  * Self-hosts pdf.js's CMaps and standard fonts under `pdfjs/`, beside the
  * page, so CJK and non-embedded-font PDFs render without any remote host and
- * without widening the CSP. The build emits them as assets (`out/renderer/pdfjs/…`,
- * reached as `file://` in Electron and `tauri://localhost/` in Tauri); the dev
+ * without widening the CSP. The build emits them as assets
+ * (`out/renderer-tauri/pdfjs/…`, reached as `tauri://localhost/`); the dev
  * server serves the same paths straight from node_modules.
  */
 function pdfjsAssets(): Plugin {
@@ -127,7 +124,7 @@ function pdfjsAssets(): Plugin {
 
 /**
  * The renderer config block. `bootModule` is the absolute path of the file
- * `@boot` resolves to: `src/renderer/boot/boot-electron.ts` or `boot-tauri.ts`.
+ * `@boot` resolves to: `src/renderer/boot/boot-tauri.ts`.
  */
 export function rendererConfig(bootModule: string): UserConfig {
 	return {
@@ -151,5 +148,4 @@ export function rendererConfig(bootModule: string): UserConfig {
 	};
 }
 
-export const BOOT_ELECTRON = resolveFromRoot("src", "renderer", "boot", "boot-electron.ts");
 export const BOOT_TAURI = resolveFromRoot("src", "renderer", "boot", "boot-tauri.ts");

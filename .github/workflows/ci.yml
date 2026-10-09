@@ -13,7 +13,6 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-latest
-    # The Electron binary is installed: tests load electron through electron-store.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

@@ -1,4 +1,4 @@
-//! The system tray, ported from `src/main/tray.ts`: a template mark with a
+//! The system tray: a template mark with a
 //! quick-access menu built from the snapshot the renderer pushes. The native
 //! menu is rebuilt only when a visible label changes; actions route back to
 //! the renderer through `menu:action`.

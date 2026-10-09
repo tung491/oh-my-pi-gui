@@ -1,5 +1,4 @@
-//! The window manager, ported from `src/main/window.ts` and the window parts of
-//! `src/main/index.ts`. Every native call goes through the private [`Backend`]
+//! The window manager. Every native call goes through the private [`Backend`]
 //! trait: the Tauri implementation drives `webview::build_window`, the tray
 //! and the menu; tests install a fake so every decision runs without a runtime.
 

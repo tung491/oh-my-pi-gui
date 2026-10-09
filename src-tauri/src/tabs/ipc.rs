@@ -1,4 +1,4 @@
-//! Handlers for the channels this module owns, ported from `src/main/ipc.ts`.
+//! Handlers for the channels this module owns.
 //! "This window" is always `Caller.win_id`, never a payload field.
 
 use std::path::{Path, PathBuf};

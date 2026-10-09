@@ -1,6 +1,5 @@
 //! Bundled Ollama model catalog and the pure sizing that turns it into the
-//! onboarding cards. Works offline: nothing here touches the network. Keeps
-//! step with `src/shared/ollama-catalog.ts`; change both together.
+//! onboarding cards. Works offline: nothing here touches the network.
 //!
 //! Sizing is a port of sai-welcome's unmeasured path
 //! (`welcome-rs/welcome-core/src/modelfit`: `need.rs`, `class.rs`,

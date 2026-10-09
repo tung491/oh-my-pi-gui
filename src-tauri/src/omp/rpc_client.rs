@@ -1,4 +1,4 @@
-//! Request correlation for the RPC sidecar, ported from `src/main/rpc-client.ts`:
+//! Request correlation for the RPC sidecar:
 //! every command gets a `gui-<n>` id, its frame is written before the call
 //! returns (so stdin order equals arrival order), and the response is awaited
 //! by id with a per-command timeout.

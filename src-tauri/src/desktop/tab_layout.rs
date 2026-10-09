@@ -1,5 +1,5 @@
-//! Validation of the saved tab layouts before they reach a sidecar, ported
-//! from `src/main/tab-layout.ts`. Missing workspaces are dropped; a deleted
+//! Validation of the saved tab layouts before they reach a sidecar.
+//! Missing workspaces are dropped; a deleted
 //! transcript becomes a fresh tab at the same cwd instead of failing startup.
 
 use std::collections::HashSet;

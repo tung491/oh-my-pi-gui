@@ -1,4 +1,4 @@
-//! Sidecar lifecycle manager, ported from `src/main/sidecar.ts`: spawns
+//! Sidecar lifecycle manager: spawns
 //! `omp --mode rpc-ui` through the supervisor, routes frames to the RPC client
 //! and the event batcher, and runs the restart and crash-loop policy.
 //!

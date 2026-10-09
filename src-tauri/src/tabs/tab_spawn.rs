@@ -1,4 +1,4 @@
-//! Port of `src/main/tab-spawn.ts`: the `tab:spawn` decision (acquire a sidecar
+//! The `tab:spawn` decision (acquire a sidecar
 //! for a new tab of the calling window, or refuse).
 //!
 //! Every tab spawns an assistant session (`Agent`), whatever kind the payload

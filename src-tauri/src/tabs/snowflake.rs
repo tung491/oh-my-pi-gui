@@ -1,7 +1,7 @@
-//! Snowflake ids for tabs, the same scheme as `src/main/snowflake.ts` (itself
-//! vendored from `packages/utils/src/snowflake.ts`): 16 lowercase hex chars,
-//! `(timestamp - EPOCH) << 22 | seq`, time-ordered and collision-resistant
-//! within the process. The renderer stores these ids as opaque strings.
+//! Snowflake ids for tabs (vendored from `packages/utils/src/snowflake.ts`):
+//! 16 lowercase hex chars, `(timestamp - EPOCH) << 22 | seq`, time-ordered
+//! and collision-resistant within the process. The renderer stores these ids
+//! as opaque strings.
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

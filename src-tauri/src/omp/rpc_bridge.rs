@@ -1,5 +1,5 @@
 //! NDJSON framing and protocol-v2 chunk reassembly for the sidecar's stdout
-//! stream, ported from `src/main/rpc-bridge.ts`. One logical frame is at most
+//! stream. One logical frame is at most
 //! `RPC_MAX_FRAME_BYTES` on the wire, or `RPC_MAX_REASSEMBLED_BYTES` after a
 //! contiguous `rpc_chunk` sequence is put back together.
 

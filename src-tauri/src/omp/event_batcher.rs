@@ -1,5 +1,5 @@
 //! Batches agent session events at roughly one 30 Hz presentation frame,
-//! ported from `src/main/event-batcher.ts`. Never drops `message_update` or
+//! Never drops `message_update` or
 //! lifecycle events; drops intermediate `tool_execution_update` events once
 //! more than `MAX_BUFFER_SIZE` are buffered.
 

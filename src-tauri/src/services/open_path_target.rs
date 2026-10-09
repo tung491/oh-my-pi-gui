@@ -1,13 +1,9 @@
-//! Decides how to hand an existing path to the OS default handler, ported
-//! from `open-path-target.ts`. It uses `src/shared/launchable-path.ts`, which
-//! is frozen shared code this module may not own, so the functions it needs
-//! are ported privately here instead.
+//! Decides how to hand an existing path to the OS default handler.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-/// The platform whose default-open behavior decides what counts as a program;
-/// mirrors `LaunchPlatform` in `src/shared/launchable-path.ts`.
+/// The platform whose default-open behavior decides what counts as a program.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LaunchPlatform {
     Mac,

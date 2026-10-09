@@ -1,4 +1,4 @@
-//! Native-Wayland global shortcuts, ported from `src/main/wayland-portal.ts`.
+//! Native-Wayland global shortcuts.
 //! The X11 grab the shortcut plugin uses does nothing under a Wayland
 //! compositor, so a Wayland session goes through the GlobalShortcuts portal,
 //! which needs an installed `<app_id>.desktop` entry. Pure so the decision is

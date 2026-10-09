@@ -1,6 +1,6 @@
-//! The quick-entry shortcut, ported from `src/main/quick-entry-shortcut.ts`,
-//! with two backends: the global-shortcut plugin (macOS, Windows, X11) and the
-//! GlobalShortcuts portal on native Wayland, where the X11 grab fails silently.
+//! The quick-entry shortcut, with two backends: the global-shortcut plugin
+//! (macOS, Windows, X11) and the GlobalShortcuts portal on native Wayland,
+//! where the X11 grab fails silently.
 //! Both register once at startup, in the same tick as the window toggle: a
 //! portal session binds once, so a later request would be dropped. Native mode
 //! rebinds live; portal mode only saves the change and says it applies after

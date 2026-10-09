@@ -1,8 +1,6 @@
-//! Main-process strings, ported from `src/main/i18n.ts`. The language comes
+//! Native-shell strings (menus, dialogs, tray, updater). The language comes
 //! from the `language` pref, then the system locale, then English. Keys are
-//! typed so a missing translation is a compile error, and a test keeps every
-//! TypeScript entry mirrored while Electron still ships (the shell adds the
-//! few keys its own menus need).
+//! typed so a missing translation is a compile error.
 
 use crate::prefs::JsonStore;
 
@@ -197,35 +195,6 @@ impl MainI18n {
 mod tests {
     use super::*;
     use serde_json::json;
-
-    const MAIN_I18N_TS: &str = include_str!("../../src/main/i18n.ts");
-
-    fn ts_entries() -> Vec<(String, String, String)> {
-        let pattern = regex::Regex::new(
-            r#"(?s)"([a-zA-Z.]+)":\s*\{\s*en:\s*"((?:[^"\\]|\\.)*)",\s*vi:\s*"((?:[^"\\]|\\.)*)",?\s*\}"#,
-        )
-        .unwrap();
-        let start = MAIN_I18N_TS.find("const TEXT").unwrap();
-        pattern.captures_iter(&MAIN_I18N_TS[start..]).map(|c| (c[1].to_string(), c[2].to_string(), c[3].to_string())).collect()
-    }
-
-    /// Keys the Tauri shell needs that the Electron table never had (its menu has no such item).
-    const RUST_ONLY_KEYS: &[MainTextKey] = &[MainTextKey::MenuCheckForUpdates];
-
-    #[test]
-    fn mirrors_every_text_key_in_the_typescript_table() {
-        let entries = ts_entries();
-        assert_eq!(entries.len() + RUST_ONLY_KEYS.len(), MainTextKey::ALL.len());
-        for key in RUST_ONLY_KEYS {
-            assert!(entries.iter().all(|(name, _, _)| name != key.key()), "{} is in the TS table too", key.key());
-        }
-        for (key, en, vi) in entries {
-            let typed = MainTextKey::from_key(&key).unwrap_or_else(|| panic!("{key} is missing from MainTextKey"));
-            assert_eq!(main_t(typed, MainLanguage::En, &[]), en, "{key} (en)");
-            assert_eq!(main_t(typed, MainLanguage::Vi, &[]), vi, "{key} (vi)");
-            assert_eq!(typed.key(), key);
-        }
-    }
 
     #[test]
     fn fills_placeholders_and_keeps_unknown_ones() {

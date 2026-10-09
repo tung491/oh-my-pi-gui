@@ -1,8 +1,7 @@
 /**
  * The deep GUI audit against the real bundled sidecar: every settings page and
  * control, every schema entry written, read back and restored through its
- * row, and every command discoverable in the palette. Mirrors
- * e2e/deep-audit.e2e.ts; WebDriver stands in for Playwright's locators.
+ * row, and every command discoverable in the palette.
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";

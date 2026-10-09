@@ -3,8 +3,6 @@
 //! compacting, records each result in the `ollamaContextFit` pref, and rewrites
 //! the sidecar overlay that carries the limits. Every window's Ollama screen
 //! asks it through IPC; nothing in a renderer schedules a measurement.
-//!
-//! Keeps step with `src/main/ollama/context-fit-scheduler.ts`; change both together.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::path::{Path, PathBuf};

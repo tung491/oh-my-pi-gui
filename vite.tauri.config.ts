@@ -1,6 +1,6 @@
 /**
- * Vite config for the renderer inside the Tauri shell. Same renderer as the
- * Electron build (vite.renderer.shared.ts) with two differences: `@boot`
+ * Vite config for the renderer inside the Tauri shell: the shared renderer
+ * config (vite.renderer.shared.ts) with two additions: `@boot`
  * installs the Tauri bridge, and the HTML meta CSP is removed because its
  * `connect-src 'self'` would block Tauri's IPC transport; the same policy is
  * served from tauri.conf.json → app.security.csp instead.

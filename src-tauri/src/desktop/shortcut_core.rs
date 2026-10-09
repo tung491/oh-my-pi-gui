@@ -1,5 +1,4 @@
-//! The quick-entry shortcut's rules, ported from
-//! `src/main/quick-entry-shortcut-core.ts` together with the chord grammar of
+//! The quick-entry shortcut's rules, with the chord grammar of
 //! `src/shared/chord.ts` it depends on: which chords may be grabbed
 //! system-wide, how a saved or requested change applies in each mode, and what
 //! the shortcuts dialog is told. A global grab breaks the chord in every other
@@ -212,7 +211,7 @@ pub(crate) fn native_accelerator(id: &str) -> Option<&'static str> {
 pub(crate) const QUICK_ENTRY_DEFAULT_CHORD: &str = "⇧⌃␣";
 
 // ---------------------------------------------------------------------------
-// Policy (`src/main/quick-entry-shortcut-core.ts`)
+// Policy
 // ---------------------------------------------------------------------------
 
 /// Chords the window manager or the OS itself owns, in canonical form (⌘ is Cmd or Super).

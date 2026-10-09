@@ -51,9 +51,9 @@ case "$MODULE" in
       "src-tauri/src/runtime_log.rs" "src-tauri/src/testing.rs" "src-tauri/src/test_hooks.rs"
       "src-tauri/src/omp/" "src-tauri/src/tabs/" "src-tauri/src/desktop/" "src-tauri/src/services/" "src-tauri/src/ollama/" "src-tauri/src/updater/"
       "scripts/check-module.sh" "scripts/tauri-dev.ts" "scripts/rust-pins.env"
-      "src/shared/bridge/" "src/preload/" "src/renderer/boot/" "src/renderer/styles/first-paint.css"
+      "src/shared/bridge/" "src/renderer/boot/" "src/renderer/styles/first-paint.css"
       "src/renderer/main.tsx" "src/renderer/quick-entry/main.tsx" "src/renderer/index.html" "src/renderer/quick-entry.html" "src/renderer/global.d.ts"
-      "src/renderer/lib/themes.test.ts" "vite.renderer.shared.ts" "vite.tauri.config.ts" "electron.vite.config.ts" "package.json" "bun.lock" ".gitignore"
+      "src/renderer/lib/themes.test.ts" "vite.renderer.shared.ts" "vite.tauri.config.ts" "package.json" "bun.lock" ".gitignore"
     )
     RUST_FILES=(src-tauri/src/main.rs src-tauri/src/lib.rs src-tauri/src/ctx.rs src-tauri/src/ports.rs src-tauri/src/bridge.rs src-tauri/src/webview.rs
       src-tauri/src/prefs.rs src-tauri/src/paths.rs src-tauri/src/product.rs src-tauri/src/i18n.rs src-tauri/src/runtime_log.rs src-tauri/src/testing.rs src-tauri/src/test_hooks.rs)
@@ -64,7 +64,7 @@ case "$MODULE" in
       "src-tauri/Info.plist" "src-tauri/icons/" "src-tauri/linux/" "src-tauri/macos/"
       "scripts/stage-tauri-sidecar.ts" "scripts/release-feeds.ts" "scripts/release-feeds.test.ts" "scripts/tauri-packaging-config.test.ts"
       "scripts/mac-update-floor.ts" "scripts/mac-update-floor.test.ts" "scripts/check-mac-update-floor.ts"
-      "package.json" ".github/workflows/ci.yml" "src/main/packaging-config.test.ts")
+      "package.json" ".github/workflows/ci.yml")
     RUST_FILES=(); while IFS= read -r f; do RUST_FILES+=("$f"); done < <(find src-tauri/src/updater -name '*.rs' | sort)
     SNAPSHOTS=(updater ports)
     ;;
@@ -156,9 +156,8 @@ if [[ "$MODULE" == "renderer" ]]; then
   step 4 "bunx biome check (changed files)"
   CHANGED=(); while IFS= read -r f; do [[ -f "$f" && "$f" =~ \.(ts|tsx|js|mjs)$ ]] && CHANGED+=("$f"); done < <(git diff --name-only "$BASE" -- src/renderer)
   if ((${#CHANGED[@]} > 0)); then bunx biome check "${CHANGED[@]}" || fail 4 "biome reported problems"; fi
-  step 5 "bun run build";                   bun run build || fail 5 "Electron build failed"
-  step 6 "bun run build:renderer:tauri";    bun run build:renderer:tauri || fail 6 "Tauri renderer build failed"
-  step 7 "node scripts/lint-surfaces.mjs";  node scripts/lint-surfaces.mjs || fail 7 "lint-surfaces failed"
+  step 5 "bun run build";                   bun run build || fail 5 "renderer build failed"
+  step 6 "node scripts/lint-surfaces.mjs";  node scripts/lint-surfaces.mjs || fail 6 "lint-surfaces failed"
   echo "check-module $MODULE: PASS"
   exit 0
 fi
@@ -197,7 +196,7 @@ step 7 "cargo test (default and e2e-hooks)"
 "$CARGO" test --manifest-path "$MANIFEST" || fail 7 "cargo test failed"
 "$CARGO" test --manifest-path "$MANIFEST" --features e2e-hooks || fail 7 "cargo test --features e2e-hooks failed"
 if [[ "$MODULE" == "updater" ]]; then
-  bunx vitest run scripts/ src/main/packaging-config.test.ts || fail 7 "vitest (scripts, packaging-config) failed"
+  bunx vitest run scripts/ || fail 7 "vitest (scripts) failed"
 fi
 
 # --- gate 8: cross-OS check -----------------------------------------------------

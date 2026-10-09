@@ -1,4 +1,4 @@
-//! The quick-entry bar, ported from `src/main/quick-entry.ts`: a small
+//! The quick-entry bar: a small
 //! frameless window summoned over whatever the user is doing, which hands its
 //! prompt to a new tab in the main window. The bar is never a window record,
 //! so the tray, the menus and tab-layout persistence never see it. The shell

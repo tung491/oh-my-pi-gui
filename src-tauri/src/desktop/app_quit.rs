@@ -1,4 +1,4 @@
-//! The quit latch, ported from `src/main/app-quit.ts`: everything that ends
+//! The quit latch: everything that ends
 //! the process goes through `request_quit`, and an exit the OS or the last
 //! window asks for is refused until the "sessions are still working" guard
 //! approved it. Without this, quitting SIGTERMs every in-flight agent run

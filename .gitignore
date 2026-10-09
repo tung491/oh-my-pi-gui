@@ -8,7 +8,7 @@ node_modules/
 # Build output
 out/
 dist/
-# TypeScript incremental state (tsconfig.node.json is composite)
+# TypeScript incremental state
 *.tsbuildinfo
 
 # Bundled agent sidecar binaries (build with `bun run build:omp`; >100MB, not committed)
@@ -22,12 +22,7 @@ resources/assistant-pack/
 .DS_Store
 tmp/
 
-# electron-builder trial/override configs
-electron-builder.trial.yml
-dev-app-update.yml
-
 # Desktop functional audit artifacts
-playwright-report/
 test-results/
 
 # Tauri shell build output and staged sidecars

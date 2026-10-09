@@ -409,7 +409,7 @@ pub enum SidecarError {
     Other(String),
 }
 
-/// One variant per event `src/main/sidecar.ts` emits. Frame payloads are the
+/// One variant per event the sidecar manager emits. Frame payloads are the
 /// JSON frames as received, so routing modules forward them unchanged.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SidecarEvent {

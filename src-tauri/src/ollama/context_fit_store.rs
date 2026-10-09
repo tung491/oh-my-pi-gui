@@ -2,7 +2,7 @@
 //! under one main-owned key (`ollamaContextFit`; model tags contain dots, so
 //! never a dotted path per tag), and the sidecar settings overlay built from
 //! it. Pure helpers only: the scheduler and the IPC handlers do the reads and
-//! writes. Keeps step with `src/shared/context-fit-store.ts`; change both together.
+//! writes.
 
 use std::collections::BTreeMap;
 

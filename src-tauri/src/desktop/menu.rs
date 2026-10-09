@@ -1,4 +1,4 @@
-//! The application menu, ported from `src/main/menu.ts`, as pure data that
+//! The application menu, as pure data that
 //! the Tauri backend renders. A shortcut the renderer keymap owns is never a
 //! menu accelerator: the menu would fire first and the user's remap would die.
 //! Menu-only chords live in the native chord table the keymap reads as reserved.

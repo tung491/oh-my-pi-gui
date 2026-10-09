@@ -1,4 +1,4 @@
-//! Restored-window geometry guard, ported from `src/main/window-bounds.ts`.
+//! Restored-window geometry guard.
 //! A saved rect may name a display that is no longer attached; a window that
 //! "opens" there is unreachable, so it is recentered on the fallback display.
 

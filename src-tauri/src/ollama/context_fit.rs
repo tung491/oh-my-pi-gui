@@ -5,8 +5,7 @@
 //! memory, it fits while `size` stays within the RAM budget. Ollama spills to
 //! the CPU rather than failing, so a spill is read, never caught.
 //!
-//! Plain HTTP to the daemon, like `warm.rs`; never fails. Keeps step with
-//! `src/main/ollama/context-fit.ts`; change both together.
+//! Plain HTTP to the daemon, like `warm.rs`; never fails.
 
 use std::time::{Duration, Instant};
 

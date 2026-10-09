@@ -1,5 +1,4 @@
-//! Proxy environment for every child, ported from `src/main/index.ts`
-//! (`resolveProxyEnvForSpawn`). A desktop-launched app has no shell env, so
+//! Proxy environment for every child. A desktop-launched app has no shell env, so
 //! without this a proxy-only network hangs every provider request. Resolution
 //! order per spawn: the GUI pref `proxyUrl` → inherited env (a terminal
 //! launch) → the system proxy → none. Failure degrades to no proxy env, never

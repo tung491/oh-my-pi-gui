@@ -1,4 +1,4 @@
-//! Port of `src/main/sidecar-pool.ts`: one sidecar per tab, bounded at a hard
+//! One sidecar per tab, bounded at a hard
 //! cap that counts tabs across every window.
 //!
 //! The cap is atomic: a slot is reserved under the state lock before the

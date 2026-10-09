@@ -1,7 +1,6 @@
 //! Which Ollama models and endpoints count as "on this computer". The rules
 //! match the sidecar's `modelPolicy.localOnly`, so the GUI never measures or
-//! limits a model the agent would refuse to run. Keeps step with
-//! `src/shared/ollama-local.ts`; change both together.
+//! limits a model the agent would refuse to run.
 
 use std::net::Ipv4Addr;
 
