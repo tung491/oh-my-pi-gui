@@ -2,12 +2,11 @@ import { Pencil, RotateCcw } from "lucide-react";
 import { QUICK_ENTRY_DEFAULT_CHORD } from "../../../shared/hotkeys";
 import type { QuickEntryShortcutState } from "../../../shared/ipc-types";
 import { useT } from "../../lib/i18n";
-import { formatChord, type KeyboardPlatform } from "../../lib/keymap";
+import { formatChord } from "../../lib/keymap";
 import { Button } from "../common";
 
 interface QuickEntryShortcutRowProps {
 	state: QuickEntryShortcutState;
-	platform: KeyboardPlatform;
 	busy: boolean;
 	onRebind: () => void;
 	onToggle: () => void;
@@ -20,16 +19,9 @@ interface QuickEntryShortcutRowProps {
  * (Wayland portal), a change that waits for a restart, or a grab that only works
  * while the app is focused (XWayland).
  */
-export function QuickEntryShortcutRow({
-	state,
-	platform,
-	busy,
-	onRebind,
-	onToggle,
-	onReset,
-}: QuickEntryShortcutRowProps) {
+export function QuickEntryShortcutRow({ state, busy, onRebind, onToggle, onReset }: QuickEntryShortcutRowProps) {
 	const t = useT();
-	const chord = formatChord(state.chord, platform);
+	const chord = formatChord(state.chord);
 	const canReset = !state.enabled || state.chord !== QUICK_ENTRY_DEFAULT_CHORD;
 	const notes: string[] = [];
 	if (state.enabled && state.mode === "portal") notes.push(t("hotkeys.quickEntry.portal", { chord }));

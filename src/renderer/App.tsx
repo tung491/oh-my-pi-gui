@@ -43,7 +43,6 @@ import { isImeKeyEvent } from "./lib/ime";
 import {
 	chordFromEvent,
 	compileKeymap,
-	currentKeyboardPlatform,
 	formatChord,
 	KEYMAP_ACTION_BY_ID,
 	KEYMAP_ACTIONS,
@@ -140,8 +139,7 @@ export function App() {
 	useSessionTabs();
 	// Once per profile: sign out of and remove providers outside the allow-list.
 	useProviderCleanup();
-	// WebKitGTK and WebView2 show their own context menu outside editable fields; Electron's
-	// main process already suppresses it there, so match that here for every engine.
+	// WebKitGTK shows its own context menu outside editable fields; suppress it there.
 	useEffect(() => installContextMenuGuard(document), []);
 	// Quick-entry prompts queued before this renderer loaded (cold start, reload).
 	useEffect(() => {
@@ -172,7 +170,7 @@ export function App() {
 			toast({
 				variant: "warning",
 				title: t("quickEntry.toast.refusedTitle"),
-				message: t("quickEntry.toast.refusedBody", { chord: formatChord(notice.chord, currentKeyboardPlatform()) }),
+				message: t("quickEntry.toast.refusedBody", { chord: formatChord(notice.chord) }),
 			});
 		});
 	}, [t]);
@@ -341,11 +339,7 @@ export function App() {
 	// plan/15 §3.5): keydown dispatch is an O(1) map hit, never a config walk.
 	// The memo recomputes only when the overrides object identity changes.
 	const keymapOverrides = useUiStore(s => s.keymapOverrides);
-	const keyboardPlatform = currentKeyboardPlatform();
-	const keymap = useMemo(
-		() => compileKeymap(KEYMAP_ACTIONS, keymapOverrides, keyboardPlatform),
-		[keymapOverrides, keyboardPlatform],
-	);
+	const keymap = useMemo(() => compileKeymap(KEYMAP_ACTIONS, keymapOverrides), [keymapOverrides]);
 
 	// Boot hydration of user keybinding overrides (prefs key "keymapOverrides").
 	useEffect(() => {
@@ -387,7 +381,7 @@ export function App() {
 					ui.toggleToolsExpandAll();
 					return;
 				case "thinking.toggle": {
-					// ⌃T — show/hide thinking blocks (TUI app.thinking.toggle).
+					// Unbound by default — show/hide thinking blocks (TUI app.thinking.toggle).
 					void setDisplayPreference("hideThinkingBlock", !readDisplayPreference("hideThinkingBlock"));
 					return;
 				}

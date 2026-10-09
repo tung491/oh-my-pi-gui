@@ -14,8 +14,8 @@ import { whenSidecarReady } from "./sidecar-ready";
 import { focusedTabRpc } from "./tab-rpc";
 
 /**
- * Dotted on purpose: electron-store reads and writes dotted keys as paths,
- * so this is stored as `{ providers: { cleanupVersion: 1 } }` and
+ * Dotted on purpose: the prefs store (src-tauri/src/prefs.rs) reads and writes
+ * dotted keys as paths, so this is stored as `{ providers: { cleanupVersion: 1 } }` and
  * `prefs.get(PROVIDER_CLEANUP_PREF)` returns the number again.
  */
 export const PROVIDER_CLEANUP_PREF = "providers.cleanupVersion";

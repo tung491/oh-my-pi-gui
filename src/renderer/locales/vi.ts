@@ -449,7 +449,7 @@ export const vi: Record<string, string> = {
 	"settings.gui.transcript.fullDesc": "Hiển thị mọi khối suy luận và thẻ công cụ.",
 	"settings.gui.proxy": "Proxy HTTP",
 	"settings.gui.proxyDesc":
-		"Định tuyến các yêu cầu nhà cung cấp của agent (OAuth, streaming, mức sử dụng) qua proxy này. Để trống để tuân theo proxy hệ thống macOS. Áp dụng khi khởi động lại agent — sẽ tự động khởi động lại khi rảnh rỗi.",
+		"Định tuyến các yêu cầu nhà cung cấp của agent (OAuth, streaming, mức sử dụng) qua proxy này. Để trống để tuân theo proxy hệ thống. Áp dụng khi khởi động lại agent — sẽ tự động khởi động lại khi rảnh rỗi.",
 	"settings.gui.proxyApplied": "Đã lưu proxy — đang khởi động lại agent để áp dụng…",
 	"settings.gui.proxySavedPending": "Đã lưu proxy — sẽ có hiệu lực vào lần khởi động lại agent tiếp theo.",
 	"settings.restartRequired.badge": "Cần khởi động lại",
@@ -867,7 +867,7 @@ export const vi: Record<string, string> = {
 	"hotkeys.quickEntry.restart": "Khởi động lại Sai ATLAS để áp dụng thay đổi này.",
 	"hotkeys.quickEntry.desktopEntryMissing":
 		"Phím tắt toàn cục trên Wayland cần bản cài đặt .deb. Thay vào đó, hãy gán “sai-atlas --quick-entry” trong cài đặt bàn phím của desktop.",
-	"hotkeys.quickEntry.invalid": "Hãy dùng một phím kết hợp với Ctrl, Alt hoặc Cmd/Super.",
+	"hotkeys.quickEntry.invalid": "Hãy dùng một phím kết hợp với Ctrl, Alt hoặc Super.",
 	"hotkeys.quickEntry.conflictGlobal": "“{action}” đã sử dụng tổ hợp phím này trên toàn hệ thống",
 	"hotkeys.quickEntry.takesOver": "Mục nhập nhanh sẽ chiếm tổ hợp phím này ở mọi nơi, bao gồm cả từ “{action}”",
 	"tools.ask.questionFallback": "Câu hỏi",
@@ -1195,7 +1195,7 @@ export const vi: Record<string, string> = {
 	"queuePanel.edit": "Chỉnh sửa",
 	"queuePanel.editInput": "Nội dung tin nhắn trong hàng đợi",
 	"queuePanel.saveEdit": "Lưu",
-	"queuePanel.saveEditHint": "Lưu (⌘/Ctrl+Enter)",
+	"queuePanel.saveEditHint": "Lưu (Ctrl+Enter)",
 	"queuePanel.cancelEdit": "Hủy",
 	"queuePanel.drag": "Kéo để sắp xếp lại",
 	"queuePanel.moveUp": "Di chuyển lên",
@@ -1240,7 +1240,7 @@ export const vi: Record<string, string> = {
 	"updates.title": "Cập nhật",
 	"updates.subtitle": "Giữ Sai ATLAS luôn được cập nhật.",
 	"updates.gui.name": "Ứng dụng GUI",
-	"updates.gui.description": "Lớp vỏ Electron, renderer và các tài nguyên đi kèm.",
+	"updates.gui.description": "Lớp vỏ ứng dụng, renderer và các tài nguyên đi kèm.",
 	"updates.current": "Hiện tại",
 	"updates.latest": "Mới nhất",
 	"updates.systemHealthy": "Sai ATLAS đã là phiên bản mới nhất",
@@ -1416,12 +1416,10 @@ export const vi: Record<string, string> = {
 	"welcome.fact.memory": "Bộ nhớ: {size}",
 	"welcome.fact.graphics": "Đồ họa: {name}, {size}",
 	"welcome.fact.graphicsNone": "Đồ họa: không có GPU rời",
-	"welcome.fact.unified": "Đồ họa: {name}, dùng chung bộ nhớ hệ thống",
 	"welcome.ollama.running": "Ollama đang chạy ({count} mô hình)",
 	"welcome.ollama.stopped.linux": "Ollama đã được cài nhưng không phản hồi. Khởi động dịch vụ của nó là đủ.",
 	"welcome.ollama.stopped.manual":
 		"Ollama đã được cài nhưng chưa chạy. Chạy “ollama serve” trong terminal, rồi kiểm tra lại.",
-	"welcome.ollama.stopped.other": "Ollama đã được cài nhưng chưa chạy. Mở ứng dụng Ollama, rồi kiểm tra lại.",
 	"welcome.ollama.absent": "Ollama chưa được cài trên máy này. Đây là phần mềm chạy mô hình AI cục bộ.",
 	"welcome.ollama.installNote":
 		"Thao tác này tải và chạy trình cài đặt của Ollama với quyền root. Bạn sẽ được yêu cầu cấp quyền.",

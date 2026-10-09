@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { en } from "../../locales/en";
-import { runStarter, STARTERS, type Starter, type StarterDeps, startersFor } from "./starters";
+import { runStarter, STARTERS, type Starter, type StarterDeps } from "./starters";
 
 function starter(id: Starter["id"]): Starter {
 	const found = STARTERS.find(entry => entry.id === id);
@@ -17,41 +17,24 @@ function deps(dialogResult: string[] | null) {
 }
 
 describe("starter cards", () => {
-	it("lists the four everyday jobs with their skills, filters and platform", () => {
-		expect(STARTERS.map(({ id, skill, filters, linuxOnly }) => ({ id, skill, filters, linuxOnly }))).toEqual([
+	it("lists the four everyday jobs with their skills and filters", () => {
+		expect(STARTERS.map(({ id, skill, filters }) => ({ id, skill, filters }))).toEqual([
 			{
 				id: "word-report",
 				skill: "word-report",
 				filters: [{ name: "Documents", extensions: ["md", "txt", "docx", "pdf"] }],
-				linuxOnly: false,
 			},
 			{
 				id: "spreadsheet-cleanup",
 				skill: "spreadsheet-cleanup",
 				filters: [{ name: "Spreadsheets", extensions: ["xlsx", "xls", "ods", "csv"] }],
-				linuxOnly: false,
 			},
 			{
 				id: "slides-from-report",
 				skill: "slides-from-report",
 				filters: [{ name: "Documents", extensions: ["docx", "md", "txt", "pdf"] }],
-				linuxOnly: false,
 			},
-			{ id: "helpdesk", skill: "sai-os-helpdesk", filters: undefined, linuxOnly: true },
-		]);
-	});
-
-	it("offers the helpdesk only on Linux", () => {
-		expect(startersFor("linux").map(entry => entry.id)).toEqual([
-			"word-report",
-			"spreadsheet-cleanup",
-			"slides-from-report",
-			"helpdesk",
-		]);
-		expect(startersFor("darwin").map(entry => entry.id)).toEqual([
-			"word-report",
-			"spreadsheet-cleanup",
-			"slides-from-report",
+			{ id: "helpdesk", skill: "sai-os-helpdesk", filters: undefined },
 		]);
 	});
 

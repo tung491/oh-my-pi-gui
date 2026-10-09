@@ -54,7 +54,7 @@ export interface OllamaStatus {
 	version?: string;
 	modelCount: number;
 	installedTags: string[];
-	platform: NodeJS.Platform;
+	platform: "linux";
 	/** The remedy that fits this state and platform, or null when none applies. */
 	remedy: OllamaRemedyId | null;
 	/** Last probe or remedy failure, for diagnostics. */

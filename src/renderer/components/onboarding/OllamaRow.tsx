@@ -57,7 +57,6 @@ const REMEDY_LABEL_KEYS: Record<OllamaRemedyId, string> = {
 
 function messageKey(status: OllamaStatus): string {
 	if (status.state === "absent") return "welcome.ollama.absent";
-	if (status.platform !== "linux") return "welcome.ollama.stopped.other";
 	// Without a systemd unit (a binary or tarball install) there is no service to start.
 	return status.remedy === "linux-start" ? "welcome.ollama.stopped.linux" : "welcome.ollama.stopped.manual";
 }
@@ -95,7 +94,7 @@ export function OllamaRow({
 	}
 
 	const remedy = status.remedy;
-	const showCommand = remedy !== null && status.platform === "linux";
+	const showCommand = remedy !== null;
 	const anyBusy = busy !== null;
 	const Icon = status.state === "absent" ? XCircle : AlertTriangle;
 	const installFrame = visibleInstallFrame(status, busy, installProgress);

@@ -26,9 +26,8 @@ function dataTransfer({ types = ["Files"], uriList = "", files = [], getDataThro
 const globals = globalThis as { window?: unknown };
 const originalWindow = globals.window;
 
-function setPathForFile(pathForFile: ((file: File) => string) | undefined): void {
-	const system = { pathForFile } as Partial<OmpApi["system"]>;
-	globals.window = { omp: { system } };
+function setBareShell(): void {
+	globals.window = { omp: { system: {} } };
 }
 
 /** A Tauri-like `window.omp` whose native drop paths the test pushes; the window takes events. */
@@ -67,7 +66,7 @@ afterEach(() => {
 
 describe("isFileDrag", () => {
 	it("is true only for drags that carry files", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		expect(isFileDrag(dataTransfer({ types: ["text/uri-list", "Files"] }))).toBe(true);
 		expect(isFileDrag(dataTransfer({ types: ["text/uri-list", "text/html"] }))).toBe(true);
 		expect(isFileDrag(dataTransfer({ types: ["application/x-omp-tab"] }))).toBe(false);
@@ -78,7 +77,7 @@ describe("isFileDrag", () => {
 
 describe("droppedFilePaths", () => {
 	it("decodes file URIs with spaces and Unicode names", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		const uriList = [
 			"file:///home/u/My%20Report.pdf",
 			"file:///home/u/T%C3%A0i%20li%E1%BB%87u/b%C3%A1o%20c%C3%A1o.docx",
@@ -90,7 +89,7 @@ describe("droppedFilePaths", () => {
 	});
 
 	it("skips comment lines, blank lines and non-file URIs", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		const uriList = [
 			"# dragged from the file manager",
 			"",
@@ -104,33 +103,18 @@ describe("droppedFilePaths", () => {
 	});
 
 	it("removes duplicates and keeps drop order", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		const uriList = "file:///b.txt\nfile:///a.txt\nfile:///b.txt\nfile:///a.txt";
 		expect(droppedFilePaths(dataTransfer({ uriList }))).toEqual(["/b.txt", "/a.txt"]);
 	});
 
-	it("falls back to the shell's pathForFile when the URI list names no file", () => {
-		setPathForFile(file => (file.name === "built-in-page.txt" ? "" : `/Users/u/${file.name}`));
-		const files = [new File(["x"], "a.pdf"), new File(["y"], "built-in-page.txt"), new File(["z"], "a.pdf")];
-		expect(droppedFilePaths(dataTransfer({ files }))).toEqual(["/Users/u/a.pdf"]);
-		expect(droppedFilePaths(dataTransfer({ files, uriList: "https://example.com/x" }))).toEqual(["/Users/u/a.pdf"]);
-	});
-
-	it("prefers the URI list over pathForFile", () => {
-		setPathForFile(file => `/fallback/${file.name}`);
-		const files = [new File(["x"], "a.pdf")];
-		expect(droppedFilePaths(dataTransfer({ files, uriList: "file:///real/a.pdf" }))).toEqual(["/real/a.pdf"]);
-	});
-
-	it("survives getData and pathForFile throwing", () => {
-		setPathForFile(() => {
-			throw new Error("not a real file");
-		});
+	it("survives getData throwing", () => {
+		setBareShell();
 		expect(droppedFilePaths(dataTransfer({ files: [new File(["x"], "a.pdf")], getDataThrows: true }))).toEqual([]);
 	});
 
-	it("returns nothing without a URI list or pathForFile", () => {
-		setPathForFile(undefined);
+	it("returns nothing without a URI list", () => {
+		setBareShell();
 		expect(droppedFilePaths(dataTransfer({ files: [new File(["x"], "a.pdf")] }))).toEqual([]);
 	});
 });
@@ -204,25 +188,19 @@ describe("resolveDroppedPaths", () => {
 	});
 
 	it("resolves at once to nothing without a native source", async () => {
-		setPathForFile(undefined);
+		setBareShell();
 		expect(await resolveDroppedPaths(webkitDrop())).toEqual([]);
 	});
 });
 
 describe("hasDroppedFiles", () => {
 	it("is true for a drop whose URI list names a local file", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		expect(hasDroppedFiles(dataTransfer({ types: ["text/uri-list"], uriList: "file:///home/u/a.pdf" }))).toBe(true);
 	});
 
-	it("is true for an Electron drop resolved through pathForFile", () => {
-		setPathForFile(() => "/home/u/a.zip");
-		const file = new File(["x"], "a.zip");
-		expect(hasDroppedFiles(dataTransfer({ files: [file] }))).toBe(true);
-	});
-
 	it("is false for a link, plain text or nothing", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		expect(hasDroppedFiles(dataTransfer({ types: ["text/uri-list"], uriList: "https://example.com/" }))).toBe(false);
 		expect(hasDroppedFiles(dataTransfer({ types: ["text/plain"] }))).toBe(false);
 		expect(hasDroppedFiles(null)).toBe(false);
@@ -254,13 +232,13 @@ describe("hasDroppedFiles", () => {
 
 describe("dragCarriesFiles", () => {
 	it("is true for a Chromium drag listing Files", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		expect(dragCarriesFiles(dataTransfer({ types: ["Files"] }))).toBe(true);
 		expect(dragCarriesFiles(dataTransfer({ types: ["text/uri-list", "Files"] }))).toBe(true);
 	});
 
 	it("is false for a link, text, a tab or nothing", () => {
-		setPathForFile(undefined);
+		setBareShell();
 		expect(dragCarriesFiles(dataTransfer({ types: ["text/uri-list", "text/plain"] }))).toBe(false);
 		expect(dragCarriesFiles(dataTransfer({ types: ["text/plain"] }))).toBe(false);
 		expect(dragCarriesFiles(dataTransfer({ types: ["application/x-omp-tab"] }))).toBe(false);

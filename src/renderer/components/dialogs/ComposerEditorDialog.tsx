@@ -13,7 +13,7 @@ import { ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
-import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
+import { displayShortcut } from "../../lib/keymap";
 import { useUiStore } from "../../stores/ui";
 import { Button, Modal, Spinner } from "../common";
 
@@ -162,7 +162,7 @@ export function ComposerEditorDialog() {
 							{t("editor.cancel")}
 						</Button>
 						<Button onClick={save} size="sm">
-							{t("editor.save", { chord: displayShortcut("⌘↵", currentKeyboardPlatform()) })}
+							{t("editor.save", { chord: displayShortcut("⌘↵") })}
 						</Button>
 					</span>
 				</div>

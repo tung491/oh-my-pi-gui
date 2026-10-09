@@ -538,21 +538,6 @@ describe("FirstRunOnboardingDialog", () => {
 		expect(document.querySelector('.omp-ollama-row[data-state="ok"]')).not.toBeNull();
 	});
 
-	it("offers no command block off Linux", async () => {
-		const omp = installFakeOmp({
-			statuses: [status({ state: "absent", platform: "darwin", remedy: null, modelCount: 0 })],
-		});
-		await mountReady();
-		expect(document.querySelector(".omp-ollama-command")).toBeNull();
-		expect(action("remedy")).toBeNull();
-		await click(action("open-download"));
-		expect(omp.ollama.openDownload).toHaveBeenCalledTimes(1);
-		const before = omp.ollama.status.mock.calls.length;
-		await click(action("check-again"));
-		expect(omp.ollama.status.mock.calls.length).toBe(before + 1);
-		expect(omp.ollama.modelScreen.mock.calls.length).toBeGreaterThanOrEqual(2);
-	});
-
 	it("streams download progress, then flips the card to downloaded and re-checks", async () => {
 		const omp = installFakeOmp();
 		await mountReady();

@@ -12,7 +12,7 @@ import type {
 import { IPC_COMMANDS, IPC_EVENTS } from "../ipc-types";
 import type { IpcPort } from "./ipc-port";
 
-export function createQuickEntryApi(port: IpcPort, platform: string): QuickEntryBarApi {
+export function createQuickEntryApi(port: IpcPort, platform: QuickEntryBarApi["platform"]): QuickEntryBarApi {
 	// Main pushes the state on every show, possibly before React subscribes, and
 	// a remounting subscriber still needs the current show. So the latest state
 	// is kept and replayed to each new subscriber rather than consumed once.

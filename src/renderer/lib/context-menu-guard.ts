@@ -1,9 +1,8 @@
 /**
- * Suppresses the webview's default context menu outside editable content, so
- * WebKitGTK and WebView2 behave like Electron's `editable-context-menu.ts`
- * (no menu for plain content; the native menu, with spelling suggestions,
- * still opens over an input, a textarea, contenteditable or an element
- * opting back in with `data-native-context-menu`).
+ * Suppresses WebKitGTK's default context menu outside editable content: no
+ * menu for plain content; the native menu, with spelling suggestions, still
+ * opens over an input, a textarea, contenteditable or an element opting back
+ * in with `data-native-context-menu`.
  */
 
 const EDITABLE_SELECTOR = "input, textarea, [contenteditable], [data-native-context-menu]";

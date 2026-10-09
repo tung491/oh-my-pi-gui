@@ -52,7 +52,7 @@ import {
 import { ExecutionGroup } from "./ExecutionGroup";
 import { MessageBubble } from "./MessageBubble";
 import { StreamingText } from "./StreamingText";
-import { runStarter, type Starter, startersFor } from "./starters";
+import { runStarter, STARTERS, type Starter } from "./starters";
 import { ThinkingBlock } from "./ThinkingBlock";
 
 const STARTER_ICONS: Record<Starter["id"], LucideIcon> = {
@@ -234,7 +234,7 @@ function SessionTranscript() {
 		setVisibleRowIndex(current => (current === next ? current : next));
 	}, []);
 
-	const starters = startersFor(window.omp?.platform);
+	const starters = STARTERS;
 	const startJob = (starter: Starter) => {
 		void runStarter(starter, {
 			showOpenDialog: filters => window.omp.system.showOpenDialog(filters),

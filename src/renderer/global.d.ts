@@ -1,7 +1,7 @@
 /** Set by the Tauri shell's initialization script (`bridge::bootstrap_script`) before any page script runs. */
 interface OmpBootstrap {
-	/** Node's platform names, as `process.platform` reported them in Electron. */
-	platform: "darwin" | "win32" | "linux";
+	/** The host OS; always Linux. */
+	platform: "linux";
 	version: string;
 	windowKind: "main" | "quick-entry";
 	/** The user's home folder; empty when the shell could not tell. */

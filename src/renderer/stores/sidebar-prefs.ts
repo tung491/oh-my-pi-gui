@@ -1,7 +1,7 @@
 /**
  * Sidebar presentation prefs: pinned sessions, explicit session MRU access
  * times, and workspace display aliases (rename, read by the tab bar). Persisted as one JSON blob
- * under the "sidebar" prefs key via window.omp.prefs (electron-store in main);
+ * under the "sidebar" prefs key via window.omp.prefs (the prefs store, src-tauri/src/prefs.rs);
  * hydrate once at App mount. Recency bookkeeping writes fire-and-forget; the
  * pins and aliases the user can SEE are optimistic writes that roll back when
  * the persist rejects, so a row never stays pinned across a restart.

@@ -21,7 +21,6 @@ export interface MachineFactsProps {
 const FACT_SLOTS = ["memory", "graphics"] as const;
 
 function graphicsFact(machine: MachineFactsValue, t: ReturnType<typeof useT>): string {
-	if (machine.unifiedMemory && machine.gpuName) return t("welcome.fact.unified", { name: machine.gpuName });
 	if (machine.gpuName && machine.vramBytes !== null && machine.vramBytes > 0) {
 		return t("welcome.fact.graphics", { name: machine.gpuName, size: formatGigabytes(machine.vramBytes) });
 	}

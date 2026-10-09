@@ -8,7 +8,7 @@ import type {
 	QuickEntryShortcutUpdate,
 } from "../../../shared/ipc-types";
 import { I18nProvider } from "../../lib/i18n";
-import { KEYMAP_ACTIONS, RESERVED_CHORDS } from "../../lib/keymap";
+import { formatChord, KEYMAP_ACTIONS, platformDefaults, reservedChordsFor } from "../../lib/keymap";
 import { en } from "../../locales/en";
 import { useToastStore } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
@@ -143,15 +143,16 @@ describe("HotkeysDialog", () => {
 		await mount();
 		const chords = displayedChords();
 		for (const action of KEYMAP_ACTIONS) {
-			const displayed = action.defaults.join(" / ");
+			const defaults = platformDefaults(action);
+			const displayed = defaults.length > 0 ? formatChord(defaults.join(" / ")) : en["hotkeys.unbound"];
 			expect(
 				chords.filter(chord => chord === displayed),
 				action.id,
 			).toHaveLength(1);
 		}
-		for (const entry of RESERVED_CHORDS) {
+		for (const entry of reservedChordsFor()) {
 			expect(
-				chords.filter(chord => chord === entry.chord),
+				chords.filter(chord => chord === formatChord(entry.chord)),
 				entry.id,
 			).toHaveLength(1);
 		}
@@ -163,8 +164,8 @@ describe("HotkeysDialog", () => {
 		useUiStore.setState({ keymapOverrides: { retry: ["⌥⇧R"] } });
 		await mount();
 		const chords = displayedChords();
-		expect(chords).toContain("⌥⇧R");
-		expect(chords).not.toContain("⌥R");
+		expect(chords).toContain("Alt+Shift+R");
+		expect(chords).not.toContain("Alt+R");
 	});
 
 	it("lists Ctrl chords as text on Linux", async () => {
@@ -227,14 +228,5 @@ describe("HotkeysDialog", () => {
 		const text = quickEntryRow().textContent ?? "";
 		expect(text).toContain("sai-atlas --quick-entry");
 		expect(text).toContain(en["hotkeys.quickEntry.restart"]);
-	});
-
-	it("names the ⌘ forms after the Windows key on Windows", async () => {
-		(window as unknown as { omp: { platform: string } }).omp = { platform: "win32" };
-		await mount();
-		const chords = displayedChords();
-		expect(chords).toContain("Ctrl+W / Win+W");
-		expect(chords).toContain("Ctrl+T / Win+T");
-		expect(chords.filter(chord => /Super|[⌘⌃⌥⇧]/.test(chord))).toEqual([]);
 	});
 });

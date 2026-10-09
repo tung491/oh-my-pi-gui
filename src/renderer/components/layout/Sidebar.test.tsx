@@ -268,10 +268,10 @@ describe("Sidebar menus and pinned ordering", () => {
 			expect(navigation?.textContent).toContain(label);
 		}
 		const commandCenter = navigation?.querySelector('button[data-command-center-entry="true"]');
-		expect(commandCenter?.textContent).toContain("⌘K / ⌃K");
+		expect(commandCenter?.textContent).toContain("Ctrl+K / Super+K");
 		await act(async () => useUiStore.setState({ keymapOverrides: { palette: ["⌘⇧K"] } }));
-		expect(commandCenter?.textContent).toContain("⇧⌘K");
-		expect(commandCenter?.textContent).not.toContain("⌃K");
+		expect(commandCenter?.textContent).toContain("Shift+Super+K");
+		expect(commandCenter?.textContent).not.toContain("Ctrl+K");
 		await act(async () => useUiStore.setState({ keymapOverrides: {} }));
 
 		const collapse = navigation!.querySelector('[aria-label="Collapse navigation"]');
@@ -700,9 +700,9 @@ describe("Sidebar VIF rail", () => {
 		}
 		const commands = navButtons[0];
 		if (!commands) throw new Error("Commands navigation item missing");
-		expect(commands.querySelector("kbd")?.textContent).toBe("⌘K / ⌃K");
+		expect(commands.querySelector("kbd")?.textContent).toBe("Ctrl+K / Super+K");
 		expect(accessibleName(commands)).toBe("Commands");
-		expect(commands.getAttribute("title")).toBe("Open Command Center (⌘K / ⌃K)");
+		expect(commands.getAttribute("title")).toBe("Open Command Center (Ctrl+K / Super+K)");
 
 		// Strict e2e clicks resolve `{ name: "Settings", exact: true }`: only the nav item may carry it.
 		const sidebarButtons = container.querySelectorAll("aside button");

@@ -1,7 +1,5 @@
 /**
- * Paths of files dropped on the page. Electron's `File` has no path, so its
- * preload exposes `webUtils.getPathForFile` as `window.omp.system.pathForFile`.
- * Tauri keeps its native drag-drop handler off (HTML5 DnD powers tab reorder
+ * Paths of files dropped on the page. Tauri keeps its native drag-drop handler off (HTML5 DnD powers tab reorder
  * and pane split), and WebKitGTK then hides the dropped paths from the page:
  * the drop lists `text/uri-list` but returns it empty and has no `Files`. The
  * shell reads the paths from the GTK drop data instead and sends them as
@@ -158,25 +156,9 @@ function pathsFromUriList(list: string): string[] {
 	return paths;
 }
 
-function pathsFromFiles(data: DataTransfer): string[] {
-	const pathForFile = window.omp?.system.pathForFile;
-	if (!pathForFile) return [];
-	const paths: string[] = [];
-	for (const file of Array.from(data.files ?? [])) {
-		let path = "";
-		try {
-			path = pathForFile(file);
-		} catch {
-			// A File the shell cannot resolve (e.g. built in the page) has no path.
-		}
-		if (path) paths.push(path);
-	}
-	return paths;
-}
-
 /**
- * Dropped file paths in drop order, without duplicates: the drop's
- * `text/uri-list` when it names local files, else the shell's `pathForFile`.
+ * Dropped file paths in drop order, without duplicates: the local files the
+ * drop's `text/uri-list` names.
  */
 export function droppedFilePaths(data: DataTransfer): string[] {
 	let fromUris: string[] = [];
@@ -185,7 +167,7 @@ export function droppedFilePaths(data: DataTransfer): string[] {
 	} catch {
 		// Some engines refuse getData outside the drop event itself.
 	}
-	return dedupe(fromUris.length > 0 ? fromUris : pathsFromFiles(data));
+	return dedupe(fromUris);
 }
 
 /**

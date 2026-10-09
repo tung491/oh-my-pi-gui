@@ -1,8 +1,8 @@
 /**
- * The transport under `window.omp`. The Electron preload backs it with
- * `ipcRenderer`; the Tauri boot module backs it with one `invoke` command and
- * one `Channel` per page. `createOmpApi` and `createQuickEntryApi` build the
- * renderer-facing API on top of it and know nothing about either shell.
+ * The transport under `window.omp`. The Tauri boot module
+ * (src/renderer/boot/boot-tauri.ts) backs it with one `invoke` command and one
+ * `Channel` per page. `createOmpApi` and `createQuickEntryApi` build the
+ * renderer-facing API on top of it and know nothing about the shell.
  */
 export interface IpcPort {
 	/** Request/response. Rejections surface as `Error` objects with the main-side message. */

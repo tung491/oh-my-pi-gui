@@ -345,11 +345,10 @@ describe("installed package", () => {
 	it("exposes the host platform to the renderer", async () => {
 		await start("platform", { noProject: true });
 		const platform = await browser.execute(() => window.omp.platform);
-		expect(platform).toBe(process.platform);
+		expect(platform).toBe("linux");
 	}).timeout(120_000);
 
-	it("checks for updates against latest-linux.yml", async function () {
-		if (process.platform !== "linux") this.skip();
+	it("checks for updates against latest-linux.yml", async () => {
 		await start("updates", { noProject: true });
 		const status = await browser.execute(() => window.omp.updater.check());
 		// A release without Linux metadata fails naming the channel file; one

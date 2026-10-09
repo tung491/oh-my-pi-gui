@@ -37,8 +37,6 @@ export interface KeymapAction {
 	readonly labelKey: string;
 	/** Canonical default chords (first is the primary display chord). */
 	readonly defaults: readonly string[];
-	/** Defaults off macOS when the Ctrl-twin rule would collide (thinking.toggle's ⌃T is tab.new's twin there). */
-	readonly otherDefaults?: readonly string[];
 	/**
 	 * True = fires even while an overlay/dialog owns the keyboard or a focused
 	 * control consumed the key — the pre-B3 behavior of the unguarded ⌘ block
@@ -64,31 +62,12 @@ export interface ReservedChord {
 /** actionId → replacement chord list (canonical or aliased; sanitized on hydration). */
 export type KeymapOverrides = Record<string, string[]>;
 
-/**
- * macOS keeps the glyph table; every other host gets Ctrl twins and text
- * labels. Linux and Windows compile the same chords and differ only in the
- * name of the ⌘ key (Super vs Win).
- */
-export type KeyboardPlatform = "mac" | "linux" | "windows";
-
-export function keyboardPlatformOf(hostPlatform: string | undefined): KeyboardPlatform {
-	if (hostPlatform === undefined || hostPlatform === "darwin") return "mac";
-	return hostPlatform === "win32" ? "windows" : "linux";
-}
-
-/** The running window's layout, from the preload bridge (absent in unit tests → mac). */
-export function currentKeyboardPlatform(): KeyboardPlatform {
-	return keyboardPlatformOf(globalThis.window?.omp?.platform);
-}
-
-function textModifiers(platform: KeyboardPlatform): readonly (readonly [glyph: string, name: string])[] {
-	return [
-		["⌃", "Ctrl"],
-		["⌥", "Alt"],
-		["⇧", "Shift"],
-		["⌘", platform === "windows" ? "Win" : "Super"],
-	];
-}
+const TEXT_MODIFIERS: readonly (readonly [glyph: string, name: string])[] = [
+	["⌃", "Ctrl"],
+	["⌥", "Alt"],
+	["⇧", "Shift"],
+	["⌘", "Super"],
+];
 const TEXT_KEYS: Record<string, string> = {
 	"↵": "Enter",
 	"⇥": "Tab",
@@ -99,7 +78,7 @@ const TEXT_KEYS: Record<string, string> = {
 };
 const MODIFIER_GLYPHS = "⌥⇧⌃⌘";
 
-function formatOneChord(chord: string, platform: KeyboardPlatform): string {
+function formatOneChord(chord: string): string {
 	let rest = chord;
 	const held = new Set<string>();
 	while (rest.length > 0 && MODIFIER_GLYPHS.includes(rest.charAt(0))) {
@@ -107,24 +86,21 @@ function formatOneChord(chord: string, platform: KeyboardPlatform): string {
 		rest = rest.slice(1);
 	}
 	if (held.size === 0) return chord;
-	const names = textModifiers(platform)
-		.filter(([glyph]) => held.has(glyph))
-		.map(([, name]) => name);
+	const names = TEXT_MODIFIERS.filter(([glyph]) => held.has(glyph)).map(([, name]) => name);
 	return [...names, TEXT_KEYS[rest] ?? rest].join("+");
 }
 
-/** Display form of one chord or a " / "-joined list: glyphs on macOS, "Ctrl+Shift+T" elsewhere. */
-export function formatChord(keys: string, platform: KeyboardPlatform): string {
-	if (platform === "mac") return keys;
+/** Display form of one chord or a " / "-joined list: "Ctrl+Shift+T". */
+export function formatChord(keys: string): string {
 	return keys
 		.split(" / ")
-		.map(chord => formatOneChord(chord, platform))
+		.map(chord => formatOneChord(chord))
 		.join(" / ");
 }
 
-/** Display a CmdOrCtrl chord spelled in its macOS form (menu accelerators, hint constants). */
-export function displayShortcut(chord: string, platform: KeyboardPlatform): string {
-	return formatChord(platform === "mac" ? chord : ctrlTwin(chord), platform);
+/** Display a CmdOrCtrl chord spelled in its ⌘ form (menu accelerators, hint constants) as Linux fires it. */
+export function displayShortcut(chord: string): string {
+	return formatChord(ctrlTwin(chord));
 }
 
 /** Structural subset of KeyboardEvent that chord extraction reads (test-friendly). */
@@ -205,7 +181,7 @@ function keyFromEvent(event: KeyEventLike): string | null {
 	if (glyph) return glyph;
 	if (/^F(?:[1-9]|1[0-2])$/.test(event.key)) return event.key;
 	// Prefer the physical code for letters/digits/punctuation: with ⌥ held,
-	// macOS turns event.key into a composition character (⌥R → "®"), and the
+	// some layouts turn event.key into a composition character (⌥R → "®"), and the
 	// pre-B3 hardcoded chains were already code-based for exactly this reason.
 	if (/^Key[A-Z]$/.test(event.code)) return event.code.slice(3);
 	if (/^Digit[0-9]$/.test(event.code)) return event.code.slice(5);
@@ -232,8 +208,8 @@ export function chordFromEvent(event: KeyEventLike): string | null {
 /**
  * GUI-remappable actions (TUI app.* naming, plan/17 §6.2). Single source for
  * App.tsx's dispatch and HotkeysDialog's rows; the native menu keeps its own
- * chords in shared/hotkeys.ts because Electron resolves those before the
- * renderer sees a keydown.
+ * chords in shared/hotkeys.ts because the native layer resolves those before
+ * the renderer sees a keydown.
  * `defaults` for the ⌘ actions include their ⌃ twin: the pre-B3 handler
  * accepted `metaKey || ctrlKey` for that block, and the compiled map fully
  * replaces those chains.
@@ -267,8 +243,8 @@ export const KEYMAP_ACTIONS = [
 	{
 		id: "thinking.toggle",
 		labelKey: "hotkeys.row.thinkingToggle",
-		defaults: ["⌃T"],
-		otherDefaults: [],
+		// Unbound by default: ⌃T is tab.new's Ctrl twin. It stays in the palette and remappable.
+		defaults: [],
 		overlaySafe: false,
 		hotkeyGroup: "generation",
 	},
@@ -338,16 +314,13 @@ export const RESERVED_CHORDS: readonly ReservedChord[] = [
 	})),
 ];
 
-/** Defaults one host compiles: macOS as declared; elsewhere Ctrl twins first, ⌘ forms kept. */
-export function platformDefaults(action: KeymapAction, platform: KeyboardPlatform): readonly string[] {
-	if (platform === "mac") return action.defaults;
-	if (action.otherDefaults) return action.otherDefaults;
+/** Compiled defaults: Ctrl twins first, the ⌘ (Super) forms kept. */
+export function platformDefaults(action: KeymapAction): readonly string[] {
 	return [...new Set([...action.defaults.map(ctrlTwin), ...action.defaults])];
 }
 
-/** Native accelerators are CmdOrCtrl, so off macOS they hold the Ctrl form. */
-export function reservedChordsFor(platform: KeyboardPlatform): readonly ReservedChord[] {
-	if (platform === "mac") return RESERVED_CHORDS;
+/** Native accelerators are CmdOrCtrl, so they hold the Ctrl form. */
+export function reservedChordsFor(): readonly ReservedChord[] {
 	return RESERVED_CHORDS.map(entry =>
 		entry.hotkeyGroup === "native" ? { ...entry, chord: ctrlTwin(entry.chord) } : entry,
 	);
@@ -364,8 +337,8 @@ export function keymapActionsForGroup<const Group extends HotkeyGroupId>(
 }
 
 /** Non-remappable rows the reference dialog files under a group. */
-export function reservedChordsForGroup(group: ReservedChordGroup, platform: KeyboardPlatform = "mac"): ReservedChord[] {
-	return reservedChordsFor(platform).filter(entry => entry.hotkeyGroup === group);
+export function reservedChordsForGroup(group: ReservedChordGroup): ReservedChord[] {
+	return reservedChordsFor().filter(entry => entry.hotkeyGroup === group);
 }
 
 export interface ChordOwner {
@@ -403,12 +376,11 @@ export const KEYMAP_ACTION_BY_ID: Readonly<Record<KeymapActionId, KeymapAction>>
 export function compileKeymap<A extends KeymapAction>(
 	actions: readonly A[],
 	overrides: KeymapOverrides,
-	platform: KeyboardPlatform = "mac",
 ): Map<string, A["id"]> {
 	const map = new Map<string, A["id"]>();
 	for (const action of actions) {
 		if (overrides[action.id]?.length) continue; // replaced, not merged
-		for (const raw of platformDefaults(action, platform)) {
+		for (const raw of platformDefaults(action)) {
 			const parsed = parseChord(raw);
 			if (parsed) map.set(serializeChord(parsed), action.id);
 		}
@@ -441,21 +413,20 @@ export interface KeymapConflict {
  * §6.3). Defaults of an action that is itself remapped are dead and cast no
  * shadow. (c) reserved: a user chord taken by a focused control → warning (it
  * still fires elsewhere), or by the native menu / global shortcut → error
- * (Electron resolves it before the renderer ever sees the keydown).
- * `extraReserved` adds chords held elsewhere, already in this platform's
+ * (the native layer resolves it before the renderer ever sees the keydown).
+ * `extraReserved` adds chords held elsewhere, already in their compiled
  * spelling (the quick-entry chord is literal Control, never a Cmd twin).
  */
 export function detectConflicts(
 	actions: readonly KeymapAction[],
 	overrides: KeymapOverrides,
-	platform: KeyboardPlatform = "mac",
 	extraReserved: readonly ReservedChord[] = [],
 ): KeymapConflict[] {
-	const reserved = [...reservedChordsFor(platform), ...extraReserved];
+	const reserved = [...reservedChordsFor(), ...extraReserved];
 	const defaultChords = new Map<string, Set<string>>();
 	for (const action of actions) {
 		const chords = new Set<string>();
-		for (const raw of platformDefaults(action, platform)) {
+		for (const raw of platformDefaults(action)) {
 			const parsed = parseChord(raw);
 			if (parsed) chords.add(serializeChord(parsed));
 		}
@@ -514,21 +485,17 @@ export interface QuickEntryConflict {
  * window sees the keydown, so a keymap or composer chord it takes over is a
  * warning, and a native chord is an error. Main re-validates on save.
  */
-export function quickEntryConflicts(
-	chord: string,
-	overrides: KeymapOverrides,
-	platform: KeyboardPlatform,
-): QuickEntryConflict | null {
+export function quickEntryConflicts(chord: string, overrides: KeymapOverrides): QuickEntryConflict | null {
 	const parsed = parseChord(chord);
 	if (!parsed) return null;
 	const canonical = serializeChord(parsed);
-	const holders = reservedChordsFor(platform).filter(entry => {
+	const holders = reservedChordsFor().filter(entry => {
 		const held = parseChord(entry.chord);
 		return held !== null && serializeChord(held) === canonical;
 	});
 	const native = holders.find(entry => entry.hotkeyGroup === "native");
 	if (native) return { kind: "error", ownerId: native.id };
-	const action = compileKeymap(KEYMAP_ACTIONS, overrides, platform).get(canonical);
+	const action = compileKeymap(KEYMAP_ACTIONS, overrides).get(canonical);
 	if (action) return { kind: "warning", ownerId: action };
 	const composer = holders[0];
 	return composer ? { kind: "warning", ownerId: composer.id } : null;

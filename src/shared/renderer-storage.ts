@@ -17,8 +17,8 @@ export const RENDERER_STORAGE_KEYS = [
 export type RendererStorageKey = (typeof RENDERER_STORAGE_KEYS)[number];
 
 /**
- * The prefs key a renderer storage key mirrors to. electron-store nests dotted
- * keys, so `omp.lang` lands at `{ rendererStorage: { omp: { lang } } }`.
+ * The prefs key a renderer storage key mirrors to. The prefs store
+ * (src-tauri/src/prefs.rs) nests dotted keys, so `omp.lang` lands at `{ rendererStorage: { omp: { lang } } }`.
  */
 export function rendererStoragePrefKey(key: RendererStorageKey): string {
 	return `rendererStorage.${key}`;

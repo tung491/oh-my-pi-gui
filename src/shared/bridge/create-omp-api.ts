@@ -1,7 +1,6 @@
 /**
- * Builds the `window.omp` object over an {@link IpcPort}. Both shells share
- * this file, so the renderer sees one API whether the port is Electron's
- * `ipcRenderer` or Tauri's `invoke` + `Channel` pair.
+ * Builds the `window.omp` object over an {@link IpcPort}: Tauri's `invoke` +
+ * `Channel` pair.
  */
 import type {
 	CustomProviderView,
@@ -86,8 +85,6 @@ import type { IpcPort } from "./ipc-port";
 
 /** Shell-specific members the shared bridge cannot build over an {@link IpcPort}. */
 export interface OmpApiShellExtras {
-	/** Electron preload passes `webUtils.getPathForFile`; Tauri leaves it out. */
-	pathForFile?: (file: File) => string;
 	/** The Tauri boot sets this: its shell emits `system:native-drop-paths`. */
 	nativeDropPaths?: boolean;
 }
@@ -323,7 +320,6 @@ export function createOmpApi(
 			notify: (title: string, body?: string) => {
 				void port.invoke(IPC_COMMANDS.SYSTEM_NOTIFY, { title, body });
 			},
-			pathForFile: extras.pathForFile,
 			onNativeDropPaths: extras.nativeDropPaths
 				? (callback: (paths: string[]) => void) =>
 						subscribe<unknown>(IPC_EVENTS.NATIVE_DROP_PATHS, payload => callback(nativeDropPathsOf(payload)))

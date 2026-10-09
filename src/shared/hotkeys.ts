@@ -1,13 +1,13 @@
 /**
- * Chords owned by the native (main-process) layer: the app menu and the
- * system-wide window shortcut. Electron resolves these before the keydown
- * reaches any renderer, so a GUI action bound onto one of them can never fire —
- * the keymap registry therefore treats them as reserved and refuses the binding,
- * and the shortcuts dialog lists them alongside the remappable rows.
+ * Chords owned by the native layer: the app menu and the system-wide window
+ * shortcut. The native layer resolves these before the keydown reaches the
+ * renderer, so a GUI action bound onto one of them can never fire. The keymap
+ * registry therefore treats them as reserved and refuses the binding, and the
+ * shortcuts dialog lists them alongside the remappable rows.
  *
- * This is the only place these chords are spelled out: `main/menu.ts` and
- * `main/index.ts` ask for the Electron accelerator by id, and the renderer
- * derives its display + conflict table from the same list.
+ * This is the only place these chords are spelled out: the Tauri menu
+ * (src-tauri/src/desktop/menu.rs) uses the same accelerators, and a Rust test
+ * reads them from this file.
  */
 export interface NativeChord {
 	readonly id: string;
@@ -15,7 +15,7 @@ export interface NativeChord {
 	readonly labelKey: string;
 	/** Canonical chord as the shortcuts dialog displays it (⌥⇧⌃⌘ order). */
 	readonly chord: string;
-	/** Electron accelerator spelling for the same keys. */
+	/** Accelerator spelling for the same keys (CmdOrCtrl is Ctrl on Linux). */
 	readonly accelerator: string;
 }
 
@@ -35,14 +35,6 @@ export const NATIVE_CHORDS = [
 ] as const satisfies readonly NativeChord[];
 
 export type NativeChordId = (typeof NATIVE_CHORDS)[number]["id"];
-
-const nativeChordById = {} as Record<NativeChordId, (typeof NATIVE_CHORDS)[number]>;
-for (const entry of NATIVE_CHORDS) nativeChordById[entry.id] = entry;
-
-/** Electron accelerator for a native chord id. */
-export function nativeAccelerator(id: NativeChordId): string {
-	return nativeChordById[id].accelerator;
-}
 
 /** The quick-entry bar's system-wide chord: main registers it, the shortcuts dialog rebinds it. */
 export const QUICK_ENTRY_CHORD_ID = "quickEntry.summon";

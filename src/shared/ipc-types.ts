@@ -295,7 +295,7 @@ export interface RuntimeErrorReport {
 	details?: Record<string, string | number | boolean | null>;
 }
 
-// Update status machine (electron-updater/manual macOS installer → renderer)
+// Update status machine (updater → renderer)
 // ============================================================================
 
 export type UpdateInstallMode = "automatic" | "manual";
@@ -440,7 +440,7 @@ export type QuickEntryShortcutResult =
 
 /** window.ompQuickEntry: the only surface the bar page sees. */
 export interface QuickEntryBarApi {
-	readonly platform: string;
+	readonly platform: "linux";
 	/** The latest state replays to each new subscriber. */
 	onState(callback: (state: QuickEntryBarState) => void): () => void;
 	submit(payload: QuickEntrySubmitPayload): Promise<QuickEntrySubmitResult>;
@@ -1052,8 +1052,8 @@ export interface LogBatch {
 }
 
 export interface OmpApi {
-	/** process.platform of the host; drives the keyboard layout (Ctrl vs ⌘). */
-	readonly platform: string;
+	/** The host OS; the keyboard layout is Linux's (Ctrl twins, Super). */
+	readonly platform: "linux";
 	/** The user's home folder, as the sidecar expands `~`; empty when the shell could not tell. */
 	readonly homeDir: string;
 	runtime: {
@@ -1377,16 +1377,10 @@ export interface OmpApi {
 		clipboardRead(): Promise<string>;
 		notify(title: string, body?: string): void;
 		/**
-		 * Filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`;
-		 * "" when the file has none). Undefined under Tauri, where dropped paths
-		 * come from the drop's `text/uri-list`.
-		 */
-		pathForFile?: (file: File) => string;
-		/**
 		 * File paths of a drag over the window as the shell reads them from the
 		 * native drop data, which arrives before the page's `drop` event. Tauri
-		 * only: WebKitGTK hides dropped file paths from the page. Undefined under
-		 * Electron. Returns the unsubscribe function.
+		 * only: WebKitGTK hides dropped file paths from the page. Returns the
+		 * unsubscribe function.
 		 */
 		onNativeDropPaths?: (callback: (paths: string[]) => void) => () => void;
 	};

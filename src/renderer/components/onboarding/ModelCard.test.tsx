@@ -201,20 +201,10 @@ describe("MachineFacts", () => {
 		expect(container.textContent).toContain("Graphics: RTX 3070, 8.0 GB");
 	});
 
-	it("reports shared memory on Apple Silicon and no GPU elsewhere", async () => {
+	it("reports no dedicated GPU when the machine has none", async () => {
 		await mount(
-			<MachineFacts machine={{ ramBytes: 16e9, vramBytes: null, gpuName: "M2", unifiedMemory: true, threads: 8 }} />,
+			<MachineFacts machine={{ ramBytes: 8e9, vramBytes: null, gpuName: null, unifiedMemory: false, threads: 8 }} />,
 		);
-		expect(container.textContent).toContain("Graphics: M2, sharing system memory");
-		await act(async () => {
-			root.render(
-				<I18nProvider>
-					<MachineFacts
-						machine={{ ramBytes: 8e9, vramBytes: null, gpuName: null, unifiedMemory: false, threads: 8 }}
-					/>
-				</I18nProvider>,
-			);
-		});
 		expect(container.textContent).toContain("Graphics: no dedicated GPU");
 	});
 

@@ -2,9 +2,9 @@
  * Launch profiles: per-workspace agent CLI customisation configured in the
  * GUI (Settings → Launch Profile), persisted in GUI prefs under
  * `launchProfiles.<cwd>`, and appended to the sidecar spawn argv by
- * src/main/sidecar.ts. This module is pure mapping/preview — no I/O — so the
- * renderer (settings form + effective-command preview) and the main process
- * (spawn) share one source of truth.
+ * src-tauri/src/omp/manager.rs. This module is pure mapping/preview — no I/O —
+ * for the renderer's settings form and effective-command preview; manager.rs
+ * mirrors the mapping for the spawn.
  *
  * Flag mappings mirror packages/coding-agent/src/cli/flag-tables.ts.
  */

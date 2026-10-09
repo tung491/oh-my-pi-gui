@@ -25,7 +25,7 @@ import { dropSessionNow } from "../../hooks/use-session-switch";
 import { cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
-import { currentKeyboardPlatform, onEscape } from "../../lib/keymap";
+import { onEscape } from "../../lib/keymap";
 import { sessionDisplayTitle } from "../../lib/session-title";
 import { effectiveShortcut } from "../../lib/shortcut-hint";
 import { useTabRpc } from "../../lib/tab-rpc";
@@ -107,13 +107,9 @@ export function Sidebar() {
 	const tabRpc = useTabRpc();
 	const t = useT();
 	const keymapOverrides = useUiStore(state => state.keymapOverrides);
-	const keyboardPlatform = currentKeyboardPlatform();
 	// The command palette is the one destination the rail marks with a hint; it
 	// shows every chord that actually fires it, overrides included.
-	const paletteShortcut = useMemo(
-		() => effectiveShortcut("palette", keymapOverrides, keyboardPlatform),
-		[keymapOverrides, keyboardPlatform],
-	);
+	const paletteShortcut = useMemo(() => effectiveShortcut("palette", keymapOverrides), [keymapOverrides]);
 	const [navigationExpanded, setNavigationExpanded] = useState(true);
 	const switchPendingTo = useSessionStore(s => s.switchPending?.toId ?? null);
 	// Resizable left rail (mirrors PanelContainer's right-rail drag, but the

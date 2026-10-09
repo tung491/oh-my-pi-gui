@@ -155,16 +155,6 @@ describe("OllamaRow", () => {
 		expect(button("remedy")?.textContent).toContain("Install Ollama");
 	});
 
-	it("offers only the download link and a re-check off Linux", async () => {
-		await render(status({ state: "stopped", platform: "darwin" }));
-		expect(row().textContent).toContain("Open the Ollama app, then check again.");
-		expect(container.querySelector(".omp-ollama-command")).toBeNull();
-		expect(container.querySelector('[data-note="no-cloud"]')).toBeNull();
-		expect(button("remedy")).toBeNull();
-		expect(button("open-download")?.textContent).toContain("Open ollama.com/download");
-		expect(button("check-again")?.textContent).toContain("Check again");
-	});
-
 	it("spins the running remedy and disables every other action", async () => {
 		await render(status({ state: "stopped", remedy: "linux-start" }), "linux-start");
 		expect(button("remedy")?.querySelector('[role="status"]')).not.toBeNull();

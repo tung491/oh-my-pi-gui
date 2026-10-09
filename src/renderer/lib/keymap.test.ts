@@ -21,12 +21,10 @@ import {
 	displayShortcut,
 	formatChord,
 	KEYMAP_ACTIONS,
-	keyboardPlatformOf,
 	keymapActionsForGroup,
 	parseChord,
 	platformDefaults,
 	quickEntryConflicts,
-	RESERVED_CHORDS,
 	reservedChordsFor,
 	reservedChordsForGroup,
 	sanitizeOverrides,
@@ -40,7 +38,7 @@ function canonical(input: string): string {
 	return serializeChord(parsed);
 }
 
-/** Electron accelerator spelling → the canonical chord the dialog promises.
+/** Menu accelerator spelling → the canonical chord the dialog promises.
  *  "CmdOrCtrl" is one chord: the dialog shows the ⌘ form for both platforms. */
 function acceleratorToChord(accelerator: string): string {
 	const parts = accelerator.split("+");
@@ -117,7 +115,7 @@ describe("chordFromEvent", () => {
 	});
 
 	it("prefers the physical code over ⌥-composed event.key characters", () => {
-		// macOS reports ⌥R as key "®" — the pre-B3 hardcoded chains were code-based
+		// Some layouts report ⌥R as key "®" — the pre-B3 hardcoded chains were code-based
 		// for exactly this reason.
 		expect(chordFromEvent({ key: "®", code: "KeyR", ...NO_MODS, altKey: true })).toBe("⌥R");
 		expect(chordFromEvent({ key: "∏", code: "KeyP", ...NO_MODS, altKey: true, shiftKey: true })).toBe("⌥⇧P");
@@ -146,7 +144,8 @@ describe("compileKeymap", () => {
 		// The old default chord is dead…
 		expect(map.has("⌃O")).toBe(false);
 		// …while untouched actions keep their defaults.
-		expect(map.get("⌃T")).toBe("thinking.toggle");
+		expect(map.get("⌃T")).toBe("tab.new");
+		expect(map.get("⌃W")).toBe("tab.close");
 	});
 
 	it("lets an explicit user chord win a shadowed default slot", () => {
@@ -167,7 +166,8 @@ describe("detectConflicts", () => {
 	});
 
 	it("drops the shadow warning once the shadowed action is itself remapped", () => {
-		const conflicts = detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃O"], "tools.expand": ["ctrl+shift+o"] });
+		// ⇧⌃O is window.toggle on Linux, so the remap lands on a chord nobody holds.
+		const conflicts = detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃O"], "tools.expand": ["ctrl+alt+o"] });
 		expect(conflicts).toEqual([]);
 	});
 
@@ -177,10 +177,10 @@ describe("detectConflicts", () => {
 	});
 
 	it("blocks a binding on a chord the native layer already registers", () => {
-		// Electron resolves the menu/global accelerator before the renderer sees
-		// the keydown, so such a binding could never fire.
-		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌘N"] })).toEqual([
-			{ kind: "error", chord: "⌘N", actionIds: ["retry", "session.new"] },
+		// The native layer resolves the menu/global accelerator before the renderer
+		// sees the keydown, so such a binding could never fire.
+		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃N"] })).toEqual([
+			{ kind: "error", chord: "⌃N", actionIds: ["retry", "session.new"] },
 		]);
 	});
 
@@ -197,34 +197,29 @@ describe("detectConflicts", () => {
 			chord: QUICK_ENTRY_DEFAULT_CHORD,
 			hotkeyGroup: "native" as const,
 		};
-		for (const platform of ["mac", "linux"] as const) {
-			expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["ctrl+shift+space"] }, platform, [quickEntry])).toEqual([
-				{ kind: "error", chord: "⇧⌃␣", actionIds: ["retry", QUICK_ENTRY_CHORD_ID] },
-			]);
-		}
-		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⇧⌘␣"] }, "mac", [quickEntry])).toEqual([]);
+		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["ctrl+shift+space"] }, [quickEntry])).toEqual([
+			{ kind: "error", chord: "⇧⌃␣", actionIds: ["retry", QUICK_ENTRY_CHORD_ID] },
+		]);
 		expect(chordOwner(QUICK_ENTRY_CHORD_ID)).toEqual({ labelKey: "hotkeys.row.quickEntry", holds: "native" });
 	});
 });
 
 describe("quickEntryConflicts", () => {
 	it("refuses a native chord in this platform's spelling", () => {
-		expect(quickEntryConflicts("⇧⌃O", {}, "linux")).toEqual({ kind: "error", ownerId: "window.toggle" });
-		expect(quickEntryConflicts("⇧⌘O", {}, "mac")).toEqual({ kind: "error", ownerId: "window.toggle" });
-		expect(quickEntryConflicts("⇧⌃O", {}, "mac")).toBeNull();
+		expect(quickEntryConflicts("⇧⌃O", {})).toEqual({ kind: "error", ownerId: "window.toggle" });
 	});
 
 	it("warns when it takes a composer chord or a live keymap chord", () => {
-		expect(quickEntryConflicts("⌃R", {}, "linux")).toEqual({ kind: "warning", ownerId: "composer.history" });
-		expect(quickEntryConflicts("⌥⇧K", { retry: ["alt+shift+k"] }, "linux")).toEqual({
+		expect(quickEntryConflicts("⌃R", {})).toEqual({ kind: "warning", ownerId: "composer.history" });
+		expect(quickEntryConflicts("⌥⇧K", { retry: ["alt+shift+k"] })).toEqual({
 			kind: "warning",
 			ownerId: "retry",
 		});
 	});
 
 	it("has nothing to say about a free chord or one that does not parse", () => {
-		expect(quickEntryConflicts(QUICK_ENTRY_DEFAULT_CHORD, {}, "linux")).toBeNull();
-		expect(quickEntryConflicts("nope", {}, "linux")).toBeNull();
+		expect(quickEntryConflicts(QUICK_ENTRY_DEFAULT_CHORD, {})).toBeNull();
+		expect(quickEntryConflicts("nope", {})).toBeNull();
 	});
 });
 
@@ -249,12 +244,11 @@ describe("hotkey reference table", () => {
 		// later action win, and a default landing on the composer's ⌃R or a menu
 		// accelerator never reaches the renderer at all.
 		const claims = [
-			...KEYMAP_ACTIONS.flatMap(action => action.defaults.map(chord => ({ id: action.id, chord }))),
-			...RESERVED_CHORDS.map(entry => ({ id: entry.id, chord: entry.chord })),
+			...KEYMAP_ACTIONS.flatMap(action => platformDefaults(action)),
+			...reservedChordsFor().map(entry => entry.chord),
 		];
-		for (const claim of claims) expect(canonical(claim.chord), `"${claim.chord}"`).toBe(claim.chord);
-		const chords = claims.map(claim => claim.chord);
-		expect(new Set(chords).size).toBe(chords.length);
+		for (const chord of claims) expect(canonical(chord), `"${chord}"`).toBe(chord);
+		expect(new Set(claims).size).toBe(claims.length);
 	});
 
 	it("lists each native menu chord once, in both owners' tables", () => {
@@ -262,7 +256,7 @@ describe("hotkey reference table", () => {
 		expect(native.sort()).toEqual(NATIVE_CHORDS.map(entry => entry.id).sort());
 	});
 
-	it("spells every Electron accelerator with the keys the dialog displays", () => {
+	it("spells every menu accelerator with the keys the dialog displays", () => {
 		// The menu registers the accelerator; the dialog promises the chord. Edit
 		// only one of the two and the documented shortcut does nothing.
 		for (const entry of NATIVE_CHORDS) {
@@ -301,82 +295,48 @@ describe("sanitizeOverrides", () => {
 	});
 });
 
-describe("non-macOS keyboard", () => {
-	it("keeps macOS defaults exactly as declared", () => {
-		for (const action of KEYMAP_ACTIONS) expect(platformDefaults(action, "mac"), action.id).toBe(action.defaults);
-	});
-
-	it("gives every ⌘-only default a Ctrl twin elsewhere", () => {
-		const linux = (id: string) => platformDefaults(KEYMAP_ACTIONS.find(action => action.id === id)!, "linux");
+describe("Linux keyboard", () => {
+	it("gives every ⌘-only default a Ctrl twin", () => {
+		const linux = (id: string) => platformDefaults(KEYMAP_ACTIONS.find(action => action.id === id)!);
 		expect(linux("tab.new")).toEqual(["⌃T", "⌘T"]);
 		expect(linux("tab.close")).toEqual(["⌃W", "⌘W"]);
 		expect(linux("palette")).toEqual(["⌃K", "⌘K"]);
 		expect(linux("model.cycleForward")).toEqual(["⌃P"]);
-		// ⌃T is tab.new's twin off macOS; the thinking toggle stays in the palette and remappable.
+		// ⌃T is tab.new's Ctrl twin; the thinking toggle stays in the palette and remappable.
 		expect(linux("thinking.toggle")).toEqual([]);
 		expect(ctrlTwin("⇧⌘T")).toBe("⇧⌃T");
 		expect(ctrlTwin("⌥R")).toBe("⌥R");
 	});
 
-	it("gives every chord the app owns exactly one claimant off macOS", () => {
-		const claims = [
-			...KEYMAP_ACTIONS.flatMap(action => platformDefaults(action, "linux")),
-			...reservedChordsFor("linux").map(entry => entry.chord),
-		];
-		for (const chord of claims) expect(canonical(chord), `"${chord}"`).toBe(chord);
-		expect(new Set(claims).size).toBe(claims.length);
-	});
-
-	it("reserves the Ctrl form of every native accelerator off macOS", () => {
+	it("reserves the Ctrl form of every native accelerator", () => {
 		expect(
-			reservedChordsFor("linux")
+			reservedChordsFor()
 				.filter(entry => entry.hotkeyGroup === "native")
 				.map(entry => entry.chord),
 		).toEqual(NATIVE_CHORDS.map(entry => acceleratorToChord(entry.accelerator).replace("⌘", "⌃")));
-		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃N"] }, "linux")).toEqual([
+		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃N"] })).toEqual([
 			{ kind: "error", chord: "⌃N", actionIds: ["retry", "session.new"] },
 		]);
-		expect(detectConflicts(KEYMAP_ACTIONS, { retry: ["⌃N"] })).toEqual([]);
 	});
 
-	it("dispatches the Ctrl twins off macOS and leaves macOS dispatch alone", () => {
-		const linux = compileKeymap(KEYMAP_ACTIONS, {}, "linux");
+	it("dispatches the Ctrl twins", () => {
+		const linux = compileKeymap(KEYMAP_ACTIONS, {});
 		expect(linux.get("⌃T")).toBe("tab.new");
 		expect(linux.get("⌃W")).toBe("tab.close");
 		expect(linux.get("⌘T")).toBe("tab.new");
-		const mac = compileKeymap(KEYMAP_ACTIONS, {});
-		expect(mac.get("⌃T")).toBe("thinking.toggle");
-		expect(mac.get("⌃W")).toBeUndefined();
 	});
 
-	it("spells chords as text off macOS and keeps glyphs on macOS", () => {
-		expect(formatChord("⇧⌃T", "linux")).toBe("Ctrl+Shift+T");
-		expect(formatChord("⌥⇧P", "linux")).toBe("Alt+Shift+P");
-		expect(formatChord("⌃K / ⌘K", "linux")).toBe("Ctrl+K / Super+K");
-		expect(formatChord("⌃↵", "linux")).toBe("Ctrl+Enter");
-		expect(formatChord("⇧Enter", "linux")).toBe("Shift+Enter");
-		expect(formatChord("↑ / ↓", "linux")).toBe("↑ / ↓");
-		expect(formatChord("Esc", "linux")).toBe("Esc");
-		expect(formatChord("⌃K / ⌘K", "windows")).toBe("Ctrl+K / Win+K");
-		expect(formatChord("⇧⌃T", "windows")).toBe("Ctrl+Shift+T");
-		expect(formatChord("⇧⌘T", "mac")).toBe("⇧⌘T");
-		expect(displayShortcut("⌘N", "linux")).toBe("Ctrl+N");
-		expect(displayShortcut("⇧⌘T", "linux")).toBe("Ctrl+Shift+T");
-		expect(displayShortcut("⌘↵", "linux")).toBe("Ctrl+Enter");
-		expect(displayShortcut("⌥R", "linux")).toBe("Alt+R");
-		expect(displayShortcut("⌘K", "mac")).toBe("⌘K");
-	});
-
-	it("maps the host platform onto the keyboard layouts", () => {
-		expect(keyboardPlatformOf(undefined)).toBe("mac");
-		expect(keyboardPlatformOf("darwin")).toBe("mac");
-		expect(keyboardPlatformOf("linux")).toBe("linux");
-		expect(keyboardPlatformOf("win32")).toBe("windows");
-		expect(keyboardPlatformOf("freebsd")).toBe("linux");
-		// Windows compiles the same chords as Linux; only the labels differ.
-		expect(platformDefaults(KEYMAP_ACTIONS.find(action => action.id === "tab.close")!, "windows")).toEqual([
-			"⌃W",
-			"⌘W",
-		]);
+	it("spells chords as text", () => {
+		expect(formatChord("⇧⌃T")).toBe("Ctrl+Shift+T");
+		expect(formatChord("⌥⇧P")).toBe("Alt+Shift+P");
+		expect(formatChord("⌃K / ⌘K")).toBe("Ctrl+K / Super+K");
+		expect(formatChord("⌃↵")).toBe("Ctrl+Enter");
+		expect(formatChord("⇧Enter")).toBe("Shift+Enter");
+		expect(formatChord("↑ / ↓")).toBe("↑ / ↓");
+		expect(formatChord("Esc")).toBe("Esc");
+		expect(displayShortcut("⌘N")).toBe("Ctrl+N");
+		expect(displayShortcut("⇧⌘T")).toBe("Ctrl+Shift+T");
+		expect(displayShortcut("⌘↵")).toBe("Ctrl+Enter");
+		expect(displayShortcut("⌥R")).toBe("Alt+R");
 	});
 });

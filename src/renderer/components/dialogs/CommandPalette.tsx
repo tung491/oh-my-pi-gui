@@ -23,7 +23,7 @@ import {
 } from "../../lib/command-registry";
 import { useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
-import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
+import { displayShortcut } from "../../lib/keymap";
 import { retryLastTurn as retryLastTurnShared } from "../../lib/messages";
 import { writePersisted } from "../../lib/persisted-storage";
 import { useModelStore } from "../../stores/model";
@@ -136,7 +136,6 @@ async function runAffordance(
 
 export function CommandPalette() {
 	const tabRpc = useTabRpc();
-	const keyboardPlatform = currentKeyboardPlatform();
 	const tabId = useRuntimeTabId();
 	const t = useT();
 	const open = useUiStore(state => state.commandPaletteOpen);
@@ -597,9 +596,7 @@ export function CommandPalette() {
 					</span>
 				</span>
 				{item.shortcut && (
-					<kbd className="omp-kbd shrink-0 font-medium text-(--omp-muted)">
-						{displayShortcut(item.shortcut, keyboardPlatform)}
-					</kbd>
+					<kbd className="omp-kbd shrink-0 font-medium text-(--omp-muted)">{displayShortcut(item.shortcut)}</kbd>
 				)}
 				{options?.categoryLabel && (
 					<span className="shrink-0 text-omp-xxs tracking-wide text-(--omp-dim) uppercase">

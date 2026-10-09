@@ -8,7 +8,6 @@ import * as path from "node:path";
 import { $, $$, browser, expect } from "@wdio/globals";
 import { writeDesktopPrefs } from "../e2e/desktop-prefs";
 import { removedCommandName } from "../src/renderer/lib/command-availability";
-import { keyboardPlatformOf } from "../src/renderer/lib/keymap";
 import { effectiveShortcut } from "../src/renderer/lib/shortcut-hint";
 import type { AvailableCommand, SettingEntry, SettingsSchemaResult } from "../src/shared/rpc-types";
 import {
@@ -982,10 +981,10 @@ describe("deep audit", () => {
 			await expect($(DIALOG)).toBeDisplayed();
 			await browser.keys("Escape");
 			await expect($$(DIALOG)).toBeElementsArrayOfSize(0);
-			// The chip spells the palette's chords in the host's form: glyphs on macOS, text elsewhere.
+			// The chip spells the palette's chords as text (Ctrl+K / Super+K).
 			await expect($('button[data-command-center-entry="true"] kbd')).toHaveElementProperty(
 				"textContent",
-				effectiveShortcut("palette", {}, keyboardPlatformOf(process.platform)),
+				effectiveShortcut("palette", {}),
 				{ containing: true },
 			);
 			await $('button[data-command-center-entry="true"]').click();

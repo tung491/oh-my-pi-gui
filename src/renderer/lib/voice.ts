@@ -127,7 +127,7 @@ export interface CaptureBackendContext {
 /**
  * The worklet runs capture on the audio thread and survives long main-thread
  * tasks (e.g. streaming markdown); `ScriptProcessorNode` is the fallback for
- * an engine without `audioWorklet` (kept while Electron still ships one).
+ * an engine without `audioWorklet`.
  */
 export function chooseCaptureBackend(context: CaptureBackendContext): "worklet" | "script-processor" {
 	return context.audioWorklet ? "worklet" : "script-processor";

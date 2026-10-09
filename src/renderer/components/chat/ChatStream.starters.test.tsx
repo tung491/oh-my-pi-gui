@@ -28,8 +28,8 @@ const windowGlobals = window as unknown as Record<string, unknown>;
 let container: Element | null = null;
 let root: Root | null = null;
 
-async function mountEmpty(platform: string): Promise<Element> {
-	windowGlobals.omp = { platform };
+async function mountEmpty(): Promise<Element> {
+	windowGlobals.omp = { platform: "linux" };
 	useSessionStore.setState({ status: "ready" });
 	const host = document.createElement("div") as unknown as Element;
 	document.body.appendChild(host as never);
@@ -58,21 +58,15 @@ afterEach(async () => {
 });
 
 describe("empty-state starter cards", () => {
-	it("shows four cards on Linux, the helpdesk included", async () => {
-		const host = await mountEmpty("linux");
+	it("shows four cards, the helpdesk included", async () => {
+		const host = await mountEmpty();
 		const cards = host.querySelectorAll(".omp-starter-card");
 		expect(cards).toHaveLength(4);
 		expect(host.textContent).toContain(en["chat.starter.helpdesk.title"]);
 	});
 
-	it("shows three cards on macOS, without the helpdesk", async () => {
-		const host = await mountEmpty("darwin");
-		expect(host.querySelectorAll(".omp-starter-card")).toHaveLength(3);
-		expect(host.textContent).not.toContain(en["chat.starter.helpdesk.title"]);
-	});
-
 	it("asks what it can help with today", async () => {
-		const host = await mountEmpty("linux");
+		const host = await mountEmpty();
 		expect(en["chat.empty.everyday.title"]).toBe("What can I help you with today?");
 		expect(host.querySelector("h1")?.textContent).toBe(en["chat.empty.everyday.title"]);
 	});

@@ -20,7 +20,7 @@ import {
 import { useSessionList } from "../../hooks/use-session-list";
 import { basename, cx } from "../../lib/format";
 import { useT } from "../../lib/i18n";
-import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
+import { displayShortcut } from "../../lib/keymap";
 import { sessionHasContent } from "../../lib/session-title";
 import { type LiveTabRuntime, performTabClose, tabNeedsCloseConfirm } from "../../lib/tab-close";
 import { tabSignalPresentation } from "../../lib/tab-signal";
@@ -535,7 +535,6 @@ export function TabBar({ confirmCloseMs = CONFIRM_CLOSE_MS }: { confirmCloseMs?:
  * New-tab affordance: a new task tab.
  */
 function NewTabMenu() {
-	const keyboardPlatform = currentKeyboardPlatform();
 	const t = useT();
 	const openTab = useTabsStore(s => s.openTab);
 	return (
@@ -545,7 +544,7 @@ function NewTabMenu() {
 			label={t("tabs.new.agent")}
 			onClick={() => void openTab()}
 			size="sm"
-			title={t("tabs.new.agentHint", { chord: displayShortcut("⌘T", keyboardPlatform) })}
+			title={t("tabs.new.agentHint", { chord: displayShortcut("⌘T") })}
 			variant="ghost"
 		/>
 	);

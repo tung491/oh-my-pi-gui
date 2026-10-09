@@ -495,7 +495,7 @@ export const en: Record<string, string> = {
 	"settings.gui.transcript.fullDesc": "Show every reasoning block and tool card.",
 	"settings.gui.proxy": "HTTP proxy",
 	"settings.gui.proxyDesc":
-		"Routes the agent's provider requests (OAuth, streaming, usage) through this proxy. Leave empty to follow the macOS system proxy. Applies on agent restart — restarted for you when idle.",
+		"Routes the agent's provider requests (OAuth, streaming, usage) through this proxy. Leave empty to follow the system proxy. Applies on agent restart — restarted for you when idle.",
 	"settings.gui.proxyApplied": "Proxy saved — restarting the agent to apply…",
 	"settings.gui.proxySavedPending": "Proxy saved — takes effect on the next agent restart.",
 	"settings.restartRequired.badge": "Restart",
@@ -957,7 +957,7 @@ export const en: Record<string, string> = {
 	"hotkeys.quickEntry.restart": "Restart Sai ATLAS to apply this change.",
 	"hotkeys.quickEntry.desktopEntryMissing":
 		"Wayland global shortcuts need the installed .deb. Bind “sai-atlas --quick-entry” in your desktop's keyboard settings instead.",
-	"hotkeys.quickEntry.invalid": "Use a key with Ctrl, Alt or Cmd/Super.",
+	"hotkeys.quickEntry.invalid": "Use a key with Ctrl, Alt or Super.",
 	"hotkeys.quickEntry.conflictGlobal": "“{action}” already uses this chord system-wide",
 	"hotkeys.quickEntry.takesOver": "Quick entry will take this chord everywhere, including from “{action}”",
 
@@ -1311,7 +1311,7 @@ export const en: Record<string, string> = {
 	"queuePanel.edit": "Edit",
 	"queuePanel.editInput": "Queued message text",
 	"queuePanel.saveEdit": "Save",
-	"queuePanel.saveEditHint": "Save (⌘/Ctrl+Enter)",
+	"queuePanel.saveEditHint": "Save (Ctrl+Enter)",
 	"queuePanel.cancelEdit": "Cancel",
 	"queuePanel.drag": "Drag to reorder",
 	"queuePanel.moveUp": "Move up",
@@ -1368,7 +1368,7 @@ export const en: Record<string, string> = {
 	"updates.title": "Updates",
 	"updates.subtitle": "Keep Sai ATLAS up to date.",
 	"updates.gui.name": "GUI application",
-	"updates.gui.description": "Electron shell, renderer, and bundled resources.",
+	"updates.gui.description": "App shell, renderer, and bundled resources.",
 	"updates.current": "Current",
 	"updates.latest": "Latest",
 	"updates.systemHealthy": "Sai ATLAS is up to date",
@@ -1538,12 +1538,10 @@ export const en: Record<string, string> = {
 	"welcome.fact.memory": "Memory: {size}",
 	"welcome.fact.graphics": "Graphics: {name}, {size}",
 	"welcome.fact.graphicsNone": "Graphics: no dedicated GPU",
-	"welcome.fact.unified": "Graphics: {name}, sharing system memory",
 	"welcome.ollama.running": "Ollama is running ({count} models)",
 	"welcome.ollama.stopped.linux": "Ollama is installed but not answering. Starting its service should be enough.",
 	"welcome.ollama.stopped.manual":
 		"Ollama is installed but not running. Run “ollama serve” in a terminal, then check again.",
-	"welcome.ollama.stopped.other": "Ollama is installed but not running. Open the Ollama app, then check again.",
 	"welcome.ollama.absent": "Ollama is not installed on this machine. It is what runs the local AI model.",
 	"welcome.ollama.installNote":
 		"This downloads and runs Ollama's own installer as root. You will be asked to authorize it.",

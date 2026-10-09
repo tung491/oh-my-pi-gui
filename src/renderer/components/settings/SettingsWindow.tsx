@@ -43,7 +43,7 @@ import { retryFailedTurn } from "../../lib/command-registry";
 import { exportSessionHtml } from "../../lib/export-session";
 import { useLang, useT } from "../../lib/i18n";
 import { isImeKeyEvent } from "../../lib/ime";
-import { currentKeyboardPlatform, displayShortcut } from "../../lib/keymap";
+import { displayShortcut } from "../../lib/keymap";
 import { setCodeLineNumbersPref } from "../../lib/markdown";
 import { clearSessionContext, retryLastTurn as retryLastTurnShared } from "../../lib/messages";
 import { en } from "../../locales/en";
@@ -158,7 +158,6 @@ export function SettingsConnectionNotice({
 }
 
 export function SettingsWindow() {
-	const keyboardPlatform = currentKeyboardPlatform();
 	const tabRpc = useTabRpc();
 	const t = useT();
 	const { lang } = useLang();
@@ -774,7 +773,7 @@ export function SettingsWindow() {
 							value={query}
 						/>
 						<Kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-(--omp-dim)">
-							{displayShortcut("⌘K", keyboardPlatform)}
+							{displayShortcut("⌘K")}
 						</Kbd>
 					</div>
 				)}
