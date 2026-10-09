@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub(crate) use super::wayland_portal::ShortcutMode;
-use super::Platform;
 
 // ---------------------------------------------------------------------------
 // Chord grammar (`src/shared/chord.ts`)
@@ -169,7 +168,7 @@ fn accelerator_key(key: &str) -> Option<String> {
 
 /// Accelerator for a chord: "⇧⌃␣" → "Control+Shift+Space". ⌘ is Super; it is
 /// never widened to CommandOrControl.
-pub(crate) fn chord_to_accelerator(chord: &str, _platform: Platform) -> Option<String> {
+pub(crate) fn chord_to_accelerator(chord: &str) -> Option<String> {
     let parsed = parse_chord(chord)?;
     let mut parts: Vec<&str> = Vec::new();
     if parsed.meta {
@@ -207,7 +206,7 @@ pub(crate) fn native_accelerator(id: &str) -> Option<&'static str> {
     NATIVE_CHORDS.iter().find(|(entry, _, _)| *entry == id).map(|(_, _, accelerator)| *accelerator)
 }
 
-/// The quick-entry bar's system-wide chord: literal Control on every platform.
+/// The quick-entry bar's system-wide chord: literal Control.
 pub(crate) const QUICK_ENTRY_DEFAULT_CHORD: &str = "⇧⌃␣";
 
 // ---------------------------------------------------------------------------
@@ -241,7 +240,7 @@ pub(crate) enum ChordRejection {
 }
 
 /// The app chord this one would collide with: a `NATIVE_CHORDS` id (CommandOrControl, which is Ctrl on Linux).
-pub(crate) fn reserved_global_chord(chord: &str, _platform: Platform) -> Option<&'static str> {
+pub(crate) fn reserved_global_chord(chord: &str) -> Option<&'static str> {
     let canonical = serialize_chord(&parse_chord(chord)?);
     NATIVE_CHORDS.iter().find_map(|(id, native, _)| (ctrl_twin(native) == canonical).then_some(*id))
 }
@@ -249,9 +248,9 @@ pub(crate) fn reserved_global_chord(chord: &str, _platform: Platform) -> Option<
 /// The one global-chord policy. `Invalid`: unparsable, or a key that cannot
 /// be registered; `System`: Ctrl and/or Cmd alone or a window-manager chord;
 /// `Reserved`: one of the app's own native chords.
-pub(crate) fn validate_global_chord(chord: &str, platform: Platform) -> Option<ChordRejection> {
+pub(crate) fn validate_global_chord(chord: &str) -> Option<ChordRejection> {
     let Some(parsed) = parse_chord(chord) else { return Some(ChordRejection::Invalid) };
-    if chord_to_accelerator(chord, platform).is_none() {
+    if chord_to_accelerator(chord).is_none() {
         return Some(ChordRejection::Invalid);
     }
     if !parsed.alt && !parsed.shift {
@@ -260,7 +259,7 @@ pub(crate) fn validate_global_chord(chord: &str, platform: Platform) -> Option<C
     if OS_CHORDS.contains(&serialize_chord(&parsed).as_str()) {
         return Some(ChordRejection::System);
     }
-    if reserved_global_chord(chord, platform).is_some() {
+    if reserved_global_chord(chord).is_some() {
         return Some(ChordRejection::Reserved);
     }
     None
@@ -269,12 +268,12 @@ pub(crate) fn validate_global_chord(chord: &str, platform: Platform) -> Option<C
 /// The saved shortcut, or the default chord when the saved one is missing,
 /// malformed or no longer allowed. A boolean `enabled` survives, so a user's
 /// "off" is kept even when the chord falls back.
-pub(crate) fn sanitize_shortcut_pref(raw: Option<&Value>, platform: Platform) -> QuickEntryShortcutPref {
+pub(crate) fn sanitize_shortcut_pref(raw: Option<&Value>) -> QuickEntryShortcutPref {
     let record = raw.filter(|value| value.is_object());
     let enabled = record.and_then(|r| r.get("enabled")).and_then(Value::as_bool).unwrap_or(true);
     let chord = record.and_then(|r| r.get("chord")).and_then(Value::as_str).unwrap_or("");
     match parse_chord(chord) {
-        Some(parsed) if validate_global_chord(chord, platform).is_none() => QuickEntryShortcutPref { chord: serialize_chord(&parsed), enabled },
+        Some(parsed) if validate_global_chord(chord).is_none() => QuickEntryShortcutPref { chord: serialize_chord(&parsed), enabled },
         _ => QuickEntryShortcutPref { enabled, ..QuickEntryShortcutPref::default_pref() },
     }
 }
@@ -299,7 +298,7 @@ pub(crate) enum ShortcutPlan {
 }
 
 /// `QuickEntryShortcutUpdate`: `{ chord } | { enabled } | { reset: true }`.
-fn next_pref(current: &QuickEntryShortcutPref, update: &Value, platform: Platform) -> Result<QuickEntryShortcutPref, ChordRejection> {
+fn next_pref(current: &QuickEntryShortcutPref, update: &Value) -> Result<QuickEntryShortcutPref, ChordRejection> {
     if !update.is_object() {
         return Err(ChordRejection::Invalid);
     }
@@ -310,7 +309,7 @@ fn next_pref(current: &QuickEntryShortcutPref, update: &Value, platform: Platfor
         return Ok(QuickEntryShortcutPref { chord: current.chord.clone(), enabled });
     }
     let Some(chord) = update.get("chord").and_then(Value::as_str) else { return Err(ChordRejection::Invalid) };
-    if let Some(reason) = validate_global_chord(chord, platform) {
+    if let Some(reason) = validate_global_chord(chord) {
         return Err(reason);
     }
     let parsed = parse_chord(chord).ok_or(ChordRejection::Invalid)?;
@@ -318,15 +317,15 @@ fn next_pref(current: &QuickEntryShortcutPref, update: &Value, platform: Platfor
     Ok(QuickEntryShortcutPref { chord: serialize_chord(&parsed), enabled: true })
 }
 
-pub(crate) fn plan_shortcut_update(current: &QuickEntryShortcutPref, update: &Value, mode: ShortcutMode, platform: Platform) -> ShortcutPlan {
-    let next = match next_pref(current, update, platform) {
+pub(crate) fn plan_shortcut_update(current: &QuickEntryShortcutPref, update: &Value, mode: ShortcutMode) -> ShortcutPlan {
+    let next = match next_pref(current, update) {
         Ok(next) => next,
         Err(reason) => return ShortcutPlan::Reject(reason),
     };
     if mode == ShortcutMode::Portal {
         return ShortcutPlan::Persist { next };
     }
-    let accelerator = |pref: &QuickEntryShortcutPref| if pref.enabled { chord_to_accelerator(&pref.chord, platform) } else { None };
+    let accelerator = |pref: &QuickEntryShortcutPref| if pref.enabled { chord_to_accelerator(&pref.chord) } else { None };
     let from = accelerator(current);
     let to = accelerator(&next);
     ShortcutPlan::Rebind { next, from, to }
@@ -432,75 +431,75 @@ mod tests {
     #[test]
     fn refuses_ctrl_or_cmd_alone_and_the_window_manager_s_chords() {
         for chord in ["⌃V", "⌘C", "⌘Q", "⌥F4", "⌘␣", "⌃⌘Q", "⌥⇥", "⌥⌃⌦"] {
-            assert_eq!(validate_global_chord(chord, Platform::Linux), Some(ChordRejection::System), "{chord}");
+            assert_eq!(validate_global_chord(chord), Some(ChordRejection::System), "{chord}");
         }
-        assert_eq!(validate_global_chord("⌃A", Platform::Linux), Some(ChordRejection::System));
+        assert_eq!(validate_global_chord("⌃A"), Some(ChordRejection::System));
     }
 
     #[test]
     fn accepts_chords_with_alt_or_shift_beyond_ctrl_cmd() {
         for chord in ["⌥␣", "⇧⌃␣", "⌥⇧K", "⇧⌘K"] {
-            assert_eq!(validate_global_chord(chord, Platform::Linux), None, "{chord}");
+            assert_eq!(validate_global_chord(chord), None, "{chord}");
         }
     }
 
     #[test]
     fn refuses_what_does_not_parse() {
-        assert_eq!(validate_global_chord("⇧A", Platform::Linux), Some(ChordRejection::Invalid));
-        assert_eq!(validate_global_chord("hello", Platform::Linux), Some(ChordRejection::Invalid));
+        assert_eq!(validate_global_chord("⇧A"), Some(ChordRejection::Invalid));
+        assert_eq!(validate_global_chord("hello"), Some(ChordRejection::Invalid));
     }
 
     #[test]
     fn refuses_a_key_electron_cannot_register_which_would_throw_rather_than_fail() {
-        assert_eq!(validate_global_chord("⇧⌃§", Platform::Linux), Some(ChordRejection::Invalid));
-        assert_eq!(validate_global_chord("⌥⇧\u{1}", Platform::Linux), Some(ChordRejection::Invalid));
-        assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⇧⌃§", "enabled": true })), Platform::Linux), default());
+        assert_eq!(validate_global_chord("⇧⌃§"), Some(ChordRejection::Invalid));
+        assert_eq!(validate_global_chord("⌥⇧\u{1}"), Some(ChordRejection::Invalid));
+        assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⇧⌃§", "enabled": true }))), default());
     }
 
     #[test]
     fn refuses_the_app_s_own_native_chords_in_their_platform_spelling() {
-        assert_eq!(reserved_global_chord("⇧⌃O", Platform::Linux), Some("window.toggle"));
-        assert_eq!(reserved_global_chord("⇧⌘O", Platform::Linux), None);
-        assert_eq!(validate_global_chord("⇧⌃O", Platform::Linux), Some(ChordRejection::Reserved));
-        assert_eq!(validate_global_chord("⇧⌃W", Platform::Linux), Some(ChordRejection::Reserved));
+        assert_eq!(reserved_global_chord("⇧⌃O"), Some("window.toggle"));
+        assert_eq!(reserved_global_chord("⇧⌘O"), None);
+        assert_eq!(validate_global_chord("⇧⌃O"), Some(ChordRejection::Reserved));
+        assert_eq!(validate_global_chord("⇧⌃W"), Some(ChordRejection::Reserved));
     }
 
     #[test]
     fn keeps_a_valid_saved_chord_in_canonical_form() {
         assert_eq!(
-            sanitize_shortcut_pref(Some(&json!({ "chord": "alt+shift+k", "enabled": false })), Platform::Linux),
+            sanitize_shortcut_pref(Some(&json!({ "chord": "alt+shift+k", "enabled": false }))),
             QuickEntryShortcutPref { chord: "⌥⇧K".into(), enabled: false }
         );
     }
 
     #[test]
     fn falls_back_to_the_default_for_garbage_or_a_missing_value() {
-        assert_eq!(sanitize_shortcut_pref(None, Platform::Linux), default());
+        assert_eq!(sanitize_shortcut_pref(None), default());
         for raw in [Value::Null, json!("⇧⌃␣"), json!({ "chord": 3 }), json!({ "chord": "nope", "enabled": true })] {
-            assert_eq!(sanitize_shortcut_pref(Some(&raw), Platform::Linux), default(), "{raw}");
+            assert_eq!(sanitize_shortcut_pref(Some(&raw)), default(), "{raw}");
         }
     }
 
     #[test]
     fn treats_a_missing_enabled_flag_as_on() {
         assert_eq!(
-            sanitize_shortcut_pref(Some(&json!({ "chord": "⌥␣" })), Platform::Linux),
+            sanitize_shortcut_pref(Some(&json!({ "chord": "⌥␣" }))),
             QuickEntryShortcutPref { chord: "⌥␣".into(), enabled: true }
         );
     }
 
     #[test]
     fn replaces_a_saved_editing_chord_with_the_default_keeping_the_user_s_off_switch() {
-        assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⌃V", "enabled": true })), Platform::Linux), default());
+        assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⌃V", "enabled": true }))), default());
         assert_eq!(
-            sanitize_shortcut_pref(Some(&json!({ "chord": "⌃V", "enabled": false })), Platform::Linux),
+            sanitize_shortcut_pref(Some(&json!({ "chord": "⌃V", "enabled": false }))),
             QuickEntryShortcutPref { enabled: false, ..default() }
         );
     }
 
     #[test]
     fn reports_a_replaced_chord_not_a_re_spelled_one_or_a_first_run() {
-        let keep = |raw: Option<Value>| saved_chord_replaced(raw.as_ref(), &sanitize_shortcut_pref(raw.as_ref(), Platform::Linux));
+        let keep = |raw: Option<Value>| saved_chord_replaced(raw.as_ref(), &sanitize_shortcut_pref(raw.as_ref()));
         assert!(keep(Some(json!({ "chord": "⌃V", "enabled": true }))));
         assert!(keep(Some(json!("⇧⌃␣"))));
         assert!(!keep(Some(json!({ "chord": "alt+shift+k", "enabled": true }))));
@@ -525,7 +524,7 @@ mod tests {
     #[test]
     fn rebinds_live_in_native_mode() {
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "chord": "⌥⇧K" }), ShortcutMode::Native, Platform::Linux),
+            plan_shortcut_update(&default(), &json!({ "chord": "⌥⇧K" }), ShortcutMode::Native),
             ShortcutPlan::Rebind {
                 next: QuickEntryShortcutPref { chord: "⌥⇧K".into(), enabled: true },
                 from: Some("Control+Shift+Space".into()),
@@ -537,7 +536,7 @@ mod tests {
     #[test]
     fn only_persists_in_portal_mode() {
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "chord": "⌥⇧K" }), ShortcutMode::Portal, Platform::Linux),
+            plan_shortcut_update(&default(), &json!({ "chord": "⌥⇧K" }), ShortcutMode::Portal),
             ShortcutPlan::Persist { next: QuickEntryShortcutPref { chord: "⌥⇧K".into(), enabled: true } }
         );
     }
@@ -546,16 +545,16 @@ mod tests {
     fn unregisters_on_disable_registers_on_enable_and_resets_to_the_default() {
         let off = QuickEntryShortcutPref { enabled: false, ..default() };
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "enabled": false }), ShortcutMode::Native, Platform::Linux),
+            plan_shortcut_update(&default(), &json!({ "enabled": false }), ShortcutMode::Native),
             ShortcutPlan::Rebind { next: off.clone(), from: Some("Control+Shift+Space".into()), to: None }
         );
         assert_eq!(
-            plan_shortcut_update(&off, &json!({ "enabled": true }), ShortcutMode::Native, Platform::Linux),
+            plan_shortcut_update(&off, &json!({ "enabled": true }), ShortcutMode::Native),
             ShortcutPlan::Rebind { next: default(), from: None, to: Some("Control+Shift+Space".into()) }
         );
         let moved_off = QuickEntryShortcutPref { chord: "⌥⇧K".into(), enabled: false };
         assert_eq!(
-            plan_shortcut_update(&moved_off, &json!({ "reset": true }), ShortcutMode::Native, Platform::Linux),
+            plan_shortcut_update(&moved_off, &json!({ "reset": true }), ShortcutMode::Native),
             ShortcutPlan::Rebind { next: default(), from: None, to: Some("Control+Shift+Space".into()) }
         );
     }
@@ -563,14 +562,14 @@ mod tests {
     #[test]
     fn rejects_with_the_policy_s_reason_before_touching_anything() {
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "chord": "⌘C" }), ShortcutMode::Native, Platform::Linux),
+            plan_shortcut_update(&default(), &json!({ "chord": "⌘C" }), ShortcutMode::Native),
             ShortcutPlan::Reject(ChordRejection::System)
         );
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "chord": "⇧A" }), ShortcutMode::Native, Platform::Linux),
+            plan_shortcut_update(&default(), &json!({ "chord": "⇧A" }), ShortcutMode::Native),
             ShortcutPlan::Reject(ChordRejection::Invalid)
         );
-        assert_eq!(plan_shortcut_update(&default(), &json!(null), ShortcutMode::Native, Platform::Linux), ShortcutPlan::Reject(ChordRejection::Invalid));
+        assert_eq!(plan_shortcut_update(&default(), &json!(null), ShortcutMode::Native), ShortcutPlan::Reject(ChordRejection::Invalid));
     }
 
     struct Base {
@@ -635,8 +634,8 @@ mod tests {
         assert_eq!(parse_chord("shift+k"), None);
         assert_eq!(parse_chord("k"), None);
         assert_eq!(parse_chord("⌘⇧O").map(|c| serialize_chord(&c)), Some("⇧⌘O".into()));
-        assert_eq!(chord_to_accelerator("⇧⌘K", Platform::Linux), Some("Super+Shift+K".into()));
-        assert_eq!(chord_to_accelerator("⌃+", Platform::Linux), Some("Control+Plus".into()));
+        assert_eq!(chord_to_accelerator("⇧⌘K"), Some("Super+Shift+K".into()));
+        assert_eq!(chord_to_accelerator("⌃+"), Some("Control+Plus".into()));
         assert_eq!(ctrl_twin("⇧⌘O"), "⇧⌃O");
         assert_eq!(ctrl_twin("⌥⇧K"), "⌥⇧K");
         let hotkeys = include_str!("../../../src/shared/hotkeys.ts");

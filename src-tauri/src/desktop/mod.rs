@@ -72,18 +72,6 @@ pub const EMITS: &[&str] = &[
     "quick-entry:state",
 ];
 
-/// The OS family the desktop rules take; only Linux remains.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Platform {
-    Linux,
-}
-
-impl Platform {
-    pub(crate) fn current() -> Self {
-        Platform::Linux
-    }
-}
-
 pub fn register(reg: &mut Registry) {
     reg.register("app:quit", Scope::Main, ipc::app_quit);
     reg.register("quick-entry:submit", Scope::QuickEntry, ipc::quick_entry_submit);
@@ -173,7 +161,7 @@ impl Desktop {
     }
 
     pub(crate) fn with_backend(backend: Arc<dyn Backend>, ctx: CtxRef) -> Self {
-        let wayland_portal = shortcut_mode(backend.platform(), &backend.env()) == ShortcutMode::Portal;
+        let wayland_portal = shortcut_mode(&backend.env()) == ShortcutMode::Portal;
         Self {
             backend,
             ctx,
@@ -270,9 +258,8 @@ impl Desktop {
 
     /// Register both global shortcuts in one tick (a portal session binds once).
     fn install_shortcuts(&self, ctx: &Arc<AppCtx>, registry: Arc<dyn ShortcutRegistry>) {
-        let platform = self.backend.platform();
         let env = self.backend.env();
-        let mode = shortcut_mode(platform, &env);
+        let mode = shortcut_mode(&env);
         let portal = mode == ShortcutMode::Portal;
         runtime_log::note("global-shortcut", "global shortcut mode", json!({ "portal": portal }));
         *lock(&self.shortcut_registry) = Some(registry.clone());
@@ -314,7 +301,7 @@ impl Desktop {
             }),
             mode,
             desktop_entry_missing,
-            xwayland_only: xwayland_only(platform, &env),
+            xwayland_only: xwayland_only(&env),
             on_activate: Arc::new(move || {
                 runtime_log::note("global-shortcut", "quick entry shortcut activated", json!({ "portal": portal }));
                 survive("quick entry shortcut", || {
@@ -325,7 +312,6 @@ impl Desktop {
                     }
                 });
             }),
-            platform,
         });
         shortcut.register_at_startup();
         *lock(&self.shortcut) = Some(shortcut);
@@ -398,7 +384,7 @@ impl Desktop {
     /// registers at all: a debug or e2e build would point every link on the
     /// desktop at a binary that runs without the profile it was started with.
     fn claim_url_scheme_once(&self, build: BuildKind) {
-        if !registers_url_scheme(build, self.backend.platform()) {
+        if !registers_url_scheme(build) {
             return;
         }
         if self.url_scheme_claimed.swap(true, Ordering::SeqCst) {
@@ -506,7 +492,7 @@ impl DesktopPort for Desktop {
 
     fn on_exit_requested(&self, code: Option<i32>) -> bool {
         let approved = self.quit.approved() || self.is_quitting_latched();
-        match exit_decision(code, approved, self.backend.platform()) {
+        match exit_decision(code, approved) {
             ExitDecision::Allow => false,
             ExitDecision::VetoAndAsk => {
                 if let Some(ctx) = self.ctx() {
@@ -595,7 +581,7 @@ pub(crate) mod testing {
 
     pub(crate) use super::windows::fake::FakeBackend;
     pub(crate) use super::windows::Backend;
-    use super::{Desktop, Platform};
+    use super::Desktop;
     pub(crate) use crate::ports::DesktopPort;
     use crate::bridge::Registry;
     use crate::ctx::AppCtx;
@@ -620,9 +606,9 @@ pub(crate) mod testing {
         pub backend: Arc<FakeBackend>,
     }
 
-    pub(crate) fn harness(platform: Platform) -> Harness {
+    pub(crate) fn harness() -> Harness {
         let fakes = Box::new(Fakes::default());
-        let backend = Arc::new(FakeBackend::new(platform));
+        let backend = Arc::new(FakeBackend::new());
         let installed = backend.clone();
         let mut registry = Registry::new();
         super::register(&mut registry);

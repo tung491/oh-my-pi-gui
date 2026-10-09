@@ -10,7 +10,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use super::quit_guard::{assess_quit_risk, quit_needs_confirmation};
-use super::{survive, Desktop, Platform};
+use super::{survive, Desktop};
 use crate::bridge;
 use crate::ctx::AppCtx;
 use crate::i18n::MainTextKey;
@@ -62,7 +62,7 @@ pub(crate) enum ExitDecision {
 /// signal): those were already decided and are never vetoed, or the app would
 /// refuse its own quit. `None` is the OS or the last window closing: allowed
 /// once approved or already quitting; otherwise the guard runs first.
-pub(crate) fn exit_decision(code: Option<i32>, approved: bool, _platform: Platform) -> ExitDecision {
+pub(crate) fn exit_decision(code: Option<i32>, approved: bool) -> ExitDecision {
     if code.is_some() || approved {
         return ExitDecision::Allow;
     }
@@ -173,18 +173,18 @@ mod tests {
 
     #[test]
     fn an_exit_the_app_requested_is_never_vetoed() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         working(&ctx, &fakes, 3);
         assert!(!desktop.on_exit_requested(Some(0)));
         assert!(!desktop.on_exit_requested(Some(1)));
-        assert_eq!(exit_decision(Some(0), false, Platform::Linux), ExitDecision::Allow);
-        assert_eq!(exit_decision(Some(1), false, Platform::Linux), ExitDecision::Allow);
+        assert_eq!(exit_decision(Some(0), false), ExitDecision::Allow);
+        assert_eq!(exit_decision(Some(1), false), ExitDecision::Allow);
         assert!(fakes.host.log.calls().iter().all(|call| !call.starts_with("message_dialog")));
     }
 
     #[tokio::test]
     async fn a_user_exit_with_working_sessions_asks_first() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         working(&ctx, &fakes, 2);
         fakes.host.message_dialog_answers.lock().unwrap().push(0);
         assert!(desktop.on_exit_requested(None), "the exit is vetoed while the guard asks");
@@ -198,16 +198,16 @@ mod tests {
 
     #[test]
     fn a_user_exit_with_nothing_working_quits() {
-        let Harness { desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { desktop, fakes, .. } = harness();
         assert!(desktop.on_exit_requested(None));
         assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
         assert!(fakes.host.log.calls().iter().all(|call| !call.starts_with("message_dialog")));
-        assert_eq!(exit_decision(None, true, Platform::Linux), ExitDecision::Allow);
+        assert_eq!(exit_decision(None, true), ExitDecision::Allow);
     }
 
     #[tokio::test]
     async fn the_keep_working_button_is_last() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         working(&ctx, &fakes, 1);
         // The fake only logs the title; the button order is checked through a
         // scripted answer of the second index, which must keep working.
@@ -224,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_dismissed_quit_dialog_keeps_working() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         working(&ctx, &fakes, 1);
         // The host answers the last index for a dismissed dialog; script exactly that.
         fakes.host.message_dialog_answers.lock().unwrap().push(1);
@@ -241,7 +241,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_app_quit_channel_runs_the_guarded_quit() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         dispatch_for_test(&ctx, Caller::main(id), "app:quit", vec![]).await.unwrap();
         assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);

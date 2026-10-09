@@ -108,7 +108,6 @@ impl Desktop {
 mod tests {
     use super::*;
     use crate::desktop::testing::{harness, Backend as _, DesktopPort as _, Harness};
-    use crate::desktop::Platform;
     use crate::ports::{Caller, PersistedTabLayout, WindowRecord, WindowTabFact};
     use std::sync::Mutex;
 
@@ -130,7 +129,7 @@ mod tests {
 
     #[test]
     fn quit_with_three_windows_keeps_three_saved_layouts() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         let ids: Vec<WindowId> = ["/w/alpha", "/w/beta", "/work"].iter().map(|cwd| desktop.spawn_window(Some(cwd.to_string()), None, None).unwrap()).collect();
         for (id, cwd) in ids.iter().zip(["/w/alpha", "/w/beta", "/work"]) {
             fakes.tabs.layouts.lock().unwrap().insert(*id, layout(cwd));
@@ -159,7 +158,7 @@ mod tests {
 
     #[test]
     fn closing_the_last_window_quits_on_linux() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.quick_entry.show(&ctx, &desktop);
         assert!(backend.exists(WindowId::QUICK_ENTRY));
@@ -176,7 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn closing_the_last_window_with_a_working_tab_asks_first() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         seed_working_tab(&fakes, id);
         let closed = Arc::new(Mutex::new(Vec::new()));
@@ -211,7 +210,7 @@ mod tests {
 
     #[test]
     fn closing_a_window_that_is_not_the_last_never_asks() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         seed_working_tab(&fakes, first);
@@ -226,7 +225,7 @@ mod tests {
 
     #[test]
     fn closing_a_window_notifies_subscribers_before_the_record_and_the_bridge_entry_go() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         let seen: Arc<Mutex<Vec<(WindowRecord, bool, bool)>>> = Arc::new(Mutex::new(Vec::new()));
@@ -258,7 +257,7 @@ mod tests {
     /// fails the test instead of hanging the whole run.
     #[test]
     fn a_listener_that_registers_another_listener_does_not_deadlock() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
 
         let probe_ctx = Arc::downgrade(&ctx);

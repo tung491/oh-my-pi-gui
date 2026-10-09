@@ -14,7 +14,7 @@ use serde_json::json;
 use super::tab_layout::{sanitize_persisted_tab_layouts, DiskPathChecks};
 pub(crate) use super::window_bounds::{MIN_HEIGHT, MIN_WIDTH};
 use super::window_bounds::{corrected_inner_size, restore_within_displays, Rect};
-use super::{lock, survive, Desktop, Platform};
+use super::{lock, survive, Desktop};
 use crate::bridge;
 use crate::ctx::AppCtx;
 use crate::ports::{AcquireOptions, PersistedTabLayout, RunProgressState, SessionKind, WindowId, WindowRecord};
@@ -108,7 +108,6 @@ impl MenuItemModel {
 /// The native surface: windows, monitors, tray, menu, and the environment
 /// probes the decisions need. One implementation drives Tauri; tests fake it.
 pub(crate) trait Backend: Send + Sync {
-    fn platform(&self) -> Platform;
     fn packaged(&self) -> bool;
     fn build_main_window(&self, spec: MainWindowSpec) -> Result<(), String>;
     fn build_quick_entry_window(&self, spec: QuickEntrySpec) -> Result<(), String>;
@@ -763,18 +762,16 @@ mod tauri_backend {
     use tauri::{AppHandle, Manager, WebviewWindow, WindowEvent};
     use tauri_plugin_deep_link::DeepLinkExt;
 
-    use super::{correct_to_outer, Backend, CorrectableWindow, MainWindowSpec, MenuItemModel, PendingCorrections, QuickEntrySpec, WinEvent};
+    use super::{Backend, CorrectableWindow, MainWindowSpec, MenuItemModel, PendingCorrections, QuickEntrySpec, WinEvent};
     use crate::desktop::quick_entry_core::QUICK_ENTRY_SIZE;
     use crate::desktop::window_bounds::Rect;
-    use crate::desktop::{lock, menu, survive, tray, Desktop, Platform};
+    use crate::desktop::{lock, menu, survive, tray, Desktop};
     use crate::ports::{CtxRef, WindowId, WindowKind};
     use crate::webview::{self, WindowSpec};
     use crate::{paths, product, runtime_log};
 
-    /// A live window, read and resized through Tauri. On the main thread (every
-    /// Linux correction path) its getters read tao's caches directly; from the
-    /// thread that builds a window elsewhere (the macOS/Windows correction
-    /// right after the build) each getter is a round trip to the main thread.
+    /// A live window, read and resized through Tauri. Every correction path
+    /// runs on the main thread, where its getters read tao's caches directly.
     struct Live<'a>(&'a WebviewWindow);
 
     impl CorrectableWindow for Live<'_> {
@@ -805,7 +802,7 @@ mod tauri_backend {
         app: AppHandle,
         ctx: CtxRef,
         tray: Mutex<Option<tauri::tray::TrayIcon>>,
-        /// Linux only: corrections waiting for each new window's first configure.
+        /// Corrections waiting for each new window's first configure.
         pending: Arc<PendingCorrections>,
         /// The main thread: the backend is built in Tauri's `setup`, which runs there.
         main_thread: std::thread::ThreadId,
@@ -917,7 +914,6 @@ mod tauri_backend {
                 return Some(tauri::image::Image::new_owned(icon.rgba().to_vec(), icon.width(), icon.height()));
             }
             let path = crate::desktop::app_icons::linux_window_icon_path(
-                Platform::current(),
                 self.packaged(),
                 &self.app.path().resource_dir().unwrap_or_default(),
                 &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
@@ -927,10 +923,6 @@ mod tauri_backend {
     }
 
     impl Backend for TauriBackend {
-        fn platform(&self) -> Platform {
-            Platform::current()
-        }
-
         fn packaged(&self) -> bool {
             !cfg!(debug_assertions)
         }
@@ -967,8 +959,6 @@ mod tauri_backend {
                 let _ = window.maximize();
             } else if defer_correction {
                 self.schedule_catch_up(spec.win_id);
-            } else {
-                let _ = correct_to_outer(&Live(&window), spec.size);
             }
             Ok(())
         }
@@ -1189,7 +1179,7 @@ pub(crate) mod fake {
 
     use super::{correct_to_outer, Backend, CorrectableWindow, MainWindowSpec, MenuItemModel, PendingCorrections, QuickEntrySpec, WinEvent};
     use crate::desktop::window_bounds::Rect;
-    use crate::desktop::{lock, Desktop, Platform};
+    use crate::desktop::{lock, Desktop};
     use crate::ports::WindowId;
     use crate::testing::CallLog;
 
@@ -1225,7 +1215,6 @@ pub(crate) mod fake {
     /// A window system in memory: windows, their geometry, the tray and menu models.
     pub(crate) struct FakeBackend {
         pub log: CallLog,
-        pub platform: Mutex<Platform>,
         pub windows: Mutex<BTreeMap<WindowId, FakeWindow>>,
         pub main_specs: Mutex<Vec<MainWindowSpec>>,
         pub quick_entry_specs: Mutex<Vec<QuickEntrySpec>>,
@@ -1248,9 +1237,10 @@ pub(crate) mod fake {
         /// scale 1, so every other test keeps today's exact pass-through.
         pub scale: Mutex<f64>,
         pub decoration_physical: Mutex<(f64, f64)>,
-        /// Linux's model: the size correction waits for the window's first
-        /// configure ([`FakeBackend::configure`]) instead of running in
-        /// `build_main_window`. Off by default (the macOS/Windows model).
+        /// The real backend's model: the size correction waits for the window's
+        /// first configure ([`FakeBackend::configure`]) instead of running in
+        /// `build_main_window`. Off by default, so a test that does not
+        /// exercise the deferral sees the corrected footprint at once.
         pub defer_correction: Mutex<bool>,
         /// What a window reports as its outer size until its first configure,
         /// when set: tao on Linux seeds that cache with the window's position.
@@ -1278,10 +1268,9 @@ pub(crate) mod fake {
     }
 
     impl FakeBackend {
-        pub(crate) fn new(platform: Platform) -> Self {
+        pub(crate) fn new() -> Self {
             Self {
                 log: CallLog::default(),
-                platform: Mutex::new(platform),
                 windows: Mutex::new(BTreeMap::new()),
                 main_specs: Mutex::new(Vec::new()),
                 quick_entry_specs: Mutex::new(Vec::new()),
@@ -1439,10 +1428,6 @@ pub(crate) mod fake {
     }
 
     impl Backend for FakeBackend {
-        fn platform(&self) -> Platform {
-            *lock(&self.platform)
-        }
-
         fn packaged(&self) -> bool {
             false
         }
@@ -1457,8 +1442,8 @@ pub(crate) mod fake {
             let (x, y) = spec.position.unwrap_or((100.0, 100.0));
             // Mirror the real backend: `spec.size` is requested as the content
             // size, so the realized footprint carries the decoration on top,
-            // then corrected so the footprint matches `spec.size` — now
-            // (macOS/Windows), or at the first configure (Linux).
+            // then corrected so the footprint matches `spec.size` — at the
+            // first configure when `defer_correction` is on, otherwise at once.
             let decoration = self.decoration_logical();
             let size = if spec.maximize { spec.size } else { (spec.size.0 + decoration.0, spec.size.1 + decoration.1) };
             lock(&self.windows).insert(
@@ -1708,7 +1693,7 @@ mod tests {
 
     #[test]
     fn spawns_a_window_and_acquires_its_first_tab() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         assert_eq!(id, WindowId(1));
         assert_eq!(desktop.record(id).map(|r| r.cwd), Some("/w/alpha".into()));
@@ -1723,7 +1708,7 @@ mod tests {
 
     #[test]
     fn an_idle_spawn_opens_the_work_workspace_with_a_fresh_placeholder_tab() {
-        let Harness { desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { desktop, fakes, .. } = harness();
         desktop.spawn_window(None, None, None).unwrap();
         let acquire = fakes.tabs.log.calls().into_iter().find(|call| call.starts_with("acquire(")).unwrap();
         assert!(acquire.contains("cwd: \"/work\""), "{acquire}");
@@ -1733,7 +1718,7 @@ mod tests {
 
     #[test]
     fn refuses_to_spawn_at_the_pool_cap_and_closes_a_window_whose_tab_failed() {
-        let Harness { desktop, fakes, backend, .. } = harness(Platform::Linux);
+        let Harness { desktop, fakes, backend, .. } = harness();
         *fakes.tabs.at_cap.lock().unwrap() = true;
         assert_eq!(desktop.spawn_window(Some("/w/alpha".into()), None, None), None);
         assert!(backend.window_ids().is_empty());
@@ -1742,7 +1727,7 @@ mod tests {
 
     #[test]
     fn restores_the_saved_session_one_window_per_layout() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         let layout = |cwd: &str| json!({ "version": 1, "activeIndex": 0, "tabs": [{ "cwd": cwd, "kind": "agent" }] });
         // Every fake directory exists for the sanitizer, which probes the real filesystem.
         let dir = fakes.dir.path();
@@ -1759,7 +1744,7 @@ mod tests {
 
     #[test]
     fn persists_bounds_on_close_and_tab_layouts_on_change() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         backend.move_window(id, 300.0, 200.0);
         desktop.on_window_event(&ctx, id, WinEvent::CloseRequested);
@@ -1784,7 +1769,7 @@ mod tests {
     /// client-side header bar and shadow), measured at a HiDPI scale factor.
     #[test]
     fn restoring_a_decorated_window_saves_the_same_outer_bounds_it_was_given() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         backend.set_decoration((104.0, 178.0), 2.0); // 52x89 logical, like the reported GTK drift.
         let saved = json!({ "width": 1452.0, "height": 989.0, "x": 0.0, "y": 0.0, "isMaximized": false });
         ctx.window_state.set(WINDOW_STATE_KEY, saved.clone()).unwrap();
@@ -1798,7 +1783,7 @@ mod tests {
     /// A Linux backend restoring a 1452x989 footprint under a 52x89 logical
     /// decoration (GTK's header bar and shadow at scale 2).
     fn deferred_restore(first_configure: fake::FirstConfigure) -> (Harness, serde_json::Value) {
-        let harness = harness(Platform::Linux);
+        let harness = harness();
         *harness.backend.defer_correction.lock().unwrap() = true;
         *harness.backend.first_configure.lock().unwrap() = first_configure;
         harness.backend.set_decoration((104.0, 178.0), 2.0);
@@ -1864,7 +1849,7 @@ mod tests {
     /// logical), whose two outer seeds straddled the reparent: the position
     /// reads (0,0), the size the window's own origin.
     fn straddled_restore(first_configure: fake::FirstConfigure, on_main_thread: bool, footprint: Rect) -> (Harness, serde_json::Value) {
-        let harness = harness(Platform::Linux);
+        let harness = harness();
         *harness.backend.defer_correction.lock().unwrap() = true;
         *harness.backend.first_configure.lock().unwrap() = first_configure;
         *harness.backend.built_on_main_thread.lock().unwrap() = on_main_thread;
@@ -2019,7 +2004,7 @@ mod tests {
     #[test]
     fn a_position_seeded_probe_never_doubles_the_window() {
         for defer in [false, true] {
-            let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+            let Harness { ctx, desktop, backend, .. } = harness();
             *backend.defer_correction.lock().unwrap() = defer;
             // Electron's centred default on a 1920x1080 display, and a size
             // cache that still holds the window's position.
@@ -2038,7 +2023,7 @@ mod tests {
 
     #[test]
     fn a_close_before_the_first_configure_does_not_save_garbage() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         *backend.defer_correction.lock().unwrap() = true;
         *backend.outer_before_configure.lock().unwrap() = Some((260.0, 90.0));
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
@@ -2056,7 +2041,7 @@ mod tests {
 
     #[test]
     fn restoring_an_undecorated_window_is_unaffected_by_the_correction() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let saved = json!({ "width": 1400.0, "height": 900.0, "x": 10.0, "y": 20.0, "isMaximized": false });
         ctx.window_state.set(WINDOW_STATE_KEY, saved.clone()).unwrap();
 
@@ -2076,7 +2061,7 @@ mod tests {
         let broken = collect_layouts(&ids, |id| if id == WindowId(2) { panic!("not yet implemented") } else { Some(layout.clone()) });
         assert_eq!(broken, None, "one failed window must not shrink the saved session to the others");
 
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         fakes.tabs.layouts.lock().unwrap().insert(id, layout);
         desktop.persist_tab_layouts(&ctx);
@@ -2085,7 +2070,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn debounces_bounds_while_the_window_keeps_moving() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         backend.move_window(id, 10.0, 10.0);
         desktop.on_window_event(&ctx, id, WinEvent::Moved);
@@ -2101,7 +2086,7 @@ mod tests {
 
     #[test]
     fn tracks_focus_for_the_main_and_target_window() {
-        let Harness { ctx, desktop, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, .. } = harness();
         let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         assert_eq!(desktop.main_window(), Some(second));
@@ -2118,7 +2103,7 @@ mod tests {
 
     #[test]
     fn maps_run_progress_to_the_taskbar_and_the_dock() {
-        let Harness { desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.set_run_progress(RunProgressState::Working);
         assert_eq!(backend.progress.lock().unwrap().get(&id), Some(&Some(50)));

@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 
 use super::shortcut_core::native_accelerator;
 use super::windows::{MenuItemModel, PredefinedItem};
-use super::{survive, Desktop, Platform};
+use super::{survive, Desktop};
 use crate::ctx::AppCtx;
 use crate::i18n::{MainI18n, MainTextKey};
 use crate::runtime_log;
@@ -26,8 +26,8 @@ fn action(i18n: &MainI18n, key: MainTextKey, action: &str) -> MenuItemModel {
     MenuItemModel::item(format!("{ACTION_PREFIX}{action}"), i18n.t(key))
 }
 
-/// The whole menu bar for `platform`.
-pub(crate) fn build_app_menu(i18n: &MainI18n, _platform: Platform) -> Vec<MenuItemModel> {
+/// The whole menu bar.
+pub(crate) fn build_app_menu(i18n: &MainI18n) -> Vec<MenuItemModel> {
     let mut bar = Vec::new();
     let file = vec![
         action(i18n, MainTextKey::MenuNewSession, "new-session").with_accelerator(native_accelerator("session.new")),
@@ -162,7 +162,7 @@ impl Desktop {
 
     /// Install (or reinstall, after a language change) the application menu.
     pub(crate) fn install_app_menu(&self, ctx: &AppCtx) {
-        let model = build_app_menu(&ctx.i18n, self.backend.platform());
+        let model = build_app_menu(&ctx.i18n);
         if let Err(error) = self.backend.set_app_menu(&model) {
             runtime_log::note("unknown", format!("could not install the application menu: {error}"), json!({}));
         }
@@ -260,7 +260,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let prefs = JsonStore::open(dir.path().join("prefs.json"));
         let i18n = MainI18n::new(prefs.clone(), None);
-        let linux = build_app_menu(&i18n, Platform::Linux);
+        let linux = build_app_menu(&i18n);
         assert_eq!(labels(&linux), vec!["File", "Edit", "View", "Window", "Session", "Tools", "Help"]);
         assert!(find_item(&linux, ID_CHECK_FOR_UPDATES).is_some());
         assert!(matches!(find_item(&linux, "menu:action:new-session"), Some(MenuItemModel::Item { accelerator: Some(a), .. }) if a == "CmdOrCtrl+N"));
@@ -268,7 +268,7 @@ mod tests {
         assert!(matches!(find_item(&linux, ID_CLOSE_WINDOW), Some(MenuItemModel::Item { accelerator: Some(a), .. }) if a == "CmdOrCtrl+Shift+W"));
         assert_eq!(i18n.language(), MainLanguage::En);
         prefs.set("language", json!("vi")).unwrap();
-        let vi = build_app_menu(&i18n, Platform::Linux);
+        let vi = build_app_menu(&i18n);
         assert_eq!(labels(&vi)[0], "Tệp");
         assert_eq!(action_of("menu:action:open-jobs"), Some("open-jobs"));
         assert_eq!(action_of(ID_NEW_WINDOW), None);
@@ -331,7 +331,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let i18n = MainI18n::new(JsonStore::open(dir.path().join("prefs.json")), None);
         let mut actions = std::collections::BTreeSet::new();
-        menu_actions(&build_app_menu(&i18n, Platform::Linux), &mut actions);
+        menu_actions(&build_app_menu(&i18n), &mut actions);
         for removed in DEVELOPER {
             assert!(!actions.contains(removed), "{removed} is still in the menu");
         }
@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn menu_clicks_reach_the_target_window_or_open_one() {
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, backend } = harness();
         // Without a window the action spawns one and the bridge queues it until the page attaches.
         desktop.on_menu_id(&ctx, "menu:action:open-settings");
         let id = desktop.main_window().unwrap();

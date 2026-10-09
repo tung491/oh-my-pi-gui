@@ -212,7 +212,7 @@ impl QuickEntryController {
         }
     }
 
-    /// Windows and Linux: a hidden bar would keep the app alive after its last chat window closed.
+    /// A hidden bar would keep the app alive after its last chat window closed.
     pub(crate) fn destroy_window(&self, desktop: &Desktop) {
         if desktop.backend.exists(WindowId::QUICK_ENTRY) {
             desktop.backend.destroy(WindowId::QUICK_ENTRY);
@@ -464,7 +464,6 @@ mod tests {
     use super::*;
     use crate::bridge::{dispatch_for_test, Envelope};
     use crate::desktop::testing::{attach_recording_sink, harness, Backend as _, DesktopPort as _, Harness};
-    use crate::desktop::Platform;
     use crate::ports::{Caller, SessionStatus};
 
     fn session(cwd: &str, modified: &str, kind: Option<SessionKind>) -> SessionInfo {
@@ -504,7 +503,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_queues_the_prompt_for_the_main_window_and_nudges_it() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let sink = attach_recording_sink(&ctx, id);
         desktop.quick_entry.show(&ctx, &desktop);
@@ -525,7 +524,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_refuses_bad_payloads_and_the_pool_cap() {
-        let Harness { ctx, desktop, fakes, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, fakes, .. } = harness();
         desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let invalid = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "" })]).await.unwrap();
         assert_eq!(invalid, json!({ "ok": false, "reason": "invalid" }));
@@ -541,7 +540,7 @@ mod tests {
 
     #[tokio::test]
     async fn submit_without_a_window_spawns_one() {
-        let Harness { ctx, desktop, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, .. } = harness();
         let result = dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "hi", "target": { "kind": "work" } })]).await.unwrap();
         assert_eq!(result, json!({ "ok": true }));
         let id = desktop.main_window().unwrap();
@@ -550,7 +549,7 @@ mod tests {
 
     #[tokio::test]
     async fn returned_and_interrupted_prompts_land_in_the_restore_list_once() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.quick_entry.show(&ctx, &desktop);
         dispatch_for_test(&ctx, Caller::quick_entry(), "quick-entry:submit", vec![json!({ "text": "one", "target": { "kind": "work" } })]).await.unwrap();
@@ -578,7 +577,7 @@ mod tests {
 
     #[tokio::test]
     async fn dismiss_hides_the_bar_and_blur_hides_it_once_startup_settled() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.quick_entry.mark_startup_windows(&ctx, &desktop, &[]);
         desktop.quick_entry.show(&ctx, &desktop);
@@ -595,7 +594,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_shortcut_channels_serve_chat_windows_only() {
-        let Harness { ctx, desktop, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let state = dispatch_for_test(&ctx, Caller::main(id), "quick-entry:shortcut-get", vec![]).await.unwrap();
         assert_eq!(state["chord"], "⇧⌃␣");
@@ -612,7 +611,7 @@ mod tests {
 
     #[tokio::test(start_paused = true)]
     async fn a_summon_before_startup_settles_waits_for_the_windows_or_the_ceiling() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.quick_entry.mark_startup_windows(&ctx, &desktop, &[id]);
         desktop.quick_entry.show_when_settled(&ctx, &desktop);
@@ -620,7 +619,7 @@ mod tests {
         desktop.on_window_event(&ctx, id, WinEvent::Focused(true));
         assert!(backend.is_visible(WindowId::QUICK_ENTRY));
         // A fresh controller with a window that never shows gives up at the ceiling.
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.quick_entry.mark_startup_windows(&ctx, &desktop, &[id]);
         desktop.quick_entry.show_when_settled(&ctx, &desktop);

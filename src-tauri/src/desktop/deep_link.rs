@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use serde_json::{json, Value};
 
 use super::launch_argv::{launch_arguments, parse_launch_argv, LaunchRequest};
-use super::{lock, Desktop, Platform};
+use super::{lock, Desktop};
 use crate::bridge::DEEP_LINK_CHANNEL;
 use crate::ctx::AppCtx;
 use crate::runtime_log;
@@ -38,13 +38,12 @@ impl BuildKind {
 }
 
 /// Whether this build makes itself the system `omp://` handler at startup.
-/// Only a release build on Linux does (the AppImage has no installed desktop
-/// entry).
+/// Only a release build does (the AppImage has no installed desktop entry).
 /// Debug and e2e builds never do: their handler would start the binary on the
 /// user's real profile, and outlive the build. They test links by passing the
 /// URL as an argument instead.
-pub(crate) fn registers_url_scheme(build: BuildKind, platform: Platform) -> bool {
-    build == BuildKind::Release && platform == Platform::Linux
+pub(crate) fn registers_url_scheme(build: BuildKind) -> bool {
+    build == BuildKind::Release
 }
 
 /// Links that reached the module before `init` finished.
@@ -174,7 +173,6 @@ mod tests {
     use super::*;
     use crate::bridge::Envelope;
     use crate::desktop::testing::{attach_recording_sink, harness, AcceptAllRegistry, DesktopPort as _, Harness};
-    use crate::desktop::Platform;
     use crate::ports::WindowId;
     use std::sync::Arc;
 
@@ -182,9 +180,9 @@ mod tests {
         sent.iter().filter(|envelope| envelope.channel == DEEP_LINK_CHANNEL).map(|envelope| envelope.payload.clone()).collect()
     }
 
-    /// Start the module on `platform` as `init` does, with this launch argv.
-    fn cold_start(platform: Platform, argv: &[&str]) -> Harness {
-        let harness = harness(platform);
+    /// Start the module as `init` does, with this launch argv.
+    fn cold_start(argv: &[&str]) -> Harness {
+        let harness = harness();
         *lock(&harness.backend.argv) = argv.iter().map(|arg| arg.to_string()).collect();
         harness.desktop.start(&harness.ctx, Arc::new(AcceptAllRegistry));
         harness
@@ -192,7 +190,7 @@ mod tests {
 
     #[test]
     fn a_cold_start_link_is_delivered_once() {
-        let Harness { ctx, desktop, .. } = cold_start(Platform::Linux, &["sai-atlas", "omp://new"]);
+        let Harness { ctx, desktop, .. } = cold_start(&["sai-atlas", "omp://new"]);
         let id = desktop.main_window().unwrap();
         let sink = attach_recording_sink(&ctx, id);
         assert_eq!(deep_links(&sink.sent()), vec![json!({ "action": "new-session" })]);
@@ -200,7 +198,7 @@ mod tests {
 
     #[test]
     fn a_warm_link_from_a_second_instance_is_delivered_once() {
-        let Harness { ctx, desktop, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, .. } = harness();
         desktop.replay_pending_links(&ctx);
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let sink = attach_recording_sink(&ctx, id);
@@ -213,19 +211,19 @@ mod tests {
 
     #[test]
     fn only_a_release_build_on_linux_registers_the_url_scheme() {
-        assert!(!registers_url_scheme(BuildKind::Debug, Platform::Linux));
-        assert!(!registers_url_scheme(BuildKind::E2e, Platform::Linux));
-        assert!(registers_url_scheme(BuildKind::Release, Platform::Linux));
+        assert!(!registers_url_scheme(BuildKind::Debug));
+        assert!(!registers_url_scheme(BuildKind::E2e));
+        assert!(registers_url_scheme(BuildKind::Release));
         // Tests are debug builds.
         assert_eq!(BuildKind::current(), BuildKind::Debug);
     }
 
     #[test]
     fn a_debug_build_never_registers_the_url_scheme_at_startup() {
-        let Harness { backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
+        let Harness { backend, .. } = cold_start(&["sai-atlas"]);
         assert!(!backend.log.calls().iter().any(|call| call.starts_with("register_deep_link_scheme")));
         // Nor once its renderer has attached.
-        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
+        let Harness { desktop, backend, .. } = cold_start(&["sai-atlas"]);
         desktop.on_renderer_attached();
         assert!(!backend.log.calls().iter().any(|call| call.starts_with("register_deep_link_scheme")));
     }
@@ -236,7 +234,7 @@ mod tests {
 
     #[test]
     fn a_release_build_claims_the_url_scheme_only_after_the_first_renderer_attaches() {
-        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
+        let Harness { desktop, backend, .. } = cold_start(&["sai-atlas"]);
         assert!(!desktop.records().is_empty(), "startup opened its window");
         assert_eq!(scheme_registrations(&backend), 0, "a window whose page never ran proves nothing");
         desktop.claim_url_scheme_once(BuildKind::Release);
@@ -249,7 +247,7 @@ mod tests {
 
     #[test]
     fn a_release_build_claims_the_url_scheme_once_across_attaches_and_windows() {
-        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
+        let Harness { desktop, backend, .. } = cold_start(&["sai-atlas"]);
         desktop.claim_url_scheme_once(BuildKind::Release);
         // A reload of the first window, and the pages of later windows, attach again.
         desktop.claim_url_scheme_once(BuildKind::Release);
@@ -261,7 +259,7 @@ mod tests {
 
     #[test]
     fn a_release_build_never_claims_the_url_scheme_without_an_attached_renderer() {
-        let Harness { ctx, desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas", "omp://new"]);
+        let Harness { ctx, desktop, backend, .. } = cold_start(&["sai-atlas", "omp://new"]);
         let first = desktop.main_window().unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         // The second instance's link goes to the most recently focused window.
@@ -291,7 +289,7 @@ mod tests {
 
     #[test]
     fn a_second_instance_with_a_link_focuses_and_delivers_it() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let sink = attach_recording_sink(&ctx, id);
         backend.log.clear();
@@ -305,7 +303,7 @@ mod tests {
 
     #[test]
     fn a_second_instance_with_a_path_raises_its_window_or_opens_one() {
-        let Harness { ctx: _ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx: _ctx, desktop, backend, .. } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         backend.log.clear();
         desktop.on_second_instance(vec!["sai-atlas".into(), "/w/alpha".into()], None);
@@ -323,7 +321,7 @@ mod tests {
 
     #[test]
     fn links_before_setup_are_replayed_after_it() {
-        let Harness { ctx, desktop, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, .. } = harness();
         desktop.open_url(&ctx, "omp://new".into());
         assert!(desktop.records().is_empty(), "nothing opens before setup");
         desktop.replay_pending_links(&ctx);

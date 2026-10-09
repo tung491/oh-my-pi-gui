@@ -1,5 +1,5 @@
 //! The quick-entry shortcut, with two backends: the global-shortcut plugin
-//! (macOS, Windows, X11) and the GlobalShortcuts portal on native Wayland,
+//! (X11 and XWayland) and the GlobalShortcuts portal on native Wayland,
 //! where the X11 grab fails silently.
 //! Both register once at startup, in the same tick as the window toggle: a
 //! portal session binds once, so a later request would be dropped. Native mode
@@ -17,7 +17,7 @@ use super::shortcut_core::{
 };
 #[cfg(target_os = "linux")]
 use super::gnome_keybindings::{find_conflict, parse_portal_trigger, GnomeBinding};
-use super::{lock, Platform};
+use super::lock;
 use crate::ports::WindowId;
 use crate::runtime_log;
 
@@ -53,7 +53,6 @@ pub(crate) struct ShortcutDeps {
     pub desktop_entry_missing: bool,
     pub xwayland_only: bool,
     pub on_activate: Activation,
-    pub platform: Platform,
 }
 
 struct ShortcutState {
@@ -109,7 +108,7 @@ pub(crate) struct QuickEntryShortcut {
 
 impl QuickEntryShortcut {
     pub(crate) fn new(deps: ShortcutDeps) -> Arc<Self> {
-        let pref = sanitize_shortcut_pref((deps.read_pref)().as_ref(), deps.platform);
+        let pref = sanitize_shortcut_pref((deps.read_pref)().as_ref());
         Arc::new(Self {
             deps,
             state: Mutex::new(ShortcutState { pref, bound: None, registered: None, notice: None, notice_taken: false, suspended_by: HashSet::new() }),
@@ -138,7 +137,7 @@ impl QuickEntryShortcut {
         if !pref.enabled {
             return;
         }
-        let Some(accelerator) = chord_to_accelerator(&pref.chord, self.deps.platform) else { return };
+        let Some(accelerator) = chord_to_accelerator(&pref.chord) else { return };
         let registered = self.register(&accelerator);
         {
             let mut state = lock(&self.state);
@@ -184,7 +183,7 @@ impl QuickEntryShortcut {
 
     fn apply(self: &Arc<Self>, update: &Value) -> ShortcutUpdateResult {
         let current = lock(&self.state).pref.clone();
-        let plan = plan_shortcut_update(&current, update, self.deps.mode, self.deps.platform);
+        let plan = plan_shortcut_update(&current, update, self.deps.mode);
         let next = match plan {
             ShortcutPlan::Reject(reason) => return ShortcutUpdateResult::Refused { reason: reason.into(), state: self.state() },
             ShortcutPlan::Persist { next } => next,
@@ -609,7 +608,6 @@ mod tests {
             desktop_entry_missing: false,
             xwayland_only: false,
             on_activate: Arc::new(move || *lock(&count) += 1),
-            platform: Platform::Linux,
         });
         Built { shortcut, saves, activations }
     }

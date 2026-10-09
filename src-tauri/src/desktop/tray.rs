@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use super::app_icons::{tray_icon_bitmap, tray_mark};
 use super::tray_labels::{aggregate_tray_status, approval_label, format_tokens, menu_signature, t, tray_tooltip, TrayLabelKey, TrayState};
 use super::windows::MenuItemModel;
-use super::{lock, Desktop, Platform};
+use super::{lock, Desktop};
 use crate::ctx::AppCtx;
 use crate::i18n::MainLanguage;
 use crate::ports::WindowId;
@@ -208,11 +208,11 @@ impl Desktop {
     }
 }
 
-/// Build the native tray icon with the platform's mark.
+/// Build the native tray icon with the white mark.
 pub(crate) fn build_tray(app: &tauri::AppHandle, tooltip: &str, items: &[MenuItemModel]) -> Result<tauri::tray::TrayIcon, String> {
     use tauri::tray::TrayIconBuilder;
     let mark = tray_mark()?;
-    let bitmap = tray_icon_bitmap(Platform::current(), mark);
+    let bitmap = tray_icon_bitmap(mark);
     let size = bitmap.size as u32;
     let icon = tauri::image::Image::new_owned(bitmap.pixels, size, size);
     let menu = super::menu::build_menu(app, items)?;
@@ -254,7 +254,7 @@ mod tests {
 
     #[tokio::test]
     async fn aggregates_pushes_per_window_and_rebuilds_only_on_visible_changes() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         desktop.tray.install(&ctx, &desktop);
@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn tray_actions_focus_the_target_window_and_reach_the_renderer() {
-        let Harness { ctx, desktop, backend, fakes } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, fakes } = harness();
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let sink = attach_recording_sink(&ctx, id);
         backend.log.clear();
@@ -312,7 +312,7 @@ mod tests {
     /// hanging the whole run.
     #[test]
     fn destroy_releases_its_lock_before_calling_the_backend() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         desktop.tray.install(&ctx, &desktop);
 
         let probe_ctx = ctx.clone();

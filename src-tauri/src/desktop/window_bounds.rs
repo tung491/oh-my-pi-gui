@@ -35,9 +35,9 @@ pub(crate) fn is_reachable(rect: &Rect, work_areas: &[Rect]) -> bool {
 
 /// The largest window decoration (outer footprint minus content size, logical
 /// pixels) believed to be real. GNOME's client-side header bar and shadow are
-/// about 52x89, Windows' borders and caption about 16x39, macOS' title bar
-/// 0x28; a larger gap is a bogus measurement (a size cache still holding the
-/// window's position, or a first configure the compositor constrained).
+/// about 52x89; a larger gap is a bogus measurement (a size cache still
+/// holding the window's position, or a first configure the compositor
+/// constrained).
 const MAX_DECORATION_WIDTH: f64 = 200.0;
 const MAX_DECORATION_HEIGHT: f64 = 300.0;
 

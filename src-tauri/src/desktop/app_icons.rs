@@ -1,4 +1,4 @@
-//! Tray and window icon choices per platform.
+//! Tray and window icon choices.
 //! Ubuntu's AppIndicator shows pixels as drawn on a top bar
 //! that is dark in both themes, so Linux gets a white mark. The mark's alpha
 //! channel is read from `src/shared/tray-mark.ts`, which `gen:icons` renders.
@@ -7,8 +7,6 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use base64::prelude::*;
-
-use super::Platform;
 
 const TRAY_MARK_TS: &str = include_str!("../../../src/shared/tray-mark.ts");
 
@@ -55,7 +53,7 @@ pub(crate) struct TrayBitmap {
     pub scale_factor: u32,
 }
 
-pub(crate) fn tray_icon_bitmap(_platform: Platform, mark: &TrayMark) -> TrayBitmap {
+pub(crate) fn tray_icon_bitmap(mark: &TrayMark) -> TrayBitmap {
     // The mark is 18pt drawn at 2× so it stays crisp on HiDPI displays. The run
     // status is text (tooltip + menu header), never painted into the mark.
     let channel = 255;
@@ -73,7 +71,7 @@ pub(crate) fn tray_icon_bitmap(_platform: Platform, mark: &TrayMark) -> TrayBitm
 }
 
 /// Window/taskbar icon for Linux.
-pub(crate) fn linux_window_icon_path(_platform: Platform, packaged: bool, resources_path: &Path, app_path: &Path) -> Option<PathBuf> {
+pub(crate) fn linux_window_icon_path(packaged: bool, resources_path: &Path, app_path: &Path) -> Option<PathBuf> {
     Some(if packaged { resources_path.join("icon.png") } else { app_path.join("resources").join("icon.png") })
 }
 
@@ -91,7 +89,7 @@ mod tests {
         [bitmap.pixels[index], bitmap.pixels[index + 1], bitmap.pixels[index + 2], bitmap.pixels[index + 3]]
     }
 
-    /// Every drawn pixel carries the platform's ink; the rest stay fully transparent.
+    /// Every drawn pixel carries the mark's ink; the rest stay fully transparent.
     fn expect_ink(bitmap: &TrayBitmap, channel: u8) {
         for index in 0..bitmap.size * bitmap.size {
             let [r, g, b, a] = pixel(bitmap, index % bitmap.size, index / bitmap.size);
@@ -112,7 +110,7 @@ mod tests {
 
     #[test]
     fn paints_the_same_mark_white_for_the_dark_ubuntu_top_bar() {
-        let bitmap = tray_icon_bitmap(Platform::Linux, mark());
+        let bitmap = tray_icon_bitmap(mark());
         assert_eq!((bitmap.size, bitmap.scale_factor), (36, 2));
         expect_ink(&bitmap, 255);
         expect_clear_corners(&bitmap);
@@ -137,7 +135,7 @@ mod tests {
     #[test]
     fn points_packaged_linux_windows_at_the_bundled_icon() {
         assert_eq!(
-            linux_window_icon_path(Platform::Linux, true, Path::new("/opt/Sai ATLAS/resources"), Path::new("/opt/Sai ATLAS/resources/app.asar")),
+            linux_window_icon_path(true, Path::new("/opt/Sai ATLAS/resources"), Path::new("/opt/Sai ATLAS/resources/app.asar")),
             Some(PathBuf::from("/opt/Sai ATLAS/resources/icon.png"))
         );
     }
@@ -145,7 +143,7 @@ mod tests {
     #[test]
     fn uses_the_checkout_icon_in_a_dev_run() {
         assert_eq!(
-            linux_window_icon_path(Platform::Linux, false, Path::new("/electron/resources"), Path::new("/src/gui")),
+            linux_window_icon_path(false, Path::new("/electron/resources"), Path::new("/src/gui")),
             Some(PathBuf::from("/src/gui/resources/icon.png"))
         );
     }

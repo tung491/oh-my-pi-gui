@@ -181,7 +181,7 @@ pub fn tray_state_push(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> R
     }
 }
 
-/// `progress:set`: the window's run progress joins the dock and taskbar aggregate.
+/// `progress:set`: the window's run progress joins the taskbar aggregate.
 pub fn progress_set(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Reply {
     let desktop = match chat_window(ctx, caller, "progress:set") {
         Ok(desktop) => desktop,
@@ -200,13 +200,12 @@ pub fn progress_set(ctx: &Arc<AppCtx>, caller: Caller, args: Vec<Value>) -> Repl
 mod tests {
     use crate::bridge::dispatch_for_test;
     use crate::desktop::testing::{harness, Backend as _, DesktopPort as _, Harness};
-    use crate::desktop::Platform;
     use crate::ports::{Caller, RunProgressState, WindowId};
     use serde_json::json;
 
     /// A harness with one chat window whose page is attached, and the bar shown.
     async fn with_bar() -> (Harness, WindowId) {
-        let h = harness(Platform::Linux);
+        let h = harness();
         let id = h.desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         h.desktop.quick_entry.mark_startup_windows(&h.ctx, &h.desktop, &[]);
         h.desktop.quick_entry.show(&h.ctx, &h.desktop);
@@ -317,7 +316,7 @@ mod tests {
 
     #[tokio::test]
     async fn progress_pushes_aggregate_across_windows() {
-        let Harness { ctx, desktop, backend, .. } = harness(Platform::Linux);
+        let Harness { ctx, desktop, backend, .. } = harness();
         let first = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         dispatch_for_test(&ctx, Caller::main(first), "progress:set", vec![json!("working")]).await.unwrap();
