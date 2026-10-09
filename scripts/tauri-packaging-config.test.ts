@@ -283,16 +283,21 @@ describe("renderer security", () => {
 		}
 	});
 
-	it("no package or release script sets SAI_ATLAS_UPDATE_BASE", () => {
-		for (const [name, script] of Object.entries(scripts()))
-			expect(script, name).not.toContain("SAI_ATLAS_UPDATE_BASE");
+	it("no package or release script sets SAI_ATLAS_UPDATE_BASE or SAI_ATLAS_UPDATE_KEYS", () => {
+		const names = ["SAI_ATLAS_UPDATE_BASE", "SAI_ATLAS_UPDATE_KEYS"];
+		for (const name of names) {
+			for (const [scriptName, script] of Object.entries(scripts())) expect(script, scriptName).not.toContain(name);
+		}
 		for (const file of [
 			...packagingFiles(),
-			path.join(ROOT, "scripts/release-feeds.ts"),
 			path.join(ROOT, "scripts/stage-tauri-sidecar.ts"),
+			path.join(ROOT, "scripts/sign-release.ts"),
 			path.join(ROOT, ".github/workflows/ci.yml"),
+			path.join(ROOT, ".github/workflows/sign-release.yml"),
 		]) {
-			expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain("SAI_ATLAS_UPDATE_BASE");
+			for (const name of names) {
+				expect(fs.readFileSync(file, "utf8"), path.relative(ROOT, file)).not.toContain(name);
+			}
 		}
 	});
 });

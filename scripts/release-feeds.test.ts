@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -67,12 +67,78 @@ describe("release feeds", () => {
 				"omp-1.2.3.dmg",
 				"latest-linux.yml",
 				"latest-mac.yml",
+				"SHA512SUMS",
 			].sort(),
 		);
 		expect(readFileSync(path.join(out, names.deb), "utf8")).toBe("deb bytes");
 		expect(readFileSync(path.join(out, names.macX64Zip), "utf8")).toBe("x64 zip bytes");
 		expect(feed(out, "latest-linux.yml").files.map(file => file.url)).toEqual([names.appImage, names.deb]);
 		expect(feed(out, "latest-linux.yml").version).toBe(VERSION);
+	});
+
+	it("writes SHA512SUMS for the Linux assets and the feed", async () => {
+		const out = path.join(dir, "out");
+		await buildRelease({ version: VERSION, outDir: out, ...bundles() });
+		const text = readFileSync(path.join(out, "SHA512SUMS"), "utf8");
+		expect(text.endsWith("\n")).toBe(true);
+		const lines = text.slice(0, -1).split("\n");
+		expect(lines).toHaveLength(3);
+		expect(lines.map(line => line.split("  ")[1])).toEqual([
+			"Sai-ATLAS-1.2.3-x86_64.AppImage",
+			"latest-linux.yml",
+			"sai-atlas_1.2.3_amd64.deb",
+		]);
+		for (const line of lines) {
+			const [hex, name] = line.split("  ") as [string, string];
+			expect(hex, name).toBe(
+				createHash("sha512")
+					.update(readFileSync(path.join(out, name)))
+					.digest("hex"),
+			);
+		}
+	});
+
+	it("writes no SHA512SUMS without Linux bundles", async () => {
+		const out = path.join(dir, "out");
+		const { macArm64, macX64 } = bundles();
+		await buildRelease({ version: VERSION, outDir: out, macArm64, macX64 });
+		expect(existsSync(path.join(out, "SHA512SUMS"))).toBe(false);
+	});
+
+	it("starts latest-linux.yml with the version line", async () => {
+		const out = path.join(dir, "out");
+		await buildRelease({ version: VERSION, outDir: out, ...bundles() });
+		expect(readFileSync(path.join(out, "latest-linux.yml"), "utf8").split("\n")[0]).toBe("version: 1.2.3");
+	});
+
+	it("refuses to run while SAI_ATLAS_UPDATE_BASE is set", async () => {
+		const out = path.join(dir, "out");
+		process.env.SAI_ATLAS_UPDATE_BASE = "http://127.0.0.1:9/releases";
+		try {
+			await expect(buildRelease({ version: VERSION, outDir: out, ...bundles() })).rejects.toThrow(
+				"SAI_ATLAS_UPDATE_BASE",
+			);
+		} finally {
+			delete process.env.SAI_ATLAS_UPDATE_BASE;
+		}
+	});
+
+	it("refuses to run while SAI_ATLAS_UPDATE_KEYS is set", async () => {
+		const out = path.join(dir, "out");
+		process.env.SAI_ATLAS_UPDATE_KEYS = "{}";
+		try {
+			await expect(buildRelease({ version: VERSION, outDir: out, ...bundles() })).rejects.toThrow(
+				"SAI_ATLAS_UPDATE_KEYS",
+			);
+		} finally {
+			delete process.env.SAI_ATLAS_UPDATE_KEYS;
+		}
+	});
+
+	it("refuses a non-empty output directory", async () => {
+		const out = path.join(dir, "out");
+		write(path.join(out, "stale.txt"), "stale");
+		await expect(buildRelease({ version: VERSION, outDir: out, ...bundles() })).rejects.toThrow(/not empty/);
 	});
 
 	it("writes sha512 that matches the file", async () => {
