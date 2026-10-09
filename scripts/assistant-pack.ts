@@ -69,10 +69,9 @@ export function resolveAssistantPackDir(binaryPath: string, searchFrom: readonly
 	return beside ?? resolve(searchFrom[0] ?? "", "resources", PACK_DIR_NAME);
 }
 
-/** The spawn flags that load the pack; Linux adds the SAI OS tools, every other platform gets the office set only. */
-export function assistantPackFlags(packDir: string, platform: string): string[] {
-	const tools =
-		platform === "linux" ? [...COMMON_TOOLS, ...LINUX_OS_TOOLS, ...OFFICE_TOOLS] : [...COMMON_TOOLS, ...OFFICE_TOOLS];
+/** The spawn flags that load the pack, with the SAI OS tools. */
+export function assistantPackFlags(packDir: string): string[] {
+	const tools = [...COMMON_TOOLS, ...LINUX_OS_TOOLS, ...OFFICE_TOOLS];
 	return [
 		"--no-extensions",
 		// The folder's instruction files (rules folders, AGENTS.md, CLAUDE.md

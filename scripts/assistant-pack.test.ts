@@ -53,7 +53,7 @@ afterEach(() => {
 
 describe("assistant pack", () => {
 	it("builds the linux pack flags in order", () => {
-		expect(assistantPackFlags("/opt/pack", "linux")).toEqual([
+		expect(assistantPackFlags("/opt/pack")).toEqual([
 			"--no-extensions",
 			"--no-rules",
 			"--no-context-files",
@@ -70,29 +70,6 @@ describe("assistant pack", () => {
 			"--approval-mode",
 			"always-ask",
 		]);
-	});
-
-	it("builds the macos pack flags without the os tools", () => {
-		const expected = [
-			"--no-extensions",
-			"--no-rules",
-			"--no-context-files",
-			"--extension",
-			"/opt/pack",
-			"--tools",
-			"read,glob,write,ask,office_report,office_slides,office_clean",
-			"--system-prompt",
-			join("/opt/pack", "system-prompt.md"),
-			"--append-system-prompt",
-			join("/opt/pack", "append-system-prompt.md"),
-			"--config",
-			join("/opt/pack", "config.yml"),
-			"--approval-mode",
-			"always-ask",
-		];
-		expect(assistantPackFlags("/opt/pack", "darwin")).toEqual(expected);
-		// Every platform other than Linux gets the list without the OS tools.
-		expect(assistantPackFlags("/opt/pack", "win32")).toEqual(expected);
 	});
 
 	it("resolves the pack beside the sidecar binary", () => {

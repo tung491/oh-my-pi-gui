@@ -10,7 +10,7 @@ import ExcelJS from "exceljs";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const OMP_BIN = join(ROOT, "resources", process.platform === "linux" ? "omp.linux-x64" : "omp");
+const OMP_BIN = join(ROOT, "resources", "omp.linux-x64");
 const PACK = join(ROOT, "resources", "assistant-pack");
 const CALL_TOOL = join(ROOT, "assistant-pack", "test", "fixtures", "call-tool.mjs");
 const CHECK = join(ROOT, "scripts", "check-assistant-pack.ts");

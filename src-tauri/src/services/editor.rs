@@ -45,18 +45,8 @@ async fn run_editor(editor_cmd: &str, tmp_file: &Path, content: &str, path_env: 
 
     // Bare editor names (code, zed, subl) resolve via the login-shell PATH,
     // which is why the caller passes the overlay `spawn_env()` computed.
-    #[cfg(windows)]
-    let mut command = {
-        let mut command = Command::new("cmd");
-        command.arg("/C").arg(editor).args(&editor_args);
-        command
-    };
-    #[cfg(not(windows))]
-    let mut command = {
-        let mut command = Command::new(editor);
-        command.args(&editor_args);
-        command
-    };
+    let mut command = Command::new(editor);
+    command.args(&editor_args);
     command.arg(tmp_file);
     command.env("PATH", path_env);
     command.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());

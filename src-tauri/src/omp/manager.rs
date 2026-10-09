@@ -2,11 +2,10 @@
 //! `omp --mode rpc-ui` through the supervisor, routes frames to the RPC client
 //! and the event batcher, and runs the restart and crash-loop policy.
 //!
-//! Process tree on Linux and macOS: GUI → supervisor (this binary re-executed
-//! with `ports::SUPERVISOR_ARGV`) → omp → tool children. The GUI holds one end
-//! of a socketpair; the supervisor inherits the other as fd 3, writes omp's pid
-//! on it once, and treats EOF as the GUI's death. Windows spawns omp directly
-//! until it gets a Job Object.
+//! Process tree: GUI → supervisor (this binary re-executed with
+//! `ports::SUPERVISOR_ARGV`) → omp → tool children. The GUI holds one end of a
+//! socketpair; the supervisor inherits the other as fd 3, writes omp's pid on
+//! it once, and treats EOF as the GUI's death.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -228,8 +227,8 @@ fn launch_profile_flags(ctx: &CtxRef, cwd: &str) -> Vec<String> {
 // Supervised spawn
 // ---------------------------------------------------------------------------
 
-/// The command that runs `program args…` under the supervisor on Linux and
-/// macOS, or directly on Windows. The caller sets cwd, env and stdio.
+/// The command that runs `program args…` under the supervisor. The caller sets
+/// cwd, env and stdio.
 fn supervised_command(program: &Path, args: &[String]) -> std::io::Result<Command> {
     #[cfg(unix)]
     {
@@ -240,12 +239,6 @@ fn supervised_command(program: &Path, args: &[String]) -> std::io::Result<Comman
             command.env(key, value);
         }
         launcher.append_omp_argv(&mut command, program, args);
-        Ok(command)
-    }
-    #[cfg(not(unix))]
-    {
-        let mut command = Command::new(program);
-        command.args(args);
         Ok(command)
     }
 }
@@ -294,7 +287,7 @@ fn supervisor_launcher() -> std::io::Result<SupervisorLauncher> {
     })
 }
 
-/// A spawned supervisor (or, on Windows, omp itself) with the GUI-side control channel.
+/// A spawned supervisor with the GUI-side control channel.
 pub(crate) struct Supervised {
     pub(crate) child: Child,
     #[cfg(unix)]
@@ -340,10 +333,6 @@ pub(crate) fn spawn_supervised(program: &Path, args: &[String], configure: impl 
         let (control_read, control_write) = tokio::net::UnixStream::from_std(stream)?.into_split();
         Ok(Supervised { child, control_read, control_write })
     }
-    #[cfg(not(unix))]
-    {
-        Ok(Supervised { child: command.spawn()? })
-    }
 }
 
 /// The `pid <n>` line the supervisor writes right after spawning omp; `None` at EOF.
@@ -369,7 +358,7 @@ pub(crate) async fn read_pid_line(control: &mut tokio::net::unix::OwnedReadHalf)
 /// A live spawn cycle.
 struct Spawned {
     id: u64,
-    /// The direct child: the supervisor on Linux and macOS, omp itself on Windows.
+    /// The direct child: the supervisor.
     direct_pid: Option<u32>,
     stdin: mpsc::UnboundedSender<Vec<u8>>,
     #[cfg(unix)]
@@ -604,7 +593,7 @@ impl Inner {
             } else if state.fresh_launch_pending {
                 args.push("--no-auto-resume".to_string());
             }
-            args.extend(assistant_pack::pack_flags(&state.pack_dir, std::env::consts::OS));
+            args.extend(assistant_pack::pack_flags(&state.pack_dir));
             (state.options.clone(), args, state.generation, state.spawn_env.clone())
         };
         // Each local model's measured context limit, loaded after the pack's
@@ -687,11 +676,6 @@ impl Inner {
             {
                 state.supervisor_pid = direct_pid;
                 state.omp_pid = None;
-            }
-            #[cfg(not(unix))]
-            {
-                state.supervisor_pid = None;
-                state.omp_pid = direct_pid;
             }
         }
 
@@ -944,12 +928,6 @@ impl Inner {
                 let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
             }
         }
-        #[cfg(not(unix))]
-        {
-            if let Some(request) = lock(&child.kill_request).take() {
-                let _ = request.send(());
-            }
-        }
     }
 
     fn kill(self: &Arc<Self>) -> BoxFuture<'static, ()> {
@@ -992,8 +970,6 @@ fn describe_exit(status: &std::process::ExitStatus) -> String {
             Err(_) => format!(" (signal: {signal})"),
         })
     };
-    #[cfg(not(unix))]
-    let signal: Option<String> = None;
     format!("Exit code {code}{}", signal.unwrap_or_default())
 }
 
@@ -1114,13 +1090,9 @@ pub(crate) mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("resources").join("assistant-pack")
     }
 
-    /// The `--tools` value of the spawn contract for the platform running the suite.
+    /// The `--tools` value of the spawn contract.
     fn pack_tools() -> &'static str {
-        if cfg!(target_os = "linux") {
-            "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean"
-        } else {
-            "read,glob,write,ask,office_report,office_slides,office_clean"
-        }
+        "read,glob,write,ask,diagnose,system_status,open_item,os_setting,office_report,office_slides,office_clean"
     }
 
     /// The pack part of the spawn argv, written out so the test does not restate the code it checks.

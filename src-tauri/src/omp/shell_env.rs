@@ -79,11 +79,6 @@ fn parse_probe_output(stdout: &str) -> Option<LoginShellEnv> {
 
 /// Run `$SHELL -ilc` once with marker-delimited `env`; failure yields the empty result.
 async fn probe_login_shell(env: &Env) -> LoginShellEnv {
-    // Windows has no login-shell probe. Keep the inherited environment and add
-    // the well-known per-user tool directories through `fallback_bin_dirs`.
-    if cfg!(windows) {
-        return LoginShellEnv::default();
-    }
     let shell = env.get("SHELL").filter(|shell| !shell.is_empty()).cloned().unwrap_or_else(|| "/bin/zsh".to_string());
     // `command` bypasses rc aliases; the markers isolate rc chatter.
     let script = format!("command printf '%s\\n' '{BEGIN}'; command env; command printf '%s\\n' '{END}'");
@@ -128,52 +123,29 @@ fn home_dir(env: &Env) -> PathBuf {
 /// Existing well-known user bin dirs, used when the shell probe fails.
 fn fallback_bin_dirs(env: &Env) -> Vec<PathBuf> {
     let home = home_dir(env);
-    let mut candidates: Vec<PathBuf> = if cfg!(windows) {
-        let local = env.get("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Local"));
-        let roaming = env.get("APPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData").join("Roaming"));
-        vec![
-            home.join(".bun").join("bin"),
-            home.join(".cargo").join("bin"),
-            home.join(".local").join("bin"),
-            local.join("Programs").join("bun"),
-            roaming.join("npm"),
-            local.join("Microsoft").join("WindowsApps"),
-        ]
-    } else {
-        vec![
-            home.join(".local").join("bin"),
-            home.join(".bun").join("bin"),
-            home.join("bin"),
-            home.join(".cargo").join("bin"),
-            home.join(".volta").join("bin"),
-            PathBuf::from("/opt/homebrew/bin"),
-            PathBuf::from("/usr/local/bin"),
-        ]
-    };
-    if !cfg!(windows) {
-        // nvm keeps no stable "current" symlink; take the newest installed node.
-        let nvm_dir = home.join(".nvm").join("versions").join("node");
-        if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
-            let mut versions: Vec<String> = entries.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).filter(|name| name.starts_with('v')).collect();
-            versions.sort_by(|a, b| compare_version_dirs(a, b));
-            if let Some(newest) = versions.last() {
-                candidates.push(nvm_dir.join(newest).join("bin"));
-            }
+    let mut candidates: Vec<PathBuf> = vec![
+        home.join(".local").join("bin"),
+        home.join(".bun").join("bin"),
+        home.join("bin"),
+        home.join(".cargo").join("bin"),
+        home.join(".volta").join("bin"),
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+    ];
+    // nvm keeps no stable "current" symlink; take the newest installed node.
+    let nvm_dir = home.join(".nvm").join("versions").join("node");
+    if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+        let mut versions: Vec<String> = entries.flatten().map(|entry| entry.file_name().to_string_lossy().into_owned()).filter(|name| name.starts_with('v')).collect();
+        versions.sort_by(|a, b| compare_version_dirs(a, b));
+        if let Some(newest) = versions.last() {
+            candidates.push(nvm_dir.join(newest).join("bin"));
         }
     }
     candidates.into_iter().filter(|dir| dir.is_dir()).collect()
 }
 
-fn path_delimiter() -> char {
-    if cfg!(windows) {
-        ';'
-    } else {
-        ':'
-    }
-}
-
 fn split_path(value: &str) -> impl Iterator<Item = &str> {
-    value.split(path_delimiter()).filter(|entry| !entry.is_empty())
+    value.split(':').filter(|entry| !entry.is_empty())
 }
 
 /// Merge inherited PATH entries (the explicit launch env wins order) with the
@@ -195,7 +167,7 @@ pub(crate) fn spawn_path(env: &Env, probed: &LoginShellEnv) -> String {
             merged.push(entry.to_string());
         }
     }
-    merged.join(&path_delimiter().to_string())
+    merged.join(":")
 }
 
 /// Env overlay for sidecar spawns: every probed shell var the process lacks
@@ -217,9 +189,6 @@ pub(crate) fn shell_spawn_env(env: &Env, probed: &LoginShellEnv) -> HashMap<Stri
 pub(crate) fn resolve_editor_command(env: &Env, probed: &LoginShellEnv) -> Option<String> {
     if let Some(configured) = non_empty(env.get("VISUAL")).or_else(|| non_empty(env.get("EDITOR"))) {
         return Some(configured);
-    }
-    if cfg!(windows) {
-        return Some("notepad".to_string());
     }
     probed.editor.clone()
 }

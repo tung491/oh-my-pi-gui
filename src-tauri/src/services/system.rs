@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use crate::ctx::AppCtx;
 use crate::ports::{Caller, WindowId};
 
-use super::open_path_target::{self, LaunchPlatform, OpenAction, OsFs};
+use super::open_path_target::{self, OpenAction, OsFs};
 
 /// The mailto header fields `system:open-external` passes on. Some mail
 /// clients reached through xdg-open have honoured `attach`/`attachment`, so a
@@ -113,11 +113,6 @@ impl NotifyDedupe {
     }
 }
 
-/// The Node `process.platform` name this build reports for the open-path decision.
-pub fn launch_platform() -> LaunchPlatform {
-    open_path_target::launch_platform_of(crate::runtime_log::node_platform())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenPathOutcome {
     pub resolved_path: String,
@@ -181,7 +176,7 @@ pub async fn open_path(
         resolve_open_path(target, dirs::home_dir().as_deref(), tab_id, |tab_id| ctx.tabs.cwd_for(caller, tab_id))?;
     let probe_path = resolved.clone();
     let decision = tokio::task::spawn_blocking(move || {
-        open_path_target::open_path_target(&probe_path, launch_platform(), &OsFs)
+        open_path_target::open_path_target(&probe_path, &OsFs)
     })
     .await
     .ok()

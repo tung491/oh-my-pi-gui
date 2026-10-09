@@ -586,7 +586,7 @@ async function main(): Promise<number> {
 		return 2;
 	}
 	// The flags the shells spawn with; `--tools` replaces only the tool list.
-	const packFlags = assistantPackFlags(pack, process.platform);
+	const packFlags = assistantPackFlags(pack);
 	const toolsAt = packFlags.indexOf("--tools") + 1;
 	const tools = (parsed.values.tools ?? packFlags[toolsAt])
 		.split(",")

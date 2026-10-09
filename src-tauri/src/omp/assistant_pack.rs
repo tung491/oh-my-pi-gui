@@ -62,13 +62,10 @@ fn absolute(path: PathBuf) -> PathBuf {
     std::path::absolute(&path).unwrap_or(path)
 }
 
-/// The spawn flags that load the pack. `os` is `std::env::consts::OS`: Linux
-/// adds the SAI OS tools, every other platform gets the office set only.
-pub(crate) fn pack_flags(pack_dir: &Path, os: &str) -> Vec<String> {
+/// The spawn flags that load the pack, with the SAI OS tools.
+pub(crate) fn pack_flags(pack_dir: &Path) -> Vec<String> {
     let mut tools: Vec<&str> = COMMON_TOOLS.to_vec();
-    if os == "linux" {
-        tools.extend_from_slice(LINUX_OS_TOOLS);
-    }
+    tools.extend_from_slice(LINUX_OS_TOOLS);
     tools.extend_from_slice(OFFICE_TOOLS);
     vec![
         "--no-extensions".to_string(),
@@ -328,32 +325,7 @@ mod tests {
             "--approval-mode",
             "always-ask",
         ]);
-        assert_eq!(pack_flags(pack, "linux"), expected);
-    }
-
-    #[test]
-    fn builds_the_macos_pack_flags_without_the_os_tools() {
-        let pack = Path::new("/opt/pack");
-        let expected = strings(&[
-            "--no-extensions",
-            "--no-rules",
-            "--no-context-files",
-            "--extension",
-            "/opt/pack",
-            "--tools",
-            "read,glob,write,ask,office_report,office_slides,office_clean",
-            "--system-prompt",
-            "/opt/pack/system-prompt.md",
-            "--append-system-prompt",
-            "/opt/pack/append-system-prompt.md",
-            "--config",
-            "/opt/pack/config.yml",
-            "--approval-mode",
-            "always-ask",
-        ]);
-        assert_eq!(pack_flags(pack, "macos"), expected);
-        // Every platform other than Linux gets the list without the OS tools.
-        assert_eq!(pack_flags(pack, "windows"), expected);
+        assert_eq!(pack_flags(pack), expected);
     }
 
     #[test]

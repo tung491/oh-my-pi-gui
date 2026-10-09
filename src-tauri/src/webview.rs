@@ -182,16 +182,9 @@ fn strip_fragment(url: &Url) -> Url {
     copy
 }
 
-/// Whether `url` is on the app's own origin: `tauri://localhost`, the
-/// `http(s)://tauri.localhost` origin Windows serves the app from (elsewhere
-/// that host resolves to 127.0.0.1 and is not the app), or the dev server in a
-/// debug build.
+/// Whether `url` is on the app's own origin: `tauri://localhost`, or the dev server in a debug build.
 fn is_app_origin(url: &Url, dev_url: Option<&Url>, debug: bool) -> bool {
-    let app = match url.scheme() {
-        "tauri" => url.host_str() == Some("localhost"),
-        "http" | "https" => cfg!(windows) && url.host_str() == Some("tauri.localhost"),
-        _ => false,
-    };
+    let app = url.scheme() == "tauri" && url.host_str() == Some("localhost");
     app || matches!((debug, dev_url), (true, Some(dev)) if url.origin() == dev.origin())
 }
 
@@ -371,9 +364,6 @@ struct Downloads {
     win_id: WindowId,
     dev_url: Option<Url>,
     staging_dir: PathBuf,
-    /// Decide completion from the staged file rather than wry's reported result
-    /// (see `download_completed`).
-    filesystem_decides: bool,
     registry: Arc<DownloadRegistry>,
 }
 
@@ -399,25 +389,9 @@ struct StagedDownload {
 /// The one registry every window's download handler shares.
 static DOWNLOAD_REGISTRY: LazyLock<Arc<DownloadRegistry>> = LazyLock::new(Arc::default);
 
-/// Whether a finished download left a complete file to save. WebKitGTK removes
-/// the file of a failed or cancelled download itself, while wry's failure flag
-/// is set once per window and never cleared, so after one blocked download it
-/// reports every later one as failed. There the staged file's presence is the
-/// truth; elsewhere the reported result is, as long as the file is there.
-fn download_completed(reported_success: bool, staged_exists: bool, filesystem_decides: bool) -> bool {
-    staged_exists && (filesystem_decides || reported_success)
-}
-
 impl Downloads {
     fn new(host: Arc<dyn Host>, win_id: WindowId, dev_url: Option<Url>) -> Self {
-        Self::with_registry(
-            host,
-            win_id,
-            dev_url,
-            downloads_dir(),
-            cfg!(target_os = "linux"),
-            DOWNLOAD_REGISTRY.clone(),
-        )
+        Self::with_registry(host, win_id, dev_url, downloads_dir(), DOWNLOAD_REGISTRY.clone())
     }
 
     fn with_registry(
@@ -425,10 +399,9 @@ impl Downloads {
         win_id: WindowId,
         dev_url: Option<Url>,
         staging_dir: PathBuf,
-        filesystem_decides: bool,
         registry: Arc<DownloadRegistry>,
     ) -> Self {
-        Self { host, win_id, dev_url, staging_dir, filesystem_decides, registry }
+        Self { host, win_id, dev_url, staging_dir, registry }
     }
 
     fn handle(&self, event: DownloadEvent<'_>) -> bool {
@@ -501,7 +474,12 @@ impl Downloads {
                 json!({ "winId": win_id.0 }),
             );
         }
-        if !download_completed(success, staged.exists(), self.filesystem_decides) {
+        // Whether the download left a complete file to save. WebKitGTK removes
+        // the file of a failed or cancelled download itself, while wry's failure
+        // flag is set once per window and never cleared, so after one blocked
+        // download it reports every later one as failed. The staged file's
+        // presence is the truth.
+        if !staged.exists() {
             remove_staged(&staged);
             runtime_log::note("unknown", format!("download of {url} failed"), json!({ "winId": win_id.0 }));
             return None;
@@ -637,7 +615,6 @@ const NATIVE_DROP_PATHS_CHANNEL: &str = "system:native-drop-paths";
 
 /// Absolute local paths of the `file://` URIs in a drag's URI list, in order and
 /// without duplicates. Other schemes, remote hosts and non-UTF-8 paths are skipped.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn file_paths_from_uris<S: AsRef<str>>(uris: &[S]) -> Vec<String> {
     let mut paths: Vec<String> = Vec::new();
     for uri in uris {
@@ -776,10 +753,9 @@ mod tests {
     }
 
     #[test]
-    fn tauri_localhost_is_the_app_origin_only_on_windows() {
-        let windows_origin = navigation_allowed(&url("http://tauri.localhost/quick-entry.html"), "quick-entry.html", None, false);
-        assert_eq!(windows_origin, cfg!(windows));
-        assert_eq!(navigation_allowed(&url("https://tauri.localhost/index.html"), "index.html", None, false), cfg!(windows));
+    fn tauri_localhost_over_http_is_not_the_app_origin() {
+        assert!(!navigation_allowed(&url("http://tauri.localhost/quick-entry.html"), "quick-entry.html", None, false));
+        assert!(!navigation_allowed(&url("https://tauri.localhost/index.html"), "index.html", None, false));
     }
 
     #[test]
@@ -896,19 +872,12 @@ mod tests {
         bar: Downloads,
     }
 
-    fn two_windows(filesystem_decides: bool) -> TwoWindows {
+    fn two_windows() -> TwoWindows {
         let staging = tempfile::tempdir().unwrap();
         let host = Arc::new(crate::testing::FakeHost::new());
         let registry = Arc::new(DownloadRegistry::default());
         let window = |win_id| {
-            Downloads::with_registry(
-                host.clone(),
-                win_id,
-                None,
-                staging.path().to_path_buf(),
-                filesystem_decides,
-                registry.clone(),
-            )
+            Downloads::with_registry(host.clone(), win_id, None, staging.path().to_path_buf(), registry.clone())
         };
         let (main, bar) = (window(WindowId(1)), window(WindowId::QUICK_ENTRY));
         TwoWindows { staging, host, main, bar }
@@ -939,7 +908,7 @@ mod tests {
 
     #[test]
     fn every_window_stages_a_download_at_the_same_path() {
-        let windows = two_windows(true);
+        let windows = two_windows();
         let blob = url("blob:tauri://localhost/3f1c-uuid");
         let mut first = windows.prefilled("omp-logs.log");
         let mut second = windows.prefilled("omp-logs.log");
@@ -953,7 +922,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_finished_download_opens_one_save_dialog_with_the_suggested_name() {
-        let windows = two_windows(true);
+        let windows = two_windows();
         let blob = url("blob:tauri://localhost/3f1c-uuid");
         let staged = windows.download(&windows.main, &blob, "omp-logs.log", "log lines");
         let target = windows.staging.path().join("saved.log");
@@ -972,7 +941,7 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_downloads_are_handled_independently() {
-        let windows = two_windows(true);
+        let windows = two_windows();
         let first = url("blob:tauri://localhost/first-uuid");
         let second = url("blob:tauri://localhost/second-uuid");
         let first_staged = windows.download(&windows.main, &first, "a.log", "a");
@@ -994,12 +963,13 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_download_removes_its_staged_file_once() {
-        let windows = two_windows(false);
+    fn a_failed_download_is_claimed_once_and_saves_nothing() {
+        let windows = two_windows();
         let blob = url("blob:tauri://localhost/3f1c-uuid");
         let staged = windows.download(&windows.main, &blob, "omp-logs.log", "partial");
+        // WebKitGTK removes a failed download's file.
+        std::fs::remove_file(&staged).unwrap();
         assert!(windows.main.finished(blob.clone(), None, false).is_none());
-        assert!(!staged.exists(), "the partial file is discarded");
         // A file that shows up at the same path later is not this download's to remove.
         std::fs::write(&staged, "unrelated").unwrap();
         assert!(windows.bar.finished(blob, None, false).is_none());
@@ -1008,8 +978,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_complete_file_is_saved_even_when_reported_as_failed_where_the_filesystem_decides() {
-        let windows = two_windows(true);
+    async fn a_complete_file_is_saved_even_when_reported_as_failed() {
+        let windows = two_windows();
         let blob = url("blob:tauri://localhost/3f1c-uuid");
         let staged = windows.download(&windows.main, &blob, "omp-logs.log", "log lines");
         windows.answer_save_dialog(None);
@@ -1020,7 +990,7 @@ mod tests {
 
     #[test]
     fn a_download_without_its_file_opens_no_dialog() {
-        let windows = two_windows(true);
+        let windows = two_windows();
         let blob = url("blob:tauri://localhost/3f1c-uuid");
         let mut destination = windows.prefilled("omp-logs.log");
         assert!(windows.main.requested(blob.clone(), &mut destination));
@@ -1030,21 +1000,12 @@ mod tests {
 
     #[test]
     fn a_blocked_download_is_never_staged() {
-        let windows = two_windows(true);
+        let windows = two_windows();
         let foreign = url("https://example.com/file.zip");
         let mut destination = windows.prefilled("file.zip");
         assert!(!windows.main.requested(foreign.clone(), &mut destination));
         assert_eq!(destination, windows.prefilled("file.zip"));
         assert!(windows.bar.finished(foreign, None, false).is_none());
         assert!(windows.save_dialogs().is_empty());
-    }
-
-    #[test]
-    fn download_completion_trusts_the_file_where_the_filesystem_decides() {
-        assert!(download_completed(false, true, true), "a sticky failure flag does not discard a complete file");
-        assert!(!download_completed(true, false, true));
-        assert!(download_completed(true, true, false));
-        assert!(!download_completed(false, true, false));
-        assert!(!download_completed(true, false, false));
     }
 }

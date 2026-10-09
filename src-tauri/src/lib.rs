@@ -48,7 +48,7 @@ use tauri_plugin_opener::OpenerExt;
 use crate::bridge::{Bridge, Registry};
 use crate::ctx::AppCtx;
 use crate::i18n::MainI18n;
-use crate::ports::{Host, HostError, MessageDialogOptions, MessageKind, OpenDialogOptions, SaveDialogOptions, WindowId};
+use crate::ports::{Host, HostError, MessageDialogOptions, MessageKind, OpenDialogOptions, SaveDialogOptions};
 use crate::prefs::JsonStore;
 use crate::runtime_log::RuntimeLog;
 
@@ -69,27 +69,14 @@ struct TauriHost {
 }
 
 impl TauriHost {
-    fn window(&self, win_id: Option<WindowId>) -> Option<tauri::WebviewWindow> {
-        win_id.and_then(|id| self.app.get_webview_window(&id.label()))
-    }
-
-    /// The window a native dialog is attached to. On Linux there is none: the
+    /// A file dialog. Native dialogs are never attached to a parent window: the
     /// GTK3 dialog backend ignores a parent, and reading a Wayland window
     /// handle for a hidden window dereferences a null surface.
-    fn dialog_parent(&self, win_id: Option<WindowId>) -> Option<tauri::WebviewWindow> {
-        if dialog_parent_supported() {
-            self.window(win_id)
-        } else {
-            None
-        }
-    }
-
     fn file_dialog(
         &self,
         title: Option<&str>,
         default_path: Option<&Path>,
         filters: &[ports::FileFilter],
-        parent: Option<WindowId>,
     ) -> tauri_plugin_dialog::FileDialogBuilder<tauri::Wry> {
         let mut builder = self.app.dialog().file();
         if let Some(title) = title {
@@ -111,16 +98,8 @@ impl TauriHost {
             let extensions: Vec<&str> = filter.extensions.iter().map(String::as_str).collect();
             builder = builder.add_filter(&filter.name, &extensions);
         }
-        if let Some(window) = self.dialog_parent(parent) {
-            builder = builder.set_parent(&window);
-        }
         builder
     }
-}
-
-/// Whether native dialogs on this platform are attached to a parent window.
-fn dialog_parent_supported() -> bool {
-    !cfg!(target_os = "linux")
 }
 
 fn file_paths(paths: Vec<tauri_plugin_dialog::FilePath>) -> Vec<PathBuf> {
@@ -139,7 +118,7 @@ fn system_locale() -> Option<String> {
 impl Host for TauriHost {
     fn open_dialog(&self, options: OpenDialogOptions) -> BoxFuture<'_, Option<Vec<PathBuf>>> {
         let builder = self
-            .file_dialog(options.title.as_deref(), options.default_path.as_deref(), &options.filters, options.parent)
+            .file_dialog(options.title.as_deref(), options.default_path.as_deref(), &options.filters)
             .set_can_create_directories(options.can_create_directories);
         let (tx, rx) = tokio::sync::oneshot::channel();
         match (options.directory, options.multiple) {
@@ -160,7 +139,7 @@ impl Host for TauriHost {
     }
 
     fn save_dialog(&self, options: SaveDialogOptions) -> BoxFuture<'_, Option<PathBuf>> {
-        let builder = self.file_dialog(options.title.as_deref(), options.default_path.as_deref(), &options.filters, options.parent);
+        let builder = self.file_dialog(options.title.as_deref(), options.default_path.as_deref(), &options.filters);
         let (tx, rx) = tokio::sync::oneshot::channel();
         builder.save_file(move |picked| {
             let _ = tx.send(picked.and_then(|path| path.into_path().ok()));
@@ -169,7 +148,7 @@ impl Host for TauriHost {
     }
 
     fn message_dialog(&self, options: MessageDialogOptions) -> BoxFuture<'_, usize> {
-        let MessageDialogOptions { title, message, detail, kind, buttons, parent } = options;
+        let MessageDialogOptions { title, message, detail, kind, buttons, parent: _ } = options;
         let text = match detail {
             Some(detail) if !detail.is_empty() => format!("{message}\n\n{detail}"),
             _ => message,
@@ -179,9 +158,6 @@ impl Host for TauriHost {
             MessageKind::Warning => MessageDialogKind::Warning,
             MessageKind::Error => MessageDialogKind::Error,
         });
-        if let Some(window) = self.dialog_parent(parent) {
-            builder = builder.parent(&window);
-        }
         // The plugin shows at most three buttons; the first is the affirmative one.
         let labels = buttons;
         builder = builder.buttons(match labels.as_slice() {
@@ -406,9 +382,6 @@ fn listen_for_signals(app: AppHandle) {
     });
 }
 
-#[cfg(not(unix))]
-fn listen_for_signals(_app: AppHandle) {}
-
 fn startup_failure(stage: &str, error: impl std::fmt::Display) -> ExitCode {
     runtime_log::note("main-uncaught", format!("{stage}: {error}"), json!({ "stage": stage }));
     eprintln!("{}: {stage}: {error}", product::PRODUCT_NAME);
@@ -506,12 +479,4 @@ pub fn run() -> ExitCode {
         _ => {}
     });
     ExitCode::SUCCESS
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn native_dialogs_are_never_parented_on_linux() {
-        assert_eq!(super::dialog_parent_supported(), !cfg!(target_os = "linux"));
-    }
 }

@@ -43,16 +43,7 @@ pub fn run(args: Vec<OsString>) -> ExitCode {
 
 /// The exit status `run` ends with, as a number a test helper can `exit` with.
 pub(crate) fn run_code(args: Vec<OsString>) -> u8 {
-    #[cfg(unix)]
-    {
-        unix::run(args)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = args;
-        warn("the sidecar supervisor is not used on this OS");
-        1
-    }
+    unix::run(args)
 }
 
 /// Write one line to stderr; a closed pipe is ignored, never a panic.
@@ -289,10 +280,6 @@ mod unix {
         }
     }
 
-    /// macOS orphans are collected by the shutdown sweep.
-    #[cfg(not(target_os = "linux"))]
-    fn reap_orphans(_omp: Pid) {}
-
     /// Collect every exited child without blocking.
     fn reap() {
         loop {
@@ -322,12 +309,6 @@ mod unix {
             }
         }
         children
-    }
-
-    /// macOS has no `/proc`; the `proc_listchildpids` snapshot arrives with that OS's cutover.
-    #[cfg(not(target_os = "linux"))]
-    fn live_children_of_self() -> Vec<Pid> {
-        Vec::new()
     }
 }
 

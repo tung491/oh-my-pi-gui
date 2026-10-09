@@ -172,15 +172,9 @@ fn try_append(file_path: &Path, report: &Value, context: &RuntimeLogContext) -> 
     file.write_all(&line)
 }
 
-/// Node's platform name for this build (`process.platform` in Electron).
+/// The host OS in Node's spelling, as the renderer bootstrap and the runtime log record it.
 pub fn node_platform() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "darwin"
-    } else if cfg!(windows) {
-        "win32"
-    } else {
-        "linux"
-    }
+    "linux"
 }
 
 /// A handle bound to one log file and the app version.

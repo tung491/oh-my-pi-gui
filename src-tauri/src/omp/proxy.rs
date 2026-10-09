@@ -96,14 +96,6 @@ fn portal_proxy_to_url(answer: &reqwest::Url) -> Option<String> {
     Some(format!("{scheme}://{credentials}{host}:{port}"))
 }
 
-/// Windows (WinHTTP) and macOS (`scutil --proxy`, PAC) lookups arrive when those
-/// OSes switch shells; until then the chain ends without a system proxy.
-#[cfg(not(target_os = "linux"))]
-async fn lookup_system_proxy() -> Option<String> {
-    crate::runtime_log::note("unknown", "system proxy lookup is not implemented on this OS", serde_json::json!({}));
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

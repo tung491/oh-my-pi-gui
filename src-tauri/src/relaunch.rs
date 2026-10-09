@@ -144,12 +144,6 @@ fn scrub_value(value: &std::ffi::OsStr, appdirs: &[&std::ffi::OsStr]) -> Option<
     Some(OsString::from_vec(kept.join(&b':')))
 }
 
-/// `$APPDIR` only exists inside a Linux AppImage; elsewhere nothing is scrubbed.
-#[cfg(not(unix))]
-fn scrub_value(value: &std::ffi::OsStr, _appdirs: &[&std::ffi::OsStr]) -> Option<OsString> {
-    Some(value.to_os_string())
-}
-
 /// Whether `path` is `root` or inside it, ignoring repeated and trailing slashes
 /// (AppRun scripts write `$APPDIR//usr/lib`).
 fn is_under(path: &std::ffi::OsStr, root: &std::ffi::OsStr) -> bool {

@@ -164,16 +164,12 @@ pub fn context_limits_overlay_path(user_data: &Path) -> PathBuf {
     user_data.join(CONTEXT_LIMITS_OVERLAY_FILE)
 }
 
-/// Filename of the bundled omp sidecar on this platform.
+/// Filename of the bundled omp sidecar.
 pub fn bundled_omp_filename() -> &'static str {
-    if cfg!(windows) {
-        "omp.exe"
-    } else {
-        "omp"
-    }
+    "omp"
 }
 
-/// Resolve a bundled sidecar path, accepting a Windows `.exe` suffix when needed.
+/// The joined path when it exists.
 pub fn resolve_omp_candidate(parts: &[&Path]) -> Option<PathBuf> {
     let mut candidate = PathBuf::new();
     for part in parts {
@@ -182,62 +178,30 @@ pub fn resolve_omp_candidate(parts: &[&Path]) -> Option<PathBuf> {
     if candidate.exists() {
         return Some(candidate);
     }
-    if cfg!(windows) {
-        let lower = candidate.to_string_lossy().to_lowercase();
-        if !lower.ends_with(".exe") {
-            let mut with_exe = candidate.into_os_string();
-            with_exe.push(".exe");
-            let with_exe = PathBuf::from(with_exe);
-            if with_exe.exists() {
-                return Some(with_exe);
-            }
-        }
-    }
     None
-}
-
-/// Sidecar filename under `resources/` for a cross-target build.
-pub fn sidecar_out_name(os_name: &str, arch: &str) -> String {
-    if os_name == "win32" || os_name == "windows" {
-        return "omp.exe".to_string();
-    }
-    if os_name == "linux" {
-        return format!("omp.linux-{arch}");
-    }
-    if arch == "x64" {
-        "omp.x64".to_string()
-    } else {
-        "omp".to_string()
-    }
 }
 
 /// Directories a packaged build may hold the sidecar in, most specific first,
 /// as Tauri's `resource_dir` computes them (`tauri-utils/src/platform.rs`) but
 /// without a runtime: Linux bundles ship resources in `lib/<product name>`
 /// beside `bin/` (the .deb's `/usr/lib/Sai ATLAS`, the AppImage's
-/// `$APPDIR/usr/lib/Sai ATLAS`), macOS in `Contents/Resources`, Windows beside
-/// the executable. The executable's own directory is always the last candidate.
-/// `os_name` uses Node's names (`linux`, `darwin`, `win32`).
-pub fn bundled_omp_candidates(os_name: &str, exe_dir: &Path, appdir: Option<&Path>) -> Vec<PathBuf> {
+/// `$APPDIR/usr/lib/Sai ATLAS`). The executable's own directory is always the
+/// last candidate.
+pub fn bundled_omp_candidates(exe_dir: &Path, appdir: Option<&Path>) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
-    if os_name == "linux" {
-        dirs.push(normalize(&exe_dir.join("..").join("lib").join(product::PRODUCT_NAME)));
-        if let Some(appdir) = appdir {
-            dirs.push(appdir.join("usr").join("lib").join(product::PRODUCT_NAME));
-        }
-        dirs.push(Path::new("/usr/lib").join(product::PRODUCT_NAME));
+    dirs.push(normalize(&exe_dir.join("..").join("lib").join(product::PRODUCT_NAME)));
+    if let Some(appdir) = appdir {
+        dirs.push(appdir.join("usr").join("lib").join(product::PRODUCT_NAME));
     }
-    if os_name == "darwin" {
-        dirs.push(normalize(&exe_dir.join("..").join("Resources")));
-    }
+    dirs.push(Path::new("/usr/lib").join(product::PRODUCT_NAME));
     dirs.push(exe_dir.to_path_buf());
     dirs
 }
 
 /// The packaged lookup over explicit directories, so tests can lay a bundle out in a temp dir.
-pub fn resolve_bundled_omp_in(os_name: &str, exe_dir: &Path, appdir: Option<&Path>) -> Result<PathBuf, PathsError> {
+pub fn resolve_bundled_omp_in(exe_dir: &Path, appdir: Option<&Path>) -> Result<PathBuf, PathsError> {
     let filename = Path::new(bundled_omp_filename());
-    let candidates = bundled_omp_candidates(os_name, exe_dir, appdir);
+    let candidates = bundled_omp_candidates(exe_dir, appdir);
     for dir in &candidates {
         if let Some(found) = resolve_omp_candidate(&[dir, filename]) {
             return Ok(found);
@@ -265,7 +229,7 @@ pub fn resolve_bundled_omp() -> Result<PathBuf, PathsError> {
     let exe = std::env::current_exe().map_err(PathsError::CurrentExe)?;
     let exe_dir = exe.parent().map(Path::to_path_buf).unwrap_or_default();
     let appdir = std::env::var_os("APPDIR").filter(|value| !value.is_empty()).map(PathBuf::from);
-    resolve_bundled_omp_in(crate::runtime_log::node_platform(), &exe_dir, appdir.as_deref())
+    resolve_bundled_omp_in(&exe_dir, appdir.as_deref())
 }
 
 /// `OMP_BUNDLED_OMP` names the e2e fixture sidecar, as it does for the Electron
@@ -374,16 +338,7 @@ mod tests {
 
     #[test]
     fn uses_the_host_sidecar_filename() {
-        assert_eq!(bundled_omp_filename(), if cfg!(windows) { "omp.exe" } else { "omp" });
-    }
-
-    #[test]
-    fn gives_every_packaged_platform_its_own_sidecar_file() {
-        assert_eq!(sidecar_out_name("darwin", "arm64"), "omp");
-        assert_eq!(sidecar_out_name("darwin", "x64"), "omp.x64");
-        assert_eq!(sidecar_out_name("win32", "x64"), "omp.exe");
-        assert_eq!(sidecar_out_name("windows", "x64"), "omp.exe");
-        assert_eq!(sidecar_out_name("linux", "x64"), "omp.linux-x64");
+        assert_eq!(bundled_omp_filename(), "omp");
     }
 
     #[test]
@@ -405,7 +360,7 @@ mod tests {
         std::fs::write(lib.join(bundled_omp_filename()), b"").unwrap();
         // A system `omp` beside the executable never shadows the bundled one.
         std::fs::write(exe_dir.join(bundled_omp_filename()), b"").unwrap();
-        assert_eq!(resolve_bundled_omp_in("linux", &exe_dir, None).unwrap(), lib.join(bundled_omp_filename()));
+        assert_eq!(resolve_bundled_omp_in(&exe_dir, None).unwrap(), lib.join(bundled_omp_filename()));
     }
 
     #[test]
@@ -418,8 +373,8 @@ mod tests {
         std::fs::create_dir_all(&exe_dir).unwrap();
         std::fs::create_dir_all(&lib).unwrap();
         std::fs::write(lib.join(bundled_omp_filename()), b"").unwrap();
-        assert_eq!(resolve_bundled_omp_in("linux", &exe_dir, Some(&appdir)).unwrap(), lib.join(bundled_omp_filename()));
-        let candidates = bundled_omp_candidates("linux", &exe_dir, Some(&appdir));
+        assert_eq!(resolve_bundled_omp_in(&exe_dir, Some(&appdir)).unwrap(), lib.join(bundled_omp_filename()));
+        let candidates = bundled_omp_candidates(&exe_dir, Some(&appdir));
         assert_eq!(candidates[1], lib);
         assert_eq!(candidates.last(), Some(&exe_dir));
     }
@@ -442,17 +397,12 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let exe_dir = root.path().join("bin");
         std::fs::create_dir_all(&exe_dir).unwrap();
-        let missing = resolve_bundled_omp_in("linux", &exe_dir, None).unwrap_err();
+        let missing = resolve_bundled_omp_in(&exe_dir, None).unwrap_err();
         assert!(matches!(missing, PathsError::BundledOmpMissing(_)));
         let message = missing.to_string();
         assert!(message.contains(product::PRODUCT_NAME) && message.contains(&exe_dir.display().to_string()), "{message}");
         std::fs::write(exe_dir.join(bundled_omp_filename()), b"").unwrap();
-        assert_eq!(resolve_bundled_omp_in("linux", &exe_dir, None).unwrap(), exe_dir.join(bundled_omp_filename()));
-        assert_eq!(bundled_omp_candidates("darwin", Path::new("/Apps/X.app/Contents/MacOS"), None), vec![
-            PathBuf::from("/Apps/X.app/Contents/Resources"),
-            PathBuf::from("/Apps/X.app/Contents/MacOS"),
-        ]);
-        assert_eq!(bundled_omp_candidates("win32", Path::new("C:/Apps/X"), None), vec![PathBuf::from("C:/Apps/X")]);
+        assert_eq!(resolve_bundled_omp_in(&exe_dir, None).unwrap(), exe_dir.join(bundled_omp_filename()));
     }
 
     #[test]
