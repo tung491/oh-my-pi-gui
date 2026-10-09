@@ -2,7 +2,7 @@
  * Generate the app icons from resources/icon-source.svg: a 1024px master PNG
  * (dev dock icon, Windows base, and the macOS icon electron-builder converts to
  * ICNS itself), the Windows .ico and the Linux resources/icons/*.png set. Also
- * renders the tray mark from resources/tray-source.svg into src/main/tray-mark.ts.
+ * renders the tray mark from resources/tray-source.svg into src/shared/tray-mark.ts.
  * Run: `bun run gen:icons`.
  */
 
@@ -17,7 +17,7 @@ const packageRoot = path.join(import.meta.dir, "..");
 const resources = path.join(packageRoot, "resources");
 const svgPath = path.join(resources, "icon-source.svg");
 const traySvgPath = path.join(resources, "tray-source.svg");
-const trayMarkPath = path.join(packageRoot, "src", "main", "tray-mark.ts");
+const trayMarkPath = path.join(packageRoot, "src", "shared", "tray-mark.ts");
 
 /** The tray mark is 18pt drawn at 2×, so it stays crisp on HiDPI displays. */
 const TRAY_MARK_SIZE = 36;
@@ -107,7 +107,7 @@ async function main(): Promise<void> {
 	const traySvg = await fs.readFile(traySvgPath);
 	writeTrayMark(traySvg, await renderTrayMark(traySvg));
 
-	console.log("Generated icon.png, icon.ico, resources/icons/*.png and src/main/tray-mark.ts");
+	console.log("Generated icon.png, icon.ico, resources/icons/*.png and src/shared/tray-mark.ts");
 }
 
 await main();

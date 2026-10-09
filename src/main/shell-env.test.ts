@@ -3,7 +3,7 @@ import * as os from "node:os";
 import { homedir } from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ASSISTANT_PACK_FILES } from "./assistant-pack";
+import { ASSISTANT_PACK_FILES } from "../../scripts/assistant-pack";
 import {
 	resetLoginShellEnvCache,
 	resolveEditorCommand,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { closedPortUrl, type FakeOllama, sendJson, startFakeOllama } from "./test-fake-ollama";
+import { closedPortUrl, type FakeOllama, sendJson, startFakeOllama } from "../../../e2e/fake-ollama";
 import { warmModel } from "./warm";
 
 let fake: FakeOllama | undefined;

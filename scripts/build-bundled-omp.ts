@@ -7,7 +7,7 @@
  * addon archive is embedded as an asset, so the binary needs no external omp,
  * no node_modules, and no bun runtime — the GUI spawns it as its dedicated
  * sidecar. The packaged GUI NEVER falls back to a system-installed omp
- * (src/main/index.ts resolveBundledOmp).
+ * (src-tauri/src/paths.rs resolve_bundled_omp).
  *
  * REQUIRES the omp monorepo: this file resolves `../../coding-agent` and
  * `../../natives` relative to packages/gui, so the GUI repo must sit at
@@ -41,7 +41,6 @@ import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import * as path from "node:path";
-import { sidecarOutName } from "../src/main/bundled-omp-path";
 
 const guiRoot = path.join(import.meta.dir, "..");
 const repoRoot = path.join(guiRoot, "..", "..");
@@ -138,7 +137,11 @@ function resolveTarget(): SidecarTarget {
 	return {
 		target: bunTarget,
 		platformTag,
-		out: path.join(guiRoot, "resources", sidecarOutName(osName, arch)),
+		out: path.join(
+			guiRoot,
+			"resources",
+			osName === "linux" ? `omp.linux-${arch}` : arch === "x64" ? "omp.x64" : "omp",
+		),
 		addonFilenames: addonFilenamesFor(platformTag),
 	};
 }

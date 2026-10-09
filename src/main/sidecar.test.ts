@@ -4,8 +4,8 @@ import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import Store from "electron-store";
 import { describe, expect, it, vi } from "vitest";
+import { ASSISTANT_PACK_FILES } from "../../scripts/assistant-pack";
 import type { CommandOutputFrame, PromptResultFrame, SidecarStatus, SidecarStatusPayload } from "../shared/rpc-types";
-import { ASSISTANT_PACK_FILES } from "./assistant-pack";
 import {
 	missingSidecarMessage,
 	type SidecarFailureReport,

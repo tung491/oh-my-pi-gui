@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { describe, expect, it } from "vitest";
+import { TRAY_MARK_SOURCE_SHA256 } from "../shared/tray-mark";
 import { linuxWindowIconPath, type TrayBitmap, trayIconBitmap } from "./app-icons";
-import { TRAY_MARK_SOURCE_SHA256 } from "./tray-mark";
 
 function pixel(bitmap: TrayBitmap, x: number, y: number): number[] {
 	const index = (y * bitmap.size + x) * 4;

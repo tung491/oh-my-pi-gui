@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { type FakeOllama, sendJson, startFakeOllama } from "../../../e2e/fake-ollama";
 import type { OllamaTagRow } from "../../shared/ollama-local";
 import type { ContextFitProgress, MachineFacts, MeasureOutcome } from "../../shared/ollama-types";
 import { measureContextFit } from "./context-fit";
-import { type FakeOllama, sendJson, startFakeOllama } from "./test-fake-ollama";
 
 const GiB = 1024 ** 3;
 const TAG = "qwen3:8b";

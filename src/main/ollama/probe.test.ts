@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { closedPortUrl, type FakeOllama, sendJson, startFakeOllama } from "../../../e2e/fake-ollama";
 import { detectOllamaInstall, type InstallChecks, isOllamaInstalled, parseTags, probeOllama, remedyFor } from "./probe";
-import { closedPortUrl, type FakeOllama, sendJson, startFakeOllama } from "./test-fake-ollama";
 
 function checks(over: Partial<{ unit: boolean; path: boolean; files: string[] }> = {}): InstallChecks {
 	return {

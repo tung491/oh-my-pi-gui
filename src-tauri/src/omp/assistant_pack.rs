@@ -1,6 +1,6 @@
-//! The assistant pack every sidecar session loads, ported from
-//! `src/main/assistant-pack.ts`: where it lives, the files it must hold, and
-//! the spawn flags and env that load it.
+//! The assistant pack every sidecar session loads, mirrored by
+//! `scripts/assistant-pack.ts` (the pack check's copy): where it lives, the
+//! files it must hold, and the spawn flags and env that load it.
 
 use std::path::{Path, PathBuf};
 
@@ -458,12 +458,12 @@ mod tests {
         // The local Ollama address and the pack's own language survive.
         assert!(!REMOVED_ENV.contains(&"OLLAMA_HOST"));
         assert!(!REMOVED_ENV.contains(&"SAI_ATLAS_LANG"));
-        // The Electron shell strips the very same keys.
-        let source = include_str!("../../../src/main/assistant-pack.ts");
+        // The pack check strips the very same keys.
+        let source = include_str!("../../../scripts/assistant-pack.ts");
         assert_eq!(REMOVED_ENV.to_vec(), ts_removed_env(source));
     }
 
-    /// The quoted keys of the Electron shell's removed-env lists, in order: the
+    /// The quoted keys of `scripts/assistant-pack.ts`'s removed-env lists, in order: the
     /// provider credentials expand where the removed list spreads them.
     fn ts_removed_env(source: &str) -> Vec<&str> {
         let block = |name: &str| -> Vec<&str> {
@@ -535,7 +535,7 @@ mod tests {
     fn ships_the_tool_list_the_pack_check_expects() {
         let script = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("scripts").join("check-assistant-pack.ts")).unwrap();
         // The import statement may span lines: take it from its `import` to its module path.
-        let from = script.find("from \"../src/main/assistant-pack\"").expect("the pack check imports the shared pack module");
+        let from = script.find("from \"./assistant-pack\"").expect("the pack check imports the shared pack module");
         let start = script[..from].rfind("import").expect("the module path belongs to an import");
         let import = &script[start..from];
         assert!(import.split(|c: char| !c.is_alphanumeric()).any(|name| name == "assistantPackFlags"), "{import}");

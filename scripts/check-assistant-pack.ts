@@ -26,7 +26,7 @@ import {
 	assistantPackFlags,
 	missingAssistantPackFile,
 	resolveAssistantPackDir,
-} from "../src/main/assistant-pack";
+} from "./assistant-pack";
 
 const PACK_SKILLS = ["sai-os-helpdesk", "slides-from-report", "spreadsheet-cleanup", "word-report"];
 /** Workspace folders omp searches for an `APPEND_SYSTEM.md` when no append prompt is passed. */

@@ -8,6 +8,16 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import Store from "electron-store";
+import {
+	ASSISTANT_PACK_REMOVED_ENV,
+	type AssistantPackLanguage,
+	assistantPackEnv,
+	assistantPackFlags,
+	isChatStampedSession,
+	missingAssistantPackFile,
+	missingAssistantPackMessage,
+	resolveAssistantPackDir,
+} from "../../scripts/assistant-pack";
 import { emptyContextFitStore, overlayYaml } from "../shared/context-fit-store";
 import { allowedLaunchFlags, parseLaunchProfile, profileToFlags } from "../shared/launch-profile";
 import { SIDECAR_DEFAULT_OLLAMA_CONTEXT } from "../shared/ollama-types";
@@ -32,16 +42,6 @@ import type {
 	SidecarStatusPayload,
 	SubagentFrame,
 } from "../shared/rpc-types";
-import {
-	ASSISTANT_PACK_REMOVED_ENV,
-	type AssistantPackLanguage,
-	assistantPackEnv,
-	assistantPackFlags,
-	isChatStampedSession,
-	missingAssistantPackFile,
-	missingAssistantPackMessage,
-	resolveAssistantPackDir,
-} from "./assistant-pack";
 import { EventBatcher } from "./event-batcher";
 import { attachNdjsonParser, supportsRpcProtocolV2 } from "./rpc-bridge";
 import { RpcClient } from "./rpc-client";

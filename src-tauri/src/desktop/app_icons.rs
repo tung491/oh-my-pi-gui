@@ -2,7 +2,7 @@
 //! `src/main/app-icons.ts`. macOS status items are template images (the system
 //! recolors them); Ubuntu's AppIndicator shows pixels as drawn on a top bar
 //! that is dark in both themes, so Linux gets a white mark. The mark's alpha
-//! channel is read from `src/main/tray-mark.ts`, which `gen:icons` renders.
+//! channel is read from `src/shared/tray-mark.ts`, which `gen:icons` renders.
 
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -11,7 +11,7 @@ use base64::prelude::*;
 
 use super::Platform;
 
-const TRAY_MARK_TS: &str = include_str!("../../../src/main/tray-mark.ts");
+const TRAY_MARK_TS: &str = include_str!("../../../src/shared/tray-mark.ts");
 
 /// The mark as `tray-mark.ts` carries it: side length, one alpha byte per pixel, and the artwork's hash.
 #[derive(Clone, Debug, PartialEq, Eq)]

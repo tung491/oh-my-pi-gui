@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type FakeOllama, sendJson, startFakeOllama } from "../../../e2e/fake-ollama";
 import { parseContextFitStore } from "../../shared/context-fit-store";
 import type { OllamaTagRow } from "../../shared/ollama-local";
 import type {
@@ -12,7 +13,6 @@ import type {
 import type { RpcCommand, RpcResponse } from "../../shared/rpc-types";
 import type { MeasureContextFitInput } from "./context-fit";
 import { ContextFitScheduler, type IdleSession, unloadResidentModels } from "./context-fit-scheduler";
-import { type FakeOllama, sendJson, startFakeOllama } from "./test-fake-ollama";
 
 const GiB = 1024 ** 3;
 const LOCAL = "http://127.0.0.1:11434";

@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { $, $$, browser, expect } from "@wdio/globals";
-import { type FakeOllama, sendJson, startFakeOllama } from "../src/main/ollama/test-fake-ollama";
+import { type FakeOllama, sendJson, startFakeOllama } from "../e2e/fake-ollama";
 import { awaitMainWindow, type Launch, launch, recorded, relaunch } from "./session";
 
 // A fresh profile meets the welcome screen once: download a model from a fake

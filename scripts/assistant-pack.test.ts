@@ -243,13 +243,8 @@ describe("assistant pack", () => {
 	});
 
 	it("ships the tool list the pack check expects", () => {
-		const script = readFileSync(
-			fileURLToPath(new URL("../../scripts/check-assistant-pack.ts", import.meta.url)),
-			"utf8",
-		);
-		expect(script).toMatch(
-			/import\s*\{[^}]*\bassistantPackFlags\b[^}]*\}\s*from\s*"\.\.\/src\/main\/assistant-pack"/,
-		);
+		const script = readFileSync(fileURLToPath(new URL("./check-assistant-pack.ts", import.meta.url)), "utf8");
+		expect(script).toMatch(/import\s*\{[^}]*\bassistantPackFlags\b[^}]*\}\s*from\s*"\.\/assistant-pack"/);
 		expect(script).not.toContain("office_report");
 	});
 });

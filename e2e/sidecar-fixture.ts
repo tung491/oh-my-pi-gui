@@ -3,7 +3,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createInterface } from "node:readline";
-import { RPC_MAX_FRAME_BYTES, RPC_MAX_REASSEMBLED_BYTES } from "../src/main/rpc-bridge";
 import type {
 	AgentMessage,
 	ExtensionUIResponse,
@@ -12,6 +11,10 @@ import type {
 	RpcSecurityDashboardResult,
 	RpcSessionState,
 } from "../src/shared/rpc-types";
+
+/** One logical frame on the wire, and after chunk reassembly (src-tauri/src/omp/rpc_bridge.rs). */
+const RPC_MAX_FRAME_BYTES = 1_048_576;
+const RPC_MAX_REASSEMBLED_BYTES = 67_108_864;
 
 // A local protocol peer. No provider credentials, external network, or user session files.
 const messages: AgentMessage[] = [];

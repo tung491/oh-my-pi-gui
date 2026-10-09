@@ -3,8 +3,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { expect, test } from "@playwright/test";
 import { type ElectronApplication, _electron as electron, type Page } from "playwright";
-import { type FakeOllama, sendJson, startFakeOllama } from "../src/main/ollama/test-fake-ollama";
 import { writeDesktopPrefs } from "./desktop-prefs";
+import { type FakeOllama, sendJson, startFakeOllama } from "./fake-ollama";
 
 // A fresh profile meets the welcome screen once: download a model from a fake
 // Ollama, continue, and the next launch goes straight to the assistant.

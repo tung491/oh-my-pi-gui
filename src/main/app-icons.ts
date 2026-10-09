@@ -3,10 +3,10 @@
  * testable. macOS status items are template images (the system recolors
  * them); Ubuntu's AppIndicator shows pixels as drawn on a top bar that is dark
  * in both themes, so Linux gets a white mark. The mark's shape is the Sai ATLAS
- * silhouette, rendered into ./tray-mark by scripts/gen-icons.ts.
+ * silhouette, rendered into ../shared/tray-mark by scripts/gen-icons.ts.
  */
 import { join } from "node:path";
-import { TRAY_MARK_ALPHA, TRAY_MARK_SIZE } from "./tray-mark";
+import { TRAY_MARK_ALPHA, TRAY_MARK_SIZE } from "../shared/tray-mark";
 
 export interface TrayBitmap {
 	/** 32-bit pixels, size×size, for nativeImage.createFromBuffer. */

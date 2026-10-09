@@ -1,8 +1,8 @@
 import type { ServerResponse } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
+import { closedPortUrl, type FakeOllama, sendJson, startFakeOllama } from "../../../e2e/fake-ollama";
 import type { PullProgress } from "../../shared/ollama-types";
 import { isValidModelTag, OllamaPuller, PullAggregator } from "./pull";
-import { closedPortUrl, type FakeOllama, sendJson, startFakeOllama } from "./test-fake-ollama";
 
 const TWO_LAYERS = [
 	{ status: "pulling manifest" },
