@@ -638,8 +638,7 @@ describe("desktop", () => {
 		await fs.writeFile(documentPath, "<!doctype html><title>Untrusted document</title><h1>Untrusted document</h1>");
 		const untrustedUrl = pathToFileURL(documentPath).href;
 		const trustedUrl = await browser.getUrl();
-		// The shell's navigation lock is the twin of Electron's will-navigate guard: it
-		// must refuse the URL. WebKit itself already refuses a file: load from the app
+		// The shell's navigation lock must refuse the URL. WebKit itself already refuses a file: load from the app
 		// scheme, so the click below never reaches the lock; the page must survive it.
 		const probe = await navigationProbe(browser, untrustedUrl);
 		expect(probe.navigation).toBe(false);
@@ -665,8 +664,8 @@ describe("desktop", () => {
 	});
 
 	it("launch profile updates preserve concurrent fields and workspaces through the real preferences store", async () => {
-		// WebKitWebDriver serializes an undefined property as null; JSON drops it as
-		// Electron's structured clone did, so `cleared` reads back as undefined.
+		// WebKitWebDriver serializes an undefined property as null; JSON drops it,
+		// so `cleared` reads back as undefined.
 		const serialized = await browser.execute(async () => {
 			const status = await window.omp.sidecar.getStatus();
 			const cwd = status.cwd;
@@ -696,8 +695,8 @@ describe("desktop", () => {
 	});
 
 	it("failed preference writes retain edits and never allow a premature restart", async () => {
-		// Electron replaced the handlers in the main process; the shell scripts the
-		// same refusals per channel through its fault hooks, one rule per step.
+		// The shell scripts the refusals per channel through its fault hooks, one
+		// rule per step.
 		const PROXY = "http://127.0.0.1:7899";
 		const restartsBefore = await callsTo(browser, "sidecar:restart");
 		await setFault(browser, "sidecar:restart", { error: "audit restart refused" });

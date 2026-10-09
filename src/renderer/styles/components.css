@@ -347,7 +347,7 @@
 /* ---------------------------------------------------------------------------
  * Dialog geometry — scale with the window while keeping each dialog archetype
  * readable. `dvh` prevents controls from falling below the visible desktop
- * area when the macOS title bar or a compact window reduces usable height.
+ * area when the title bar or a compact window reduces usable height.
  * ------------------------------------------------------------------------- */
 .omp-dialog-panel {
 	min-width: 0;

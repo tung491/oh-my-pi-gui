@@ -450,7 +450,7 @@ mod tests {
     }
 
     #[test]
-    fn refuses_a_key_electron_cannot_register_which_would_throw_rather_than_fail() {
+    fn refuses_a_key_no_global_shortcut_can_register() {
         assert_eq!(validate_global_chord("⇧⌃§"), Some(ChordRejection::Invalid));
         assert_eq!(validate_global_chord("⌥⇧\u{1}"), Some(ChordRejection::Invalid));
         assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⇧⌃§", "enabled": true }))), default());

@@ -111,7 +111,7 @@ export function releaseBarrier(browser: HookBrowser, id: string): Promise<boolea
 	return callHook<boolean>(browser, "test:release", { id });
 }
 
-/** How many calls are held at barrier `id` right now (poll this where Electron polled an `audit*Requested` flag). */
+/** How many calls are held at barrier `id` right now. */
 export function barrierWaiters(browser: HookBrowser, id: string): Promise<number> {
 	return callHook<number>(browser, "test:barrier-waiters", { id });
 }
@@ -131,7 +131,7 @@ export function listWindows(browser: HookBrowser): Promise<HookWindow[]> {
 	return callHook<HookWindow[]>(browser, "test:windows", null);
 }
 
-/** Whether the quick-entry bar exists and is shown (the Electron specs' `barVisible`). */
+/** Whether the quick-entry bar exists and is shown. */
 export async function quickEntryVisible(browser: HookBrowser): Promise<boolean> {
 	const windows = await listWindows(browser);
 	return windows.some(window => window.kind === "quick-entry" && window.visible === true);
@@ -156,9 +156,9 @@ export function runtimeFacts(browser: HookBrowser): Promise<HookRuntime> {
 }
 
 /**
- * Quit the app through the approved quit path (no confirmation dialog), as the
- * Electron specs' `app.exit(0)` teardown did. The call is fire-and-forget:
- * the process exits before it could reply, so the page script returns at once.
+ * Quit the app through the approved quit path (no confirmation dialog). The
+ * call is fire-and-forget: the process exits before it could reply, so the
+ * page script returns at once.
  */
 export function quitApp(browser: HookBrowser): Promise<void> {
 	return browser.execute(

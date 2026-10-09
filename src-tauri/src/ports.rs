@@ -634,8 +634,8 @@ pub trait DesktopPort: Send + Sync {
     /// `RunEvent::ExitRequested`: `code` is `None` for a user-initiated exit (last
     /// window closed, OS quit) and `Some` for the app's own `AppHandle::exit`
     /// (`request_quit`, the updater, SIGTERM). Return `true` to keep the app
-    /// running (`api.prevent_exit()`; e.g. macOS keeps running without windows,
-    /// or the quit guard asks first); `false` lets the frozen shutdown order run.
+    /// running (`api.prevent_exit()`, while the quit guard asks first); `false`
+    /// lets the frozen shutdown order run.
     /// Always return `false` for `Some(_)`: those exits were already decided.
     fn on_exit_requested(&self, code: Option<i32>) -> bool;
     /// Set the quitting latch without starting a quit (the exit path already began).

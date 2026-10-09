@@ -5,10 +5,10 @@
  * prepares a plain launch for it). A spec that needs its own history, prefs,
  * environment or sidecar calls `launch()`, which prepares a fresh profile and
  * replaces the running session through `browser.reloadSession`; `relaunch()`
- * starts the same profile again. Every launch mirrors the Electron specs: an
- * isolated `PI_CODING_AGENT_DIR`, a throwaway `--user-data-dir`, and
- * `OMP_BUNDLED_OMP` naming the sidecar fixture from `e2e/sidecar-fixture.ts`,
- * which the `e2e-hooks` build honours.
+ * starts the same profile again. Every launch gets an isolated
+ * `PI_CODING_AGENT_DIR`, a throwaway `--user-data-dir`, and `OMP_BUNDLED_OMP`
+ * naming the sidecar fixture from `e2e/sidecar-fixture.ts`, which the
+ * `e2e-hooks` build honours.
  *
  * Profiles live under the run directory wdio.conf.ts creates; it removes them
  * once the run ends and every app process is gone.

@@ -4,8 +4,8 @@
  *
  *   OMP_GUI_TEST_APP=/usr/bin/sai-atlas bun run test:e2e:tauri:packaged
  *
- * The package is built without test hooks, so whatever the Electron spec read
- * from the main process is observed from outside instead (e2e-tauri/outside.ts):
+ * The package is built without test hooks, so whatever the core holds is
+ * observed from outside instead (e2e-tauri/outside.ts):
  * /proc for processes and the sandbox, the session bus for the single-instance
  * name, the accessibility bus for the windows, and a WAYLAND_DEBUG trace for the
  * app id. Page-level steps still go through WebDriver. Each launch gets a
@@ -61,7 +61,7 @@ function app(): string {
 
 let current: Profile | null = null;
 
-/** A throwaway profile with two quiet workspaces, launched from its own root like the Electron spec. */
+/** A throwaway profile with two quiet workspaces, launched from its own root. */
 async function start(name: string, options: Pick<LaunchOptions, "noProject" | "captureOutput" | "env"> = {}) {
 	const launched = await launch({
 		name,

@@ -71,8 +71,8 @@ describe("runtime", () => {
 			await expect($$(TABS)).toBeElementsArrayOfSize(index + 1);
 			await expect($("[data-transcript-kind]")).toBeDisplayed();
 		}
-		// The Electron spec could record a CPU profile over Chromium's devtools
-		// protocol; WebKit offers no such channel through WebDriver.
+		// WebKit offers no CPU profile channel through WebDriver, so tab
+		// switches are timed instead.
 		const switchMs: number[] = [];
 		for (let index = 0; index < 20; index++) {
 			const started = performance.now();

@@ -157,9 +157,8 @@ status() {
 		grep -qxF "DISPLAY=$display" < <(tr '\0' '\n' 2>/dev/null <"$environ") && on_display[$pid]=1
 	done
 	# Only processes whose parent is not on the display are listed: stopping one
-	# takes its children with it (Chromium helpers, the sidecar). Electron
-	# rewrites its own environ, so a dev app shows up through its launcher, and
-	# services the private session bus started appear on their own.
+	# takes its children with it (WebKit helpers, the sidecar). Services the
+	# private session bus started appear on their own.
 	for pid in $(printf '%s\n' "${!on_display[@]}" | sort -n); do
 		stat=$(cat "/proc/$pid/stat" 2>/dev/null) || continue
 		stat=${stat##*) }
