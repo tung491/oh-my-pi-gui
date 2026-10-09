@@ -69,7 +69,7 @@ if (!existsSync(compileBinaryModulePath) || !existsSync(path.join(nativesDir, "s
 			"    cd gui && bun install",
 			"",
 			"  To package WITHOUT the monorepo, copy a prebuilt sidecar into resources/omp",
-			"  (and resources/omp.x64 for Intel) and skip this script — see README → Build from source.",
+			"  and skip this script — see README → Build from source.",
 			"",
 		].join("\n"),
 	);

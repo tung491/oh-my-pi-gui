@@ -37,7 +37,6 @@ fi
 MANIFEST="src-tauri/Cargo.toml"
 
 fail() { echo "check-module $MODULE: FAIL (gate $1): $2" >&2; exit 1; }
-warn() { echo "check-module $MODULE: WARN (gate $1): $2" >&2; }
 step() { echo "== gate $1: $2"; }
 
 # --- owned paths ------------------------------------------------------------
