@@ -20,10 +20,10 @@
 - **AppImage update from 0.9.16**: the new AppImage reopens by itself after the update. If Sai ATLAS does not reopen by itself after an update, start the new `.AppImage` once by hand; its file name now carries the version.
 - **Dictation and speech in the AppImage**: the AppImage bundles the audio plugins it needs and reaches the microphone and speakers through the PulseAudio socket.
 - **Memory**: with one tab at idle, the Linux shell uses 72–75 % of the Electron shell's memory (PSS), and total memory including the agent is lower than Electron's in every measured case.
-- macOS is unchanged and still runs on Electron.
 
 ### Removed
 
+- **macOS and the Electron shell**: Sai ATLAS now ships for Linux only; the macOS build and the Electron shell it ran on are removed.
 - **AppArmor profiles on Linux**: the `.deb` no longer ships an AppArmor profile, and the AppImage no longer needs the `sai-atlas-appimage` profile; unload and delete it with `sudo apparmor_parser -R /etc/apparmor.d/sai-atlas-appimage && sudo rm /etc/apparmor.d/sai-atlas-appimage`.
 
 ### Known issues

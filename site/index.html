@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sai ATLAS — Private, local AI for your everyday work</title>
-<meta name="description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. macOS arm64 / x64 and Linux x64." />
+<meta name="description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. Linux x64." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -373,22 +373,20 @@
       <a href="#install">Install</a>
       <a href="https://github.com/tung491/oh-my-pi-gui">GitHub</a>
     </div>
-    <a class="btn btn-primary btn-sm" href="#install">Choose a build <span data-omp-version>v0.9.10</span></a>
+    <a class="btn btn-primary btn-sm" href="#install">Choose a build <span data-omp-version>v0.9.16</span></a>
   </div>
 </nav>
 
 <header class="hero" id="top">
   <div class="container">
-    <div class="hero-badge rise d1"><span class="dot"></span><span data-omp-version>v0.9.10</span> · <span data-omp-release-date>Sep 2026</span> — the private AI assistant for everyday work on SAI OS</div>
+    <div class="hero-badge rise d1"><span class="dot"></span><span data-omp-version>v0.9.16</span> · <span data-omp-release-date>Oct 2026</span> — the private AI assistant for everyday work on SAI OS</div>
     <h1 class="rise d2">Private, local AI<br /><span class="grad">for your everyday work.</span></h1>
     <p class="sub rise d3">Write a Word report, clean up a spreadsheet, turn a report into slides, or get help when the computer misbehaves. Sai ATLAS runs on your own computer, answers in English or Vietnamese, and asks before it changes anything.</p>
     <div class="hero-cta rise d4">
-      <a class="btn btn-primary" data-omp-dmg="arm64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg">
+      <a class="btn btn-primary" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Download for macOS <span class="btn-sub">Apple Silicon</span>
+        Download for Linux <span class="btn-sub">x64 .deb</span>
       </a>
-      <a class="btn btn-ghost" data-omp-dmg="x64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg">Intel build <span class="btn-sub">macOS x64</span></a>
-      <a class="btn btn-ghost" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux build <span class="btn-sub">x64 .deb</span></a>
     </div>
     <p class="hero-fine rise d5">No account, no sign-in · models run through Ollama on this computer · <a href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a></p>
     <div class="hero-shot-wrap rise d5">
@@ -521,18 +519,16 @@
       <h2>Up and running in a few minutes</h2>
       <p class="lead" style="margin-left: auto; margin-right: auto;">Install Ollama from ollama.com, then grab the build for your computer. On first launch Sai ATLAS suggests a model that fits your machine and downloads it for you.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" data-omp-dmg="arm64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10-arm64.dmg">
+        <a class="btn btn-primary" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Apple Silicon <span class="btn-sub">arm64</span>
+          Linux <span class="btn-sub">x64 .deb</span>
         </a>
-        <a class="btn btn-ghost" data-omp-dmg="x64" href="https://github.com/nornzach/oh-my-pi-gui/releases/download/v0.9.10/omp-0.9.10.dmg">Intel <span class="btn-sub">x64</span></a>
-        <a class="btn btn-ghost" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 .deb</span></a>
         <a class="btn btn-ghost" data-omp-linux="appimage" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 AppImage</span></a>
         <a class="btn btn-ghost" href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a>
       </div>
       <div class="install-note">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>macOS builds are ad-hoc signed but not notarized: on first launch, macOS may require right-click → <b>Open</b> or System Settings → Privacy &amp; Security → Open Anyway. On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>.</span>
+        <span>On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>.</span>
       </div>
     </div>
   </div>
@@ -622,19 +618,9 @@
 </script>
 
 <script>
-  // The release is the source of truth for the version string and platform installer links, so the
+  // The release is the source of truth for the version string and Linux package links, so the
   // page cannot advertise a stale build between releases. The markup ships the current
   // release as the no-JS / rate-limited fallback; any failure simply leaves it in place.
-  // Sai-ATLAS- names win; omp- names cover releases from before the rename and the bridge copies.
-  const installerUrl = (assets, tag, architecture) => {
-    const version = tag.replace(/^v/, "");
-    const suffix = `${version}${architecture === "arm64" ? "-arm64" : ""}.dmg`;
-    for (const name of [`Sai-ATLAS-${suffix}`, `omp-${suffix}`]) {
-      const url = assets.find((asset) => asset.name === name)?.browser_download_url;
-      if (url) return url;
-    }
-    return undefined;
-  };
   const assetUrlEndingWith = (assets, suffix) => assets.find((asset) => asset.name.endsWith(suffix))?.browser_download_url;
 
   fetch("https://api.github.com/repos/tung491/oh-my-pi-gui/releases/latest", {
@@ -645,13 +631,6 @@
       document.querySelectorAll("[data-omp-version]").forEach((element) => { element.textContent = release.tag_name; });
       const date = new Date(release.published_at).toLocaleDateString("en-US", { month: "short", year: "numeric" });
       document.querySelectorAll("[data-omp-release-date]").forEach((element) => { element.textContent = date; });
-      for (const architecture of ["arm64", "x64"]) {
-        const url = installerUrl(release.assets, release.tag_name, architecture);
-        if (!url) continue;
-        document.querySelectorAll(`[data-omp-dmg="${architecture}"]`).forEach((element) => { element.href = url; });
-      }
-      const windowsUrl = assetUrlEndingWith(release.assets, "-setup.exe");
-      if (windowsUrl) document.querySelectorAll("[data-omp-win]").forEach((element) => { element.href = windowsUrl; });
       for (const [kind, suffix] of [["deb", "_amd64.deb"], ["appimage", "-x86_64.AppImage"]]) {
         const linuxUrl = assetUrlEndingWith(release.assets, suffix);
         if (linuxUrl) document.querySelectorAll(`[data-omp-linux="${kind}"]`).forEach((element) => { element.href = linuxUrl; });
