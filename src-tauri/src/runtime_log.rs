@@ -268,7 +268,7 @@ mod tests {
     fn context() -> RuntimeLogContext {
         RuntimeLogContext {
             app_version: "0.6.0".into(),
-            platform: "darwin".into(),
+            platform: "linux".into(),
             pid: 42,
             window_id: Some(7),
             cwd: Some("/project".into()),
@@ -294,7 +294,7 @@ mod tests {
         assert_eq!(lines.len(), 1);
         let entry: Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(entry["appVersion"], "0.6.0");
-        assert_eq!(entry["platform"], "darwin");
+        assert_eq!(entry["platform"], "linux");
         assert_eq!(entry["pid"], 42);
         assert_eq!(entry["windowId"], 7);
         assert_eq!(entry["cwd"], "/project");
