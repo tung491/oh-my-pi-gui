@@ -41,7 +41,7 @@ use crate::ports::{CtxRef, DesktopPort, QuitRisk, RunProgressState, SessionKind,
 use crate::runtime_log;
 
 use app_quit::{exit_decision, ExitDecision, QuitState};
-use deep_link::{plugin_owns_links, registers_url_scheme, BuildKind, PendingLinks, DEEP_LINK_PROTOCOL};
+use deep_link::{registers_url_scheme, BuildKind, PendingLinks, DEEP_LINK_PROTOCOL};
 use launch_argv::{launch_arguments, parse_launch_argv, LaunchRequest};
 use quick_entry::QuickEntryController;
 use shortcut::{QuickEntryShortcut, ShortcutDeps, ShortcutRegistry, TOGGLE_WINDOW_SHORTCUT_ID};
@@ -72,23 +72,15 @@ pub const EMITS: &[&str] = &[
     "quick-entry:state",
 ];
 
-/// The OS family, in Node's spelling, for the decisions that differ per platform.
+/// The OS family the desktop rules take; only Linux remains.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Platform {
-    Darwin,
-    Win32,
     Linux,
 }
 
 impl Platform {
     pub(crate) fn current() -> Self {
-        if cfg!(target_os = "macos") {
-            Platform::Darwin
-        } else if cfg!(windows) {
-            Platform::Win32
-        } else {
-            Platform::Linux
-        }
+        Platform::Linux
     }
 }
 
@@ -380,15 +372,9 @@ impl Desktop {
         self.tray.install(ctx, self);
         self.install_app_menu(ctx);
 
-        // Cold-start links: argv everywhere, plus the OS handoff on macOS. Off
-        // macOS the plugin's startup URLs are a copy of the same argv.
+        // Cold-start links come from argv.
         if let LaunchRequest::Url(url) = &request {
             self.links_offer_cold_start(url.clone());
-        }
-        if plugin_owns_links(self.backend.platform()) {
-            for url in self.backend.startup_urls() {
-                self.links_offer_cold_start(url);
-            }
         }
         self.replay_pending_links(ctx);
         if request == LaunchRequest::QuickEntry {
@@ -522,19 +508,12 @@ impl DesktopPort for Desktop {
         let approved = self.quit.approved() || self.is_quitting_latched();
         match exit_decision(code, approved, self.backend.platform()) {
             ExitDecision::Allow => false,
-            ExitDecision::Veto => true,
             ExitDecision::VetoAndAsk => {
                 if let Some(ctx) = self.ctx() {
                     self.start_guarded_quit(&ctx);
                 }
                 true
             }
-        }
-    }
-
-    fn on_reopen(&self, has_visible_windows: bool) {
-        if let Some(ctx) = self.ctx() {
-            self.on_reopen_in(&ctx, has_visible_windows);
         }
     }
 
@@ -579,17 +558,6 @@ pub fn init(ctx: &Arc<AppCtx>, app: &AppHandle) -> tauri::Result<()> {
     let Some(desktop) = Desktop::of(ctx) else { return Ok(()) };
     let registry: Arc<dyn ShortcutRegistry> = shortcut_registry_for(app, desktop.wayland_portal, &desktop.backend.env());
     {
-        use tauri_plugin_deep_link::DeepLinkExt;
-        let weak = Arc::downgrade(ctx);
-        app.deep_link().on_open_url(move |event| {
-            survive("deep link event", || {
-                let Some(ctx) = weak.upgrade() else { return };
-                let Some(desktop) = Desktop::of(&ctx) else { return };
-                desktop.on_plugin_urls(&ctx, event.urls());
-            });
-        });
-    }
-    {
         let weak = Arc::downgrade(ctx);
         app.on_menu_event(move |_app, event| {
             survive("menu event", || {
@@ -617,11 +585,6 @@ fn shortcut_registry_for(app: &AppHandle, portal: bool, env: &wayland_portal::En
         Vec::new()
     };
     Arc::new(shortcut::PortalShortcutRegistry::new(gnome_bindings))
-}
-
-#[cfg(not(target_os = "linux"))]
-fn shortcut_registry_for(app: &AppHandle, _portal: bool, _env: &wayland_portal::Env) -> Arc<dyn ShortcutRegistry> {
-    Arc::new(shortcut::PluginShortcutRegistry::new(app.clone()))
 }
 
 #[cfg(test)]

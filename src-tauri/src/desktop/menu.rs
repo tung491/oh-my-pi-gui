@@ -27,39 +27,17 @@ fn action(i18n: &MainI18n, key: MainTextKey, action: &str) -> MenuItemModel {
 }
 
 /// The whole menu bar for `platform`.
-pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuItemModel> {
-    let darwin = platform == Platform::Darwin;
+pub(crate) fn build_app_menu(i18n: &MainI18n, _platform: Platform) -> Vec<MenuItemModel> {
     let mut bar = Vec::new();
-    if darwin {
-        bar.push(MenuItemModel::submenu(
-            crate::product::PRODUCT_NAME,
-            vec![
-                MenuItemModel::Predefined(PredefinedItem::About),
-                MenuItemModel::item(ID_CHECK_FOR_UPDATES, i18n.t(MainTextKey::MenuCheckForUpdates)),
-                // No accelerator: ⌘, belongs to the renderer keymap so users can remap it.
-                action(i18n, MainTextKey::MenuSettings, "open-settings"),
-                MenuItemModel::Separator,
-                MenuItemModel::Predefined(PredefinedItem::Services),
-                MenuItemModel::Separator,
-                MenuItemModel::Predefined(PredefinedItem::Hide),
-                MenuItemModel::Predefined(PredefinedItem::HideOthers),
-                MenuItemModel::Predefined(PredefinedItem::ShowAll),
-                MenuItemModel::Separator,
-                MenuItemModel::Predefined(PredefinedItem::Quit),
-            ],
-        ));
-    }
-    let mut file = vec![
+    let file = vec![
         action(i18n, MainTextKey::MenuNewSession, "new-session").with_accelerator(native_accelerator("session.new")),
         // No accelerator: ⌘T/⇧⌘T live in the renderer keymap so users can remap them.
         action(i18n, MainTextKey::MenuNewTab, "new-tab"),
         MenuItemModel::item(ID_NEW_WINDOW, i18n.t(MainTextKey::MenuNewWindow)).with_accelerator(native_accelerator("window.new")),
+        MenuItemModel::Separator,
+        action(i18n, MainTextKey::MenuSettings, "open-settings"),
+        MenuItemModel::item(ID_CHECK_FOR_UPDATES, i18n.t(MainTextKey::MenuCheckForUpdates)),
     ];
-    if !darwin {
-        file.push(MenuItemModel::Separator);
-        file.push(action(i18n, MainTextKey::MenuSettings, "open-settings"));
-        file.push(MenuItemModel::item(ID_CHECK_FOR_UPDATES, i18n.t(MainTextKey::MenuCheckForUpdates)));
-    }
     bar.push(MenuItemModel::submenu(i18n.t(MainTextKey::MenuFile), file));
     bar.push(MenuItemModel::submenu(
         i18n.t(MainTextKey::MenuEdit),
@@ -88,15 +66,12 @@ pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuIte
         ],
     ));
     // ⌘W closes a tab in the renderer keymap; ⇧⌘W closes the window.
-    let mut window = vec![
+    let window = vec![
         action(i18n, MainTextKey::MenuCloseTab, "close-tab"),
         MenuItemModel::item(ID_CLOSE_WINDOW, i18n.t(MainTextKey::MenuCloseWindow)).with_accelerator(native_accelerator("window.close")),
         MenuItemModel::Separator,
         MenuItemModel::Predefined(PredefinedItem::Minimize),
     ];
-    if darwin {
-        window.push(MenuItemModel::Predefined(PredefinedItem::Maximize));
-    }
     bar.push(MenuItemModel::submenu(i18n.t(MainTextKey::MenuWindow), window));
     bar.push(MenuItemModel::submenu(
         i18n.t(MainTextKey::MenuSession),
@@ -116,11 +91,10 @@ pub(crate) fn build_app_menu(i18n: &MainI18n, platform: Platform) -> Vec<MenuIte
             action(i18n, MainTextKey::MenuRestartCore, "restart-sidecar"),
         ],
     ));
-    let mut help = Vec::new();
-    if !darwin {
-        help.push(MenuItemModel::Predefined(PredefinedItem::About));
-    }
-    help.push(MenuItemModel::item(ID_DOCUMENTATION, i18n.t(MainTextKey::MenuDocumentation)));
+    let help = vec![
+        MenuItemModel::Predefined(PredefinedItem::About),
+        MenuItemModel::item(ID_DOCUMENTATION, i18n.t(MainTextKey::MenuDocumentation)),
+    ];
     bar.push(MenuItemModel::submenu(i18n.t(MainTextKey::MenuHelp), help));
     bar
 }
@@ -131,9 +105,8 @@ pub(crate) fn action_of(id: &str) -> Option<&str> {
 }
 
 impl Desktop {
-    /// Deliver a `menu:action` to the target window; with none open (macOS
-    /// keep-running) spawn one and let the bridge hold the action until its
-    /// page attaches. `focus` brings the window forward first (tray actions).
+    /// Deliver a `menu:action` to the target window; with none open spawn one
+    /// and let the bridge hold the action until its page attaches. `focus` brings the window forward first (tray actions).
     pub(crate) fn send_menu_action(&self, ctx: &AppCtx, action: &str, payload: Option<Value>, focus: bool) {
         let mut body = json!({ "action": action });
         if let (Some(target), Some(extra)) = (body.as_object_mut(), payload.as_ref().and_then(Value::as_object)) {
@@ -238,9 +211,7 @@ fn build_item(app: &tauri::AppHandle, item: &MenuItemModel) -> Result<Box<dyn ta
                 PredefinedItem::Paste => PredefinedMenuItem::paste(app, None),
                 PredefinedItem::SelectAll => PredefinedMenuItem::select_all(app, None),
                 PredefinedItem::Minimize => PredefinedMenuItem::minimize(app, None),
-                PredefinedItem::Maximize => PredefinedMenuItem::maximize(app, None),
                 PredefinedItem::Fullscreen => PredefinedMenuItem::fullscreen(app, None),
-                PredefinedItem::Quit => PredefinedMenuItem::quit(app, None),
                 PredefinedItem::About => PredefinedMenuItem::about(
                     app,
                     None,
@@ -250,10 +221,6 @@ fn build_item(app: &tauri::AppHandle, item: &MenuItemModel) -> Result<Box<dyn ta
                         ..Default::default()
                     }),
                 ),
-                PredefinedItem::Services => PredefinedMenuItem::services(app, None),
-                PredefinedItem::Hide => PredefinedMenuItem::hide(app, None),
-                PredefinedItem::HideOthers => PredefinedMenuItem::hide_others(app, None),
-                PredefinedItem::ShowAll => PredefinedMenuItem::show_all(app, None),
             }
             .map_err(err)?,
         ),
@@ -301,9 +268,8 @@ mod tests {
         assert!(matches!(find_item(&linux, ID_CLOSE_WINDOW), Some(MenuItemModel::Item { accelerator: Some(a), .. }) if a == "CmdOrCtrl+Shift+W"));
         assert_eq!(i18n.language(), MainLanguage::En);
         prefs.set("language", json!("vi")).unwrap();
-        let vi = build_app_menu(&i18n, Platform::Darwin);
-        assert_eq!(labels(&vi)[0], crate::product::PRODUCT_NAME);
-        assert_eq!(labels(&vi)[1], "Tệp");
+        let vi = build_app_menu(&i18n, Platform::Linux);
+        assert_eq!(labels(&vi)[0], "Tệp");
         assert_eq!(action_of("menu:action:open-jobs"), Some("open-jobs"));
         assert_eq!(action_of(ID_NEW_WINDOW), None);
     }
@@ -364,14 +330,12 @@ mod tests {
         ];
         let dir = tempfile::tempdir().unwrap();
         let i18n = MainI18n::new(JsonStore::open(dir.path().join("prefs.json")), None);
-        for platform in [Platform::Linux, Platform::Darwin] {
-            let mut actions = std::collections::BTreeSet::new();
-            menu_actions(&build_app_menu(&i18n, platform), &mut actions);
-            for removed in DEVELOPER {
-                assert!(!actions.contains(removed), "{platform:?}: {removed} is still in the menu");
-            }
-            assert_eq!(actions, EVERYDAY.iter().map(|a| a.to_string()).collect(), "{platform:?}");
+        let mut actions = std::collections::BTreeSet::new();
+        menu_actions(&build_app_menu(&i18n, Platform::Linux), &mut actions);
+        for removed in DEVELOPER {
+            assert!(!actions.contains(removed), "{removed} is still in the menu");
         }
+        assert_eq!(actions, EVERYDAY.iter().map(|a| a.to_string()).collect::<std::collections::BTreeSet<String>>());
     }
 
     #[test]

@@ -25,7 +25,6 @@ pub fn sai_atlas_lib::desktop::Desktop::is_quitting(&self) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
 pub fn sai_atlas_lib::desktop::Desktop::mark_quitting(&self)
 pub fn sai_atlas_lib::desktop::Desktop::on_exit_requested(&self, core::option::Option<i32>) -> bool
-pub fn sai_atlas_lib::desktop::Desktop::on_reopen(&self, bool)
 pub fn sai_atlas_lib::desktop::Desktop::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
 pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
 pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk
@@ -53,7 +52,6 @@ pub fn sai_atlas_lib::desktop::Desktop::is_quitting(&self) -> bool
 pub fn sai_atlas_lib::desktop::Desktop::main_window(&self) -> core::option::Option<sai_atlas_lib::ports::WindowId>
 pub fn sai_atlas_lib::desktop::Desktop::mark_quitting(&self)
 pub fn sai_atlas_lib::desktop::Desktop::on_exit_requested(&self, core::option::Option<i32>) -> bool
-pub fn sai_atlas_lib::desktop::Desktop::on_reopen(&self, bool)
 pub fn sai_atlas_lib::desktop::Desktop::on_second_instance(&self, alloc::vec::Vec<alloc::string::String>, core::option::Option<alloc::string::String>)
 pub fn sai_atlas_lib::desktop::Desktop::on_window_closed(&self, sai_atlas_lib::ports::WindowClosedListener)
 pub fn sai_atlas_lib::desktop::Desktop::quit_risk(&self) -> sai_atlas_lib::ports::QuitRisk

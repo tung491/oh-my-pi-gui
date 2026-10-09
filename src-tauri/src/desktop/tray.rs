@@ -1,4 +1,4 @@
-//! The system tray: a template mark with a
+//! The system tray: a white mark with a
 //! quick-access menu built from the snapshot the renderer pushes. The native
 //! menu is rebuilt only when a visible label changes; actions route back to
 //! the renderer through `menu:action`.
@@ -94,7 +94,7 @@ pub(crate) fn build_tray_menu(state: Option<&TrayState>, fallback: MainLanguage)
 }
 
 impl TrayController {
-    /// Build the tray with the template mark and the empty menu.
+    /// Build the tray with the white mark and the empty menu.
     pub(crate) fn install(&self, ctx: &AppCtx, desktop: &Desktop) {
         let menu = build_tray_menu(None, ctx.i18n.language());
         match desktop.backend.install_tray(&tray_tooltip(None), &menu) {
@@ -200,16 +200,6 @@ impl Desktop {
         }
     }
 
-    /// The tray icon was clicked (macOS and Windows; Linux has no click events).
-    pub(crate) fn on_tray_click(&self, ctx: &AppCtx) {
-        match self.windows.target_window() {
-            Some(id) => self.backend.focus(id),
-            None => {
-                self.spawn_window_in(ctx, None, None, None);
-            }
-        }
-    }
-
     /// Handle a `tray:state-push` from `win_id`.
     pub(crate) fn push_tray_state(&self, ctx: &AppCtx, win_id: WindowId, state: Value) -> Result<(), String> {
         let state: TrayState = serde_json::from_value(state).map_err(|error| error.to_string())?;
@@ -220,29 +210,13 @@ impl Desktop {
 
 /// Build the native tray icon with the platform's mark.
 pub(crate) fn build_tray(app: &tauri::AppHandle, tooltip: &str, items: &[MenuItemModel]) -> Result<tauri::tray::TrayIcon, String> {
-    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    use tauri::tray::TrayIconBuilder;
     let mark = tray_mark()?;
     let bitmap = tray_icon_bitmap(Platform::current(), mark);
     let size = bitmap.size as u32;
     let icon = tauri::image::Image::new_owned(bitmap.pixels, size, size);
     let menu = super::menu::build_menu(app, items)?;
-    let mut builder = TrayIconBuilder::with_id("sai-atlas-tray").icon(icon).icon_as_template(bitmap.template).tooltip(tooltip).menu(&menu);
-    if Platform::current() != Platform::Linux {
-        // Left click focuses the main window as before; the menu stays on the right button.
-        builder = builder.show_menu_on_left_click(false).on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                super::survive("tray click", || {
-                    let app = tray.app_handle();
-                    if let Some(ctx) = tauri::Manager::try_state::<std::sync::Arc<AppCtx>>(app) {
-                        if let Some(desktop) = Desktop::of(&ctx) {
-                            desktop.on_tray_click(&ctx);
-                        }
-                    }
-                });
-            }
-        });
-    }
-    builder.build(app).map_err(|error| error.to_string())
+    TrayIconBuilder::with_id("sai-atlas-tray").icon(icon).tooltip(tooltip).menu(&menu).build(app).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

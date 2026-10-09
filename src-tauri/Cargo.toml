@@ -62,9 +62,6 @@ gobject-sys = "0.18.0"
 webkit2gtk = "2.0.2"
 webkit2gtk-sys = "2.0.2"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-tauri-nspanel = "2"
-
 [dev-dependencies]
 tempfile = "3"
 tokio = { version = "1", features = ["test-util"] }

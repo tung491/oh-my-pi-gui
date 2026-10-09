@@ -1,6 +1,5 @@
 //! Tray and window icon choices per platform.
-//! macOS status items are template images (the system
-//! recolors them); Ubuntu's AppIndicator shows pixels as drawn on a top bar
+//! Ubuntu's AppIndicator shows pixels as drawn on a top bar
 //! that is dark in both themes, so Linux gets a white mark. The mark's alpha
 //! channel is read from `src/shared/tray-mark.ts`, which `gen:icons` renders.
 
@@ -54,13 +53,12 @@ pub(crate) struct TrayBitmap {
     pub pixels: Vec<u8>,
     pub size: usize,
     pub scale_factor: u32,
-    pub template: bool,
 }
 
-pub(crate) fn tray_icon_bitmap(platform: Platform, mark: &TrayMark) -> TrayBitmap {
+pub(crate) fn tray_icon_bitmap(_platform: Platform, mark: &TrayMark) -> TrayBitmap {
     // The mark is 18pt drawn at 2× so it stays crisp on HiDPI displays. The run
     // status is text (tooltip + menu header), never painted into the mark.
-    let channel = if platform == Platform::Linux { 255 } else { 0 };
+    let channel = 255;
     let mut pixels = vec![0u8; mark.size * mark.size * 4];
     for (index, alpha) in mark.alpha.iter().enumerate() {
         if *alpha == 0 {
@@ -71,14 +69,11 @@ pub(crate) fn tray_icon_bitmap(platform: Platform, mark: &TrayMark) -> TrayBitma
         pixels[index * 4 + 2] = channel;
         pixels[index * 4 + 3] = *alpha;
     }
-    TrayBitmap { pixels, size: mark.size, scale_factor: 2, template: platform != Platform::Linux }
+    TrayBitmap { pixels, size: mark.size, scale_factor: 2 }
 }
 
-/// Window/taskbar icon for Linux; macOS and Windows take it from the bundle.
-pub(crate) fn linux_window_icon_path(platform: Platform, packaged: bool, resources_path: &Path, app_path: &Path) -> Option<PathBuf> {
-    if platform != Platform::Linux {
-        return None;
-    }
+/// Window/taskbar icon for Linux.
+pub(crate) fn linux_window_icon_path(_platform: Platform, packaged: bool, resources_path: &Path, app_path: &Path) -> Option<PathBuf> {
     Some(if packaged { resources_path.join("icon.png") } else { app_path.join("resources").join("icon.png") })
 }
 
@@ -96,10 +91,6 @@ mod tests {
         [bitmap.pixels[index], bitmap.pixels[index + 1], bitmap.pixels[index + 2], bitmap.pixels[index + 3]]
     }
 
-    fn alpha_at(bitmap: &TrayBitmap, index: usize) -> u8 {
-        bitmap.pixels[index * 4 + 3]
-    }
-
     /// Every drawn pixel carries the platform's ink; the rest stay fully transparent.
     fn expect_ink(bitmap: &TrayBitmap, channel: u8) {
         for index in 0..bitmap.size * bitmap.size {
@@ -112,11 +103,6 @@ mod tests {
         }
     }
 
-    fn opaque_share(bitmap: &TrayBitmap) -> f64 {
-        let opaque = (0..bitmap.size * bitmap.size).filter(|index| alpha_at(bitmap, *index) > 0).count();
-        opaque as f64 / (bitmap.size * bitmap.size) as f64
-    }
-
     fn expect_clear_corners(bitmap: &TrayBitmap) {
         let last = bitmap.size - 1;
         for (x, y) in [(0, 0), (last, 0), (0, last), (last, last)] {
@@ -125,31 +111,11 @@ mod tests {
     }
 
     #[test]
-    fn keeps_the_macos_menu_bar_mark_a_black_template_image() {
-        let bitmap = tray_icon_bitmap(Platform::Darwin, mark());
-        assert_eq!((bitmap.size, bitmap.scale_factor, bitmap.template), (36, 2, true));
-        assert_eq!(bitmap.pixels.len(), 36 * 36 * 4);
-        expect_ink(&bitmap, 0);
-        expect_clear_corners(&bitmap);
-        assert!(opaque_share(&bitmap) > 0.15);
-        assert!(opaque_share(&bitmap) < 0.6);
-    }
-
-    #[test]
     fn paints_the_same_mark_white_for_the_dark_ubuntu_top_bar() {
         let bitmap = tray_icon_bitmap(Platform::Linux, mark());
-        assert_eq!((bitmap.size, bitmap.scale_factor, bitmap.template), (36, 2, false));
+        assert_eq!((bitmap.size, bitmap.scale_factor), (36, 2));
         expect_ink(&bitmap, 255);
         expect_clear_corners(&bitmap);
-        let darwin = tray_icon_bitmap(Platform::Darwin, mark());
-        for index in 0..bitmap.size * bitmap.size {
-            assert_eq!(alpha_at(&bitmap, index), alpha_at(&darwin, index));
-        }
-    }
-
-    #[test]
-    fn leaves_the_windows_tray_bitmap_exactly_as_macos_draws_it() {
-        assert_eq!(tray_icon_bitmap(Platform::Win32, mark()), tray_icon_bitmap(Platform::Darwin, mark()));
     }
 
     #[test]
@@ -182,11 +148,5 @@ mod tests {
             linux_window_icon_path(Platform::Linux, false, Path::new("/electron/resources"), Path::new("/src/gui")),
             Some(PathBuf::from("/src/gui/resources/icon.png"))
         );
-    }
-
-    #[test]
-    fn leaves_macos_and_windows_to_their_bundle_icons() {
-        assert_eq!(linux_window_icon_path(Platform::Darwin, true, Path::new("/r"), Path::new("/a")), None);
-        assert_eq!(linux_window_icon_path(Platform::Win32, true, Path::new("/r"), Path::new("/a")), None);
     }
 }

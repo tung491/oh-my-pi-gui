@@ -270,11 +270,6 @@
     "method": "on_exit_requested"
   },
   {
-    "caller": "foundation",
-    "callee": "desktop",
-    "method": "on_reopen"
-  },
-  {
     "caller": "updater",
     "callee": "updater",
     "method": "relaunch_after_exit"

@@ -8,7 +8,7 @@ use serde_json::json;
 
 use super::quit_guard::quit_needs_confirmation;
 use super::windows::WinEvent;
-use super::{Desktop, Platform};
+use super::Desktop;
 use crate::ctx::AppCtx;
 use crate::ports::WindowId;
 use crate::runtime_log;
@@ -32,11 +32,6 @@ impl Desktop {
                     return true;
                 }
                 self.shortcut_release_window(win_id);
-                if self.keep_last_window_on_close(win_id) {
-                    // macOS: the last window hides instead of closing, so the app stays in the dock.
-                    self.backend.hide(win_id);
-                    return true;
-                }
             }
             WinEvent::Destroyed => self.on_window_destroyed(ctx, win_id),
             WinEvent::Focused(focused) => {
@@ -49,14 +44,14 @@ impl Desktop {
         false
     }
 
-    /// Linux and Windows: closing the last chat window quits the app, and its
+    /// Closing the last chat window quits the app, and its
     /// tabs are released (their sidecars killed) as soon as the window is
     /// destroyed, before Tauri's `ExitRequested` arrives. The working-sessions
     /// guard therefore runs here, while the window and its tabs still exist.
     /// True vetoes the close and starts the guarded quit (the tray's Quit flow):
     /// "Quit anyway" exits, "Keep working" leaves the window open.
     fn guard_last_window_close(&self, ctx: &Arc<AppCtx>, win_id: WindowId) -> bool {
-        if self.backend.platform() == Platform::Darwin || self.is_quitting_latched() || self.quit.approved() {
+        if self.is_quitting_latched() || self.quit.approved() {
             return false;
         }
         if self.windows.ids() != vec![win_id] {
@@ -71,15 +66,11 @@ impl Desktop {
         true
     }
 
-    fn keep_last_window_on_close(&self, win_id: WindowId) -> bool {
-        self.backend.platform() == Platform::Darwin && !self.is_quitting_latched() && self.windows.ids() == vec![win_id]
-    }
-
     /// A window is gone: notify the subscribers while its record still exists,
     /// drop the record, then let the bridge forget it. Then the prompts it held
     /// go back to the bar, its tray and progress snapshots leave the aggregate,
-    /// the saved session is rewritten (unless quitting), and on Linux and
-    /// Windows the last window takes the app with it.
+    /// the saved session is rewritten (unless quitting), and closing the last
+    /// chat window quits the app.
     fn on_window_destroyed(&self, ctx: &Arc<AppCtx>, win_id: WindowId) {
         if let Some(record) = self.windows.record(win_id) {
             // Clone the listener list (each entry is an `Arc`, so this is cheap) and
@@ -98,22 +89,9 @@ impl Desktop {
         self.tray.forget_window(ctx, self, win_id);
         self.forget_progress(win_id);
         self.persist_tab_layouts(ctx);
-        if self.backend.platform() != Platform::Darwin && self.windows.count() == 0 && !self.is_quitting_latched() {
+        if self.windows.count() == 0 && !self.is_quitting_latched() {
             self.quick_entry.destroy_window(self);
             self.request_quit_in(ctx);
-        }
-    }
-
-    /// macOS dock click: show a hidden window or open one.
-    pub(crate) fn on_reopen_in(&self, ctx: &AppCtx, has_visible_windows: bool) {
-        if has_visible_windows {
-            return;
-        }
-        match self.windows.main_window() {
-            Some(id) => self.backend.focus(id),
-            None => {
-                self.spawn_window_in(ctx, None, None, None);
-            }
         }
     }
 
@@ -130,6 +108,7 @@ impl Desktop {
 mod tests {
     use super::*;
     use crate::desktop::testing::{harness, Backend as _, DesktopPort as _, Harness};
+    use crate::desktop::Platform;
     use crate::ports::{Caller, PersistedTabLayout, WindowRecord, WindowTabFact};
     use std::sync::Mutex;
 
@@ -193,52 +172,41 @@ mod tests {
         assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
         assert!(desktop.is_quitting());
         assert!(!dialog_requested(&fakes));
-
-        // macOS keeps running: the last window hides on close instead.
-        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Darwin);
-        let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
-        assert!(desktop.on_window_event(&ctx, id, WinEvent::CloseRequested));
-        assert!(!backend.is_visible(id));
-        assert!(fakes.host.exit_codes.lock().unwrap().is_empty());
-        desktop.on_reopen(false);
-        assert!(backend.is_visible(id));
     }
 
     #[tokio::test]
     async fn closing_the_last_window_with_a_working_tab_asks_first() {
-        for platform in [Platform::Linux, Platform::Win32] {
-            let Harness { ctx, desktop, fakes, backend } = harness(platform);
-            let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
-            seed_working_tab(&fakes, id);
-            let closed = Arc::new(Mutex::new(Vec::new()));
-            let sink = closed.clone();
-            desktop.on_window_closed(Box::new(move |record| sink.lock().unwrap().push(record.id)));
+        let Harness { ctx, desktop, fakes, backend } = harness(Platform::Linux);
+        let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
+        seed_working_tab(&fakes, id);
+        let closed = Arc::new(Mutex::new(Vec::new()));
+        let sink = closed.clone();
+        desktop.on_window_closed(Box::new(move |record| sink.lock().unwrap().push(record.id)));
 
-            // "Keep working" (also what a dismissal answers): the window and its tabs stay.
-            fakes.host.message_dialog_answers.lock().unwrap().push(1);
-            assert!(desktop.on_window_event(&ctx, id, WinEvent::CloseRequested), "{platform:?}: the close is vetoed while the guard asks");
-            tokio::task::yield_now().await;
-            assert!(dialog_requested(&fakes), "{platform:?}: the working-sessions dialog is shown");
-            assert!(backend.exists(id));
-            assert!(desktop.record(id).is_some());
-            assert!(closed.lock().unwrap().is_empty(), "{platform:?}: the window's tabs are not released");
-            assert!(fakes.host.exit_codes.lock().unwrap().is_empty());
-            assert!(!desktop.is_quitting());
+        // "Keep working" (also what a dismissal answers): the window and its tabs stay.
+        fakes.host.message_dialog_answers.lock().unwrap().push(1);
+        assert!(desktop.on_window_event(&ctx, id, WinEvent::CloseRequested), "the close is vetoed while the guard asks");
+        tokio::task::yield_now().await;
+        assert!(dialog_requested(&fakes), "the working-sessions dialog is shown");
+        assert!(backend.exists(id));
+        assert!(desktop.record(id).is_some());
+        assert!(closed.lock().unwrap().is_empty(), "the window's tabs are not released");
+        assert!(fakes.host.exit_codes.lock().unwrap().is_empty());
+        assert!(!desktop.is_quitting());
 
-            // "Quit anyway": the app exits with 0 through the guarded quit.
-            fakes.host.message_dialog_answers.lock().unwrap().push(0);
-            assert!(desktop.on_window_event(&ctx, id, WinEvent::CloseRequested));
-            tokio::task::yield_now().await;
-            assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
-            assert!(desktop.is_quitting());
-            // The shutdown then closes the window; that close neither asks nor exits again.
-            let dialogs = fakes.host.log.calls().iter().filter(|call| call.starts_with("message_dialog")).count();
-            assert!(!desktop.on_window_event(&ctx, id, WinEvent::CloseRequested));
-            backend.destroy(id);
-            desktop.on_window_event(&ctx, id, WinEvent::Destroyed);
-            assert_eq!(fakes.host.log.calls().iter().filter(|call| call.starts_with("message_dialog")).count(), dialogs);
-            assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
-        }
+        // "Quit anyway": the app exits with 0 through the guarded quit.
+        fakes.host.message_dialog_answers.lock().unwrap().push(0);
+        assert!(desktop.on_window_event(&ctx, id, WinEvent::CloseRequested));
+        tokio::task::yield_now().await;
+        assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
+        assert!(desktop.is_quitting());
+        // The shutdown then closes the window; that close neither asks nor exits again.
+        let dialogs = fakes.host.log.calls().iter().filter(|call| call.starts_with("message_dialog")).count();
+        assert!(!desktop.on_window_event(&ctx, id, WinEvent::CloseRequested));
+        backend.destroy(id);
+        desktop.on_window_event(&ctx, id, WinEvent::Destroyed);
+        assert_eq!(fakes.host.log.calls().iter().filter(|call| call.starts_with("message_dialog")).count(), dialogs);
+        assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
     }
 
     #[test]

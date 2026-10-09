@@ -31,10 +31,7 @@ fn forced_gdk_backend(env: &Env) -> Option<String> {
 
 /// True when this Linux session talks to the GlobalShortcuts portal: a forced
 /// `GDK_BACKEND` wins, otherwise a Wayland session (`XDG_SESSION_TYPE=wayland`).
-pub(crate) fn uses_shortcut_portal(platform: Platform, env: &Env) -> bool {
-    if platform != Platform::Linux {
-        return false;
-    }
+pub(crate) fn uses_shortcut_portal(_platform: Platform, env: &Env) -> bool {
     if let Some(backend) = forced_gdk_backend(env) {
         return backend == "wayland";
     }
@@ -51,7 +48,7 @@ pub(crate) fn shortcut_mode(platform: Platform, env: &Env) -> ShortcutMode {
 
 /// Native mode inside a Wayland session (XWayland): the X11 grab fires only while the app has focus.
 pub(crate) fn xwayland_only(platform: Platform, env: &Env) -> bool {
-    platform == Platform::Linux && !uses_shortcut_portal(platform, env) && env.get("XDG_SESSION_TYPE").map(String::as_str) == Some("wayland")
+    !uses_shortcut_portal(platform, env) && env.get("XDG_SESSION_TYPE").map(String::as_str) == Some("wayland")
 }
 
 fn join(dir: &str, segments: &[&str]) -> String {
@@ -150,13 +147,6 @@ mod tests {
         assert!(uses_shortcut_portal(Platform::Linux, &env(&[("XDG_SESSION_TYPE", "wayland"), ("GDK_BACKEND", "*")])));
         assert!(!uses_shortcut_portal(Platform::Linux, &env(&[("GDK_BACKEND", "*")])));
         assert!(!xwayland_only(Platform::Linux, &env(&[("XDG_SESSION_TYPE", "x11")])));
-    }
-
-    #[test]
-    fn never_uses_it_off_linux() {
-        assert!(!uses_shortcut_portal(Platform::Darwin, &wayland()));
-        assert!(!uses_shortcut_portal(Platform::Win32, &env(&[("XDG_SESSION_TYPE", "wayland"), ("GDK_BACKEND", "wayland")])));
-        assert_eq!(shortcut_mode(Platform::Darwin, &wayland()), ShortcutMode::Native);
     }
 
     #[test]

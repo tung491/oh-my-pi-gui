@@ -642,10 +642,6 @@ impl DesktopPort for FakeDesktop {
         *lock(&self.prevent_exit)
     }
 
-    fn on_reopen(&self, has_visible_windows: bool) {
-        self.log.record(format!("on_reopen({has_visible_windows})"));
-    }
-
     fn mark_quitting(&self) {
         self.log.record("mark_quitting()");
         *lock(&self.quitting) = true;

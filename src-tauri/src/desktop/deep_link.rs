@@ -16,16 +16,6 @@ use crate::runtime_log;
 
 pub(crate) const DEEP_LINK_PROTOCOL: &str = "omp";
 
-/// True where the deep-link plugin's URLs (`on_open_url`, `get_current`) are
-/// the OS handoff: macOS only. On Linux and Windows the plugin copies them
-/// from argv, and from the second instance's argv through the single-instance
-/// plugin, which the cold start and `on_second_instance` already read; taking
-/// both would deliver every link twice. A dedupe would be wrong, since it
-/// would also swallow a link the user really opened twice.
-pub(crate) fn plugin_owns_links(platform: Platform) -> bool {
-    platform == Platform::Darwin
-}
-
 /// What this binary was built as, for the decisions a dev or test build must not make.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BuildKind {
@@ -49,7 +39,7 @@ impl BuildKind {
 
 /// Whether this build makes itself the system `omp://` handler at startup.
 /// Only a release build on Linux does (the AppImage has no installed desktop
-/// entry; macOS registers through `Info.plist`, Windows through the installer).
+/// entry).
 /// Debug and e2e builds never do: their handler would start the binary on the
 /// user's real profile, and outlive the build. They test links by passing the
 /// URL as an argument instead.
@@ -57,12 +47,11 @@ pub(crate) fn registers_url_scheme(build: BuildKind, platform: Platform) -> bool
     build == BuildKind::Release && platform == Platform::Linux
 }
 
-/// Links and files that reached the module before `init` finished.
+/// Links that reached the module before `init` finished.
 #[derive(Default)]
 pub(crate) struct PendingLinks {
     ready: Mutex<bool>,
     urls: Mutex<Vec<String>>,
-    files: Mutex<Vec<String>>,
 }
 
 impl PendingLinks {
@@ -75,17 +64,9 @@ impl PendingLinks {
         false
     }
 
-    fn offer_file(&self, path: String) -> bool {
-        if *lock(&self.ready) {
-            return true;
-        }
-        lock(&self.files).push(path);
-        false
-    }
-
-    fn take(&self) -> (Vec<String>, Vec<String>) {
+    fn take(&self) -> Vec<String> {
         *lock(&self.ready) = true;
-        (std::mem::take(&mut *lock(&self.urls)), std::mem::take(&mut *lock(&self.files)))
+        std::mem::take(&mut *lock(&self.urls))
     }
 }
 
@@ -116,38 +97,10 @@ impl Desktop {
         }
     }
 
-    /// A file or folder from the OS (`open -a` on macOS), buffered before setup.
-    pub(crate) fn open_file(&self, ctx: &AppCtx, path: String) {
-        if self.links.offer_file(path.clone()) {
-            self.handle_open_path(ctx, &path);
-        }
-    }
-
-    /// URLs from the deep-link plugin's `on_open_url`: links and files the OS
-    /// opened with the app. Off macOS they duplicate argv, so they are ignored.
-    pub(crate) fn on_plugin_urls(&self, ctx: &AppCtx, urls: Vec<tauri::Url>) {
-        if !plugin_owns_links(self.backend.platform()) {
-            return;
-        }
-        for url in urls {
-            if url.scheme() == "file" {
-                if let Ok(path) = url.to_file_path() {
-                    self.open_file(ctx, path.to_string_lossy().to_string());
-                }
-            } else {
-                self.open_url(ctx, url.to_string());
-            }
-        }
-    }
-
     /// Setup finished: replay what arrived early, in order.
     pub(crate) fn replay_pending_links(&self, ctx: &AppCtx) {
-        let (urls, files) = self.links.take();
-        for url in urls {
+        for url in self.links.take() {
             self.handle_deep_link(ctx, &url);
-        }
-        for path in files {
-            self.handle_open_path(ctx, &path);
         }
     }
 
@@ -229,29 +182,17 @@ mod tests {
         sent.iter().filter(|envelope| envelope.channel == DEEP_LINK_CHANNEL).map(|envelope| envelope.payload.clone()).collect()
     }
 
-    /// Start the module on `platform` as `init` does, with this launch argv and plugin startup URLs.
-    fn cold_start(platform: Platform, argv: &[&str], startup_urls: &[&str]) -> Harness {
+    /// Start the module on `platform` as `init` does, with this launch argv.
+    fn cold_start(platform: Platform, argv: &[&str]) -> Harness {
         let harness = harness(platform);
         *lock(&harness.backend.argv) = argv.iter().map(|arg| arg.to_string()).collect();
-        *lock(&harness.backend.startup_urls) = startup_urls.iter().map(|url| url.to_string()).collect();
         harness.desktop.start(&harness.ctx, Arc::new(AcceptAllRegistry));
         harness
     }
 
     #[test]
-    fn a_cold_start_link_is_delivered_once_on_linux_and_windows() {
-        for platform in [Platform::Linux, Platform::Win32] {
-            // The plugin's startup URLs are a copy of the same argv.
-            let Harness { ctx, desktop, .. } = cold_start(platform, &["sai-atlas", "omp://new"], &["omp://new"]);
-            let id = desktop.main_window().unwrap();
-            let sink = attach_recording_sink(&ctx, id);
-            assert_eq!(deep_links(&sink.sent()), vec![json!({ "action": "new-session" })], "{platform:?}");
-        }
-    }
-
-    #[test]
-    fn a_cold_start_link_from_the_os_handoff_is_delivered_once_on_macos() {
-        let Harness { ctx, desktop, .. } = cold_start(Platform::Darwin, &["sai-atlas"], &["omp://new"]);
+    fn a_cold_start_link_is_delivered_once() {
+        let Harness { ctx, desktop, .. } = cold_start(Platform::Linux, &["sai-atlas", "omp://new"]);
         let id = desktop.main_window().unwrap();
         let sink = attach_recording_sink(&ctx, id);
         assert_eq!(deep_links(&sink.sent()), vec![json!({ "action": "new-session" })]);
@@ -263,9 +204,6 @@ mod tests {
         desktop.replay_pending_links(&ctx);
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         let sink = attach_recording_sink(&ctx, id);
-        // The single-instance plugin forwards the link to the deep-link plugin, then calls back with the argv.
-        let url = tauri::Url::parse("omp://new").unwrap();
-        desktop.on_plugin_urls(&ctx, vec![url]);
         desktop.on_second_instance(vec!["sai-atlas".into(), "omp://new".into()], Some("/tmp".into()));
         assert_eq!(deep_links(&sink.sent()), vec![json!({ "action": "new-session" })]);
         // A link the user really opens again is a second delivery.
@@ -274,35 +212,20 @@ mod tests {
     }
 
     #[test]
-    fn a_warm_link_from_the_os_handoff_is_delivered_once_on_macos() {
-        let Harness { ctx, desktop, .. } = harness(Platform::Darwin);
-        desktop.replay_pending_links(&ctx);
-        let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
-        let sink = attach_recording_sink(&ctx, id);
-        let url = tauri::Url::parse("omp://session/abc").unwrap();
-        desktop.on_plugin_urls(&ctx, vec![url]);
-        assert_eq!(deep_links(&sink.sent()), vec![json!({ "action": "switch-session", "sessionId": "abc" })]);
-    }
-
-    #[test]
     fn only_a_release_build_on_linux_registers_the_url_scheme() {
-        for platform in [Platform::Linux, Platform::Darwin, Platform::Win32] {
-            assert!(!registers_url_scheme(BuildKind::Debug, platform), "{platform:?}");
-            assert!(!registers_url_scheme(BuildKind::E2e, platform), "{platform:?}");
-        }
+        assert!(!registers_url_scheme(BuildKind::Debug, Platform::Linux));
+        assert!(!registers_url_scheme(BuildKind::E2e, Platform::Linux));
         assert!(registers_url_scheme(BuildKind::Release, Platform::Linux));
-        assert!(!registers_url_scheme(BuildKind::Release, Platform::Darwin));
-        assert!(!registers_url_scheme(BuildKind::Release, Platform::Win32));
         // Tests are debug builds.
         assert_eq!(BuildKind::current(), BuildKind::Debug);
     }
 
     #[test]
     fn a_debug_build_never_registers_the_url_scheme_at_startup() {
-        let Harness { backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        let Harness { backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
         assert!(!backend.log.calls().iter().any(|call| call.starts_with("register_deep_link_scheme")));
         // Nor once its renderer has attached.
-        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
         desktop.on_renderer_attached();
         assert!(!backend.log.calls().iter().any(|call| call.starts_with("register_deep_link_scheme")));
     }
@@ -313,7 +236,7 @@ mod tests {
 
     #[test]
     fn a_release_build_claims_the_url_scheme_only_after_the_first_renderer_attaches() {
-        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
         assert!(!desktop.records().is_empty(), "startup opened its window");
         assert_eq!(scheme_registrations(&backend), 0, "a window whose page never ran proves nothing");
         desktop.claim_url_scheme_once(BuildKind::Release);
@@ -326,7 +249,7 @@ mod tests {
 
     #[test]
     fn a_release_build_claims_the_url_scheme_once_across_attaches_and_windows() {
-        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"], &[]);
+        let Harness { desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas"]);
         desktop.claim_url_scheme_once(BuildKind::Release);
         // A reload of the first window, and the pages of later windows, attach again.
         desktop.claim_url_scheme_once(BuildKind::Release);
@@ -338,7 +261,7 @@ mod tests {
 
     #[test]
     fn a_release_build_never_claims_the_url_scheme_without_an_attached_renderer() {
-        let Harness { ctx, desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas", "omp://new"], &[]);
+        let Harness { ctx, desktop, backend, .. } = cold_start(Platform::Linux, &["sai-atlas", "omp://new"]);
         let first = desktop.main_window().unwrap();
         let second = desktop.spawn_window(Some("/w/beta".into()), None, None).unwrap();
         // The second instance's link goes to the most recently focused window.
@@ -351,15 +274,6 @@ mod tests {
         assert_eq!(deep_links(&first_sink.sent()), vec![json!({ "action": "new-session" })]);
         assert_eq!(deep_links(&second_sink.sent()), vec![json!({ "action": "switch-session", "sessionId": "abc" })]);
         assert_eq!(scheme_registrations(&backend), 0);
-    }
-
-    #[test]
-    fn a_release_build_off_linux_never_claims_the_url_scheme() {
-        for platform in [Platform::Darwin, Platform::Win32] {
-            let Harness { desktop, backend, .. } = cold_start(platform, &["sai-atlas"], &[]);
-            desktop.claim_url_scheme_once(BuildKind::Release);
-            assert_eq!(scheme_registrations(&backend), 0, "{platform:?}");
-        }
     }
 
     #[test]

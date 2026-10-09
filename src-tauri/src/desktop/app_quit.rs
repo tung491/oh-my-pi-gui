@@ -54,8 +54,6 @@ impl QuitState {
 pub(crate) enum ExitDecision {
     /// Let the frozen shutdown order run.
     Allow,
-    /// Keep running and do nothing more (macOS stays in the dock).
-    Veto,
     /// Keep running and start the guarded quit, which ends in `request_quit`.
     VetoAndAsk,
 }
@@ -63,14 +61,10 @@ pub(crate) enum ExitDecision {
 /// `code` is `Some` for the app's own exits (`request_quit`, the updater, a
 /// signal): those were already decided and are never vetoed, or the app would
 /// refuse its own quit. `None` is the OS or the last window closing: allowed
-/// once approved or already quitting; otherwise macOS stays running, and the
-/// other platforms run the guard first.
-pub(crate) fn exit_decision(code: Option<i32>, approved: bool, platform: Platform) -> ExitDecision {
+/// once approved or already quitting; otherwise the guard runs first.
+pub(crate) fn exit_decision(code: Option<i32>, approved: bool, _platform: Platform) -> ExitDecision {
     if code.is_some() || approved {
         return ExitDecision::Allow;
-    }
-    if platform == Platform::Darwin {
-        return ExitDecision::Veto;
     }
     ExitDecision::VetoAndAsk
 }
@@ -183,7 +177,7 @@ mod tests {
         working(&ctx, &fakes, 3);
         assert!(!desktop.on_exit_requested(Some(0)));
         assert!(!desktop.on_exit_requested(Some(1)));
-        assert_eq!(exit_decision(Some(0), false, Platform::Darwin), ExitDecision::Allow);
+        assert_eq!(exit_decision(Some(0), false, Platform::Linux), ExitDecision::Allow);
         assert_eq!(exit_decision(Some(1), false, Platform::Linux), ExitDecision::Allow);
         assert!(fakes.host.log.calls().iter().all(|call| !call.starts_with("message_dialog")));
     }
@@ -208,12 +202,7 @@ mod tests {
         assert!(desktop.on_exit_requested(None));
         assert_eq!(fakes.host.exit_codes.lock().unwrap().clone(), vec![0]);
         assert!(fakes.host.log.calls().iter().all(|call| !call.starts_with("message_dialog")));
-        // macOS stays in the dock without a window.
-        let Harness { desktop, fakes, .. } = harness(Platform::Darwin);
-        assert!(desktop.on_exit_requested(None));
-        assert!(fakes.host.exit_codes.lock().unwrap().is_empty());
-        assert_eq!(exit_decision(None, false, Platform::Darwin), ExitDecision::Veto);
-        assert_eq!(exit_decision(None, true, Platform::Darwin), ExitDecision::Allow);
+        assert_eq!(exit_decision(None, true, Platform::Linux), ExitDecision::Allow);
     }
 
     #[tokio::test]

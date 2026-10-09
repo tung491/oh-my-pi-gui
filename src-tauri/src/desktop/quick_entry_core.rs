@@ -1,6 +1,6 @@
 //! The quick-entry rules that need no window:
 //! where the bar goes, what a submit may carry,
-//! which macOS chords the bar swallows, and the per-window prompt queue. The
+//! and the per-window prompt queue. The
 //! shell owns a prompt until its chat window acknowledges it.
 
 use std::collections::{BTreeMap, HashSet};
@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::window_bounds::Rect;
-use super::Platform;
 use crate::ports::WindowId;
 
 pub(crate) const QUICK_ENTRY_MAX_CHARS: usize = 100_000;
@@ -122,42 +121,6 @@ pub(crate) fn resolve_initial_target(saved: Option<&Value>, offered_cwds: &HashS
         Some(target) => target,
         None => QuickEntryTarget::Work,
     }
-}
-
-/// The parts of a key event the chord guard reads.
-/// No Tauri hook sees key events before the page does (Electron's
-/// `before-input-event`), so the guard below is kept for the day one exists
-/// and is exercised by its tests only.
-#[cfg_attr(not(test), allow(dead_code))]
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct MenuChordInput {
-    /// `keyDown` or `keyUp`.
-    pub event_type: String,
-    pub key: String,
-    /// The physical key (`KeyC`), which stays Latin on Cyrillic, Greek or Hebrew layouts.
-    pub code: String,
-    pub meta: bool,
-}
-
-/// Editing and caret chords the bar's text field needs, plus ⌘Q.
-#[cfg_attr(not(test), allow(dead_code))]
-const MAC_BAR_CHORDS: [&str; 12] =
-    ["a", "c", "v", "x", "z", "q", "arrowleft", "arrowright", "arrowup", "arrowdown", "backspace", "delete"];
-
-/// macOS dispatches application-menu key equivalents while the bar is key, and
-/// the menu targets the main window: ⌘W from the bar would close it. The bar
-/// swallows every other ⌘ chord. Windows and Linux bars have no menu. A Latin
-/// layout is judged by its character, as the menu matches it; a non-Latin
-/// letter by its physical key, so ⌘C copies on a Russian layout.
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn is_blocked_menu_chord(platform: Platform, input: &MenuChordInput) -> bool {
-    if platform != Platform::Darwin || input.event_type != "keyDown" || !input.meta {
-        return false;
-    }
-    let mut chars = input.key.chars();
-    let non_ascii_single = matches!((chars.next(), chars.next()), (Some(first), None) if !first.is_ascii());
-    let name = if non_ascii_single { input.code.strip_prefix("Key").unwrap_or(&input.code).to_string() } else { input.key.clone() };
-    !MAC_BAR_CHORDS.contains(&name.to_lowercase().as_str())
 }
 
 /// One chat window's prompts: queued for it, then leased to its renderer until acknowledged.
@@ -355,56 +318,6 @@ mod tests {
         for saved in [Value::Null, json!("work"), json!({ "kind": 3 })] {
             assert_eq!(resolve_initial_target(Some(&saved), &one_offered()), QuickEntryTarget::Work);
         }
-    }
-
-    fn chord(key: &str, event_type: &str, code: &str) -> MenuChordInput {
-        MenuChordInput { event_type: event_type.into(), key: key.into(), code: code.into(), meta: true }
-    }
-
-    fn down(key: &str) -> MenuChordInput {
-        chord(key, "keyDown", "")
-    }
-
-    #[test]
-    fn swallows_w_and_n_on_macos() {
-        assert!(is_blocked_menu_chord(Platform::Darwin, &down("w")));
-        assert!(is_blocked_menu_chord(Platform::Darwin, &down("n")));
-        assert!(is_blocked_menu_chord(Platform::Darwin, &down(",")));
-    }
-
-    #[test]
-    fn lets_editing_chords_and_q_through() {
-        for key in ["v", "c", "x", "a", "z", "Z", "q", "ArrowLeft", "Backspace"] {
-            assert!(!is_blocked_menu_chord(Platform::Darwin, &down(key)), "{key}");
-        }
-    }
-
-    #[test]
-    fn lets_editing_chords_through_on_non_latin_layouts_by_their_physical_key() {
-        assert!(!is_blocked_menu_chord(Platform::Darwin, &chord("с", "keyDown", "KeyC")));
-        assert!(!is_blocked_menu_chord(Platform::Darwin, &chord("м", "keyDown", "KeyV")));
-        assert!(is_blocked_menu_chord(Platform::Darwin, &chord("ц", "keyDown", "KeyW")));
-    }
-
-    #[test]
-    fn judges_a_latin_layout_by_the_character_the_menu_matches() {
-        // Dvorak: the C character sits on the I key; AZERTY: W sits on the Z key.
-        assert!(!is_blocked_menu_chord(Platform::Darwin, &chord("c", "keyDown", "KeyI")));
-        assert!(is_blocked_menu_chord(Platform::Darwin, &chord("W", "keyDown", "KeyZ")));
-        assert!(is_blocked_menu_chord(Platform::Darwin, &chord("w", "keyDown", "KeyZ")));
-    }
-
-    #[test]
-    fn ignores_key_up_events_and_keys_without() {
-        assert!(!is_blocked_menu_chord(Platform::Darwin, &chord("w", "keyUp", "")));
-        let no_meta = MenuChordInput { event_type: "keyDown".into(), key: "w".into(), code: "KeyW".into(), meta: false };
-        assert!(!is_blocked_menu_chord(Platform::Darwin, &no_meta));
-    }
-
-    #[test]
-    fn never_blocks_on_linux_or_windows() {
-        assert!(!is_blocked_menu_chord(Platform::Linux, &down("w")));
-        assert!(!is_blocked_menu_chord(Platform::Win32, &down("w")));
     }
 
     fn prompt(id: &str) -> QuickEntryPrompt {

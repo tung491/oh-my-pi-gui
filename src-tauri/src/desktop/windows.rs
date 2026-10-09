@@ -70,14 +70,8 @@ pub(crate) enum PredefinedItem {
     Paste,
     SelectAll,
     Minimize,
-    Maximize,
     Fullscreen,
-    Quit,
     About,
-    Services,
-    Hide,
-    HideOthers,
-    ShowAll,
 }
 
 /// A menu as pure data, so the tray and app menus are built and tested without a runtime.
@@ -141,8 +135,6 @@ pub(crate) trait Backend: Send + Sync {
     fn prefers_dark(&self) -> bool;
     /// Taskbar progress in percent; `None` clears it.
     fn set_progress(&self, id: WindowId, percent: Option<u64>);
-    /// macOS dock badge; `None` clears it.
-    fn set_badge(&self, label: Option<String>);
     fn install_tray(&self, tooltip: &str, menu: &[MenuItemModel]) -> Result<(), String>;
     fn set_tray_tooltip(&self, tooltip: &str);
     fn set_tray_menu(&self, menu: &[MenuItemModel]) -> Result<(), String>;
@@ -152,8 +144,6 @@ pub(crate) trait Backend: Send + Sync {
     /// Only compiled-in callers are release builds, so debug builds never use it.
     #[cfg_attr(debug_assertions, allow(dead_code))]
     fn register_deep_link_scheme(&self) -> Result<(), String>;
-    /// URLs the deep-link plugin holds at launch: the OS handoff on macOS, an argv copy elsewhere.
-    fn startup_urls(&self) -> Vec<String>;
     fn default_workspace(&self) -> std::io::Result<PathBuf>;
     fn directory_exists(&self, path: &str) -> bool;
     fn initial_cwd(&self, candidates: &[Option<String>]) -> Option<String>;
@@ -713,16 +703,13 @@ impl Desktop {
         }
     }
 
-    /// Run-progress indicator: dock badge (macOS) plus a progress bar on every window.
+    /// Run-progress indicator: a progress bar on every window.
     pub(crate) fn apply_run_progress(&self, state: RunProgressState) {
-        let (badge, percent) = match state {
-            RunProgressState::Working => (Some("●".to_string()), Some(50)),
-            RunProgressState::Waiting => (Some("!".to_string()), Some(75)),
-            RunProgressState::Idle => (None, None),
+        let percent = match state {
+            RunProgressState::Working => Some(50),
+            RunProgressState::Waiting => Some(75),
+            RunProgressState::Idle => None,
         };
-        if self.backend.platform() == Platform::Darwin {
-            self.backend.set_badge(badge);
-        }
         for id in self.windows.ids() {
             self.backend.set_progress(id, percent);
         }
@@ -798,9 +785,6 @@ mod tauri_backend {
         }
 
         fn configured(&self) -> bool {
-            if !cfg!(target_os = "linux") {
-                return true;
-            }
             match (self.0.outer_size(), self.0.outer_position(), self.0.scale_factor()) {
                 (Ok(size), Ok(position), Ok(scale)) => !super::origin_seeded((position.x, position.y), (size.width, size.height), scale),
                 _ => false,
@@ -970,9 +954,8 @@ mod tauri_backend {
             // `spec.size` was requested as the content size; the decoration
             // still has to come off it. On Linux the outer size holds the
             // window's position until its first configure, so the correction
-            // waits for that (`PendingCorrections`); macOS and Windows read
-            // the live frame, so it is exact right away.
-            let defer_correction = cfg!(target_os = "linux") && !spec.maximize;
+            // waits for that (`PendingCorrections`).
+            let defer_correction = !spec.maximize;
             if defer_correction {
                 self.pending.arm(spec.win_id, spec.size);
             }
@@ -1018,20 +1001,7 @@ mod tauri_backend {
             )
             .map_err(|error| error.to_string())?;
             self.observe(&window, WindowId::QUICK_ENTRY);
-            #[cfg(not(target_os = "macos"))]
-            {
-                let _ = window.remove_menu();
-            }
-            #[cfg(target_os = "macos")]
-            {
-                // A non-activating panel floats over full-screen apps on every Space.
-                use tauri_nspanel::WebviewWindowExt;
-                if let Ok(panel) = window.to_panel() {
-                    const NS_NONACTIVATING_PANEL_MASK: i32 = 1 << 7;
-                    panel.set_style_mask(NS_NONACTIVATING_PANEL_MASK);
-                    panel.set_hides_on_deactivate(false);
-                }
-            }
+            let _ = window.remove_menu();
             Ok(())
         }
 
@@ -1142,15 +1112,6 @@ mod tauri_backend {
             }
         }
 
-        fn set_badge(&self, label: Option<String>) {
-            #[cfg(target_os = "macos")]
-            if let Some(window) = self.app.webview_windows().values().next() {
-                let _ = window.set_badge_label(label);
-            }
-            #[cfg(not(target_os = "macos"))]
-            let _ = label;
-        }
-
         fn install_tray(&self, tooltip: &str, menu: &[MenuItemModel]) -> Result<(), String> {
             let icon = tray::build_tray(&self.app, tooltip, menu)?;
             *lock(&self.tray) = Some(icon);
@@ -1187,10 +1148,6 @@ mod tauri_backend {
 
         fn register_deep_link_scheme(&self) -> Result<(), String> {
             self.app.deep_link().register_all().map_err(|error| error.to_string())
-        }
-
-        fn startup_urls(&self) -> Vec<String> {
-            self.app.deep_link().get_current().ok().flatten().unwrap_or_default().into_iter().map(|url| url.to_string()).collect()
         }
 
         fn default_workspace(&self) -> std::io::Result<PathBuf> {
@@ -1277,7 +1234,6 @@ pub(crate) mod fake {
         pub cursor_area: Mutex<Option<Rect>>,
         pub dark: Mutex<bool>,
         pub progress: Mutex<BTreeMap<WindowId, Option<u64>>>,
-        pub badge: Mutex<Option<String>>,
         pub tray_tooltip: Mutex<Option<String>>,
         pub tray_menu: Mutex<Option<Vec<MenuItemModel>>>,
         pub app_menu: Mutex<Option<Vec<MenuItemModel>>>,
@@ -1285,7 +1241,6 @@ pub(crate) mod fake {
         pub workspace: PathBuf,
         pub argv: Mutex<Vec<String>>,
         pub env: Mutex<crate::desktop::wayland_portal::Env>,
-        pub startup_urls: Mutex<Vec<String>>,
         /// The scale factor applied to `decoration_physical` to get the
         /// logical decoration a built window's outer footprint adds on top
         /// of its requested content size (simulates GTK client-side
@@ -1335,7 +1290,6 @@ pub(crate) mod fake {
                 cursor_area: Mutex::new(None),
                 dark: Mutex::new(true),
                 progress: Mutex::new(BTreeMap::new()),
-                badge: Mutex::new(None),
                 tray_tooltip: Mutex::new(None),
                 tray_menu: Mutex::new(None),
                 app_menu: Mutex::new(None),
@@ -1343,7 +1297,6 @@ pub(crate) mod fake {
                 workspace: PathBuf::from("/work"),
                 argv: Mutex::new(vec!["sai-atlas".into()]),
                 env: Mutex::new([("XDG_SESSION_TYPE".to_string(), "x11".to_string())].into_iter().collect()),
-                startup_urls: Mutex::new(Vec::new()),
                 scale: Mutex::new(1.0),
                 decoration_physical: Mutex::new((0.0, 0.0)),
                 defer_correction: Mutex::new(false),
@@ -1649,10 +1602,6 @@ pub(crate) mod fake {
             lock(&self.progress).insert(id, percent);
         }
 
-        fn set_badge(&self, label: Option<String>) {
-            *lock(&self.badge) = label;
-        }
-
         fn install_tray(&self, tooltip: &str, menu: &[MenuItemModel]) -> Result<(), String> {
             self.log.record("install_tray()");
             *lock(&self.tray_tooltip) = Some(tooltip.to_string());
@@ -1689,10 +1638,6 @@ pub(crate) mod fake {
         fn register_deep_link_scheme(&self) -> Result<(), String> {
             self.log.record("register_deep_link_scheme()");
             Ok(())
-        }
-
-        fn startup_urls(&self) -> Vec<String> {
-            lock(&self.startup_urls).clone()
         }
 
         fn default_workspace(&self) -> std::io::Result<PathBuf> {
@@ -2173,14 +2118,12 @@ mod tests {
 
     #[test]
     fn maps_run_progress_to_the_taskbar_and_the_dock() {
-        let Harness { desktop, backend, .. } = harness(Platform::Darwin);
+        let Harness { desktop, backend, .. } = harness(Platform::Linux);
         let id = desktop.spawn_window(Some("/w/alpha".into()), None, None).unwrap();
         desktop.set_run_progress(RunProgressState::Working);
         assert_eq!(backend.progress.lock().unwrap().get(&id), Some(&Some(50)));
-        assert_eq!(backend.badge.lock().unwrap().clone(), Some("●".into()));
         desktop.set_run_progress(RunProgressState::Idle);
         assert_eq!(backend.progress.lock().unwrap().get(&id), Some(&None));
-        assert_eq!(backend.badge.lock().unwrap().clone(), None);
         assert_eq!(Desktop::aggregate_progress([RunProgressState::Idle, RunProgressState::Waiting]), RunProgressState::Waiting);
         assert_eq!(Desktop::aggregate_progress([RunProgressState::Waiting, RunProgressState::Working]), RunProgressState::Working);
     }

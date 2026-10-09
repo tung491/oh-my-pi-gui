@@ -167,13 +167,13 @@ fn accelerator_key(key: &str) -> Option<String> {
     (printable_ascii || f_key).then(|| key.to_string())
 }
 
-/// Accelerator for a chord: "⇧⌃␣" → "Control+Shift+Space". ⌘ is Command on
-/// macOS and Super elsewhere; it is never widened to CommandOrControl.
-pub(crate) fn chord_to_accelerator(chord: &str, platform: Platform) -> Option<String> {
+/// Accelerator for a chord: "⇧⌃␣" → "Control+Shift+Space". ⌘ is Super; it is
+/// never widened to CommandOrControl.
+pub(crate) fn chord_to_accelerator(chord: &str, _platform: Platform) -> Option<String> {
     let parsed = parse_chord(chord)?;
     let mut parts: Vec<&str> = Vec::new();
     if parsed.meta {
-        parts.push(if platform == Platform::Darwin { "Command" } else { "Super" });
+        parts.push("Super");
     }
     if parsed.ctrl {
         parts.push("Control");
@@ -240,13 +240,10 @@ pub(crate) enum ChordRejection {
     Reserved,
 }
 
-/// The app chord this one would collide with: a `NATIVE_CHORDS` id (CommandOrControl, so Ctrl off macOS).
-pub(crate) fn reserved_global_chord(chord: &str, platform: Platform) -> Option<&'static str> {
+/// The app chord this one would collide with: a `NATIVE_CHORDS` id (CommandOrControl, which is Ctrl on Linux).
+pub(crate) fn reserved_global_chord(chord: &str, _platform: Platform) -> Option<&'static str> {
     let canonical = serialize_chord(&parse_chord(chord)?);
-    NATIVE_CHORDS.iter().find_map(|(id, native, _)| {
-        let twin = if platform == Platform::Darwin { native.to_string() } else { ctrl_twin(native) };
-        (twin == canonical).then_some(*id)
-    })
+    NATIVE_CHORDS.iter().find_map(|(id, native, _)| (ctrl_twin(native) == canonical).then_some(*id))
 }
 
 /// The one global-chord policy. `Invalid`: unparsable, or a key that cannot
@@ -435,7 +432,7 @@ mod tests {
     #[test]
     fn refuses_ctrl_or_cmd_alone_and_the_window_manager_s_chords() {
         for chord in ["⌃V", "⌘C", "⌘Q", "⌥F4", "⌘␣", "⌃⌘Q", "⌥⇥", "⌥⌃⌦"] {
-            assert_eq!(validate_global_chord(chord, Platform::Darwin), Some(ChordRejection::System), "{chord}");
+            assert_eq!(validate_global_chord(chord, Platform::Linux), Some(ChordRejection::System), "{chord}");
         }
         assert_eq!(validate_global_chord("⌃A", Platform::Linux), Some(ChordRejection::System));
     }
@@ -443,7 +440,7 @@ mod tests {
     #[test]
     fn accepts_chords_with_alt_or_shift_beyond_ctrl_cmd() {
         for chord in ["⌥␣", "⇧⌃␣", "⌥⇧K", "⇧⌘K"] {
-            assert_eq!(validate_global_chord(chord, Platform::Darwin), None, "{chord}");
+            assert_eq!(validate_global_chord(chord, Platform::Linux), None, "{chord}");
         }
     }
 
@@ -455,17 +452,16 @@ mod tests {
 
     #[test]
     fn refuses_a_key_electron_cannot_register_which_would_throw_rather_than_fail() {
-        assert_eq!(validate_global_chord("⇧⌃§", Platform::Darwin), Some(ChordRejection::Invalid));
+        assert_eq!(validate_global_chord("⇧⌃§", Platform::Linux), Some(ChordRejection::Invalid));
         assert_eq!(validate_global_chord("⌥⇧\u{1}", Platform::Linux), Some(ChordRejection::Invalid));
-        assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⇧⌃§", "enabled": true })), Platform::Darwin), default());
+        assert_eq!(sanitize_shortcut_pref(Some(&json!({ "chord": "⇧⌃§", "enabled": true })), Platform::Linux), default());
     }
 
     #[test]
     fn refuses_the_app_s_own_native_chords_in_their_platform_spelling() {
-        assert_eq!(reserved_global_chord("⇧⌘O", Platform::Darwin), Some("window.toggle"));
         assert_eq!(reserved_global_chord("⇧⌃O", Platform::Linux), Some("window.toggle"));
         assert_eq!(reserved_global_chord("⇧⌘O", Platform::Linux), None);
-        assert_eq!(validate_global_chord("⇧⌃O", Platform::Win32), Some(ChordRejection::Reserved));
+        assert_eq!(validate_global_chord("⇧⌃O", Platform::Linux), Some(ChordRejection::Reserved));
         assert_eq!(validate_global_chord("⇧⌃W", Platform::Linux), Some(ChordRejection::Reserved));
     }
 
@@ -488,7 +484,7 @@ mod tests {
     #[test]
     fn treats_a_missing_enabled_flag_as_on() {
         assert_eq!(
-            sanitize_shortcut_pref(Some(&json!({ "chord": "⌥␣" })), Platform::Darwin),
+            sanitize_shortcut_pref(Some(&json!({ "chord": "⌥␣" })), Platform::Linux),
             QuickEntryShortcutPref { chord: "⌥␣".into(), enabled: true }
         );
     }
@@ -550,16 +546,16 @@ mod tests {
     fn unregisters_on_disable_registers_on_enable_and_resets_to_the_default() {
         let off = QuickEntryShortcutPref { enabled: false, ..default() };
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "enabled": false }), ShortcutMode::Native, Platform::Darwin),
+            plan_shortcut_update(&default(), &json!({ "enabled": false }), ShortcutMode::Native, Platform::Linux),
             ShortcutPlan::Rebind { next: off.clone(), from: Some("Control+Shift+Space".into()), to: None }
         );
         assert_eq!(
-            plan_shortcut_update(&off, &json!({ "enabled": true }), ShortcutMode::Native, Platform::Darwin),
+            plan_shortcut_update(&off, &json!({ "enabled": true }), ShortcutMode::Native, Platform::Linux),
             ShortcutPlan::Rebind { next: default(), from: None, to: Some("Control+Shift+Space".into()) }
         );
         let moved_off = QuickEntryShortcutPref { chord: "⌥⇧K".into(), enabled: false };
         assert_eq!(
-            plan_shortcut_update(&moved_off, &json!({ "reset": true }), ShortcutMode::Native, Platform::Darwin),
+            plan_shortcut_update(&moved_off, &json!({ "reset": true }), ShortcutMode::Native, Platform::Linux),
             ShortcutPlan::Rebind { next: default(), from: None, to: Some("Control+Shift+Space".into()) }
         );
     }
@@ -567,12 +563,8 @@ mod tests {
     #[test]
     fn rejects_with_the_policy_s_reason_before_touching_anything() {
         assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "chord": "⌘C" }), ShortcutMode::Native, Platform::Darwin),
+            plan_shortcut_update(&default(), &json!({ "chord": "⌘C" }), ShortcutMode::Native, Platform::Linux),
             ShortcutPlan::Reject(ChordRejection::System)
-        );
-        assert_eq!(
-            plan_shortcut_update(&default(), &json!({ "chord": "⇧⌘O" }), ShortcutMode::Portal, Platform::Darwin),
-            ShortcutPlan::Reject(ChordRejection::Reserved)
         );
         assert_eq!(
             plan_shortcut_update(&default(), &json!({ "chord": "⇧A" }), ShortcutMode::Native, Platform::Linux),
@@ -643,7 +635,6 @@ mod tests {
         assert_eq!(parse_chord("shift+k"), None);
         assert_eq!(parse_chord("k"), None);
         assert_eq!(parse_chord("⌘⇧O").map(|c| serialize_chord(&c)), Some("⇧⌘O".into()));
-        assert_eq!(chord_to_accelerator("⇧⌘K", Platform::Darwin), Some("Command+Shift+K".into()));
         assert_eq!(chord_to_accelerator("⇧⌘K", Platform::Linux), Some("Super+Shift+K".into()));
         assert_eq!(chord_to_accelerator("⌃+", Platform::Linux), Some("Control+Plus".into()));
         assert_eq!(ctrl_twin("⇧⌘O"), "⇧⌃O");

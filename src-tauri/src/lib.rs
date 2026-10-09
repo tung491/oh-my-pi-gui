@@ -470,12 +470,6 @@ pub fn run() -> ExitCode {
             }
             start_pending_relaunch(&relaunch);
         }
-        #[cfg(target_os = "macos")]
-        RunEvent::Reopen { has_visible_windows, .. } => {
-            if let Some(ctx) = handle.try_state::<Arc<AppCtx>>() {
-                ctx.desktop.on_reopen(has_visible_windows);
-            }
-        }
         _ => {}
     });
     ExitCode::SUCCESS

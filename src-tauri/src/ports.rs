@@ -638,8 +638,6 @@ pub trait DesktopPort: Send + Sync {
     /// or the quit guard asks first); `false` lets the frozen shutdown order run.
     /// Always return `false` for `Some(_)`: those exits were already decided.
     fn on_exit_requested(&self, code: Option<i32>) -> bool;
-    /// macOS `RunEvent::Reopen` (dock click).
-    fn on_reopen(&self, has_visible_windows: bool);
     /// Set the quitting latch without starting a quit (the exit path already began).
     fn mark_quitting(&self);
     fn is_quitting(&self) -> bool;
