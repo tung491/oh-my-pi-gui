@@ -173,6 +173,24 @@ function writeFeed(
 	writeFileSync(path.join(outDir, fileName), stringify(document, { lineWidth: 0 }));
 }
 
+/**
+ * Write `SHA512SUMS` in `sha512sum -c` format (hex, two spaces), sorted by name, for the
+ * packages and the feed. Package digests come from the feed entries so no package is read twice.
+ */
+async function writeSums(outDir: string, entries: Array<{ name: string; sha512: string }>): Promise<void> {
+	const feedName = "latest-linux.yml";
+	const digests = new Map<string, string>();
+	for (const entry of entries) digests.set(entry.name, Buffer.from(entry.sha512, "base64").toString("hex"));
+	digests.set(
+		feedName,
+		createHash("sha512")
+			.update(readFileSync(path.join(outDir, feedName)))
+			.digest("hex"),
+	);
+	const lines = [...digests.keys()].sort().map(name => `${digests.get(name)}  ${name}\n`);
+	writeFileSync(path.join(outDir, "SHA512SUMS"), lines.join(""));
+}
+
 /** Copy an electron-builder feed and every asset it lists, unchanged. */
 function mergeElectronFeed(feedPath: string, outDir: string, fileName: string): string[] {
 	const raw = readFileSync(feedPath, "utf8");
@@ -193,6 +211,16 @@ function mergeElectronFeed(feedPath: string, outDir: string, fileName: string): 
 /** Build the release set; returns the names written to `outDir`. */
 export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 	const { version, outDir } = inputs;
+	for (const name of ["SAI_ATLAS_UPDATE_BASE", "SAI_ATLAS_UPDATE_KEYS"]) {
+		if (process.env[name] !== undefined) {
+			throw new Error(
+				`${name} is set; a release is never assembled in a shell set up for a local test feed. Unset it and run again.`,
+			);
+		}
+	}
+	if (existsSync(outDir) && readdirSync(outDir).length > 0) {
+		throw new Error(`${outDir} is not empty; release-feeds writes only into an empty or new directory`);
+	}
 	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error(`invalid version ${version}`);
 	if (inputs.electronMacFeed && (inputs.macArm64 || inputs.macX64)) {
 		throw new Error("pass either the Tauri macOS bundles or the Electron latest-mac.yml, not both");
@@ -209,14 +237,15 @@ export async function buildRelease(inputs: ReleaseInputs): Promise<string[]> {
 	if (inputs.linux) {
 		place(onlyBundle(path.join(inputs.linux, "appimage"), ".AppImage", version), names.appImage);
 		place(onlyBundle(path.join(inputs.linux, "deb"), ".deb", version), names.deb);
-		writeFeed(
-			outDir,
-			"latest-linux.yml",
-			version,
-			[await feedFile(outDir, names.appImage), await feedFile(outDir, names.deb)],
-			releaseDate,
-		);
+		const appImageEntry = await feedFile(outDir, names.appImage);
+		const debEntry = await feedFile(outDir, names.deb);
+		writeFeed(outDir, "latest-linux.yml", version, [appImageEntry, debEntry], releaseDate);
 		written.push("latest-linux.yml");
+		await writeSums(outDir, [
+			{ name: names.appImage, sha512: appImageEntry.sha512 },
+			{ name: names.deb, sha512: debEntry.sha512 },
+		]);
+		written.push("SHA512SUMS");
 	}
 
 	if (inputs.macArm64 || inputs.macX64) {

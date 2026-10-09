@@ -1,0 +1,116 @@
+name: sign-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, v<version>"
+        required: true
+        type: string
+      feed_sha256:
+        description: "sha256sum of dist-release/latest-linux.yml"
+        required: true
+        type: string
+      sums_sha256:
+        description: "sha256sum of dist-release/SHA512SUMS"
+        required: true
+        type: string
+
+concurrency:
+  group: sign-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    # The signing keys are secrets of this environment: main only, and the maintainer approves each run.
+    environment: release-signing
+    # ubuntu-latest (24.04) ships OpenSSL 3.0, which has no ML-DSA.
+    container:
+      image: ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
+    env:
+      TAG: ${{ inputs.tag }}
+      FEED_SHA256: ${{ inputs.feed_sha256 }}
+      SUMS_SHA256: ${{ inputs.sums_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Install tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends openssl ca-certificates git gh unzip
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+      - name: Check the inputs and the draft
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "tag must be v<semver>" >&2; exit 1; }
+          [[ "$FEED_SHA256" =~ ^[0-9a-f]{64}$ && "$SUMS_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "digests must be 64 lowercase hex characters" >&2; exit 1; }
+          git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null || { echo "no git tag $TAG" >&2; exit 1; }
+          [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ] || { echo "$TAG is not a draft release" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/release"
+          gh release download "$TAG" -D "$RUNNER_TEMP/release" -p latest-linux.yml -p SHA512SUMS -p '*.deb' -p '*.AppImage'
+          cd "$RUNNER_TEMP/release"
+          echo "$FEED_SHA256  latest-linux.yml" | sha256sum -c -
+          echo "$SUMS_SHA256  SHA512SUMS" | sha256sum -c -
+          [ "$(head -n 1 latest-linux.yml)" = "version: ${TAG#v}" ] || { echo "latest-linux.yml is not the feed of $TAG" >&2; exit 1; }
+          sha512sum -c SHA512SUMS
+      - name: Read the trusted keys
+        run: |
+          set -euo pipefail
+          git show "$TAG:src-tauri/src/updater/release-keys.json" > "$RUNNER_TEMP/trusted.json"
+          PREVIOUS="$(gh release view --json tagName --jq .tagName 2>/dev/null || true)"
+          if [ -n "$PREVIOUS" ] && git show "$PREVIOUS:src-tauri/src/updater/release-keys.json" > "$RUNNER_TEMP/previous-trusted.json" 2>/dev/null; then
+            echo "also verifying against the keys of $PREVIOUS"
+          else
+            rm -f "$RUNNER_TEMP/previous-trusted.json"
+          fi
+      - name: Sign
+        env:
+          RELEASE_SIGNING_KEYSET: ${{ vars.RELEASE_SIGNING_KEYSET }}
+          RELEASE_SIGNING_MLDSA65_KEY: ${{ secrets.RELEASE_SIGNING_MLDSA65_KEY }}
+          RELEASE_SIGNING_ED25519_KEY: ${{ secrets.RELEASE_SIGNING_ED25519_KEY }}
+          RELEASE_SIGNING_PREVIOUS_KEYSET: ${{ vars.RELEASE_SIGNING_PREVIOUS_KEYSET }}
+          RELEASE_SIGNING_PREVIOUS_MLDSA65_KEY: ${{ secrets.RELEASE_SIGNING_PREVIOUS_MLDSA65_KEY }}
+          RELEASE_SIGNING_PREVIOUS_ED25519_KEY: ${{ secrets.RELEASE_SIGNING_PREVIOUS_ED25519_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          KEYS="$RUNNER_TEMP/keys"
+          mkdir -p "$KEYS"
+          ID='^[a-z0-9][a-z0-9-]{0,31}$'
+          [[ "$RELEASE_SIGNING_KEYSET" =~ $ID ]] || { echo "RELEASE_SIGNING_KEYSET is missing or invalid" >&2; exit 1; }
+          [ -n "$RELEASE_SIGNING_MLDSA65_KEY" ] && [ -n "$RELEASE_SIGNING_ED25519_KEY" ] || { echo "the release-signing environment lacks the signing keys" >&2; exit 1; }
+          printf '%s\n' "$RELEASE_SIGNING_MLDSA65_KEY" > "$KEYS/$RELEASE_SIGNING_KEYSET-mldsa65.key"
+          printf '%s\n' "$RELEASE_SIGNING_ED25519_KEY" > "$KEYS/$RELEASE_SIGNING_KEYSET-ed25519.key"
+          set -- --keyset "$RELEASE_SIGNING_KEYSET"
+          if [ -n "$RELEASE_SIGNING_PREVIOUS_KEYSET" ]; then
+            [[ "$RELEASE_SIGNING_PREVIOUS_KEYSET" =~ $ID ]] || { echo "RELEASE_SIGNING_PREVIOUS_KEYSET is invalid" >&2; exit 1; }
+            printf '%s\n' "$RELEASE_SIGNING_PREVIOUS_MLDSA65_KEY" > "$KEYS/$RELEASE_SIGNING_PREVIOUS_KEYSET-mldsa65.key"
+            printf '%s\n' "$RELEASE_SIGNING_PREVIOUS_ED25519_KEY" > "$KEYS/$RELEASE_SIGNING_PREVIOUS_KEYSET-ed25519.key"
+            set -- "$@" --keyset "$RELEASE_SIGNING_PREVIOUS_KEYSET"
+          fi
+          bun --no-install scripts/sign-release.ts --trusted "$RUNNER_TEMP/trusted.json" --keys "$KEYS" "$@" "$RUNNER_TEMP/release"
+      - name: Remove the keys
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"
+      - name: Upload and verify the draft
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/release"
+          gh release upload "$TAG" ./*.sig ./*.pem --clobber
+          mkdir "$RUNNER_TEMP/check"
+          gh release download "$TAG" -D "$RUNNER_TEMP/check"
+          set -- --trusted "$RUNNER_TEMP/trusted.json"
+          if [ -f "$RUNNER_TEMP/previous-trusted.json" ]; then set -- "$@" --trusted "$RUNNER_TEMP/previous-trusted.json"; fi
+          cd "$GITHUB_WORKSPACE"
+          bun --no-install scripts/sign-release.ts --verify --tag "$TAG" "$@" "$RUNNER_TEMP/check"
