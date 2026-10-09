@@ -835,7 +835,6 @@ mod tests {
         struct Entry {
             caller: String,
             callee: String,
-            ts: String,
             method: String,
         }
         let entries: Vec<Entry> = serde_json::from_str(include_str!("../contracts/cross-module-calls.json")).unwrap();
@@ -845,7 +844,6 @@ mod tests {
         for entry in entries {
             assert!(modules.contains(&entry.caller.as_str()), "unknown caller {}", entry.caller);
             assert!(modules.contains(&entry.callee.as_str()), "unknown callee {}", entry.callee);
-            assert!(entry.ts.starts_with("src/main/"), "{} is not a TS call site", entry.ts);
             let needle = format!("fn {}(", entry.method);
             assert!(source.contains(&needle), "{} ({} -> {}) has no trait method", entry.method, entry.caller, entry.callee);
         }

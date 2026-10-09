@@ -141,6 +141,14 @@ describe("product identity", () => {
 		expect(crateVersion).toBe(readJson<{ version: string }>("package.json").version);
 	});
 
+	it("leaves the profile path to package.json name", () => {
+		// src-tauri/src/paths.rs (PROFILE_DIR_SEGMENTS) keeps the directory every 0.9.x
+		// release derived from this name; a productName or a rename would move it.
+		const pkg = readJson<{ name?: string; productName?: string }>("package.json");
+		expect(pkg.name).toBe("@oh-my-pi/omp-gui");
+		expect(pkg.productName).toBeUndefined();
+	});
+
 	it("registers the omp deep-link scheme", () => {
 		expect(base().plugins?.["deep-link"]?.desktop?.schemes).toEqual(["omp"]);
 		expect(base().plugins?.["deep-link"]?.mobile).toEqual([]);
@@ -234,11 +242,46 @@ describe("sidecar placement", () => {
 });
 
 describe("renderer security", () => {
+	function cspSources(page: string, directive: string): string[] {
+		const html = fs.readFileSync(path.join(ROOT, "src/renderer", page), "utf8");
+		const content = /http-equiv="Content-Security-Policy"[^>]*content="([^"]+)"/.exec(html)?.[1];
+		if (!content) throw new Error(`${page} declares no Content-Security-Policy`);
+		const entry = content
+			.split(";")
+			.map(part => part.trim())
+			.find(part => part.split(" ")[0] === directive);
+		if (!entry) throw new Error(`CSP declares no ${directive}`);
+		return entry.split(" ").slice(1);
+	}
+
 	it("CSP policy equals the meta CSP in src/renderer/index.html", () => {
 		const html = fs.readFileSync(path.join(ROOT, "src/renderer/index.html"), "utf8");
 		const meta = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/.exec(html)?.[1];
 		expect(meta).toBeDefined();
 		expect(base().app?.security?.csp).toBe(meta);
+	});
+
+	it("cannot fetch a remote image for markdown a model wrote", () => {
+		// Explicit, not inherited: without img-src the policy falls back to
+		// default-src, and a later relaxation there would silently re-open this.
+		expect(cspSources("index.html", "img-src")).toEqual(["'self'", "data:", "blob:"]);
+	});
+
+	it("keeps script execution and network calls inside the app", () => {
+		expect(cspSources("index.html", "script-src")).toEqual(["'self'"]);
+		expect(cspSources("index.html", "connect-src")).toEqual(["'self'"]);
+	});
+
+	it("the quick-entry page ships the same content security policy", () => {
+		for (const directive of ["default-src", "script-src", "style-src", "img-src", "connect-src"]) {
+			expect(cspSources("quick-entry.html", directive), directive).toEqual(cspSources("index.html", directive));
+		}
+		const csp = (page: string) =>
+			/http-equiv="Content-Security-Policy"\s+content="([^"]+)"/.exec(
+				fs.readFileSync(path.join(ROOT, "src/renderer", page), "utf8"),
+			)?.[1];
+		expect(csp("index.html")).toBeDefined();
+		expect(csp("quick-entry.html")).toBe(csp("index.html"));
 	});
 
 	it("only style-src skips asset CSP modification", () => {
@@ -577,6 +620,47 @@ describe("macOS bundle", () => {
 	});
 });
 
+describe("Linux CI workflow", () => {
+	const workflows = path.join(ROOT, ".github", "workflows");
+	interface Workflow {
+		jobs?: Record<
+			string,
+			{
+				"runs-on"?: string;
+				env?: Record<string, string>;
+				steps?: { run?: string; uses?: string; with?: Record<string, string | boolean> }[];
+			}
+		>;
+	}
+
+	it("type-checks, tests and builds a clean clone on ubuntu-latest", () => {
+		const ci = parseYaml(fs.readFileSync(path.join(workflows, "ci.yml"), "utf8")) as Workflow;
+		const job = ci.jobs?.linux;
+		expect(job?.["runs-on"]).toBe("ubuntu-latest");
+		expect(job?.steps?.flatMap(step => (step.run ? [step.run] : []))).toEqual([
+			"bun install --frozen-lockfile",
+			"bun run check:types",
+			"bunx vitest run",
+			"bun run build",
+		]);
+		// Actions are pinned to full commit SHAs, and the checkout token is not left on disk.
+		const uses = job?.steps?.flatMap(step => (step.uses ? [step.uses] : [])) ?? [];
+		expect(uses).toHaveLength(2);
+		for (const action of uses) expect(action).toMatch(/^(actions\/checkout|oven-sh\/setup-bun)@[0-9a-f]{40}$/);
+		const checkout = job?.steps?.find(step => step.uses?.startsWith("actions/checkout@"));
+		expect(checkout?.with?.["persist-credentials"]).toBe(false);
+		const setupBun = job?.steps?.find(step => step.uses?.startsWith("oven-sh/setup-bun@"));
+		expect(setupBun?.with?.["bun-version"]).toMatch(/^\d+\.\d+\.\d+$/);
+	});
+
+	it("leaves Pages deployment to the Pages workflow alone", () => {
+		const publishers = fs
+			.readdirSync(workflows)
+			.filter(name => fs.readFileSync(path.join(workflows, name), "utf8").includes("actions/deploy-pages"));
+		expect(publishers).toEqual(["pages.yml"]);
+	});
+});
+
 describe("Tauri CI job", () => {
 	interface Job {
 		"runs-on"?: string;
@@ -597,11 +681,11 @@ describe("Tauri CI job", () => {
 			"bun run build:renderer:tauri",
 			"cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings",
 			"cargo test --manifest-path src-tauri/Cargo.toml --all-features",
-			'for parity in src-tauri/contracts/*.parity.json; do bun scripts/check-test-parity.ts "$(basename "$parity" .parity.json)"; done',
 			"bash scripts/check-module.sh snapshots",
 		]) {
 			expect(runs).toContain(command);
 		}
+		expect(runs.join("\n")).not.toContain("check-test-parity");
 		// Diff-based ownership gates need a merge base and fail by design once the
 		// cross-module work lands on main, so CI runs only whole-tree checks.
 		for (const command of runs) expect(command).not.toContain("merge-base");

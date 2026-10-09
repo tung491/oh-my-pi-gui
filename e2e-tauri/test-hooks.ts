@@ -1,8 +1,6 @@
 /**
  * WebdriverIO-side helpers for the Tauri `test:*` bridge channels
  * (`src-tauri/src/test_hooks.rs`, compiled only with `--features e2e-hooks`).
- * They replace the Electron specs' `app.evaluate` main-process reach-ins
- * (`e2e-tauri/reach-ins.json`).
  *
  * Every helper runs a self-contained script in the chat window's page through
  * `browser.execute` (the function is serialized, so it may use only its own

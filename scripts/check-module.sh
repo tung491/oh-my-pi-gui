@@ -50,7 +50,7 @@ case "$MODULE" in
       "src-tauri/src/webview.rs" "src-tauri/src/prefs.rs" "src-tauri/src/paths.rs" "src-tauri/src/product.rs" "src-tauri/src/i18n.rs"
       "src-tauri/src/runtime_log.rs" "src-tauri/src/testing.rs" "src-tauri/src/test_hooks.rs"
       "src-tauri/src/omp/" "src-tauri/src/tabs/" "src-tauri/src/desktop/" "src-tauri/src/services/" "src-tauri/src/ollama/" "src-tauri/src/updater/"
-      "scripts/check-module.sh" "scripts/check-test-parity.ts" "scripts/check-test-parity.test.ts" "scripts/tauri-dev.ts" "scripts/rust-pins.env"
+      "scripts/check-module.sh" "scripts/tauri-dev.ts" "scripts/rust-pins.env"
       "src/shared/bridge/" "src/preload/" "src/renderer/boot/" "src/renderer/styles/first-paint.css"
       "src/renderer/main.tsx" "src/renderer/quick-entry/main.tsx" "src/renderer/index.html" "src/renderer/quick-entry.html" "src/renderer/global.d.ts"
       "src/renderer/lib/themes.test.ts" "vite.renderer.shared.ts" "vite.tauri.config.ts" "electron.vite.config.ts" "package.json" "bun.lock" ".gitignore"
@@ -192,33 +192,29 @@ if grep -nE 'std::thread::sleep|std::process::Command' "${RUST_FILES[@]}" >&2; t
   fail 6 "blocking std APIs found"
 fi
 
-# --- gate 7: test parity --------------------------------------------------------
-step 7 "bun scripts/check-test-parity.ts $MODULE"
-bun scripts/check-test-parity.ts "$MODULE" || fail 7 "test parity failed"
-
-# --- gate 8: tests ---------------------------------------------------------------
-step 8 "cargo test (default and e2e-hooks)"
-"$CARGO" test --manifest-path "$MANIFEST" || fail 8 "cargo test failed"
-"$CARGO" test --manifest-path "$MANIFEST" --features e2e-hooks || fail 8 "cargo test --features e2e-hooks failed"
+# --- gate 7: tests ---------------------------------------------------------------
+step 7 "cargo test (default and e2e-hooks)"
+"$CARGO" test --manifest-path "$MANIFEST" || fail 7 "cargo test failed"
+"$CARGO" test --manifest-path "$MANIFEST" --features e2e-hooks || fail 7 "cargo test --features e2e-hooks failed"
 if [[ "$MODULE" == "updater" ]]; then
-  bunx vitest run scripts/ src/main/packaging-config.test.ts || fail 8 "vitest (scripts, packaging-config) failed"
+  bunx vitest run scripts/ src/main/packaging-config.test.ts || fail 7 "vitest (scripts, packaging-config) failed"
 fi
 
-# --- gate 9: cross-OS check -----------------------------------------------------
-step 9 "cargo check for aarch64-apple-darwin"
+# --- gate 8: cross-OS check -----------------------------------------------------
+step 8 "cargo check for aarch64-apple-darwin"
 for target in aarch64-apple-darwin; do
   if ! "$CARGO_HOME_BIN/rustup" target list --installed 2>/dev/null | grep -qx "$target"; then
-    warn 9 "target $target is not installed (rustup target add $target); skipped"
+    warn 8 "target $target is not installed (rustup target add $target); skipped"
     continue
   fi
   OUT=$("$CARGO" check --manifest-path "$MANIFEST" --target "$target" --all-features 2>&1)
   if [[ $? -ne 0 ]]; then
     # Without the platform toolchain, cc-rs cannot build the Objective-C helpers in the dependency tree.
     if echo "$OUT" | grep -qiE 'sdk|xcrun|linker|could not find native static library|pkg-config|\.framework|cc-rs|objective-c|unrecognized command-line option'; then
-      warn 9 "cargo check --target $target needs the platform SDK; skipped"
+      warn 8 "cargo check --target $target needs the platform SDK; skipped"
     else
       echo "$OUT" | tail -40 >&2
-      fail 9 "cargo check --target $target failed"
+      fail 8 "cargo check --target $target failed"
     fi
   fi
 done

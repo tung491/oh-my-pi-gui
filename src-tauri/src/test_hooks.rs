@@ -1,8 +1,7 @@
 //! Test-only bridge channels, compiled only with the `e2e-hooks` cargo feature.
 //! Release bundles never enable it. The end-to-end suite reaches these through
 //! `omp_invoke` on the `bridge::E2E_HOOK_GEN` page generation
-//! (`e2e-tauri/test-hooks.ts`); the Electron specs did the same work through
-//! `app.evaluate` in the main process (`e2e-tauri/reach-ins.json` maps each one).
+//! (`e2e-tauri/test-hooks.ts`).
 
 use crate::bridge::Registry;
 

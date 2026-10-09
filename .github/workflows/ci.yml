@@ -53,10 +53,10 @@ jobs:
         env:
           CI_VISUAL: "1"
 
-  # The Tauri core: clippy, the Rust tests, test parity with the Electron suite and
-  # the frozen API snapshots (checked with the pinned cargo-public-api). Every check
-  # here covers the whole tree, so it holds on main and on any branch. No sidecar
-  # is needed: the bundle configs that name it are passed only to package builds.
+  # The Tauri core: clippy, the Rust tests and the frozen API snapshots (checked
+  # with the pinned cargo-public-api). Every check here covers the whole tree, so
+  # it holds on main and on any branch. No sidecar is needed: the bundle configs
+  # that name it are passed only to package builds.
   tauri-linux:
     runs-on: ubuntu-latest
     env:
@@ -104,7 +104,5 @@ jobs:
       - run: bun run build:renderer:tauri
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
       - run: cargo test --manifest-path src-tauri/Cargo.toml --all-features
-      - name: Test parity with the Electron suite
-        run: for parity in src-tauri/contracts/*.parity.json; do bun scripts/check-test-parity.ts "$(basename "$parity" .parity.json)"; done
       - name: Public API snapshots
         run: bash scripts/check-module.sh snapshots

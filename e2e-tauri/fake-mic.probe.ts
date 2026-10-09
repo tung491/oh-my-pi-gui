@@ -14,7 +14,7 @@
  * the destination), minus speech-to-text; playback is how spoken replies play
  * (a WAV blob in an audio element). OMP_E2E_FAKE_MIC_APP_LOG, when set, takes
  * the app's stdout and stderr (with GST_DEBUG set, GStreamer's log). The file
- * name keeps it out of the default wdio run and the Playwright twin check.
+ * name keeps it out of the default wdio run.
  */
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";

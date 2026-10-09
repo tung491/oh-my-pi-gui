@@ -1,6 +1,0 @@
-[
-  {
-    "ts": "src/main/updater-state.test.ts",
-    "rust": "src-tauri/src/updater/state.rs"
-  }
-]
