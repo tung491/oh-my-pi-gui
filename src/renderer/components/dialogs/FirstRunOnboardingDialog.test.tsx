@@ -320,7 +320,7 @@ describe("FirstRunOnboardingDialog", () => {
 
 		expect(dialog()?.textContent).toContain("Memory: 32.0 GB");
 		expect(dialog()?.textContent).toContain("Graphics: RTX 4070, 12.0 GB");
-		expect(dialog()?.textContent).toContain("Ollama is running (1 models)");
+		expect(dialog()?.textContent).toContain("Ollama is running (1 model)");
 		expect(card("qwen3:8b").textContent).toContain("On this machine, ready to use");
 		expect(card("qwen3:8b").getAttribute("data-picked")).toBe("true");
 		expect(omp.ollama.warm).toHaveBeenCalledWith("qwen3:8b");

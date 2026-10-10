@@ -1411,6 +1411,7 @@ export const vi: Record<string, string> = {
 	"welcome.fact.graphics": "Đồ họa: {name}, {size}",
 	"welcome.fact.graphicsNone": "Đồ họa: không có GPU rời",
 	"welcome.ollama.running": "Ollama đang chạy ({count} mô hình)",
+	"welcome.ollama.runningOne": "Ollama đang chạy (1 mô hình)",
 	"welcome.ollama.stopped.linux": "Ollama đã được cài nhưng không phản hồi. Khởi động dịch vụ của nó là đủ.",
 	"welcome.ollama.stopped.manual":
 		"Ollama đã được cài nhưng chưa chạy. Chạy “ollama serve” trong terminal, rồi kiểm tra lại.",
@@ -1462,6 +1463,7 @@ export const vi: Record<string, string> = {
 	"welcome.pickHeading": "Chọn mô hình cho máy này",
 	"welcome.footNote":
 		"{tag} sẽ trở thành mô hình mặc định của bạn. Bạn có thể đổi bất cứ lúc nào trong Cài đặt › Ollama.",
+	"welcome.footNoteNeedModel": "Tải một mô hình ở trên để bắt đầu.",
 	"ollama.settings.title": "Ollama",
 	"ollama.settings.endpoint": "Điểm cuối",
 	"ollama.settings.models": "Mô hình đã cài",

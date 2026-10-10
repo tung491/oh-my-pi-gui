@@ -88,7 +88,11 @@ export function OllamaRow({
 				role="status"
 			>
 				<CheckCircle2 aria-hidden="true" className="omp-ollama-row-icon shrink-0" size={16} />
-				<span>{t("welcome.ollama.running", { count: status.modelCount })}</span>
+				<span>
+					{status.modelCount === 1
+						? t("welcome.ollama.runningOne")
+						: t("welcome.ollama.running", { count: status.modelCount })}
+				</span>
 			</div>
 		);
 	}

@@ -114,6 +114,11 @@ describe("OllamaRow", () => {
 		expect(container.querySelectorAll("button")).toHaveLength(0);
 	});
 
+	it("counts a single model in the singular", async () => {
+		await render(status({ state: "ok", modelCount: 1 }));
+		expect(row().textContent).toContain("Ollama is running (1 model)");
+	});
+
 	it("offers the start remedy with its command on Linux", async () => {
 		const calls = await render(status({ state: "stopped", remedy: "linux-start" }));
 		expect(row().getAttribute("data-tone")).toBe("warning");

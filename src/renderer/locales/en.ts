@@ -1533,6 +1533,7 @@ export const en: Record<string, string> = {
 	"welcome.fact.graphics": "Graphics: {name}, {size}",
 	"welcome.fact.graphicsNone": "Graphics: no dedicated GPU",
 	"welcome.ollama.running": "Ollama is running ({count} models)",
+	"welcome.ollama.runningOne": "Ollama is running (1 model)",
 	"welcome.ollama.stopped.linux": "Ollama is installed but not answering. Starting its service should be enough.",
 	"welcome.ollama.stopped.manual":
 		"Ollama is installed but not running. Run “ollama serve” in a terminal, then check again.",
@@ -1582,6 +1583,7 @@ export const en: Record<string, string> = {
 	"welcome.skip": "Set up later",
 	"welcome.pickHeading": "Pick a model for this machine",
 	"welcome.footNote": "{tag} becomes your default model. Change it any time in Settings › Ollama.",
+	"welcome.footNoteNeedModel": "Download a model above to get started.",
 	"ollama.settings.title": "Ollama",
 	"ollama.settings.endpoint": "Endpoint",
 	"ollama.settings.models": "Installed models",

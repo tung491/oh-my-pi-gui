@@ -504,7 +504,7 @@ export function FirstRunOnboardingDialog() {
 						{t("welcome.skip")}
 					</Button>
 					<span className="min-w-0 flex-1 truncate text-center text-omp-sm text-(--omp-text-secondary)">
-						{continueTag !== null && t("welcome.footNote", { tag: continueTag })}
+						{continueTag !== null ? t("welcome.footNote", { tag: continueTag }) : t("welcome.footNoteNeedModel")}
 					</span>
 					<Button
 						data-action="continue"
