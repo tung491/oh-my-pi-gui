@@ -535,7 +535,7 @@ export function Sidebar() {
 						aria-label={t(navigationExpanded ? "sidebar.navigation.collapse" : "sidebar.navigation.expand")}
 						title={t(navigationExpanded ? "sidebar.navigation.collapse" : "sidebar.navigation.expand")}
 						onClick={() => setNavigationExpanded(expanded => !expanded)}
-						className="omp-pressable mt-1 flex h-6 w-full items-center justify-center rounded-lg border border-(--omp-sidebar-border) text-(--omp-sidebar-muted) hover:bg-(--omp-sidebar-item-hover) hover:text-(--omp-sidebar-text)"
+						className="omp-pressable mt-1 flex h-6 w-full items-center justify-center rounded-lg text-(--omp-sidebar-muted) hover:bg-(--omp-sidebar-item-hover) hover:text-(--omp-sidebar-text)"
 					>
 						{navigationExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
 					</button>

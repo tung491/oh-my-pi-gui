@@ -695,9 +695,19 @@
 	margin-block: 0;
 }
 
+/* Floats on the bubble's bottom edge so the hidden toolbar reserves no empty band. */
 .omp-transcript-editorial .omp-user-bubble-actions {
+	position: absolute;
+	right: 12px;
+	bottom: 0;
+	z-index: 1;
 	justify-content: flex-end;
-	margin-top: 8px;
+	padding: 1px 4px 1px 8px;
+	border: 1px solid var(--omp-user-msg-border);
+	border-radius: 8px;
+	background: var(--omp-bg-elevated);
+	box-shadow: var(--omp-shadow-sm);
+	transform: translateY(50%);
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity var(--omp-motion-fast) var(--omp-ease);

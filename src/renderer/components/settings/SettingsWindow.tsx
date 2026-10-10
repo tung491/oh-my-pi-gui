@@ -765,7 +765,7 @@ export function SettingsWindow() {
 						<Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--omp-dim)" size={13} />
 						<input
 							aria-label={t("settings.searchPlaceholder")}
-							className="h-8 w-full rounded-lg border border-(--omp-input-border) bg-(--omp-input-bg) pr-12 pl-8 text-omp-sm text-(--omp-text) outline-none transition-colors placeholder:text-(--omp-dim) focus:border-(--omp-input-focus-border)"
+							className="h-8 w-full rounded-lg border border-(--omp-input-border) bg-(--omp-input-bg) pr-18 pl-8 text-omp-sm text-(--omp-text) outline-none transition-colors placeholder:text-(--omp-dim) focus:border-(--omp-input-focus-border)"
 							onChange={event => setQuery(event.target.value)}
 							placeholder={t("settings.searchPlaceholder")}
 							ref={searchInputRef}
@@ -799,7 +799,7 @@ export function SettingsWindow() {
 									) : (
 										<ChevronRight aria-hidden="true" className="shrink-0 text-(--omp-dim)" size={13} />
 									)}
-									<span className="min-w-0 truncate">{t(`settings.nav.${group.id}`)}</span>
+									<span className="min-w-0 leading-snug">{t(`settings.nav.${group.id}`)}</span>
 								</button>
 								{group.items.some(item => item.id === tab) &&
 									group.items.map(tb => {

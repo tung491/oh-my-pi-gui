@@ -125,6 +125,31 @@ describe("TitleBar", () => {
 		expect(getSessionStats).toHaveBeenCalledTimes(1);
 	});
 
+	it("leaves the cost out while a session has cost nothing", async () => {
+		getSessionStats.mockImplementation(async () => ({
+			type: "response" as const,
+			command: "get_session_stats" as const,
+			success: true as const,
+			data: {
+				sessionId: "session-1",
+				userMessages: 1,
+				assistantMessages: 1,
+				toolCalls: 1,
+				toolResults: 1,
+				totalMessages: 3,
+				tokens: { input: 100, output: 1_100, reasoning: 0, cacheRead: 200, cacheWrite: 100, total: 1_500 },
+				premiumRequests: 0,
+				cost: 0,
+			},
+		}));
+		useSessionStore.setState({ status: "ready", sessionId: "session-1", cwd: "/tmp/project" });
+		await mount();
+		await act(async () => Promise.resolve());
+
+		expect(container.textContent).toContain("1.5k");
+		expect(container.textContent).not.toContain("$");
+	});
+
 	it("picks up spend that landed without a transcript entry", async () => {
 		let reads = 0;
 		getSessionStats.mockImplementation(async () => ({

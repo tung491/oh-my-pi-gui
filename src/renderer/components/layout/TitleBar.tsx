@@ -122,6 +122,7 @@ export function TitleBar() {
 	const displayName = sessionName || current?.title || t("sidebar.newSession");
 	const visibleStats = stats?.sessionId === sessionId ? stats : null;
 	const cacheHit = sessionCacheHitPercent(visibleStats);
+	const cost = visibleStats ? (visibleStats.history?.cost ?? visibleStats.cost) : 0;
 	const contextView = contextUsageView(contextUsage);
 	const executionDuration = sessionExecutionDurationMs({
 		messages,
@@ -275,13 +276,16 @@ export function TitleBar() {
 					<Database aria-hidden="true" className={metricIcon} size={13} />
 					{visibleStats ? formatTokens(visibleStats.history?.totalTokens ?? visibleStats.tokens.total) : "—"}
 				</span>
-				<span
-					className={metricSegment}
-					title={t(visibleStats?.history ? "titlebar.metric.historyCost" : "titlebar.metric.cost")}
-				>
-					<Coins aria-hidden="true" className={metricIcon} size={13} />
-					{visibleStats ? formatCost(visibleStats.history?.cost ?? visibleStats.cost, 4) : "—"}
-				</span>
+				{/* Local models cost nothing, so a zero cost is noise rather than a figure. */}
+				{cost > 0 && (
+					<span
+						className={metricSegment}
+						title={t(visibleStats?.history ? "titlebar.metric.historyCost" : "titlebar.metric.cost")}
+					>
+						<Coins aria-hidden="true" className={metricIcon} size={13} />
+						{formatCost(cost, 4)}
+					</span>
+				)}
 				<span className={cx(metricSegment, "omp-titlebar-command")} title={t("titlebar.contextTooltip")}>
 					<CircleGauge aria-hidden="true" className={metricIcon} size={13} />
 					{contextView.capacityKnown ? `${Math.round(contextView.percent)}%` : "—"}
