@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tung491.github.io/sai-atlas/sitemap.xml

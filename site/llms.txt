@@ -1,0 +1,11 @@
+# Sai ATLAS
+
+> Sai ATLAS is the private AI assistant for everyday work on SAI OS: it writes Word reports, cleans up spreadsheets, turns reports into slides and helps when the computer misbehaves, running locally through Ollama on Linux x64.
+
+Sai ATLAS runs on the user's own computer, needs no account, answers in English or Vietnamese and asks before it changes anything. Files and conversations stay on the computer; it goes online only to download models and updates. It is built on the open-source omp agent and released under the MIT license.
+
+## Docs
+
+- [Sai ATLAS home page](https://tung491.github.io/sai-atlas/index.md): what Sai ATLAS does, its privacy model and how to install it.
+- [Releases](https://github.com/tung491/sai-atlas/releases): Linux x64 .deb and AppImage downloads.
+- [README](https://github.com/tung491/sai-atlas#readme): building from source and project details.

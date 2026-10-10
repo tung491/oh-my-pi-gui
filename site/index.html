@@ -5,6 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sai ATLAS — Private, local AI for your everyday work</title>
 <meta name="description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. Linux x64." />
+<script>document.documentElement.classList.add("js");</script>
+<link rel="canonical" href="https://tung491.github.io/sai-atlas/" />
+<link rel="alternate" type="text/markdown" href="https://tung491.github.io/sai-atlas/index.md" />
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="Sai ATLAS" />
+<meta property="og:title" content="Sai ATLAS — Private, local AI for your everyday work" />
+<meta property="og:description" content="Sai ATLAS, the private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama. Linux x64." />
+<meta property="og:url" content="https://tung491.github.io/sai-atlas/" />
+<meta property="og:image" content="https://tung491.github.io/sai-atlas/assets/og-card.png" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Sai ATLAS logo with the headline: Private, local AI for your everyday work." />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://tung491.github.io/sai-atlas/#website",
+      "url": "https://tung491.github.io/sai-atlas/",
+      "name": "Sai ATLAS",
+      "description": "Sai ATLAS, the private AI assistant for everyday work on SAI OS.",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://tung491.github.io/sai-atlas/#app",
+      "name": "Sai ATLAS",
+      "description": "The private AI assistant for everyday work on SAI OS: Word reports, spreadsheet clean-ups, slides and help with your computer, running locally through Ollama.",
+      "url": "https://tung491.github.io/sai-atlas/",
+      "applicationCategory": "ProductivityApplication",
+      "operatingSystem": "Linux",
+      "processorRequirements": "x64",
+      "inLanguage": ["en", "vi"],
+      "image": "https://tung491.github.io/sai-atlas/assets/og-card.png",
+      "screenshot": "https://tung491.github.io/sai-atlas/assets/01-word-report.webp",
+      "downloadUrl": "https://github.com/tung491/sai-atlas/releases/latest",
+      "license": "https://opensource.org/licenses/MIT",
+      "isPartOf": { "@id": "https://tung491.github.io/sai-atlas/#website" },
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+  ]
+}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -16,7 +63,7 @@
     --line-strong: rgba(255, 255, 255, 0.12);
     --text: #ecf3f1;
     --muted: #96a8a3;
-    --faint: #5f706b;
+    --faint: #74857f;
     --accent: #34d3be;
     --accent-soft: rgba(52, 211, 190, 0.12);
     --radius: 22px;
@@ -125,6 +172,7 @@
     margin: 34px auto 0; max-width: 900px;
     font-size: clamp(46px, 6.6vw, 84px);
     font-weight: 800; letter-spacing: -0.045em; line-height: 1.04;
+    text-wrap: balance;
   }
   .hero h1 .grad {
     background: linear-gradient(92deg, #eafffa 0%, var(--accent) 55%, #5ea4ff 115%);
@@ -160,7 +208,7 @@
   .hero-shot img { border-radius: var(--radius); box-shadow: 0 60px 140px rgba(0, 0, 0, 0.65); }
 
   /* entrance */
-  .rise { opacity: 0; animation: rise 1s var(--ease) forwards; }
+  .rise { opacity: 0; animation: rise 0.6s var(--ease) forwards; }
   @keyframes rise { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
   .d1 { animation-delay: 0.08s; } .d2 { animation-delay: 0.18s; } .d3 { animation-delay: 0.3s; }
   .d4 { animation-delay: 0.42s; } .d5 { animation-delay: 0.56s; }
@@ -322,12 +370,15 @@
   .foot-links { display: flex; gap: 56px; flex-wrap: wrap; }
   .foot-col strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
   .foot-col a { display: block; color: var(--muted); font-size: 13.5px; padding: 4px 0; transition: color 0.2s; }
+  /* Phones: footer links get a 44px row so they are easy to tap. */
+  @media (max-width: 600px) { .foot-col a { padding: 12px 0; } }
   .foot-col a:hover { color: var(--accent); }
   .foot-base { margin-top: 48px; color: var(--faint); font-size: 13px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 
   /* ---------- reveal on scroll ---------- */
-  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
-  .reveal.visible { opacity: 1; transform: none; }
+  /* Hidden only once the head script has marked JS as running, so the page stays readable without it. */
+  .js .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.9s var(--ease), transform 0.9s var(--ease); }
+  .js .reveal.visible { opacity: 1; transform: none; }
   .reveal-late { transition-delay: 0.12s; }
   .reveal-later { transition-delay: 0.24s; }
 
@@ -342,6 +393,12 @@
     .duo .shot:nth-child(2) { transform: none; }
     section { padding: 100px 0; }
     .install-panel { padding: 48px 28px; }
+  }
+
+  /* On phones the badge wraps as one centred paragraph instead of one flex column per text node. */
+  @media (max-width: 600px) {
+    .hero-badge { display: inline-block; max-width: 100%; text-align: center; line-height: 1.5; border-radius: 18px; padding: 7px 14px; }
+    .hero-badge .dot { display: inline-block; vertical-align: middle; margin: -2px 7px 0 0; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -371,7 +428,7 @@
       <a href="#computer-help">Computer help</a>
       <a href="#privacy">Privacy</a>
       <a href="#install">Install</a>
-      <a href="https://github.com/tung491/oh-my-pi-gui">GitHub</a>
+      <a href="https://github.com/tung491/sai-atlas">GitHub</a>
     </div>
     <a class="btn btn-primary btn-sm" href="#install">Choose a build <span data-omp-version>v0.9.16</span></a>
   </div>
@@ -380,15 +437,15 @@
 <header class="hero" id="top">
   <div class="container">
     <div class="hero-badge rise d1"><span class="dot"></span><span data-omp-version>v0.9.16</span> · <span data-omp-release-date>Oct 2026</span> — the private AI assistant for everyday work on SAI OS</div>
-    <h1 class="rise d2">Private, local AI<br /><span class="grad">for your everyday work.</span></h1>
+    <h1 class="rise d2">Private, local&nbsp;AI<br /><span class="grad">for your everyday work.</span></h1>
     <p class="sub rise d3">Write a Word report, clean up a spreadsheet, turn a report into slides, or get help when the computer misbehaves. Sai ATLAS runs on your own computer, answers in English or Vietnamese, and asks before it changes anything.</p>
     <div class="hero-cta rise d4">
-      <a class="btn btn-primary" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">
+      <a class="btn btn-primary" data-omp-linux="deb" href="https://github.com/tung491/sai-atlas/releases/latest">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download for Linux <span class="btn-sub">x64 .deb</span>
       </a>
     </div>
-    <p class="hero-fine rise d5">No account, no sign-in · models run through Ollama on this computer · <a href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a></p>
+    <p class="hero-fine rise d5">No account, no sign-in · models run through Ollama on this computer · <a href="https://github.com/tung491/sai-atlas/releases">All releases</a></p>
     <div class="hero-shot-wrap rise d5">
       <div class="hero-shot" id="tilt">
         <img src="assets/01-word-report.webp" alt="Sai ATLAS writing a Word report from a short request" loading="eager" />
@@ -519,16 +576,16 @@
       <h2>Up and running in a few minutes</h2>
       <p class="lead" style="margin-left: auto; margin-right: auto;">Install Ollama from ollama.com, then grab the build for your computer. On first launch Sai ATLAS suggests a model that fits your machine and downloads it for you.</p>
       <div class="cta-row">
-        <a class="btn btn-primary" data-omp-linux="deb" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">
+        <a class="btn btn-primary" data-omp-linux="deb" href="https://github.com/tung491/sai-atlas/releases/latest">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Linux <span class="btn-sub">x64 .deb</span>
         </a>
-        <a class="btn btn-ghost" data-omp-linux="appimage" href="https://github.com/tung491/oh-my-pi-gui/releases/latest">Linux <span class="btn-sub">x64 AppImage</span></a>
-        <a class="btn btn-ghost" href="https://github.com/tung491/oh-my-pi-gui/releases">All releases</a>
+        <a class="btn btn-ghost" data-omp-linux="appimage" href="https://github.com/tung491/sai-atlas/releases/latest">Linux <span class="btn-sub">x64 AppImage</span></a>
+        <a class="btn btn-ghost" href="https://github.com/tung491/sai-atlas/releases">All releases</a>
       </div>
       <div class="install-note">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span>On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>.</span>
+        <span>On Ubuntu 24.04 or later, install the .deb with <code>sudo apt install ./sai-atlas_&lt;version&gt;_amd64.deb</code>; the AppImage needs <code>libwebkit2gtk-4.1-0</code>. Building from source is described in the <a href="https://github.com/tung491/sai-atlas#readme">README</a>.</span>
       </div>
     </div>
   </div>
@@ -546,13 +603,13 @@
       <div class="foot-links">
         <div class="foot-col">
           <strong>Product</strong>
-          <a href="https://github.com/tung491/oh-my-pi-gui/releases">Releases</a>
-          <a href="https://github.com/tung491/oh-my-pi-gui#readme">README</a>
+          <a href="https://github.com/tung491/sai-atlas/releases">Releases</a>
+          <a href="https://github.com/tung491/sai-atlas#readme">README</a>
           <a href="#install">Install</a>
         </div>
         <div class="foot-col">
           <strong>Code</strong>
-          <a href="https://github.com/tung491/oh-my-pi-gui">GUI repo</a>
+          <a href="https://github.com/tung491/sai-atlas">GUI repo</a>
           <a href="https://github.com/nornzach/oh-my-pi">Monorepo fork</a>
           <a href="https://github.com/can1357/oh-my-pi">Upstream omp</a>
         </div>
@@ -623,7 +680,7 @@
   // release as the no-JS / rate-limited fallback; any failure simply leaves it in place.
   const assetUrlEndingWith = (assets, suffix) => assets.find((asset) => asset.name.endsWith(suffix))?.browser_download_url;
 
-  fetch("https://api.github.com/repos/tung491/oh-my-pi-gui/releases/latest", {
+  fetch("https://api.github.com/repos/tung491/sai-atlas/releases/latest", {
     headers: { accept: "application/vnd.github+json" },
   })
     .then((response) => (response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`))))
