@@ -6,7 +6,25 @@ import { useRuntimeTabId } from "../../stores/session-runtime-context";
  * submenus, prompts) instead of injecting "/command" text into the composer.
  */
 
-import { Check, ChevronRight, CornerDownLeft, History, Search, Slash, X } from "lucide-react";
+import {
+	Check,
+	ChevronRight,
+	CornerDownLeft,
+	Cpu,
+	Eye,
+	FolderOpen,
+	History,
+	Layers,
+	type LucideIcon,
+	MessageSquare,
+	Plug,
+	Puzzle,
+	Search,
+	Slash,
+	ToggleLeft,
+	Wrench,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AvailableCommand } from "../../../shared/rpc-types";
 import { hydrateSession, hydrateTabSession } from "../../hooks/use-rpc-events";
@@ -14,6 +32,7 @@ import { newSessionNow } from "../../hooks/use-session-switch";
 import {
 	buildCommandMenu,
 	type CommandAffordance,
+	type CommandCategory,
 	type CommandMenuItem,
 	commandArgPrefill,
 	cycleAllowedModel,
@@ -34,6 +53,20 @@ import { toast } from "../../stores/toast";
 import { useUiStore } from "../../stores/ui";
 import { Kbd, Spinner } from "../common";
 import { isTopmostDialog, registerDialogLayer } from "../common/dialog-layer";
+
+/** One icon per group, so a scanned list says what kind of action each row is. */
+const CATEGORY_ICONS: Record<CommandCategory, LucideIcon> = {
+	session: MessageSquare,
+	view: Eye,
+	workspace: FolderOpen,
+	context: Layers,
+	model: Cpu,
+	modes: ToggleLeft,
+	tools: Wrench,
+	providers: Plug,
+	extensions: Puzzle,
+	other: Slash,
+};
 
 const RECENT_KEY = "omp.palette.recent";
 const RECENT_LIMIT = 5;
@@ -543,6 +576,7 @@ export function CommandPalette() {
 		flatIndex++;
 		const index = flatIndex;
 		const isActive = index === activeIndex;
+		const CategoryIcon = CATEGORY_ICONS[item.category];
 		const blocked = sidecarBlocked(item, sidecarReady);
 		const disabled = item.affordance.kind === "unavailable" || blocked;
 		const isSubmenu = item.affordance.kind === "submenu";
@@ -572,7 +606,7 @@ export function CommandPalette() {
 						isActive ? "bg-(--omp-bg-elevated) shadow-(--omp-shadow-sm)" : "bg-(--omp-selected-bg)"
 					}`}
 				>
-					{options?.recent ? <History size={15} /> : <Slash size={15} />}
+					{options?.recent ? <History size={15} /> : <CategoryIcon size={15} />}
 				</span>
 				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 					<span className="flex items-center gap-1.5">

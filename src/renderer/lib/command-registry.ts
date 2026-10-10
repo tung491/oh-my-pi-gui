@@ -1051,12 +1051,43 @@ export function buildCurrentCommandMenu(availableCommands: AvailableCommand[]): 
 	});
 }
 
+/** Palette group order: everyday task actions first, model and agent tuning after. */
+const CATEGORY_ORDER: readonly CommandCategory[] = [
+	"session",
+	"view",
+	"workspace",
+	"context",
+	"model",
+	"modes",
+	"tools",
+	"providers",
+	"extensions",
+	"other",
+];
+
 export function groupByCategory(items: CommandMenuItem[]): Map<CommandCategory, CommandMenuItem[]> {
-	const groups = new Map<CommandCategory, CommandMenuItem[]>();
+	const byCategory = new Map<CommandCategory, CommandMenuItem[]>();
 	for (const item of items) {
-		const list = groups.get(item.category) ?? [];
+		const list = byCategory.get(item.category) ?? [];
 		list.push(item);
-		groups.set(item.category, list);
+		byCategory.set(item.category, list);
+	}
+	const groups = new Map<CommandCategory, CommandMenuItem[]>();
+	for (const category of CATEGORY_ORDER) {
+		const list = byCategory.get(category);
+		if (list)
+			groups.set(
+				category,
+				list.toSorted((a, b) => leadRank(a) - leadRank(b)),
+			);
 	}
 	return groups;
+}
+
+/** Safe everyday entries lead their group, so the palette's default Enter never clears or deletes. */
+const LEAD_COMMANDS: readonly string[] = ["new", "new-tab", "resume", "rename"];
+
+function leadRank(item: CommandMenuItem): number {
+	const rank = LEAD_COMMANDS.indexOf(item.name);
+	return rank === -1 ? LEAD_COMMANDS.length : rank;
 }

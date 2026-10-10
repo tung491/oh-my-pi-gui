@@ -6,7 +6,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AvailableCommand } from "../../shared/rpc-types";
-import { buildCommandMenu, type CommandMenuItem, type CommandRegistryContext } from "./command-registry";
+import {
+	buildCommandMenu,
+	type CommandMenuItem,
+	type CommandRegistryContext,
+	groupByCategory,
+} from "./command-registry";
 import { translate } from "./i18n";
 
 const ok = (data?: unknown) => ({ type: "response" as const, command: "x", success: true as const, data });
@@ -168,6 +173,17 @@ describe("command inventory", () => {
 		});
 		const spellings = items.flatMap(item => [item.name, ...(item.aliases ?? [])]);
 		expect(spellings.filter(name => ["plugins", "plugin", "wt", "worktree"].includes(name))).toEqual([]);
+	});
+
+	it("lists the task commands before model tuning, whatever the names sort to", () => {
+		const categories = [...groupByCategory(buildCommandMenu(baseCtx)).keys()];
+		expect(categories[0]).toBe("session");
+		expect(categories.indexOf("view")).toBeLessThan(categories.indexOf("model"));
+	});
+
+	it("opens on starting a new task, never on clearing or deleting one", () => {
+		const session = groupByCategory(buildCommandMenu(baseCtx)).get("session") ?? [];
+		expect(session[0]?.name).toBe("new");
 	});
 
 	it("keeps the everyday commands", () => {
