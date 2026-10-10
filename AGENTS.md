@@ -108,6 +108,7 @@ Agents launch the GUI on a virtual display by default, so its windows, notificat
 - Tool-rendered text follows the monorepo's TUI sanitization rules (tabs, truncation, path shortening) via the helpers in `src/renderer/lib/format.ts`.
 - Preview ceilings come from the tiers in `src/renderer/lib/preview.ts` (`PREVIEW_SCROLL_*` + line caps) — don't invent new `max-h-*` values in tool renderers. Captured subprocess output renders through `AnsiText` (`src/renderer/lib/ansi.tsx`), never raw (ANSI escapes would print literally).
 - Tests use the linkedom harness pattern (see `src/renderer/components/chat/ThinkingBlock.test.tsx`); zustand stores are reset in `afterEach` via their `reset()`/setters — never `mock.module()`.
+- UI and site work: read `docs/DESIGN.md` first and verify with `docs/REVIEW.md` — screenshots at 1440×900, 1024×768 and 800×600 for the app (the window minimum) and 1440/768/375 for `site/`. When the site's content or routes change, keep its discovery files in step (`site/index.md`, `site/llms.txt`, `site/sitemap.xml`, the JSON-LD and the OG card).
 
 ## Examples
 
